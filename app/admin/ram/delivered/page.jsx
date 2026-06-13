@@ -33,6 +33,7 @@ function RamDeliveredContent() {
   const [totalCount, setTotalCount] = useState(0)
   const [msg, setMsg] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [didLoadOnce, setDidLoadOnce] = useState(false)
   const [rollbackBusyId, setRollbackBusyId] = useState(null)
   const [rollbackConfirmOpen, setRollbackConfirmOpen] = useState(false)
   const [rollbackConfirmOrder, setRollbackConfirmOrder] = useState(null)
@@ -42,9 +43,12 @@ function RamDeliveredContent() {
   const [pageSize, setPageSize] = useState(50)
   const [page, setPage] = useState(1)
   const fetchCtl = useRef(null)
+  const fetchSeq = useRef(0)
+  const didInitRef = useRef(false)
   const safeJson = useMemo(() => safeJsonFactory(), [])
 
   const fetchOrders = async (opts = {}) => {
+    const seq = ++fetchSeq.current
     setLoading(true)
     setMsg(null)
     try {
@@ -66,16 +70,21 @@ function RamDeliveredContent() {
       const json = await safeJson(res, '/api/admin/ram/orders/list')
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to load')
       const nextOrders = json.orders || []
+      if (seq !== fetchSeq.current) return
       setOrders(nextOrders)
       setTotalCount(Number(json?.meta?.total_count ?? nextOrders.length))
       setSelectedIds(new Set())
     } catch (e) {
+      if (seq !== fetchSeq.current) return
       if (e?.name !== 'AbortError') setMsg({ type: 'error', text: e?.message || 'Failed to load' })
       setOrders([])
       setTotalCount(0)
       setSelectedIds(new Set())
     } finally {
-      setLoading(false)
+      if (seq === fetchSeq.current) {
+        setLoading(false)
+        setDidLoadOnce(true)
+      }
     }
   }
 
@@ -92,12 +101,14 @@ function RamDeliveredContent() {
   useEffect(() => {
     fetchLocations()
     fetchOrders({ page: 1, pageSize })
+    didInitRef.current = true
     return () => {
       if (fetchCtl.current) fetchCtl.current.abort()
     }
   }, [])
 
   useEffect(() => {
+    if (!didInitRef.current) return
     setPage(1)
     fetchOrders({ page: 1, locationId: deliveryLocationId })
   }, [deliveryLocationId])
@@ -577,14 +588,21 @@ function RamDeliveredContent() {
               </tr>
             </thead>
             <tbody>
-              {!pageRows.length && (
+              {(!didLoadOnce || loading) ? (
+                Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={`sk-${i}`} className="border-b last:border-b-0 animate-pulse">
+                    <td className="p-2" colSpan={8}>
+                      <div className="h-4 w-full rounded bg-gray-100" />
+                    </td>
+                  </tr>
+                ))
+              ) : !pageRows.length ? (
                 <tr>
                   <td className="p-3 text-gray-600" colSpan={8}>
-                    {loading ? 'Loading…' : 'No delivered ram orders found'}
+                    No delivered ram orders found
                   </td>
                 </tr>
-              )}
-              {pageRows.map((o) => (
+              ) : pageRows.map((o) => (
                 <tr key={o.id} className="border-b last:border-b-0 hover:bg-gray-50">
                   <td className="p-2 align-top">
                     <input

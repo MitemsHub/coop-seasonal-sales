@@ -35,6 +35,7 @@ function RamBanksContent() {
   const [term, setTerm] = useState('')
   const [msg, setMsg] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [didLoadOnce, setDidLoadOnce] = useState(false)
   const [activeOnly, setActiveOnly] = useState(true)
 
   const [bankModalOpen, setBankModalOpen] = useState(false)
@@ -69,10 +70,13 @@ function RamBanksContent() {
   const [invoiceDeleting, setInvoiceDeleting] = useState(false)
 
   const fetchCtl = useRef(null)
+  const fetchSeq = useRef(0)
   const autoOpenRef = useRef(false)
+  const didInitRef = useRef(false)
   const safeJson = useMemo(() => safeJsonFactory(), [])
 
   const fetchRows = async () => {
+    const seq = ++fetchSeq.current
     setLoading(true)
     setMsg(null)
     try {
@@ -85,17 +89,23 @@ function RamBanksContent() {
       const res = await fetch(`/api/admin/ram/vendor-banks/locations?${qs.toString()}`, { cache: 'no-store', signal: ctl.signal })
       const json = await safeJson(res, '/api/admin/ram/vendor-banks/locations')
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to load')
+      if (seq !== fetchSeq.current) return
       setRows(json.locations || [])
     } catch (e) {
+      if (seq !== fetchSeq.current) return
       if (e?.name !== 'AbortError') setMsg({ type: 'error', text: e?.message || 'Failed to load' })
       setRows([])
     } finally {
-      setLoading(false)
+      if (seq === fetchSeq.current) {
+        setLoading(false)
+        setDidLoadOnce(true)
+      }
     }
   }
 
   useEffect(() => {
     fetchRows()
+    didInitRef.current = true
     return () => {
       if (fetchCtl.current) fetchCtl.current.abort()
     }
@@ -110,6 +120,7 @@ function RamBanksContent() {
   }, [searchParams, activeOnly])
 
   useEffect(() => {
+    if (!didInitRef.current) return
     fetchRows()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeOnly])
@@ -410,14 +421,21 @@ function RamBanksContent() {
               </tr>
             </thead>
             <tbody>
-              {!filtered.length && (
+              {(!didLoadOnce || loading) ? (
+                Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={`sk-${i}`} className="border-b last:border-b-0 animate-pulse">
+                    <td className="p-2" colSpan={8}>
+                      <div className="h-4 w-full rounded bg-gray-100" />
+                    </td>
+                  </tr>
+                ))
+              ) : !filtered.length ? (
                 <tr>
                   <td className="p-3 text-gray-600" colSpan={8}>
-                    {loading ? 'Loading…' : 'No delivery locations found.'}
+                    No delivery locations found.
                   </td>
                 </tr>
-              )}
-              {filtered.map((r) => (
+              ) : filtered.map((r) => (
                 <tr key={r.id} className="border-b last:border-b-0 hover:bg-gray-50">
                   <td className="p-2 align-top">
                     <div className="font-medium">{r.delivery_location || '—'}</div>

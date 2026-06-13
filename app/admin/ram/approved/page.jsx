@@ -33,6 +33,7 @@ function RamApprovedContent() {
   const [totalCount, setTotalCount] = useState(0)
   const [msg, setMsg] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [didLoadOnce, setDidLoadOnce] = useState(false)
   const [rollbackBusyId, setRollbackBusyId] = useState(null)
   const [receiptBusyId, setReceiptBusyId] = useState(null)
   const [delivering, setDelivering] = useState(false)
@@ -47,9 +48,12 @@ function RamApprovedContent() {
   const [pageSize, setPageSize] = useState(50)
   const [page, setPage] = useState(1)
   const fetchCtl = useRef(null)
+  const fetchSeq = useRef(0)
+  const didInitRef = useRef(false)
   const safeJson = useMemo(() => safeJsonFactory(), [])
 
   const fetchOrders = async (opts = {}) => {
+    const seq = ++fetchSeq.current
     setLoading(true)
     setMsg(null)
     try {
@@ -71,16 +75,21 @@ function RamApprovedContent() {
       const json = await safeJson(res, '/api/admin/ram/orders/list')
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to load')
       const rows = json.orders || []
+      if (seq !== fetchSeq.current) return
       setOrders(rows)
       setTotalCount(Number(json?.meta?.total_count ?? rows.length))
       setSelectedIds(new Set())
     } catch (e) {
+      if (seq !== fetchSeq.current) return
       if (e?.name !== 'AbortError') setMsg({ type: 'error', text: e?.message || 'Failed to load' })
       setOrders([])
       setTotalCount(0)
       setSelectedIds(new Set())
     } finally {
-      setLoading(false)
+      if (seq === fetchSeq.current) {
+        setLoading(false)
+        setDidLoadOnce(true)
+      }
     }
   }
 
@@ -97,12 +106,14 @@ function RamApprovedContent() {
   useEffect(() => {
     fetchLocations()
     fetchOrders({ page: 1, pageSize })
+    didInitRef.current = true
     return () => {
       if (fetchCtl.current) fetchCtl.current.abort()
     }
   }, [])
 
   useEffect(() => {
+    if (!didInitRef.current) return
     setSelectedIds(new Set())
     setPage(1)
     fetchOrders({ page: 1, locationId: deliveryLocationId })
@@ -770,7 +781,7 @@ function RamApprovedContent() {
             </tr>
           </thead>
           <motion.tbody layout>
-            {loading && (
+            {(!didLoadOnce || loading) && (
               <>
                 {Array.from({ length: 8 }).map((_, i) => (
                   <tr key={`sk-${i}`} className="animate-pulse">
@@ -782,7 +793,7 @@ function RamApprovedContent() {
               </>
             )}
 
-            {!loading && orders.length === 0 && (
+            {didLoadOnce && !loading && orders.length === 0 && (
               <tr>
                 <td className="p-3 text-gray-600" colSpan={8}>
                   No Approved ram orders.
@@ -791,7 +802,7 @@ function RamApprovedContent() {
             )}
 
             <AnimatePresence initial={false}>
-              {!loading &&
+              {didLoadOnce && !loading &&
                 pagedOrders.map((o) => (
                   <motion.tr
                     key={o.id}
