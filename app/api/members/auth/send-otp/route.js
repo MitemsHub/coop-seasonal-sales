@@ -18,8 +18,15 @@ const authSupabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 )
 
+function getClientIP(request) {
+  const forwarded = request.headers.get('x-forwarded-for')
+  if (forwarded) return forwarded.split(',')[0].trim()
+  return request.headers.get('x-real-ip') || request.headers.get('x-vercel-forwarded-for') || 'unknown'
+}
+
 export async function POST(request) {
   try {
+    const ip = getClientIP(request)
     const { memberId, email } = await request.json().catch(() => ({}))
     const mid = String(memberId || '').trim().toUpperCase()
     const addr = String(email || '').trim().toLowerCase()
@@ -30,6 +37,10 @@ export async function POST(request) {
     if (!addr || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) {
       return NextResponse.json({ error: 'A valid email address is required' }, { status: 400 })
     }
+
+    // Rate limit: 10 OTP requests per IP per 5 minutes (prevents email bombing)
+    const ipLimit = checkRateLimit('send-otp-ip', ip, 10, 5 * 60 * 1000)
+    if (!ipLimit.allowed) return rateLimitResponse(ipLimit.retryAfterMs)
 
     // Rate limit: 3 OTP requests per email per 5 minutes
     const otpLimit = checkRateLimit('send-otp', addr, 3, 5 * 60 * 1000)

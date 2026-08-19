@@ -85,6 +85,16 @@ const createConfig = (phase) => {
         ]
       },
       {
+        // Health check — public, cacheable for load-balancer probes
+        source: '/api/health',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=10, stale-while-revalidate=5'
+          }
+        ]
+      },
+      {
         // Additional security for API routes
         source: '/api/(.*)',
         headers: [
