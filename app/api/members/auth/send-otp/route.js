@@ -1,9 +1,10 @@
 // app/api/members/auth/send-otp/route.js
-// Send a one-time password (OTP) to the given email via Supabase Auth.
-//   POST { memberId, email } → { ok }
+// Send a one-time password (OTP) to the member's email via Supabase Auth.
+//   POST { memberId } → { ok }
 //
-// This is the first step of the member signup flow. The OTP is a 6-digit
-// code that Supabase delivers via its built-in email provider.
+// The email is looked up server-side from the members table — the client
+// never sends it, avoiding masked-email mismatches. This is the first step
+// of the member signup flow.
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createDbClient } from '@/lib/supabaseServer'
@@ -27,26 +28,20 @@ function getClientIP(request) {
 export async function POST(request) {
   try {
     const ip = getClientIP(request)
-    const { memberId, email } = await request.json().catch(() => ({}))
+    const { memberId } = await request.json().catch(() => ({}))
     const mid = String(memberId || '').trim().toUpperCase()
-    const addr = String(email || '').trim().toLowerCase()
 
     if (!mid) {
       return NextResponse.json({ error: 'Member ID is required' }, { status: 400 })
-    }
-    if (!addr || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(addr)) {
-      return NextResponse.json({ error: 'A valid email address is required' }, { status: 400 })
     }
 
     // Rate limit: 10 OTP requests per IP per 5 minutes (prevents email bombing)
     const ipLimit = checkRateLimit('send-otp-ip', ip, 10, 5 * 60 * 1000)
     if (!ipLimit.allowed) return rateLimitResponse(ipLimit.retryAfterMs)
 
-    // Rate limit: 3 OTP requests per email per 5 minutes
-    const otpLimit = checkRateLimit('send-otp', addr, 3, 5 * 60 * 1000)
-    if (!otpLimit.allowed) return rateLimitResponse(otpLimit.retryAfterMs)
-
-    // Verify the member exists and check their email on file
+    // Verify the member exists and look up their email on file.
+    // The email is derived server-side — the client never sends it, so there
+    // is no risk of a masked/mismatched value reaching this endpoint.
     const db = createDbClient()
     const { data: member, error: mErr } = await db
       .from('members')
@@ -69,21 +64,18 @@ export async function POST(request) {
       )
     }
 
-    // SECURITY: The email must match the one on file in the members table.
-    // This prevents someone who knows another member's ID from hijacking
-    // their account with their own email.
     if (!member.email) {
       return NextResponse.json(
         { error: 'No email address on file for this member. Please ask an admin to add your email first.' },
         { status: 400 }
       )
     }
-    if (member.email.toLowerCase() !== addr) {
-      return NextResponse.json(
-        { error: 'The email you entered does not match the email on file. Please use the email registered with your account.' },
-        { status: 403 }
-      )
-    }
+
+    const addr = member.email.toLowerCase()
+
+    // Rate limit: 3 OTP requests per email per 5 minutes
+    const otpLimit = checkRateLimit('send-otp', addr, 3, 5 * 60 * 1000)
+    if (!otpLimit.allowed) return rateLimitResponse(otpLimit.retryAfterMs)
 
     // Send OTP via Supabase Auth
     const { error: otpError } = await authSupabase.auth.signInWithOtp({

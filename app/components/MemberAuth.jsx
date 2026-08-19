@@ -619,7 +619,7 @@ export default function MemberAuth() {
       const res = await fetch('/api/members/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ memberId: memberId.trim().toUpperCase(), email: rawEmail || maskedEmail }),
+        body: JSON.stringify({ memberId: memberId.trim().toUpperCase() }),
       })
       const data = await res.json()
       if (res.ok) {
