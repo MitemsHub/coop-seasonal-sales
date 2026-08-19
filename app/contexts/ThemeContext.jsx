@@ -13,16 +13,11 @@ const ThemeContext = createContext(null)
 const LEGACY_KEY = 'theme'
 const ROLES = ['admin', 'rep', 'member']
 
-// Role of the signed-in user at this instant, read straight from localStorage
-// so the very first render (before AuthContext restores the session) is correct.
+// Role of the signed-in user at this instant.
+// On the very first render (before AuthContext restores the session from
+// the httpOnly cookie), fall back to 'guest'. The ThemeProvider's follow
+// effect will update the role once AuthContext loads.
 function getStoredRole() {
-  if (typeof window === 'undefined') return 'guest'
-  try {
-    const raw = window.localStorage.getItem('user')
-    if (!raw) return 'guest'
-    const parsed = JSON.parse(raw)
-    if (parsed && ROLES.includes(parsed.type)) return parsed.type
-  } catch {}
   return 'guest'
 }
 
@@ -63,8 +58,18 @@ export function ThemeProvider({ children }) {
   const [hydrated, setHydrated] = useState(false)
 
   // Hydrate the persisted theme + role after mount.
+  // Use a best-effort read from localStorage for the role hint (set by the
+  // inline script in layout.jsx before React hydrates). Once AuthContext
+  // loads, the follow effect below will override this.
   useEffect(() => {
-    const r = getStoredRole()
+    let r = 'guest'
+    try {
+      const raw = window.localStorage.getItem('user')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (parsed && ROLES.includes(parsed.type)) r = parsed.type
+      }
+    } catch {}
     setRole(r)
     setTheme(resolveTheme(readThemeFor(r)))
     setHydrated(true)

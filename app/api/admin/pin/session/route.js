@@ -6,10 +6,16 @@ import { sign, verify } from '@/lib/signing'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+const isProd = process.env.NODE_ENV === 'production'
+
 export async function POST(req) {
   try {
     const { passcode } = await req.json()
-    const PIN = process.env.ADMIN_PASSCODE || 'Coop@2025'
+    const PIN = process.env.ADMIN_PASSCODE
+    if (!PIN) {
+      console.error('ADMIN_PASSCODE environment variable is not set')
+      return NextResponse.json({ ok:false, error:'Server configuration error' }, { status:500 })
+    }
     if ((passcode || '') !== PIN) {
       return NextResponse.json({ ok:false, error:'Invalid passcode' }, { status:401 })
     }
@@ -20,7 +26,7 @@ export async function POST(req) {
       sameSite: 'lax', 
       path: '/', 
       maxAge: 60*60*8,
-      secure: false // Allow HTTP for localhost development
+      secure: isProd
     })
     return res
   } catch (e) {
@@ -35,7 +41,7 @@ export async function DELETE() {
     sameSite: 'lax',
     path: '/',
     maxAge: 0,
-    secure: false,
+    secure: isProd,
   })
   return res
 }

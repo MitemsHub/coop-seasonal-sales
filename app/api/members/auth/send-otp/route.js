@@ -77,12 +77,16 @@ export async function POST(request) {
     const otpLimit = checkRateLimit('send-otp', addr, 3, 5 * 60 * 1000)
     if (!otpLimit.allowed) return rateLimitResponse(otpLimit.retryAfterMs)
 
-    // Send OTP via Supabase Auth
+    // Send OTP via Supabase Auth.
+    // The emailRedirectTo ensures the "Confirm email address" link in the
+    // Supabase email points to our /auth/callback route (instead of a 404).
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin
     const { error: otpError } = await authSupabase.auth.signInWithOtp({
       email: addr,
       options: {
         // Store the member ID in the user metadata so we can link it after verification
         data: { member_id: mid },
+        emailRedirectTo: `${siteUrl}/auth/callback`,
       },
     })
 

@@ -134,6 +134,75 @@ export async function middleware(request) {
       }
     }
     
+    // CSRF protection for state-changing API requests
+    // Skip for GET/HEAD/OPTIONS (safe methods) and auth-related routes
+    // (which are the initial entry points and need to work cross-origin)
+    const method = request.method?.toUpperCase()
+    if (method === 'POST' || method === 'PATCH' || method === 'DELETE') {
+      // Skip CSRF for auth entry points (login, OTP, forgot-password, contact form)
+      // These are designed to be called from untrusted contexts but are protected
+      // by their own rate limiting and input validation.
+      const isAuthRoute = pathname.includes('/auth/check') || 
+                          pathname.includes('/auth/send-otp') || 
+                          pathname.includes('/auth/verify-otp') ||
+                          pathname.includes('/auth/forgot-password') ||
+                          pathname.includes('/auth/reset-password') ||
+                          pathname.includes('/pin/session') ||
+                          pathname.includes('/rep/session') ||
+                          pathname.includes('/rep/access') ||
+                          pathname === '/api/contact'
+      
+      if (!isAuthRoute) {
+        const origin = request.headers.get('origin')
+        const referer = request.headers.get('referer')
+        const host = request.headers.get('host') || ''
+        const proto = request.headers.get('x-forwarded-proto') || 'http'
+        const selfOrigin = `${proto}://${host}`
+        
+        // Build allowed origins list
+        const allowedOrigins = [selfOrigin]
+        // Allow Supabase URL for local dev
+        if (supabaseUrl && isLocalSupabase) allowedOrigins.push(supabaseUrl)
+        
+        let csrfPassed = false
+        
+        if (origin) {
+          csrfPassed = allowedOrigins.some((ao) => 
+            origin === ao || origin === ao + '/' ||
+            (() => {
+              try {
+                const originHost = new URL(origin).hostname
+                return allowedOrigins.some((a) => {
+                  try { return originHost === new URL(a).hostname } catch { return false }
+                })
+              } catch { return false }
+            })()
+          )
+        } else if (referer) {
+          try {
+            const refererUrl = new URL(referer)
+            const refererOrigin = `${refererUrl.protocol}//${refererUrl.host}`
+            csrfPassed = allowedOrigins.some((ao) => refererOrigin === ao || refererOrigin === ao + '/')
+          } catch {}
+        }
+        
+        // Allow requests with no origin/referer only if they have an auth header
+        // (API clients like curl/Postman don't send Origin)
+        if (!csrfPassed && !origin && !referer) {
+          const hasAuth = request.headers.get('authorization') || request.headers.get('x-api-key')
+          if (hasAuth) csrfPassed = true
+        }
+        
+        if (!csrfPassed) {
+          console.warn(`CSRF rejected: ${method} ${pathname} from origin=${origin} referer=${referer}`)
+          return new NextResponse('CSRF validation failed', {
+            status: 403,
+            headers: { ...securityHeaders, 'X-Content-Type-Options': 'nosniff' },
+          })
+        }
+      }
+    }
+
     // Admin API protection
     if (pathname.startsWith('/api/admin/')) {
       // Reasonable rate limiting for admin APIs

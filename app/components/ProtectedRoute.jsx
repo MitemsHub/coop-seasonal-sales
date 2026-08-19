@@ -1,38 +1,23 @@
 'use client'
 
+// app/components/ProtectedRoute.jsx
+// Page-level auth gate. Checks the AuthContext (which derives its state from
+// server-side httpOnly cookies) and redirects unauthorized users.
 import { useAuth } from '../contexts/AuthContext'
 import { useRouter, usePathname } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 
-// Roles whose pages are guarded server-side by an httpOnly cookie (middleware
-// page protection + protected APIs). When the localStorage user is missing on
-// a cold load — fresh browser context, cleared storage, or after the landing
-// page dropped the client state — we re-validate that cookie before redirecting
-// away, otherwise a valid admin/rep/vendor/member session would bounce home.
-const SESSION_ENDPOINTS = {
-  admin: '/api/admin/pin/session',
-  rep: '/api/rep/session',
-  vendor: '/api/vendor/session',
-  member: '/api/members/session',
-}
-
 export default function ProtectedRoute({ children, allowedRoles = [] }) {
-  const { user, userType, loading, login } = useAuth()
+  const { user, userType, loading } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const redirectRef = useRef(false)
-  // One-shot server re-validation when the client user is missing on mount.
-  const [serverChecking, setServerChecking] = useState(false)
-  const sessionCheckedRef = useRef(false)
-
-  const gateRoles = allowedRoles.filter((r) => SESSION_ENDPOINTS[r])
 
   useEffect(() => {
-    if (loading) return // Wait for auth to load
-    if (serverChecking) return // Cookie re-validation in flight
+    if (loading) return // Wait for auth to load from cookie introspection
 
-    // Authenticated: enforce the allowed-role gate once.
+    // Authenticated but wrong role — redirect to the appropriate portal
     if (user && user.authenticated) {
       if (allowedRoles.length > 0 && !allowedRoles.includes(userType)) {
         if (redirectRef.current) return
@@ -58,50 +43,16 @@ export default function ProtectedRoute({ children, allowedRoles = [] }) {
       return
     }
 
-    // No client user: cookie-gated portals re-validate the httpOnly session
-    // cookie once on mount (trying each allowed role's endpoint in order) and
-    // hydrate the user from the server instead of bouncing to the landing page.
-    if (gateRoles.length > 0 && !sessionCheckedRef.current) {
-      sessionCheckedRef.current = true
-      setServerChecking(true)
-      ;(async () => {
-        for (const role of gateRoles) {
-          try {
-            const res = await fetch(SESSION_ENDPOINTS[role], { cache: 'no-store' })
-            if (!res.ok) continue
-            const json = await res.json()
-            if (!json?.ok) continue
-            // Member endpoints nest the claims under `member`; admin/rep/vendor
-            // return them flat. Read both so the restored user matches a normal
-            // login (name + branch fields included, not just the id).
-            const memberClaims = json.member && typeof json.member === 'object' ? json.member : {}
-            const branchId = json.branch_id ?? memberClaims.branch_id
-            const branchCode = json.branch_code ?? memberClaims.branch_code
-            const id = json.id || memberClaims.member_id || memberClaims.id || role
-            login({
-              type: role,
-              id,
-              authenticated: true,
-              ...(json.module ? { module: json.module } : {}),
-              ...(branchId != null ? { branchId } : {}),
-              ...(branchCode ? { branchCode } : {}),
-              ...(memberClaims.name ? { name: memberClaims.name } : {}),
-            })
-            return
-          } catch {
-            // try the next role
-          }
-        }
-      })().finally(() => setServerChecking(false))
-      return
+    // Not authenticated — redirect to home
+    // (The middleware already handles server-side protection for protected routes,
+    // so this is a client-side fallback for pages that use this wrapper.)
+    if (!loading && !user) {
+      if (pathname !== '/') router.replace('/')
     }
+  }, [user, userType, loading, router, pathname, allowedRoles])
 
-    // No user and nothing to restore — redirect to home
-    if (pathname !== '/') router.replace('/')
-  }, [user, userType, loading, serverChecking, gateRoles, login, router, pathname, allowedRoles])
-
-  // Show loading while checking authentication or re-validating the cookie
-  if (loading || serverChecking) {
+  // Show loading while checking authentication
+  if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 flex items-center justify-center px-4">
         <motion.div
