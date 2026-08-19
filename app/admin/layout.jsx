@@ -31,6 +31,7 @@ import {
   Send,
   Store,
   Truck,
+  UserCheck,
   Users,
   X,
   XCircle,
@@ -262,6 +263,7 @@ export default function AdminLayout({ children }) {
 
   const activeKey = useMemo(() => {
     if (pathname === '/admin') return 'dashboard'
+    if (pathname.startsWith('/admin/members/auth-onboarding')) return 'members_auth'
     if (pathname.startsWith('/admin/members')) return 'members'
     if (pathname.startsWith('/admin/food/pending')) return 'food_pending'
     if (pathname.startsWith('/admin/food/cancelled')) return 'food_cancelled'
@@ -498,6 +500,7 @@ export default function AdminLayout({ children }) {
 
           <div className="pt-2">
             <NavLink href="/admin/members" label="Members Settings" icon={Users} active={activeKey === 'members'} collapsed={isCollapsed} onNavigate={navOnClick} />
+            <NavLink href="/admin/members/auth-onboarding" label="Auth Onboarding" icon={UserCheck} active={activeKey === 'members_auth'} collapsed={isCollapsed} onNavigate={navOnClick} />
           </div>
         </nav>
 

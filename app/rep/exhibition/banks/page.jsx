@@ -7,9 +7,9 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw, Store } from 'lucide-react'
-import DraggableModal from '../../components/DraggableModal'
-import Button from '../../components/ui/Button'
-import Skeleton from '../../components/ui/Skeleton'
+import DraggableModal from '../../../components/DraggableModal'
+import Button from '../../../components/ui/Button'
+import Skeleton from '../../../components/ui/Skeleton'
 
 const toastMotion = {
   initial: { opacity: 0, y: -8, scale: 0.99 },

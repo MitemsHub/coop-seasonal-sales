@@ -1,8 +1,7 @@
 // app/api/admin/members/update/route.js
-// Admin set/reset of a member's details from Members Settings — name, phone,
-// PIN (set a fresh one, or clear it to null when the member forgot it). The
-// PIN is stored like the member's own set-pin flow; it is never echoed back.
-//   PATCH { member_id, full_name?, phone?, pin?, clear_pin? }
+// Admin update of a member's details from Members Settings — name, phone,
+// email, savings, and loans.
+//   PATCH { member_id, full_name?, phone?, email?, savings?, loans? }
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
@@ -35,14 +34,13 @@ export async function PATCH(request) {
     if (body.phone !== undefined) {
       patch.phone = cleanText(body.phone, 30)
     }
-    if (body.clear_pin === true || body.clear_pin === 'true') {
-      patch.pin = null
-    } else if (body.pin !== undefined && String(body.pin) !== '') {
-      const pin = String(body.pin).replace(/\D/g, '').slice(0, 8)
-      if (pin.length < 4) return NextResponse.json({ ok: false, error: 'PIN must be at least 4 digits' }, { status: 400 })
-      patch.pin = pin
+    if (body.email !== undefined) {
+      const emailAddr = String(body.email || '').trim().toLowerCase()
+      if (emailAddr && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAddr)) {
+        return NextResponse.json({ ok: false, error: 'Invalid email address' }, { status: 400 })
+      }
+      patch.email = emailAddr || null
     }
-
     const moneyField = (v) => {
       if (v === undefined || v === null || v === '') return null
       const n = Number(v)
@@ -67,7 +65,7 @@ export async function PATCH(request) {
       .from('members')
       .update(patch)
       .eq('member_id', memberId)
-      .select('member_id, full_name, phone, savings, loans, pin, status')
+      .select('member_id, full_name, phone, email, savings, loans, status')
       .maybeSingle()
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     if (!data) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
@@ -78,11 +76,10 @@ export async function PATCH(request) {
         member_id: data.member_id,
         full_name: data.full_name || '',
         phone: data.phone || '',
+        email: data.email || '',
         savings: data.savings,
         loans: data.loans,
         status: data.status,
-        // Masked: only whether a PIN is currently set.
-        pin: data.pin != null && String(data.pin) !== '' ? 'set' : 'not set',
       },
     })
   } catch (e) {

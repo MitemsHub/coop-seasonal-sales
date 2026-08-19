@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { ArrowRight, MapPin, ShieldCheck, ShoppingBasket, Store, Truck } from 'lucide-react'
 import LandingHeader, { SIGNUP_URL } from '../components/LandingHeader'
-import MemberLauncher from '../components/MemberLauncher'
+import MemberAuth from '../components/MemberAuth'
 import Reveal from '../components/ui/Reveal'
 
 const PORTAL_NAV = [
@@ -137,7 +137,7 @@ export default function PortalPage() {
                       <p className="text-xs text-muted">Enter your staff ID to continue</p>
                     </div>
                   </div>
-                  <MemberLauncher />
+                  <MemberAuth />
                 </div>
               </div>
             </div>

@@ -3,10 +3,9 @@
 // app/admin/members/page.jsx
 // Members Settings — one home for member administration used by every module:
 //   • Members Import (moved from the food Import page) with the import log
-//   • Member details set/reset — name, phone, PIN (or clear a forgotten PIN)
-//   • Reset all member PINs (moved from the food Data Management page)
+//   • Member details set/reset — name, phone, and account management
 import { useCallback, useRef, useState } from 'react'
-import { FileSpreadsheet, KeyRound, Pencil, RefreshCw, Search, UserRound } from 'lucide-react'
+import { FileSpreadsheet, Pencil, RefreshCw, Search, UserRound } from 'lucide-react'
 import ProtectedRoute from '../../components/ProtectedRoute'
 import DraggableModal from '../../components/DraggableModal'
 import Button from '../../components/ui/Button'
@@ -100,9 +99,9 @@ function MemberLookupSection() {
   const [member, setMember] = useState(null)
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
   const [savings, setSavings] = useState('')
   const [loans, setLoans] = useState('')
-  const [pin, setPin] = useState('')
   const [saving, setSaving] = useState(false)
   const debounceRef = useRef(null)
 
@@ -136,9 +135,9 @@ function MemberLookupSection() {
     setMember(m)
     setFullName(m.full_name || '')
     setPhone(m.phone || '')
+    setEmail(m.email || '')
     setSavings(m.savings != null && m.savings !== '' ? String(m.savings) : '')
     setLoans(m.loans != null && m.loans !== '' ? String(m.loans) : '')
-    setPin('')
     setMsg('')
     setModalOpen(true)
   }
@@ -150,6 +149,8 @@ function MemberLookupSection() {
       const payload = { member_id: member.member_id }
       if (fullName.trim() && fullName.trim() !== member.full_name) payload.full_name = fullName.trim()
       if (phone.trim() !== member.phone) payload.phone = phone.trim()
+      const emailVal = email.trim().toLowerCase()
+      if (emailVal !== (member.email || '').toLowerCase()) payload.email = emailVal
       const numField = (v, cur) => {
         if (String(v ?? '').trim() === '') return null
         const n = Number(v)
@@ -160,9 +161,8 @@ function MemberLookupSection() {
       if (savingsVal != null && savingsVal !== Number(member.savings || 0)) payload.savings = savingsVal
       const loansVal = numField(loans, member.loans)
       if (loansVal != null && loansVal !== Number(member.loans || 0)) payload.loans = loansVal
-      if (pin.trim()) payload.pin = pin.trim()
       if (Object.keys(payload).length === 1) {
-        setMsg('Nothing to update — change a field or set a PIN.')
+        setMsg('Nothing to update — make a change and try again.')
         return
       }
       const res = await fetch('/api/admin/members/update', {
@@ -174,31 +174,9 @@ function MemberLookupSection() {
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to update')
       setMsg('')
       setModalOpen(false)
-      setPin('')
       search(q)
     } catch (e) {
       setMsg(e.message || 'Failed to update')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const clearPin = async () => {
-    setSaving(true)
-    setMsg('')
-    try {
-      const res = await fetch('/api/admin/members/update', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ member_id: member.member_id, clear_pin: true }),
-      })
-      const json = await res.json()
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to clear PIN')
-      setMsg('')
-      setModalOpen(false)
-      search(q)
-    } catch (e) {
-      setMsg(e.message || 'Failed to clear PIN')
     } finally {
       setSaving(false)
     }
@@ -208,7 +186,7 @@ function MemberLookupSection() {
     <Card>
       <Card.Header>
         <Card.Title>Member details</Card.Title>
-        <Card.Description>Look up a member and set or reset their name, phone number or PIN — handy when a member forgets it.</Card.Description>
+        <Card.Description>Look up a member and edit their name, phone, email, savings or loans.</Card.Description>
       </Card.Header>
       <Card.Body className="space-y-3">
         <div className="relative">
@@ -264,6 +242,11 @@ function MemberLookupSection() {
             <Label htmlFor="m-phone">Phone number</Label>
             <Input id="m-phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. 0803 123 4567" />
           </div>
+          <div>
+            <Label htmlFor="m-email">Email address</Label>
+            <Input id="m-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="member@example.com" />
+            <p className="mt-1 text-[11px] text-muted">Required for member auth signup — OTP will be sent to this email.</p>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="m-savings">Savings (₦)</Label>
@@ -273,19 +256,6 @@ function MemberLookupSection() {
               <Label htmlFor="m-loans">Loans (₦)</Label>
               <Input id="m-loans" type="number" min="0" step="0.01" value={loans} onChange={(e) => setLoans(e.target.value)} placeholder="e.g. 500000" />
             </div>
-          </div>
-          <div>
-            <Label htmlFor="m-pin">Set new PIN</Label>
-            <Input id="m-pin" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 8))} placeholder="Leave empty to keep the current PIN" />
-          </div>
-          <div className="flex items-center justify-between rounded-lg border border-danger-border bg-danger-bg/50 px-3 py-2">
-            <div>
-              <p className="text-sm font-medium text-danger-fg">Forgotten PIN</p>
-              <p className="text-xs text-muted">Clears the PIN so the member can set a new one.</p>
-            </div>
-            <Button variant="danger" size="sm" onClick={clearPin} loading={saving}>
-              Clear PIN
-            </Button>
           </div>
           {!!msg && <div className="rounded-lg border border-danger-border bg-danger-bg px-3 py-2 text-sm text-danger-fg">{msg}</div>}
           <div className="flex justify-end gap-2 pt-1">
@@ -302,67 +272,17 @@ function MemberLookupSection() {
   )
 }
 
-function ResetPinsSection() {
-  const [confirmText, setConfirmText] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState('')
-
-  const reset = async () => {
-    if (confirmText !== 'RESET PINS') {
-      setMsg('Please type "RESET PINS" to confirm')
-      return
-    }
-    setBusy(true)
-    setMsg('')
-    try {
-      const res = await fetch('/api/admin/data-management/reset-member-pins', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
-      const json = await res.json()
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to reset PINs')
-      setMsg(`Successfully reset ${json.updatedCount} member PINs`)
-      setConfirmText('')
-    } catch (e) {
-      setMsg(`Error: ${e.message}`)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <Card>
-      <Card.Header>
-        <Card.Title>Reset all member PINs</Card.Title>
-        <Card.Description>Clears every member PIN so everyone must set a new one.</Card.Description>
-      </Card.Header>
-      <Card.Body>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <Input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder='Type "RESET PINS"' className="sm:max-w-xs" />
-          <Button variant="danger" leftIcon={KeyRound} onClick={reset} loading={busy}>
-            Reset PINs
-          </Button>
-        </div>
-        {!!msg && (
-          <p className={`mt-2 text-sm ${msg.includes('Error') ? 'text-danger-fg' : 'text-success-fg'}`}>{msg}</p>
-        )}
-      </Card.Body>
-    </Card>
-  )
-}
-
 function MembersSettingsContent() {
   return (
     <div className="p-3 sm:p-4 md:p-6 max-w-5xl mx-auto space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-h2 font-bold tracking-tight text-fg">Members Settings</h1>
-          <p className="text-sm text-muted">Member administration used by every module — imports, details and PINs in one place.</p>
+          <p className="text-sm text-muted">Member administration — imports, details and account management in one place.</p>
         </div>
       </div>
       <MembersImportSection />
       <MemberLookupSection />
-      <ResetPinsSection />
     </div>
   )
 }
