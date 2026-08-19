@@ -24,7 +24,7 @@ export async function POST(req) {
     if (error) return NextResponse.json({ ok:false, error: error.message }, { status:400 })
 
     await supabase.from('orders').update({ delivered_by: deliveredBy || `rep:${claim.branch_code}`, delivered_at: new Date().toISOString() }).eq('order_id', orderId)
-    await supabase.from('audit_log').insert({ actor:`rep:${claim.branch_code}`, action:'deliver', order_id: orderId, detail: { deliveredBy } })
+    await supabase.from('audit_log').insert({ module:'food', actor:`rep:${claim.branch_code}`, action:'deliver', order_id: orderId, detail: { deliveredBy } })
 
     return NextResponse.json({ ok:true })
   } catch (e) {

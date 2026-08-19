@@ -1,5 +1,5 @@
 {
-  "name": "coop-food-distribution",
+  "name": "coop-seasonal-sales",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -7,7 +7,8 @@
     "build": "next build",
     "postbuild": "node -e \"const fs=require('fs');const path=require('path');const copy=(src,dst)=>{if(!fs.existsSync(src))return;fs.rmSync(dst,{recursive:true,force:true});fs.mkdirSync(dst,{recursive:true});fs.cpSync(src,dst,{recursive:true});};copy(path.join('.next','static'),path.join('.next','standalone','.next','static'));copy('public',path.join('.next','standalone','public'));\"",
     "start": "set DOTENV_CONFIG_PATH=.env.local&& node -r dotenv/config .next/standalone/server.js",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run"
   },
   "dependencies": {
     "@supabase/ssr": "^0.7.0",
@@ -18,6 +19,7 @@
     "framer-motion": "^12.38.0",
     "jspdf": "^3.0.2",
     "jspdf-autotable": "^5.0.2",
+    "lucide-react": "^1.29.0",
     "next": "^15.5.2",
     "nodemailer": "^6.10.1",
     "pg": "^8.16.3",
@@ -28,9 +30,13 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@types/react": "19.1.11",
     "eslint": "^9",
     "eslint-config-next": "^15.5.2",
-    "tailwindcss": "^4"
+    "jsdom": "^30.0.1",
+    "tailwindcss": "^4",
+    "vitest": "^4.1.10"
   }
 }

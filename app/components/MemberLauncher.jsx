@@ -16,12 +16,10 @@ export default function MemberLauncher() {
   const [isCheckingDatabase, setIsCheckingDatabase] = useState(false)
   const [memberExists, setMemberExists] = useState(null) // null = not checked, true = exists, false = doesn't exist
   const [pinStatus, setPinStatus] = useState(null) // null = not checked, true = has PIN, false = no PIN
-  const [currentStep, setCurrentStep] = useState('member_id') // 'member_id', 'pin_setup', 'module_picker'
-  const [authenticatedMemberId, setAuthenticatedMemberId] = useState('')
+  const [currentStep, setCurrentStep] = useState('member_id') // 'member_id', 'pin_setup'
   const [pinError, setPinError] = useState('')
   // Shopping availability state
   const [shoppingOpen, setShoppingOpen] = useState(true)
-  const [ramShoppingOpen, setRamShoppingOpen] = useState(true)
   const [shoppingStatusLoading, setShoppingStatusLoading] = useState(false)
   const [shoppingStatusError, setShoppingStatusError] = useState('')
 
@@ -31,31 +29,20 @@ export default function MemberLauncher() {
       try {
         setShoppingStatusLoading(true)
         setShoppingStatusError('')
-        const [foodRes, ramRes] = await Promise.allSettled([
-          fetch('/api/system/shopping', { cache: 'no-store' }),
-          fetch('/api/system/ram-shopping', { cache: 'no-store' }),
-        ])
+        const foodRes = await fetch('/api/system/shopping', { cache: 'no-store' }).catch(() => null)
 
-        if (foodRes.status === 'fulfilled') {
-          const json = await foodRes.value.json()
-          if (!foodRes.value.ok || !json.ok) throw new Error(json.error || 'Failed to load shopping status')
-          if (!cancelled) setShoppingOpen(!!json.open)
+        if (foodRes && foodRes.ok) {
+          const json = await foodRes.json().catch(() => null)
+          if (!cancelled && json?.ok) setShoppingOpen(!!json.open)
+          else if (!cancelled && json && !json.ok) setShoppingStatusError(json.error || 'Failed to load shopping status')
         } else {
-          throw new Error(foodRes.reason?.message || 'Failed to load shopping status')
-        }
-
-        if (ramRes.status === 'fulfilled') {
-          const json = await ramRes.value.json()
-          if (!ramRes.value.ok || !json.ok) throw new Error(json.error || 'Failed to load ram shopping status')
-          if (!cancelled) setRamShoppingOpen(!!json.open)
-        } else {
-          throw new Error(ramRes.reason?.message || 'Failed to load ram shopping status')
+          // Default closed if we can't determine the status
+          if (!cancelled) setShoppingOpen(false)
         }
       } catch (e) {
         if (!cancelled) setShoppingStatusError(`Error: ${e.message}`)
         // Default closed if cannot determine
         if (!cancelled) setShoppingOpen(false)
-        if (!cancelled) setRamShoppingOpen(false)
       } finally {
         if (!cancelled) setShoppingStatusLoading(false)
       }
@@ -242,8 +229,8 @@ export default function MemberLauncher() {
         const data = await response.json()
 
         if (response.ok && data.success) {
-          // PIN verified, proceed to shop
-          proceedToModulePicker(mid)
+          // PIN verified — proceed to the member dashboard
+          proceedToDashboard(mid, data.member)
         } else {
           setPinError(data.error || 'Incorrect PIN')
           setIsLoading(false)
@@ -256,27 +243,39 @@ export default function MemberLauncher() {
       return
     }
     
-    // If we're here, either no PIN required or PIN was verified, proceed to shop
-    proceedToModulePicker(mid)
+    // If we're here, either no PIN required or PIN was verified — proceed to the dashboard
+    proceedToDashboard(mid)
   }
 
-  const proceedToModulePicker = async (mid) => {
+  // Build the member user object; the signed session claims (issued by
+  // verify-pin / first-time set-pin) enrich it with branch + name.
+  const buildMemberUser = (mid, claims) => ({
+    type: 'member',
+    id: mid,
+    authenticated: true,
+    ...(claims
+      ? {
+          name: claims.name || '',
+          branchId: claims.branch_id ?? null,
+          branchCode: claims.branch_code || '',
+        }
+      : {}),
+  })
+
+  const proceedToDashboard = async (mid, claims) => {
     setIsLoading(true)
     
     try {
       // Set user as authenticated member
-      login({
-        type: 'member',
-        id: mid,
-        authenticated: true
-      })
+      login(buildMemberUser(mid, claims))
       
       // Add a small delay to show loading state
       await new Promise(resolve => setTimeout(resolve, 500))
 
-      setAuthenticatedMemberId(mid)
-      setCurrentStep('module_picker')
-      setIsLoading(false)
+      // Land members on their My Coop dashboard — the home hub.
+      // They pick a module (Food / Ram) from there, and the navbar
+      // + hamburger drawer navigate to Shop, Orders and Cart.
+      router.push('/my-coop')
     } catch (error) {
       console.error('Navigation error:', error)
       setIsLoading(false)
@@ -310,7 +309,7 @@ export default function MemberLauncher() {
         })
         const data = await response.json()
         if (response.ok && data.success) {
-          return proceedToOrders(mid)
+          return proceedToOrders(mid, data.member)
         } else {
           setPinError(data.error || 'Incorrect PIN')
           setIsLoading(false)
@@ -328,15 +327,11 @@ export default function MemberLauncher() {
     proceedToOrders(mid)
   }
 
-  const proceedToOrders = async (mid) => {
+  const proceedToOrders = async (mid, claims) => {
     setIsLoading(true)
     try {
       // Authenticate member session
-      login({
-        type: 'member',
-        id: mid,
-        authenticated: true
-      })
+      login(buildMemberUser(mid, claims))
       await new Promise(resolve => setTimeout(resolve, 300))
       // Navigate to member orders view
       router.push('/orders')
@@ -346,13 +341,13 @@ export default function MemberLauncher() {
     }
   }
 
-  const handlePinSet = () => {
+  const handlePinSet = (claims) => {
     setPinStatus(true)
-    proceedToModulePicker(memberId.trim().toUpperCase())
+    proceedToDashboard(memberId.trim().toUpperCase(), claims)
   }
 
   const handleSkipPin = () => {
-    proceedToModulePicker(memberId.trim().toUpperCase())
+    proceedToDashboard(memberId.trim().toUpperCase())
   }
 
   const handleBackToMemberId = () => {
@@ -368,24 +363,24 @@ export default function MemberLauncher() {
               value={memberId}
               onChange={handleInputChange}
               disabled={isLoading}
-              className={`w-full px-3 py-2 md:px-4 md:py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-200 transition-all duration-200 outline-none text-sm md:text-base text-gray-700 placeholder-gray-400 disabled:bg-gray-50 disabled:cursor-not-allowed ${
-                !memberId ? 'border-gray-200 focus:border-blue-500' :
-                validation.isValid ? 'border-green-500 focus:border-green-500' :
-                'border-red-500 focus:border-red-500'
+              className={`w-full py-2 pl-3 pr-8 md:py-3 md:pl-4 md:pr-10 border-2 rounded-xl focus:ring-2 focus:ring-brand/20 transition-all duration-200 outline-none text-[13px] md:text-base text-fg placeholder:text-subtext disabled:bg-subtle disabled:cursor-not-allowed ${
+                !memberId ? 'border-line-subtle focus:border-brand' :
+                validation.isValid ? 'border-success focus:border-success' :
+                'border-danger focus:border-danger'
               }`}
-              placeholder="Enter your Staff ID (e.g., A12345)"
+              placeholder="Your Staff ID"
             />
             <div className="absolute inset-y-0 right-0 flex items-center pr-2 md:pr-3">
               {!memberId ? (
-                <svg className="w-4 h-4 md:w-5 md:h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 md:w-5 md:h-5 text-subtext" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
               ) : validation.isValid ? (
-                <svg className="w-4 h-4 md:w-5 md:h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 md:w-5 md:h-5 text-success-fg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               ) : (
-                <svg className="w-4 h-4 md:w-5 md:h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 md:w-5 md:h-5 text-danger-fg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               )}
@@ -407,24 +402,24 @@ export default function MemberLauncher() {
                 }}
                 disabled={isLoading}
                 maxLength={5}
-                className={`w-full px-3 py-2 md:px-4 md:py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-200 transition-all duration-200 outline-none text-sm md:text-base text-gray-700 placeholder-gray-400 disabled:bg-gray-50 disabled:cursor-not-allowed ${
-                  !pin ? 'border-gray-200 focus:border-blue-500' :
-                  pinError ? 'border-red-500 focus:border-red-500' :
-                  'border-blue-500 focus:border-blue-500'
+                className={`w-full py-2 pl-3 pr-8 md:py-3 md:pl-4 md:pr-10 border-2 rounded-xl focus:ring-2 focus:ring-brand/20 transition-all duration-200 outline-none text-[13px] md:text-base text-fg placeholder:text-subtext disabled:bg-subtle disabled:cursor-not-allowed ${
+                  !pin ? 'border-line-subtle focus:border-brand' :
+                  pinError ? 'border-danger focus:border-danger' :
+                  'border-info focus:border-brand'
                 }`}
-                placeholder="Enter your PIN"
+                placeholder="Your PIN"
               />
               <div className="absolute inset-y-0 right-0 flex items-center pr-2 md:pr-3">
                 {!pin ? (
-                  <svg className="w-4 h-4 md:w-5 md:h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 md:w-5 md:h-5 text-subtext" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                 ) : pinError ? (
-                  <svg className="w-4 h-4 md:w-5 md:h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 md:w-5 md:h-5 text-danger-fg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 ) : (
-                  <svg className="w-4 h-4 md:w-5 md:h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 md:w-5 md:h-5 text-info-fg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                 )}
@@ -434,7 +429,7 @@ export default function MemberLauncher() {
           
           {/* PIN Error Message */}
           {pinError && (
-            <div className="flex items-center text-red-600 text-xs md:text-sm">
+            <div className="flex items-center text-danger-fg text-caption md:text-sm">
               <svg className="w-3 h-3 md:w-4 md:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -444,21 +439,21 @@ export default function MemberLauncher() {
           
           {/* Validation feedback */}
           {memberId && (
-            <div className="text-xs md:text-sm">
+            <div className="text-caption md:text-sm">
               {isCheckingDatabase ? (
-                <div className="flex items-center text-blue-600">
-                  <div className="animate-spin rounded-full h-3 w-3 md:h-4 md:w-4 border-b-2 border-blue-600 mr-1"></div>
+                <div className="flex items-center text-info-fg">
+                  <div className="animate-spin rounded-full h-3 w-3 md:h-4 md:w-4 border-b-2 border-info mr-1"></div>
                   Checking member ID...
                 </div>
               ) : memberExists === false ? (
-                <div className="flex items-center text-red-600">
+                <div className="flex items-center text-danger-fg">
                   <svg className="w-3 h-3 md:w-4 md:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                   Member ID not found in database
                 </div>
               ) : memberExists === true ? (
-                <div className="flex items-center text-green-600">
+                <div className="flex items-center text-success-fg">
                   <svg className="w-3 h-3 md:w-4 md:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
@@ -468,7 +463,7 @@ export default function MemberLauncher() {
                 </div>
               ) : !validation.isValid ? (
                 <div className="space-y-1">
-                  <div className="flex items-center text-red-600">
+                  <div className="flex items-center text-danger-fg">
                     <svg className="w-3 h-3 md:w-4 md:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
@@ -478,19 +473,19 @@ export default function MemberLauncher() {
                     <button
                       type="button"
                       onClick={applySuggestion}
-                      className="text-blue-600 hover:text-blue-700 underline text-xs"
+                      className="text-info-fg hover:text-info-fg underline text-caption"
                     >
                       {validation.suggestion}
                     </button>
                   )}
                   {validation.suggestion && !validation.suggestion.includes('A') && (
-                    <div className="text-gray-500 text-xs">
+                    <div className="text-muted text-caption">
                       {validation.suggestion}
                     </div>
                   )}
                 </div>
               ) : validation.isValid && memberExists === null ? (
-                <div className="flex items-center text-blue-600">
+                <div className="flex items-center text-info-fg">
                   <svg className="w-3 h-3 md:w-4 md:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
@@ -503,15 +498,15 @@ export default function MemberLauncher() {
           <button 
             type="submit"
             disabled={isLoading || !validation.isValid || memberExists !== true || isCheckingDatabase || (pinStatus === true && !pin.trim())}
-            className={`w-full inline-flex items-center justify-center px-4 py-2 md:px-6 md:py-3 text-white text-sm md:text-base font-semibold rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl ${
+            className={`w-full inline-flex items-center justify-center px-4 py-2 md:px-6 md:py-3 text-sm md:text-base font-semibold rounded-xl transition-all duration-200 ${
               validation.isValid && !isLoading && memberExists === true && !isCheckingDatabase && (pinStatus !== true || pin.trim())
-                ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700'
-                : 'bg-gray-400 cursor-not-allowed'
+                ? 'bg-brand hover:bg-brand-hover text-on-accent shadow-lg hover:shadow-xl'
+                : 'bg-subtle text-muted cursor-not-allowed'
             }`}
           >
             {isLoading ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 md:h-5 md:w-5 border-2 border-white border-t-transparent mr-2"></div>
+                <div className="animate-spin rounded-full h-4 w-4 md:h-5 md:w-5 border-2 border-on-accent border-t-transparent mr-2"></div>
                 {pinStatus === true ? 'Verifying...' : 'Loading...'}
               </>
             ) : (
@@ -524,21 +519,26 @@ export default function MemberLauncher() {
             )}
           </button>
 
+          {/* Shopping status error hint */}
+          {!!shoppingStatusError && !shoppingOpen && (
+            <div className="text-caption md:text-sm text-danger-fg">{shoppingStatusError}</div>
+          )}
+
           {/* View Orders button: show only when shopping is closed */}
           {!shoppingStatusLoading && !shoppingOpen && (
             <button
               type="button"
               onClick={viewOrders}
               disabled={isLoading || !validation.isValid || memberExists !== true || isCheckingDatabase || (pinStatus === true && !pin.trim())}
-              className={`w-full mt-2 inline-flex items-center justify-center px-4 py-2 md:px-6 md:py-3 text-white text-sm md:text-base font-semibold rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl ${
+              className={`w-full mt-2 inline-flex items-center justify-center px-4 py-2 md:px-6 md:py-3 text-sm md:text-base font-semibold rounded-xl transition-all duration-200 ${
                 validation.isValid && !isLoading && memberExists === true && !isCheckingDatabase && (pinStatus !== true || pin.trim())
-                  ? 'bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700'
-                  : 'bg-gray-400 cursor-not-allowed'
+                  ? 'bg-brand hover:bg-brand-hover text-on-accent shadow-lg hover:shadow-xl'
+                  : 'bg-subtle text-muted cursor-not-allowed'
               }`}
             >
               {isLoading ? (
                 <>
-                  <div className="animate-spin rounded-full h-4 w-4 md:h-5 md:w-5 border-2 border-white border-t-transparent mr-2"></div>
+                  <div className="animate-spin rounded-full h-4 w-4 md:h-5 md:w-5 border-2 border-on-accent border-t-transparent mr-2"></div>
                   Loading...
                 </>
               ) : (
@@ -559,54 +559,10 @@ export default function MemberLauncher() {
           memberId={memberId}
           onPinSet={handlePinSet}
           onCancel={handleSkipPin}
+          onBack={handleBackToMemberId}
         />
       )}
 
-      {currentStep === 'module_picker' && (
-        <div className="space-y-3 md:space-y-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-4 md:p-5">
-            <div className="text-sm md:text-base font-semibold text-gray-800">Choose what you want to do</div>
-            <div className="text-xs md:text-sm text-gray-600 mt-1">
-              Signed in as <span className="font-semibold">{authenticatedMemberId}</span>
-            </div>
-            {!!shoppingStatusError && (
-              <div className="text-xs md:text-sm text-red-600 mt-2">{shoppingStatusError}</div>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => router.push('/shop')}
-            disabled={!shoppingOpen}
-            className={`w-full inline-flex items-center justify-center px-4 py-2 md:px-6 md:py-3 text-white text-sm md:text-base font-semibold rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl ${
-              shoppingOpen
-                ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700'
-                : 'bg-gray-400 cursor-not-allowed'
-            }`}
-          >
-            {shoppingOpen ? 'Food Distribution (Opened)' : 'Food Distribution (Closed)'}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => router.push('/ram/shop')}
-            disabled={!ramShoppingOpen}
-            className={`w-full inline-flex items-center justify-center px-4 py-2 md:px-6 md:py-3 text-white text-sm md:text-base font-semibold rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl ${
-              ramShoppingOpen ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700' : 'bg-gray-400 cursor-not-allowed'
-            }`}
-          >
-            {ramShoppingOpen ? 'Ram Sales (Opened)' : 'Ram Sales (Closed)'}
-          </button>
-
-          <button
-            type="button"
-            onClick={handleBackToMemberId}
-            className="w-full inline-flex items-center justify-center px-4 py-2 md:px-6 md:py-3 text-gray-700 text-sm md:text-base font-semibold rounded-xl transition-all duration-200 border border-gray-300 hover:bg-gray-50"
-          >
-            Back
-          </button>
-        </div>
-      )}
     </div>
   )
 }

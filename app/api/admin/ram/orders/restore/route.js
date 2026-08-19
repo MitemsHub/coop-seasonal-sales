@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { validateSession, validateNumber } from '@/lib/validation'
 import { createClient } from '@/lib/supabaseServer'
+import { logOrderAudit } from '@/lib/orderAudit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -22,6 +23,7 @@ export async function POST(req) {
     if (!session.valid) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json().catch(() => ({}))
+    const adminId = String(body.adminId || body.admin_id || '').trim() || 'admin'
     const idsRaw = asIdArray(body.ids ?? body.id)
     const ids = idsRaw
       .map((v) => validateNumber(v, { min: 1, integer: true }))
@@ -64,6 +66,13 @@ export async function POST(req) {
 
     const { error: upErr } = await supabase.from('ram_orders').update(updates).in('id', toRestore).eq('status', 'Cancelled')
     if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 })
+
+    // Audit (food pattern) — record the restore.
+    await logOrderAudit(
+      supabase,
+      toRestore.map((id) => ({ actor: adminId, action: 'restore', order_id: String(id), detail: {} })),
+      'ram'
+    )
 
     return NextResponse.json({ ok: true, restored: toRestore, failed })
   } catch (e) {

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Complementary Accent — CBN Coop</title>
+<style>
+  :root {
+    --stone-50: #fafaf9; --stone-100: #f5f4f2; --stone-200: #e7e5e1;
+    --stone-300: #dbdad7; --stone-500: #a8a29b; --stone-700: #57534e;
+    --stone-900: #1c1917; --fg: #141414;
+    --green-600: #1d6746; --green-700: #134e34; --green-400: #69b48d;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+    background: var(--stone-50); color: var(--fg); padding: 40px 20px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; }
+  .sub { color: var(--stone-700); font-size: 14px; margin-top: 6px; line-height: 1.5; max-width: 640px; }
+  .note { font-size: 12.5px; color: var(--stone-700); margin-top: 14px; line-height: 1.55; }
+  .note b { color: var(--fg); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; margin-top: 26px; }
+  .card {
+    background: #fff; border: 1px solid var(--stone-200); border-radius: 14px;
+    padding: 18px; position: relative; box-shadow: 0 1px 2px rgba(16,15,12,.05);
+  }
+  .card.reco { border-color: var(--green-600); box-shadow: 0 0 0 1px var(--green-600), 0 8px 20px -8px rgba(29,103,70,.35); }
+  .star {
+    position: absolute; top: -11px; right: 14px; background: var(--green-600); color: #fff;
+    font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; letter-spacing: .02em;
+  }
+  .cname { font-size: 15px; font-weight: 650; display: flex; align-items: center; gap: 8px; }
+  .cdesc { font-size: 12.5px; color: var(--stone-700); margin: 4px 0 12px; line-height: 1.5; }
+  .ramp { display: flex; gap: 3px; margin-bottom: 14px; }
+  .ramp span { flex: 1; height: 18px; border-radius: 4px; }
+  .tile { border: 1px solid var(--stone-200); border-radius: 10px; padding: 14px; }
+  .tile.dark { background: #141414; border-color: #2a2826; margin-top: 10px; }
+  .tile h4 { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--stone-500); margin-bottom: 10px; font-weight: 600; }
+  .tile.dark h4 { color: #78716a; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    height: 36px; padding: 0 16px; border-radius: 8px; border: none;
+    font-size: 13px; font-weight: 500; cursor: default; width: 100%;
+  }
+  .btn + .btn { margin-top: 8px; }
+  .pair { display: flex; gap: 8px; }
+  .pair .btn { width: auto; flex: 1; }
+  .soft {
+    background: var(--bg-100); color: var(--fg-700); border: 1px solid var(--border-200);
+  }
+  .link { font-size: 13px; font-weight: 500; color: var(--fg-700); margin-top: 10px; display: inline-flex; align-items: center; gap: 4px; }
+  .contrast { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .badge {
+    font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+    border: 1px solid var(--stone-200); background: var(--stone-50); color: var(--stone-700);
+  }
+  .badge.pass { color: #027a48; border-color: #bce2cc; background: #f1fef6; }
+  .badge.fail { color: #b42318; border-color: #fed7d2; background: #fef3f2; }
+  .why { font-size: 12px; color: var(--stone-700); margin-top: 12px; line-height: 1.55; border-top: 1px dashed var(--stone-200); padding-top: 10px; }
+  .why b { color: var(--fg); }
+  .footer { margin-top: 26px; font-size: 13px; color: var(--stone-700); line-height: 1.6; }
+  .footer b { color: var(--fg); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Complementary Accent — for buttons that shouldn't be green</h1>
+  <p class="sub">Harvest green stays the primary. These three candidates become the <b>secondary button color</b> (and link/highlight color) for actions that don't need the brand — "Back", "Save draft", "Add note", secondary CTAs. Each shows a real pairing with the green primary, both themes, with live WCAG contrast.</p>
+  <p class="note"><b>Constraint applied (Mitems 06):</b> the accent must not collide with a status color — <b>A</b> sits next to the amber <i>warning</i> ramp (managed by using gold only as a dark solid CTA, never as pale status pills), <b>B</b> and <b>C</b> have no collision at all.</p>
+
+  <div class="grid">
+    <!-- A: Harvest Gold -->
+    <div class="card reco" data-hex="#b45309">
+      <span class="star">★ Recommended</span>
+      <div class="cname">A · Harvest Gold</div>
+      <div class="cdesc">Warm amber — the "harvest" of the co-op. Green + gold is the classic, unmistakably agricultural pairing.</div>
+      <div class="ramp">
+        <span style="background:#fff8ec"></span><span style="background:#fdeed2"></span><span style="background:#f9dca4"></span><span style="background:#f2c26a"></span><span style="background:#e8a53d"></span><span style="background:#d4861c"></span><span style="background:#b45309"></span><span style="background:#92400e"></span><span style="background:#78350f"></span><span style="background:#633112"></span><span style="background:#381c06"></span>
+      </div>
+      <div class="tile">
+        <h4>Light surface</h4>
+        <div class="pair">
+          <span class="btn" style="background:var(--green-600);color:#fff">Primary · green</span>
+          <span class="btn" id="a-solid" style="background:#b45309;color:#fff">Secondary · gold</span>
+        </div>
+        <span class="btn soft" id="a-soft" style="background:#fdeed2;color:#92400e;border-color:#f9dca4">Soft · gold tint</span>
+        <span class="link" id="a-link" style="color:#92400e">Link / accent text →</span>
+        <div class="contrast" id="a-contrast"></div>
+      </div>
+      <div class="tile dark">
+        <h4>Dark surface</h4>
+        <div class="pair">
+          <span class="btn" style="background:var(--green-400);color:#141414">Primary</span>
+          <span class="btn" id="a-solid-dark" style="background:#f2c26a;color:#141414">Secondary · gold</span>
+        </div>
+        <span class="link" style="color:#f9dca4">Link / accent text →</span>
+      </div>
+      <div class="why"><b>Why:</b> tells the harvest story next to the forest green; warm and friendly. <b>Guardrail:</b> gold stays a <i>dark solid</i> CTA only — never used for pale "pending" style pills, so it can't be confused with warning status.</div>
+    </div>
+
+    <!-- B: Plum -->
+    <div class="card" data-hex="#7a54a4">
+      <div class="cname">B · Plum</div>
+      <div class="cdesc">Muted violet — the true color-wheel complement of green. Premium, calm, zero collision with any status color.</div>
+      <div class="ramp">
+        <span style="background:#faf7fc"></span><span style="background:#f1ecfa"></span><span style="background:#e2d7f2"></span><span style="background:#cdb8e6"></span><span style="background:#b292d5"></span><span style="background:#9670bf"></span><span style="background:#7a54a4"></span><span style="background:#65408c"></span><span style="background:#543573"></span><span style="background:#462d5f"></span><span style="background:#2c1a40"></span>
+      </div>
+      <div class="tile">
+        <h4>Light surface</h4>
+        <div class="pair">
+          <span class="btn" style="background:var(--green-600);color:#fff">Primary · green</span>
+          <span class="btn" id="b-solid" style="background:#7a54a4;color:#fff">Secondary · plum</span>
+        </div>
+        <span class="btn soft" id="b-soft" style="background:#f1ecfa;color:#65408c;border-color:#e2d7f2">Soft · plum tint</span>
+        <span class="link" id="b-link" style="color:#65408c">Link / accent text →</span>
+        <div class="contrast" id="b-contrast"></div>
+      </div>
+      <div class="tile dark">
+        <h4>Dark surface</h4>
+        <div class="pair">
+          <span class="btn" style="background:var(--green-400);color:#141414">Primary</span>
+          <span class="btn" id="b-solid-dark" style="background:#cdb8e6;color:#141414">Secondary · plum</span>
+        </div>
+        <span class="link" style="color:#cdb8e6">Link / accent text →</span>
+      </div>
+      <div class="why"><b>Why:</b> distinct lane from every status color; reads considered and institutional. Slightly more "corporate" than the others.</div>
+    </div>
+
+    <!-- C: Bronze -->
+    <div class="card" data-hex="#8f5736">
+      <div class="cname">C · Bronze</div>
+      <div class="cdesc">Earthy copper-brown — warm, quiet, and trustworthy. Feels like grain, soil, and an established co-op.</div>
+      <div class="ramp">
+        <span style="background:#fbf7f2"></span><span style="background:#f4eadf"></span><span style="background:#e8d3bf"></span><span style="background:#d8b494"></span><span style="background:#c48f67"></span><span style="background:#ad6f45"></span><span style="background:#8f5736"></span><span style="background:#73442b"></span><span style="background:#5d3825"></span><span style="background:#4d2f21"></span><span style="background:#2a1810"></span>
+      </div>
+      <div class="tile">
+        <h4>Light surface</h4>
+        <div class="pair">
+          <span class="btn" style="background:var(--green-600);color:#fff">Primary · green</span>
+          <span class="btn" id="c-solid" style="background:#8f5736;color:#fff">Secondary · bronze</span>
+        </div>
+        <span class="btn soft" id="c-soft" style="background:#f4eadf;color:#73442b;border-color:#e8d3bf">Soft · bronze tint</span>
+        <span class="link" id="c-link" style="color:#73442b">Link / accent text →</span>
+        <div class="contrast" id="c-contrast"></div>
+      </div>
+      <div class="tile dark">
+        <h4>Dark surface</h4>
+        <div class="pair">
+          <span class="btn" style="background:var(--green-400);color:#141414">Primary</span>
+          <span class="btn" id="c-solid-dark" style="background:#d8b494;color:#141414">Secondary · bronze</span>
+        </div>
+        <span class="link" style="color:#d8b494">Link / accent text →</span>
+      </div>
+      <div class="why"><b>Why:</b> the most understated of the three — reads as a "calm neutral that isn't grey". Strong for an older, trust-first membership.</div>
+    </div>
+  </div>
+
+  <p class="footer"><b>Pick A, B, or C</b> — I'll wire it into the <code>accent</code> token set (fill / hover / soft / text) and apply it to the non-green buttons and links across the app, exactly like the Harvest tokens. Until then nothing changes in the app.</p>
+</div>
+
+<script>
+  function lum(hex) {
+    const n = hex.slice(1);
+    const c = (i) => { const v = parseInt(n.slice(i, i + 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * c(0) + 0.7152 * c(2) + 0.0722 * c(4);
+  }
+  function cr(a, b) {
+    const [l1, l2] = [lum(a), lum(b)].sort((x, y) => y - x);
+    return ((l1 + 0.05) / (l2 + 0.05)).toFixed(2);
+  }
+  const checks = [
+    ['a', '#b45309', '#ffffff', '#92400e', '#fdeed2', '#f2c26a', '#141414'],
+    ['b', '#7a54a4', '#ffffff', '#65408c', '#f1ecfa', '#cdb8e6', '#141414'],
+    ['c', '#8f5736', '#ffffff', '#73442b', '#f4eadf', '#d8b494', '#141414'],
+  ];
+  checks.forEach(([id, solid, white, fg, bg, darkFill, darkText]) => {
+    const el = document.getElementById(id + '-contrast');
+    const pair1 = [['white on solid', cr(solid, white)], ['fg on soft', cr(fg, bg)]];
+    const pair2 = [['dark text on dark fill', cr(darkFill, darkText)]];
+    const row = (label, val) => {
+      const pass = parseFloat(val) >= 4.5;
+      return `<span class="badge ${pass ? 'pass' : 'fail'}">${label}: ${val}:1 ${pass ? '✓' : '✗'}</span>`;
+    };
+    el.innerHTML = pair1.map(([l, v]) => row(l, v)).join('') + row(pair2[0][0], pair2[0][1]);
+  });
+</script>
+</body>
+</html>

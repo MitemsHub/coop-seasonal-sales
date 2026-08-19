@@ -308,11 +308,11 @@ function RepBanksContent() {
   }
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
         <div>
-          <h1 className="text-base sm:text-lg md:text-xl font-semibold break-words">Rep — Banks</h1>
-          <div className="text-xs sm:text-sm text-gray-600">Manage bank details and invoices for your delivery location(s).</div>
+          <h1 className="text-h2 font-bold tracking-tight text-fg">Banks</h1>
+          <div className="text-xs sm:text-sm text-muted">Manage bank details and invoices for your delivery location(s).</div>
         </div>
       </div>
 
@@ -322,7 +322,7 @@ function RepBanksContent() {
             key={`${msg.type}-${msg.text}`}
             {...toastMotion}
             className={`mb-4 rounded-lg border p-3 text-sm ${
-              msg.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'
+              msg.type === 'error' ? 'border-danger-border bg-danger-bg text-danger-fg' : 'border-success-border bg-success-bg text-success-fg'
             }`}
           >
             {msg.text}
@@ -330,12 +330,12 @@ function RepBanksContent() {
         ) : null}
       </AnimatePresence>
 
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 mb-4">
+      <div className="ui-card p-4 mb-4">
         <div className="flex flex-col gap-2">
           <div className="flex flex-col lg:flex-row gap-2 lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 min-w-0">
               <input
-                className="w-full max-w-[420px] border-2 border-gray-200 rounded-xl px-3 py-2 text-sm"
+                className="w-full max-w-[420px] min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                 placeholder="Search (location, vendor, bank, account...)"
                 value={term}
                 onChange={(e) => setTerm(e.target.value)}
@@ -344,57 +344,57 @@ function RepBanksContent() {
                 type="button"
                 onClick={fetchRows}
                 disabled={loading}
-                className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-50"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
               >
                 {loading ? 'Loading…' : 'Refresh'}
               </button>
             </div>
           </div>
-          <div className="text-xs text-gray-600">Locations: {filtered.length.toLocaleString()}</div>
+          <div className="text-xs text-muted">Locations: {filtered.length.toLocaleString()}</div>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+      <div className="ui-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs sm:text-sm">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-subtle border-b border-line">
               <tr>
-                <th className="p-2 text-left">Delivery Location</th>
-                <th className="p-2 text-left">Vendor</th>
-                <th className="p-2 text-left">Bank</th>
-                <th className="p-2 text-left">Account Name</th>
-                <th className="p-2 text-left">Account No</th>
-                <th className="p-2 text-right">Invoices</th>
-                <th className="p-2 text-right">Status</th>
-                <th className="p-2 text-right">Actions</th>
+                <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Delivery Location</th>
+                <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Vendor</th>
+                <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Bank</th>
+                <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Account Name</th>
+                <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Account No</th>
+                <th className="p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Invoices</th>
+                <th className="p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Status</th>
+                <th className="p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Actions</th>
               </tr>
             </thead>
             <tbody>
               {!didLoadOnce || loading ? (
                 Array.from({ length: 10 }).map((_, i) => (
-                  <tr key={`sk_${i}`} className="border-b last:border-b-0">
+                  <tr key={`sk_${i}`} className="border-b border-line last:border-b-0">
                     {Array.from({ length: 8 }).map((__, j) => (
                       <td key={`sk_${i}_${j}`} className="p-2">
-                        <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
+                        <div className="h-4 w-full sakani-skeleton rounded animate-pulse" />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : !filtered.length ? (
                 <tr>
-                  <td className="p-3 text-gray-600" colSpan={8}>
+                  <td className="p-3 text-muted" colSpan={8}>
                     No delivery locations found.
                   </td>
                 </tr>
               ) : (
                 filtered.map((r) => (
-                  <tr key={r.id} className="border-b last:border-b-0 hover:bg-gray-50">
+                  <tr key={r.id} className="border-b border-line last:border-b-0 hover:bg-subtle">
                     <td className="p-2 align-top">
                       <div className="font-medium">{r.delivery_location || '—'}</div>
                     </td>
                     <td className="p-2 align-top">
                       <div className="font-medium">{r.name || '—'}</div>
-                      <div className="text-gray-600">{r.phone || ''}</div>
+                      <div className="text-muted">{r.phone || ''}</div>
                     </td>
                     <td className="p-2 align-top">{r.bank?.bank_name || '—'}</td>
                     <td className="p-2 align-top">{r.bank?.account_name || '—'}</td>
@@ -402,16 +402,16 @@ function RepBanksContent() {
                     <td className="p-2 align-top text-right">{Number(r.invoice_count || 0).toLocaleString()}</td>
                     <td className="p-2 align-top text-right">
                       {r?.paid?.is_paid ? (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">Paid</span>
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-success-bg text-success-fg">Paid</span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">Unpaid</span>
+                        <span className="inline-flex items-center rounded-full bg-subtle px-2 py-0.5 text-xs font-semibold text-muted">Unpaid</span>
                       )}
                     </td>
                     <td className="p-2 align-top text-right">
                       <div className="flex justify-end">
                         <select
                           defaultValue=""
-                          className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs sm:text-sm bg-white disabled:opacity-50"
+                          className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none disabled:opacity-50"
                           onChange={(e) => {
                             const v = e.target.value
                             e.target.value = ''
@@ -445,13 +445,13 @@ function RepBanksContent() {
           setBankModalOpen(false)
           setBankLoc(null)
         }}
-        title={`Bank Details — ${bankLoc?.delivery_location || 'Vendor'}`}
+        title={`Bank Details · ${bankLoc?.delivery_location || 'Vendor'}`}
         overlayClassName="bg-black/40"
         footer={
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-sm font-semibold text-gray-700 disabled:opacity-50"
+              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => {
                 setBankModalOpen(false)
                 setBankLoc(null)
@@ -462,7 +462,7 @@ function RepBanksContent() {
             </button>
             <button
               type="button"
-              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
               onClick={saveBank}
               disabled={savingBank}
             >
@@ -473,19 +473,19 @@ function RepBanksContent() {
       >
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <div className="text-xs font-medium text-gray-700 mb-1">Bank</div>
-            <input className="w-full border rounded px-3 py-2 text-sm" value={bankName} onChange={(e) => setBankName(e.target.value)} />
+            <div className="text-xs font-medium text-subtext mb-1">Bank</div>
+            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={bankName} onChange={(e) => setBankName(e.target.value)} />
           </div>
           <div>
-            <div className="text-xs font-medium text-gray-700 mb-1">Account Name</div>
-            <input className="w-full border rounded px-3 py-2 text-sm" value={accountName} onChange={(e) => setAccountName(e.target.value)} />
+            <div className="text-xs font-medium text-subtext mb-1">Account Name</div>
+            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={accountName} onChange={(e) => setAccountName(e.target.value)} />
           </div>
           <div>
-            <div className="text-xs font-medium text-gray-700 mb-1">Account Number</div>
-            <input className="w-full border rounded px-3 py-2 text-sm" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} inputMode="numeric" />
+            <div className="text-xs font-medium text-subtext mb-1">Account Number</div>
+            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} inputMode="numeric" />
           </div>
         </div>
-        <div className="mt-3 text-xs text-gray-600">Saving a new account keeps audit history (previous accounts are retained).</div>
+        <div className="mt-3 text-xs text-muted">Saving a new account keeps audit history (previous accounts are retained).</div>
       </DraggableModal>
 
       <DraggableModal
@@ -494,13 +494,13 @@ function RepBanksContent() {
           if (invoiceLoading) return
           setInvoiceListOpen(false)
         }}
-        title={`Invoices — ${invoiceLoc?.delivery_location || 'Vendor'}`}
+        title={`Invoices · ${invoiceLoc?.delivery_location || 'Vendor'}`}
         overlayClassName="bg-black/40"
         footer={
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-sm font-semibold text-gray-700"
+              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle"
               onClick={() => setInvoiceListOpen(false)}
             >
               Close
@@ -509,31 +509,31 @@ function RepBanksContent() {
         }
       >
         <div className="space-y-2">
-          <div className="text-xs text-gray-600">Total: {invoices.length.toLocaleString()}</div>
+          <div className="text-xs text-muted">Total: {invoices.length.toLocaleString()}</div>
           <div className="overflow-x-auto border rounded">
             <table className="w-full text-xs">
-              <thead className="bg-gray-50 border-b">
+              <thead className="bg-subtle border-b border-line">
                 <tr>
-                  <th className="p-2 text-left">File</th>
-                  <th className="p-2 text-left">Ref</th>
-                  <th className="p-2 text-left">Cycle</th>
-                  <th className="p-2 text-left">Uploaded</th>
-                  <th className="p-2 text-right">Actions</th>
+                  <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">File</th>
+                  <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Ref</th>
+                  <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Cycle</th>
+                  <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Uploaded</th>
+                  <th className="p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {!invoices.length && (
                   <tr>
-                    <td className="p-2 text-gray-600" colSpan={5}>
+                    <td className="p-2 text-muted" colSpan={5}>
                       {invoiceLoading ? 'Loading…' : 'No invoices uploaded.'}
                     </td>
                   </tr>
                 )}
                 {invoices.map((inv) => (
-                  <tr key={inv.id} className="border-b last:border-b-0">
+                  <tr key={inv.id} className="border-b border-line last:border-b-0">
                     <td className="p-2">
                       <div className="font-medium">{inv.file_name}</div>
-                      <div className="text-gray-600">{inv.mime_type}</div>
+                      <div className="text-muted">{inv.mime_type}</div>
                     </td>
                     <td className="p-2">{inv.invoice_ref || '—'}</td>
                     <td className="p-2">{inv.ram_cycle_id != null ? String(inv.ram_cycle_id) : '—'}</td>
@@ -545,25 +545,25 @@ function RepBanksContent() {
                             href={inv.url}
                             target="_blank"
                             rel="noreferrer"
-                            className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs font-semibold inline-block"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover"
                           >
                             Open
                           </a>
                         ) : (
-                          <span className="text-gray-500">—</span>
+                          <span className="text-muted">—</span>
                         )}
                         {!invoiceLoc?.paid?.is_paid ? (
                           <>
                             <button
                               type="button"
-                              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-700"
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle"
                               onClick={() => openEditInvoice(inv)}
                             >
                               Edit
                             </button>
                             <button
                               type="button"
-                              className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold"
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-danger-fg px-3 py-1.5 text-xs font-semibold text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110"
                               onClick={() => confirmDeleteInvoice(inv)}
                             >
                               Delete
@@ -587,13 +587,13 @@ function RepBanksContent() {
           setInvoiceEditOpen(false)
           setInvoiceEditRow(null)
         }}
-        title={`Edit Invoice — ${invoiceEditRow?.file_name || ''}`}
+        title={`Edit Invoice · ${invoiceEditRow?.file_name || ''}`}
         overlayClassName="bg-black/40"
         footer={
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-sm font-semibold text-gray-700 disabled:opacity-50"
+              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => {
                 setInvoiceEditOpen(false)
                 setInvoiceEditRow(null)
@@ -604,7 +604,7 @@ function RepBanksContent() {
             </button>
             <button
               type="button"
-              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
               onClick={saveInvoiceEdits}
               disabled={invoiceSaving}
             >
@@ -615,20 +615,20 @@ function RepBanksContent() {
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <div className="text-xs font-medium text-gray-700 mb-1">Invoice reference</div>
-            <input className="w-full border rounded px-3 py-2 text-sm" value={invoiceEditRef} onChange={(e) => setInvoiceEditRef(e.target.value)} />
+            <div className="text-xs font-medium text-subtext mb-1">Invoice reference</div>
+            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={invoiceEditRef} onChange={(e) => setInvoiceEditRef(e.target.value)} />
           </div>
           <div>
-            <div className="text-xs font-medium text-gray-700 mb-1">Amount</div>
-            <input className="w-full border rounded px-3 py-2 text-sm" value={invoiceEditAmount} onChange={(e) => setInvoiceEditAmount(e.target.value)} inputMode="decimal" />
+            <div className="text-xs font-medium text-subtext mb-1">Amount</div>
+            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={invoiceEditAmount} onChange={(e) => setInvoiceEditAmount(e.target.value)} inputMode="decimal" />
           </div>
           <div>
-            <div className="text-xs font-medium text-gray-700 mb-1">Invoice date (YYYY-MM-DD)</div>
-            <input className="w-full border rounded px-3 py-2 text-sm" value={invoiceEditDate} onChange={(e) => setInvoiceEditDate(e.target.value)} placeholder="YYYY-MM-DD" />
+            <div className="text-xs font-medium text-subtext mb-1">Invoice date (YYYY-MM-DD)</div>
+            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={invoiceEditDate} onChange={(e) => setInvoiceEditDate(e.target.value)} placeholder="YYYY-MM-DD" />
           </div>
           <div>
-            <div className="text-xs font-medium text-gray-700 mb-1">Notes</div>
-            <input className="w-full border rounded px-3 py-2 text-sm" value={invoiceEditNotes} onChange={(e) => setInvoiceEditNotes(e.target.value)} />
+            <div className="text-xs font-medium text-subtext mb-1">Notes</div>
+            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={invoiceEditNotes} onChange={(e) => setInvoiceEditNotes(e.target.value)} />
           </div>
         </div>
       </DraggableModal>
@@ -646,7 +646,7 @@ function RepBanksContent() {
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-sm font-semibold text-gray-700 disabled:opacity-50"
+              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => {
                 setInvoiceDeleteOpen(false)
                 setInvoiceDeleteRow(null)
@@ -657,7 +657,7 @@ function RepBanksContent() {
             </button>
             <button
               type="button"
-              className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-danger-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
               onClick={deleteInvoice}
               disabled={invoiceDeleting}
             >
@@ -666,7 +666,7 @@ function RepBanksContent() {
           </div>
         }
       >
-        <div className="text-sm text-gray-700">
+        <div className="text-sm text-subtext">
           This will permanently delete the invoice file and record{invoiceDeleteRow?.file_name ? `: ${invoiceDeleteRow.file_name}` : ''}.
         </div>
       </DraggableModal>
@@ -677,13 +677,13 @@ function RepBanksContent() {
           if (uploading) return
           setInvoiceUploadOpen(false)
         }}
-        title={`Upload Invoice — ${invoiceLoc?.delivery_location || 'Vendor'}`}
+        title={`Upload Invoice · ${invoiceLoc?.delivery_location || 'Vendor'}`}
         overlayClassName="bg-black/40"
         footer={
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-sm font-semibold text-gray-700 disabled:opacity-50"
+              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => setInvoiceUploadOpen(false)}
               disabled={uploading}
             >
@@ -691,7 +691,7 @@ function RepBanksContent() {
             </button>
             <button
               type="button"
-              className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-success-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
               onClick={uploadInvoice}
               disabled={uploading || !invoiceFile}
             >
@@ -702,10 +702,10 @@ function RepBanksContent() {
       >
         <div className="space-y-3">
           <div>
-            <div className="text-xs font-medium text-gray-700 mb-1">Invoice file (PDF / JPG / PNG)</div>
+            <div className="text-xs font-medium text-subtext mb-1">Invoice file (PDF / JPG / PNG)</div>
             <input
               type="file"
-              className="w-full border rounded px-3 py-2 text-sm bg-white"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               accept=".pdf,image/*"
               onChange={(e) => setInvoiceFile(e.target.files?.[0] || null)}
               disabled={uploading}
@@ -713,15 +713,15 @@ function RepBanksContent() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <div className="text-xs font-medium text-gray-700 mb-1">Invoice reference (optional)</div>
-              <input className="w-full border rounded px-3 py-2 text-sm" value={invoiceRef} onChange={(e) => setInvoiceRef(e.target.value)} disabled={uploading} />
+              <div className="text-xs font-medium text-subtext mb-1">Invoice reference (optional)</div>
+              <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={invoiceRef} onChange={(e) => setInvoiceRef(e.target.value)} disabled={uploading} />
             </div>
             <div>
-              <div className="text-xs font-medium text-gray-700 mb-1">Notes (optional)</div>
-              <input className="w-full border rounded px-3 py-2 text-sm" value={invoiceNotes} onChange={(e) => setInvoiceNotes(e.target.value)} disabled={uploading} />
+              <div className="text-xs font-medium text-subtext mb-1">Notes (optional)</div>
+              <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={invoiceNotes} onChange={(e) => setInvoiceNotes(e.target.value)} disabled={uploading} />
             </div>
           </div>
-          <div className="text-xs text-gray-600">Invoices are stored per vendor and tagged to the current Ram cycle (where available).</div>
+          <div className="text-xs text-muted">Invoices are stored per vendor and tagged to the current Ram cycle (where available).</div>
         </div>
       </DraggableModal>
     </div>

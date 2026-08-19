@@ -222,8 +222,8 @@ function AdminFoodBanksContent() {
     <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
         <div>
-          <h1 className="text-lg sm:text-xl md:text-2xl font-semibold">Admin — Food Distribution — Banks</h1>
-          <div className="text-xs sm:text-sm text-gray-600">Cycle-sensitive (uses active cycle)</div>
+          <h1 className="text-h2 font-semibold">Admin · Food Distribution · Banks</h1>
+          <div className="text-xs sm:text-sm text-muted">Cycle-sensitive (uses active cycle)</div>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
           <input
@@ -236,7 +236,7 @@ function AdminFoodBanksContent() {
             type="button"
             onClick={fetchRows}
             disabled={loading}
-            className="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+            className="px-4 py-2 rounded-lg text-sm bg-brand text-on-accent hover:bg-brand-hover disabled:opacity-50 whitespace-nowrap"
           >
             {loading ? 'Refreshing…' : 'Refresh'}
           </button>
@@ -248,7 +248,7 @@ function AdminFoodBanksContent() {
           <motion.div
             {...toastMotion}
             className={`mb-4 rounded-lg border px-3 py-2 text-sm ${
-              msg.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'
+              msg.type === 'error' ? 'bg-danger-bg text-danger-fg border-danger-border' : 'bg-success-bg text-success-fg border-success-border'
             }`}
           >
             {msg.text}
@@ -259,7 +259,7 @@ function AdminFoodBanksContent() {
       <div className="ui-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50">
+            <thead className="bg-subtle">
               <tr>
                 <th className="text-left px-3 py-2 border-b">Branch</th>
                 <th className="text-left px-3 py-2 border-b">Bank</th>
@@ -274,30 +274,30 @@ function AdminFoodBanksContent() {
               {loading && !filtered.length && (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={`sk_${i}`} className="animate-pulse">
-                    <td className="px-3 py-3 border-b"><div className="h-4 w-40 bg-gray-200 rounded" /></td>
-                    <td className="px-3 py-3 border-b"><div className="h-4 w-28 bg-gray-200 rounded" /></td>
-                    <td className="px-3 py-3 border-b"><div className="h-4 w-36 bg-gray-200 rounded" /></td>
-                    <td className="px-3 py-3 border-b"><div className="h-4 w-24 bg-gray-200 rounded" /></td>
-                    <td className="px-3 py-3 border-b text-right"><div className="h-4 w-10 bg-gray-200 rounded ml-auto" /></td>
-                    <td className="px-3 py-3 border-b"><div className="h-4 w-16 bg-gray-200 rounded" /></td>
-                    <td className="px-3 py-3 border-b text-right"><div className="h-8 w-28 bg-gray-200 rounded ml-auto" /></td>
+                    <td className="px-3 py-3 border-b"><div className="h-4 w-40 bg-muted rounded" /></td>
+                    <td className="px-3 py-3 border-b"><div className="h-4 w-28 bg-muted rounded" /></td>
+                    <td className="px-3 py-3 border-b"><div className="h-4 w-36 bg-muted rounded" /></td>
+                    <td className="px-3 py-3 border-b"><div className="h-4 w-24 bg-muted rounded" /></td>
+                    <td className="px-3 py-3 border-b text-right"><div className="h-4 w-10 bg-muted rounded ml-auto" /></td>
+                    <td className="px-3 py-3 border-b"><div className="h-4 w-16 bg-muted rounded" /></td>
+                    <td className="px-3 py-3 border-b text-right"><div className="h-8 w-28 bg-muted rounded ml-auto" /></td>
                   </tr>
                 ))
               )}
 
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-gray-600">
+                  <td colSpan={7} className="px-3 py-6 text-center text-muted">
                     No rows found
                   </td>
                 </tr>
               )}
 
               {filtered.map((r) => (
-                <tr key={r.id} className="hover:bg-gray-50">
+                <tr key={r.id} className="hover:bg-subtle">
                   <td className="px-3 py-2 border-b">
-                    <div className="font-medium text-gray-900">{r.name || '—'}</div>
-                    <div className="text-xs text-gray-500">{r.code || ''}</div>
+                    <div className="font-medium text-fg">{r.name || '—'}</div>
+                    <div className="text-xs text-subtext">{r.code || ''}</div>
                   </td>
                   <td className="px-3 py-2 border-b">{r.bank?.bank_name || '—'}</td>
                   <td className="px-3 py-2 border-b">{r.bank?.account_name || '—'}</td>
@@ -306,7 +306,7 @@ function AdminFoodBanksContent() {
                   <td className="px-3 py-2 border-b">
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                        r.paid?.is_paid ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'
+                        r.paid?.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'
                       }`}
                     >
                       {r.paid?.is_paid ? 'Paid' : 'Unpaid'}
@@ -316,7 +316,7 @@ function AdminFoodBanksContent() {
                     <div className="flex justify-end">
                       <select
                         defaultValue=""
-                        className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs sm:text-sm bg-white disabled:opacity-50"
+                        className="border border-line rounded-lg px-2 py-1.5 text-xs sm:text-sm bg-surface disabled:opacity-50"
                         onChange={(e) => {
                           const v = e.target.value
                           e.target.value = ''
@@ -345,23 +345,23 @@ function AdminFoodBanksContent() {
         </div>
       </div>
 
-      <DraggableModal open={invoiceListOpen} onClose={() => setInvoiceListOpen(false)} title={`Invoices — ${invoiceLoc?.name || ''}`}>
+      <DraggableModal open={invoiceListOpen} onClose={() => setInvoiceListOpen(false)} title={`Invoices · ${invoiceLoc?.name || ''}`}>
         <div className="space-y-3">
           {invoiceLoading ? (
-            <div className="text-sm text-gray-600">Loading…</div>
+            <div className="text-sm text-muted">Loading…</div>
           ) : invoices.length === 0 ? (
-            <div className="text-sm text-gray-600">No invoices uploaded.</div>
+            <div className="text-sm text-muted">No invoices uploaded.</div>
           ) : (
             <div className="space-y-2">
               {invoices.map((inv) => (
-                <div key={inv.id} className="border rounded-lg p-3 bg-white">
+                <div key={inv.id} className="border rounded-lg p-3 bg-surface">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm font-medium text-gray-900 truncate">{inv.file_name || 'Invoice'}</div>
-                      <div className="text-xs text-gray-600">
+                      <div className="text-sm font-medium text-fg truncate">{inv.file_name || 'Invoice'}</div>
+                      <div className="text-xs text-muted">
                         Ref: {inv.invoice_ref || '—'} • Date: {inv.invoice_date || '—'} • Amount: {inv.amount != null && inv.amount !== '' ? `₦${Number(inv.amount || 0).toLocaleString()}` : '—'}
                       </div>
-                      {inv.notes && <div className="text-xs text-gray-500 mt-1">{inv.notes}</div>}
+                      {inv.notes && <div className="text-xs text-subtext mt-1">{inv.notes}</div>}
                     </div>
                     <div className="shrink-0">
                       {inv.url ? (
@@ -369,12 +369,12 @@ function AdminFoodBanksContent() {
                           href={inv.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex px-3 py-1.5 rounded-lg text-xs bg-gray-900 text-white hover:bg-black"
+                          className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-2.5 py-1 text-xs font-medium text-fg transition-colors duration-200 ease-sakani hover:border-line-strong hover:bg-subtle"
                         >
                           Open
                         </a>
                       ) : (
-                        <span className="text-xs text-gray-500">No link</span>
+                        <span className="text-xs text-subtext">No link</span>
                       )}
                     </div>
                   </div>
@@ -385,54 +385,54 @@ function AdminFoodBanksContent() {
         </div>
       </DraggableModal>
 
-      <DraggableModal open={bankModalOpen} onClose={() => setBankModalOpen(false)} title={`Bank Details — ${bankLoc?.name || ''}`}>
+      <DraggableModal open={bankModalOpen} onClose={() => setBankModalOpen(false)} title={`Bank Details · ${bankLoc?.name || ''}`}>
         <div className="space-y-3">
           <input
             value={bankName}
             onChange={(e) => setBankName(e.target.value)}
             placeholder="Bank name"
-            className="w-full border rounded-lg px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             disabled={bankSaving}
           />
           <input
             value={accountName}
             onChange={(e) => setAccountName(e.target.value)}
             placeholder="Account name"
-            className="w-full border rounded-lg px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             disabled={bankSaving}
           />
           <input
             value={accountNumber}
             onChange={(e) => setAccountNumber(e.target.value)}
             placeholder="Account number"
-            className="w-full border rounded-lg px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             disabled={bankSaving}
           />
           <button
             type="button"
             onClick={saveBank}
             disabled={bankSaving}
-            className="px-3 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+            className="px-3 py-2 rounded-lg text-sm bg-brand text-on-accent hover:bg-brand-hover disabled:opacity-50"
           >
             {bankSaving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </DraggableModal>
 
-      <DraggableModal open={invoiceUploadOpen} onClose={() => setInvoiceUploadOpen(false)} title={`Upload Invoice — ${invoiceUploadLoc?.name || ''}`}>
+      <DraggableModal open={invoiceUploadOpen} onClose={() => setInvoiceUploadOpen(false)} title={`Upload Invoice · ${invoiceUploadLoc?.name || ''}`}>
         <div className="space-y-3">
           <input
             value={invoiceRef}
             onChange={(e) => setInvoiceRef(e.target.value)}
             placeholder="Invoice reference (optional)"
-            className="w-full border rounded-lg px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             disabled={invoiceUploading}
           />
           <textarea
             value={invoiceNotes}
             onChange={(e) => setInvoiceNotes(e.target.value)}
             placeholder="Notes (optional)"
-            className="w-full border rounded-lg px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             rows={3}
             disabled={invoiceUploading}
           />
@@ -446,7 +446,7 @@ function AdminFoodBanksContent() {
             type="button"
             onClick={uploadInvoice}
             disabled={invoiceUploading || !invoiceFile}
-            className="px-3 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+            className="px-3 py-2 rounded-lg text-sm bg-brand text-on-accent hover:bg-brand-hover disabled:opacity-50"
           >
             {invoiceUploading ? 'Uploading…' : 'Upload'}
           </button>

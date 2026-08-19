@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 export default function PageTransition({ children }) {
   const pathname = usePathname()
   const [toasts, setToasts] = useState([])
-  const fullBleed = pathname === '/' || pathname === '/portal'
+  const fullBleed = pathname === '/' || pathname === '/portal' || pathname.startsWith('/admin') || pathname.startsWith('/rep')
 
   useEffect(() => {
     const onToast = (event) => {
@@ -60,10 +60,10 @@ export default function PageTransition({ children }) {
                 <div
                   className={`rounded-xl border px-4 py-3 text-sm shadow-xl backdrop-blur ${
                     t.type === 'success'
-                      ? 'border-green-200 bg-green-50/95 text-green-800'
+                      ? 'border-success-border bg-success-bg/95 text-success-fg'
                       : t.type === 'error'
-                        ? 'border-red-200 bg-red-50/95 text-red-800'
-                        : 'border-gray-200 bg-white/95 text-gray-800'
+                        ? 'border-danger-border bg-danger-bg/95 text-danger-fg'
+                        : 'border-line-subtle bg-surface/95 text-fg'
                   }`}
                 >
                   <div className="flex items-start gap-2">
@@ -76,7 +76,7 @@ export default function PageTransition({ children }) {
                     <button
                       type="button"
                       aria-label="Dismiss"
-                      className="ml-2 rounded-md px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
+                      className="ml-2 rounded-md px-2 py-1 text-xs text-muted hover:bg-muted"
                       onClick={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}
                     >
                       ✕

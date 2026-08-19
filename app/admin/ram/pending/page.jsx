@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import DraggableModal from '../../../components/DraggableModal'
+import RamOrderAuditModal from '../../../components/RamOrderAuditModal'
 import { AnimatePresence, motion } from 'framer-motion'
+import ExportButton from '../../../components/ui/ExportButton'
+import { createManifestDoc, addManifestTable, sanitizePdfText } from '../../../lib/pdfExport'
+import { CheckCircle2, CheckSquare, ChevronLeft, ChevronRight, Inbox, RefreshCw, RotateCcw, Search, XCircle } from 'lucide-react'
 
 function safeJsonFactory() {
   return async (res, label) => {
@@ -48,6 +52,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
   const [editMemberId, setEditMemberId] = useState('')
   const [editPhone, setEditPhone] = useState('')
   const [editBusy, setEditBusy] = useState(false)
+  const [auditOrder, setAuditOrder] = useState(null)
   const fetchCtl = useRef(null)
   const safeJson = useMemo(() => safeJsonFactory(), [])
 
@@ -198,7 +203,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
     const locationLabel = locationId
       ? filteredLocations.find((l) => String(l.id) === String(locationId))?.delivery_location || String(locationId)
       : 'All'
-    ws.addRow(['Ram Sales — Pending Orders (Admin)'])
+    ws.addRow(['Ram Sales · Pending Orders (Admin)'])
     ws.addRow([`Location: ${locationLabel} | Payment: ${payment || 'All'} | Grade: ${memberGrade ? memberGrade.trim() : 'All'} | Search: ${term || 'All'}`])
 
     const headers = Object.keys(rows[0] || { id: '' })
@@ -218,11 +223,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
   const exportPDF = async () => {
     const srcOrders = await fetchAllForExport()
     if (!srcOrders.length) return
-    const { jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-
-    const sanitize = (s) => String(s ?? '').replace(/\u20A6|₦/g, 'NGN ').replace(/[\u2013\u2014]/g, '-')
+    const sanitize = sanitizePdfText
     const locationLabel = locationId
       ? filteredLocations.find((l) => String(l.id) === String(locationId))?.delivery_location || String(locationId)
       : 'All'
@@ -232,12 +233,10 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
       `Grade: ${memberGrade ? memberGrade.trim() : 'All'}`,
       `Search: ${term || 'All'}`,
     ].join('  |  ')
-
-    doc.setFontSize(14)
-    doc.text('Ram Sales — Pending Orders', 12, 12)
-    doc.setFontSize(9)
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 12, 18)
-    doc.text(`Filters: ${sanitize(filters)}`, 12, 24)
+    const doc = await createManifestDoc({
+      title: 'Ram Sales · Pending Orders',
+      meta: `Filters: ${sanitize(filters)}`,
+    })
 
     const head = [
       [
@@ -301,13 +300,11 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
       '',
     ])
 
-    autoTable(doc, {
+    await addManifestTable(doc, {
       head,
       body,
       startY: 30,
-      styles: { fontSize: 7 },
-      headStyles: { fillColor: [75, 85, 99] },
-      alternateRowStyles: { fillColor: [249, 250, 251] },
+      variant: 'ram',
       columnStyles: {
         6: { halign: 'right' },
         7: { halign: 'right' },
@@ -315,13 +312,14 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
         9: { halign: 'right' },
         10: { halign: 'right' },
       },
-      didParseCell: (data) => {
-        if (data.section === 'body' && data.row.index === totalsRowIndex) {
-          data.cell.styles.fontStyle = 'bold'
-          data.cell.styles.fillColor = [243, 244, 246]
-        }
+      options: {
+        didParseCell: (data) => {
+          if (data.section === 'body' && data.row.index === totalsRowIndex) {
+            data.cell.styles.fontStyle = 'bold'
+            data.cell.styles.fillColor = [243, 244, 246]
+          }
+        },
       },
-      margin: { left: 12, right: 12 },
     })
 
     doc.save(`ram_pending_orders_${new Date().toISOString().split('T')[0]}.pdf`)
@@ -511,7 +509,8 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
   return (
     <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
-        <h1 className="text-base sm:text-lg md:text-xl font-semibold text-center sm:text-left break-words">Admin — Ram Sales — {status}</h1>
+        <h1 className="text-h2 font-bold tracking-tight text-fg">Ram Sales · {status}</h1>
+        <p className="text-sm text-muted">Browse, filter, approve and manage {status.toLowerCase()} ram orders.</p>
       </div>
 
       <AnimatePresence mode="wait">
@@ -519,8 +518,8 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
           <motion.div
             key={`${msg.type}-${msg.text}`}
             {...toastMotion}
-            className={`mb-4 rounded-lg border p-3 text-sm ${
-              msg.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'
+            className={`mb-4 rounded-xl border p-4 text-sm ${
+              msg.type === 'error' ? 'border-danger-border bg-danger-bg text-danger-fg' : 'border-success-border bg-success-bg text-success-fg'
             }`}
           >
             {msg.text}
@@ -533,7 +532,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
           <div className="flex flex-col lg:flex-row gap-2 lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 min-w-0">
               <input
-                className="w-full max-w-[420px] border-2 border-gray-200 rounded-xl px-3 py-2 text-sm"
+                className="w-full max-w-[420px] min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                 placeholder="Search (Order ID / Member ID)"
                 value={term}
                 onChange={(e) => setTerm(e.target.value)}
@@ -550,15 +549,16 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
                   setPage(1)
                   fetchOrders({ page: 1 })
                 }}
-                className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:opacity-50"
               >
+                <Search className="h-4 w-4" />
                 Search
               </button>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <select
-                className="border-2 border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                 value={payment}
                 onChange={(e) => {
                   const next = e.target.value
@@ -573,7 +573,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
                 <option value="Loan">Loan</option>
               </select>
               <select
-                className="border-2 border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                 value={locationId}
                 onChange={(e) => {
                   const next = e.target.value
@@ -590,7 +590,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
                 ))}
               </select>
               <input
-                className="border-2 border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                 placeholder="Member grade (e.g. Retiree)"
                 value={memberGrade}
                 onChange={(e) => {
@@ -602,51 +602,47 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
               />
               {status === 'Pending' && (
                 <>
-                  <button
-                    type="button"
-                    onClick={exportExcel}
+                  <ExportButton
+                    format="excel"
+                    onClick={() => exportExcel().catch((e) => setMsg({ type: 'error', text: e?.message || 'Export failed' }))}
                     disabled={!orders.length}
-                    className="px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-800 text-white text-sm font-semibold disabled:opacity-50"
-                  >
-                    Download Excel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={exportPDF}
+                  />
+                  <ExportButton
+                    format="pdf"
+                    onClick={() => exportPDF().catch((e) => setMsg({ type: 'error', text: e?.message || 'Export failed' }))}
                     disabled={!orders.length}
-                    className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50"
-                  >
-                    Download PDF
-                  </button>
+                  />
                 </>
               )}
             </div>
           </div>
 
-          <div className="text-xs text-gray-600">
-            Orders: {Number(totalCount || 0).toLocaleString()} · Selected: {selectedCount.toLocaleString()}
+          <div className="text-sm text-muted">
+            Orders: <span className="font-medium text-fg">{Number(totalCount || 0).toLocaleString()}</span> · Selected: <span className="font-medium text-fg">{selectedCount.toLocaleString()}</span>
           </div>
         </div>
       </div>
 
       <div className="ui-card overflow-hidden">
-        <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="flex flex-col gap-3 border-b border-line bg-subtle p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="text-sm font-semibold">{status} Orders</div>
+            <div className="mr-1 text-sm font-semibold text-fg">{status} Orders</div>
             <button
               type="button"
               onClick={fetchOrders}
               disabled={loading}
-              className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
             >
+              <RefreshCw className={['h-3.5 w-3.5', loading ? 'animate-spin' : ''].join(' ')} />
               {loading ? 'Loading…' : 'Refresh'}
             </button>
             <button
               type="button"
               onClick={selectAll}
               disabled={!pagedOrders.length}
-              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-xs sm:text-sm font-semibold text-gray-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
             >
+              <CheckSquare className="h-3.5 w-3.5" />
               {allSelectedOnPage ? 'Deselect All' : 'Select All'}
             </button>
             {status === 'Pending' && (
@@ -654,8 +650,9 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
                 type="button"
                 onClick={() => openBulkModal('Approved')}
                 disabled={!selectedCount || bulkBusy}
-                className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-success-fg px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
               >
+                <CheckCircle2 className="h-3.5 w-3.5" />
                 Approve Selected ({selectedCount})
               </button>
             )}
@@ -664,8 +661,9 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
                 type="button"
                 onClick={() => openCancelModal(Array.from(selected))}
                 disabled={!selectedCount || bulkBusy}
-                className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-danger-fg px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
               >
+                <XCircle className="h-3.5 w-3.5" />
                 Cancel Selected ({selectedCount})
               </button>
             ) : (
@@ -673,15 +671,16 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
                 type="button"
                 onClick={() => openRestoreModal(Array.from(selected))}
                 disabled={!selectedCount || bulkBusy}
-                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
               >
+                <RotateCcw className="h-3.5 w-3.5" />
                 Restore Selected ({selectedCount})
               </button>
             )}
           </div>
           <div className="flex items-center gap-2">
             <select
-              className="border-2 border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white"
+              className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={pageSize}
               onChange={(e) => {
                 const next = Number(e.target.value) || 50
@@ -696,7 +695,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
             </select>
             <button
               type="button"
-              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-xs sm:text-sm font-semibold text-gray-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => {
                 const next = Math.max(1, safePage - 1)
                 setPage(next)
@@ -704,14 +703,15 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
               }}
               disabled={safePage <= 1}
             >
+              <ChevronLeft className="h-3.5 w-3.5" />
               Prev
             </button>
-            <div className="text-xs text-gray-500">
-              Page {safePage} / {pageCount}
+            <div className="text-sm text-muted">
+              Page <span className="font-medium text-fg">{safePage}</span> / {pageCount}
             </div>
             <button
               type="button"
-              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-xs sm:text-sm font-semibold text-gray-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => {
                 const next = Math.min(pageCount, safePage + 1)
                 setPage(next)
@@ -720,42 +720,52 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
               disabled={safePage >= pageCount}
             >
               Next
+              <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-xs sm:text-sm">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="p-2 text-left w-10">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 z-10 bg-surface">
+              <tr className="border-b border-line text-left">
+                <th className="p-3 w-10">
                   <input
                     type="checkbox"
                     checked={allSelectedOnPage}
                     onChange={selectAll}
                     disabled={!pagedOrders.length}
-                    className="h-4 w-4"
+                    className="h-4 w-4 rounded border-line text-brand focus:ring-brand"
                     aria-label="Select all"
                   />
                 </th>
-                <th className="p-2 text-left">Order</th>
-                <th className="p-2 text-left">Member</th>
-                <th className="p-2 text-left">Delivery</th>
-                <th className="p-2 text-left">Payment</th>
-                <th className="p-2 text-right">Qty</th>
-                <th className="p-2 text-right">Unit</th>
-                <th className="p-2 text-right">Total</th>
-                <th className="p-2 text-right">Actions</th>
+                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Order</th>
+                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Member</th>
+                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Delivery</th>
+                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Payment</th>
+                <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Qty</th>
+                <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Unit</th>
+                <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Total</th>
+                <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Actions</th>
               </tr>
             </thead>
             <motion.tbody layout>
               {loading && (
                 <>
-                  {Array.from({ length: 8 }).map((_, i) => (
-                    <tr key={`sk-${i}`} className="animate-pulse">
-                      <td className="p-2" colSpan={9}>
-                        <div className="h-4 bg-gray-100 rounded w-full" />
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <tr key={`sk-${i}`} className="border-b border-line">
+                      <td className="p-3"><div className="sakani-skeleton h-4 w-4 rounded" /></td>
+                      <td className="p-3">
+                        <div className="sakani-skeleton h-4 w-24 rounded" />
+                        <div className="sakani-skeleton mt-2 h-3 w-32 rounded" />
                       </td>
+                      <td className="p-3"><div className="sakani-skeleton h-4 w-40 rounded" /></td>
+                      <td className="p-3"><div className="sakani-skeleton h-4 w-36 rounded" /></td>
+                      <td className="p-3"><div className="sakani-skeleton h-4 w-16 rounded" /></td>
+                      <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-4 w-10 rounded" /></td>
+                      <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-4 w-14 rounded" /></td>
+                      <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-4 w-20 rounded" /></td>
+                      <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-8 w-24 rounded" /></td>
                     </tr>
                   ))}
                 </>
@@ -763,8 +773,14 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
 
               {!loading && orders.length === 0 && (
                 <tr>
-                  <td className="p-3 text-gray-600" colSpan={9}>
-                    No {status} ram orders.
+                  <td className="p-10 text-center" colSpan={9}>
+                    <div className="mx-auto flex max-w-xs flex-col items-center gap-2">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-subtle">
+                        <Inbox className="h-6 w-6 text-subtext" />
+                      </div>
+                      <p className="text-sm font-medium text-fg">No {status} ram orders</p>
+                      <p className="text-xs text-muted">When members place ram orders, they will appear here.</p>
+                    </div>
                   </td>
                 </tr>
               )}
@@ -779,55 +795,59 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -6 }}
                       transition={{ duration: 0.16, ease: 'easeOut' }}
-                      className="border-b last:border-b-0 hover:bg-gray-50"
+                      className="border-b border-line last:border-b-0 transition-colors duration-150 ease-sakani hover:bg-subtle"
                     >
-                      <td className="p-2 align-top">
+                      <td className="p-3 align-top">
                         <input
                           type="checkbox"
                           checked={selected.has(o.id)}
                           onChange={() => toggleSelect(o.id)}
-                          className="h-4 w-4"
+                          className="h-4 w-4 rounded border-line text-brand focus:ring-brand"
                           aria-label={`Select order ${o.id}`}
                         />
                       </td>
-                      <td className="p-2 align-top">
-                        <div className="font-medium">#{o.id}</div>
-                        <div className="text-gray-600">{o.created_at ? new Date(o.created_at).toLocaleString() : ''}</div>
+                      <td className="p-3 align-top">
+                        <div className="font-medium text-fg">#{o.id}</div>
+                        <div className="text-xs text-subtext">{o.created_at ? new Date(o.created_at).toLocaleString() : ''}</div>
                         {status === 'Cancelled' ? (
                           <>
-                            <div className="text-gray-600">
+                            <div className="text-xs text-subtext">
                               Cancelled: {o.cancelled_at ? new Date(o.cancelled_at).toLocaleString() : '—'}
                             </div>
-                            <div className="text-gray-600 break-words">Reason: {String(o.cancelled_reason || '').trim() || '—'}</div>
+                            <div className="text-xs text-subtext break-words">Reason: {String(o.cancelled_reason || '').trim() || '—'}</div>
                           </>
                         ) : null}
                       </td>
-                      <td className="p-2 align-top">
-                        <div className="font-medium">{o.member_id}</div>
-                        <div className="text-gray-600 break-words">{o.member?.full_name || '-'}</div>
-                        <div className="text-gray-600">{o.member?.phone || ''}</div>
-                        <div className="text-gray-600">
+                      <td className="p-3 align-top">
+                        <div className="font-medium text-fg">{o.member_id}</div>
+                        <div className="text-muted break-words">{o.member?.full_name || '-'}</div>
+                        <div className="text-xs text-subtext">{o.member?.phone || ''}</div>
+                        <div className="text-xs text-subtext">
                           {o.member_category || '-'}
                           {o.member_grade ? ` (${o.member_grade})` : ''}
                         </div>
                       </td>
-                      <td className="p-2 align-top whitespace-pre-line">
-                        <div className="font-medium">{o.delivery_location?.delivery_location || '-'}</div>
-                        <div className="text-gray-600">{o.delivery_location?.name || ''}</div>
-                        <div className="text-gray-600">{o.delivery_location?.phone || ''}</div>
+                      <td className="p-3 align-top whitespace-pre-line">
+                        <div className="font-medium text-fg">{o.delivery_location?.delivery_location || '-'}</div>
+                        <div className="text-xs text-subtext">{o.delivery_location?.name || ''}</div>
+                        <div className="text-xs text-subtext">{o.delivery_location?.phone || ''}</div>
                       </td>
-                      <td className="p-2 align-top">{o.payment_option || '-'}</td>
-                      <td className="p-2 align-top text-right">{Number(o.qty || 0).toLocaleString()}</td>
-                      <td className="p-2 align-top text-right">{money(o.unit_price)}</td>
-                      <td className="p-2 align-top text-right">
-                        <div className="font-medium">{money(o.total_amount)}</div>
+                      <td className="p-3 align-top">
+                        <span className="inline-flex items-center rounded-md bg-subtle px-2 py-0.5 text-xs font-medium text-fg">
+                          {o.payment_option || '-'}
+                        </span>
                       </td>
-                      <td className="p-2 align-top text-right">
+                      <td className="p-3 align-top text-right">{Number(o.qty || 0).toLocaleString()}</td>
+                      <td className="p-3 align-top text-right">{money(o.unit_price)}</td>
+                      <td className="p-3 align-top text-right">
+                        <div className="font-medium text-fg">{money(o.total_amount)}</div>
+                      </td>
+                      <td className="p-3 align-top text-right">
                         <div className="flex justify-end">
                           <select
                             defaultValue=""
                             disabled={bulkBusy || editBusy}
-                            className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs sm:text-sm bg-white disabled:opacity-50"
+                            className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none disabled:opacity-50"
                             onChange={(e) => {
                               const v = e.target.value
                               e.target.value = ''
@@ -835,6 +855,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
                               if (v === 'edit') openEditModal(o)
                               if (v === 'cancel') openCancelModal([o.id])
                               if (v === 'restore') openRestoreModal([o.id])
+                              if (v === 'activity') setAuditOrder(o)
                             }}
                           >
                             <option value="" disabled>
@@ -848,6 +869,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
                             ) : (
                               <option value="restore">Restore</option>
                             )}
+                            <option value="activity">Activity</option>
                           </select>
                         </div>
                       </td>
@@ -876,7 +898,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
           <div className="flex gap-2 justify-end">
             <button
               type="button"
-              className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200 text-sm"
+              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle"
               onClick={() => setShowModal(null)}
               disabled={bulkBusy || editBusy}
             >
@@ -884,14 +906,14 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
             </button>
             <button
               type="button"
-              className={`px-4 py-2 rounded text-white text-sm ${
+              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani ${
                 showModal?.type === 'edit'
-                  ? 'bg-blue-600 hover:bg-blue-700'
+                  ? 'bg-brand hover:bg-brand-hover'
                   : showModal?.type === 'cancel'
-                    ? 'bg-red-600 hover:bg-red-700'
+                    ? 'bg-danger-fg hover:brightness-110'
                     : showModal?.type === 'restore'
-                      ? 'bg-blue-600 hover:bg-blue-700'
-                      : 'bg-green-600 hover:bg-green-700'
+                      ? 'bg-brand hover:bg-brand-hover'
+                      : 'bg-brand hover:bg-brand-hover'
               } disabled:opacity-50`}
               onClick={
                 showModal?.type === 'edit'
@@ -913,9 +935,9 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
           <div className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
               <div>
-                <div className="text-xs font-medium text-gray-700 mb-1">Delivery Location</div>
+                <div className="text-xs font-medium text-subtext mb-1">Delivery Location</div>
                 <select
-                  className="w-full border rounded px-3 py-2 text-sm bg-white"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                   value={editLocationId}
                   onChange={(e) => setEditLocationId(e.target.value)}
                   disabled={editBusy || bulkBusy}
@@ -929,9 +951,9 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
                 </select>
               </div>
               <div>
-                <div className="text-xs font-medium text-gray-700 mb-1">Payment</div>
+                <div className="text-xs font-medium text-subtext mb-1">Payment</div>
                 <select
-                  className="w-full border rounded px-3 py-2 text-sm bg-white"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                   value={editPaymentOption}
                   onChange={(e) => setEditPaymentOption(e.target.value)}
                   disabled={editBusy || bulkBusy}
@@ -943,9 +965,9 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
                 </select>
               </div>
               <div>
-                <div className="text-xs font-medium text-gray-700 mb-1">Qty</div>
+                <div className="text-xs font-medium text-subtext mb-1">Qty</div>
                 <input
-                  className="w-full border rounded px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                   value={editQty}
                   onChange={(e) => setEditQty(e.target.value)}
                   inputMode="numeric"
@@ -953,9 +975,9 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
                 />
               </div>
               <div>
-                <div className="text-xs font-medium text-gray-700 mb-1">Unit Price</div>
+                <div className="text-xs font-medium text-subtext mb-1">Unit Price</div>
                 <input
-                  className="w-full border rounded px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                   value={editUnitPrice}
                   onChange={(e) => setEditUnitPrice(e.target.value)}
                   inputMode="numeric"
@@ -963,25 +985,25 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
                 />
               </div>
               <div>
-                <div className="text-xs font-medium text-gray-700 mb-1">Member ID</div>
+                <div className="text-xs font-medium text-subtext mb-1">Member ID</div>
                 <input
-                  className="w-full border rounded px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                   value={editMemberId}
                   onChange={(e) => setEditMemberId(e.target.value)}
                   disabled={editBusy || bulkBusy}
                 />
               </div>
               <div>
-                <div className="text-xs font-medium text-gray-700 mb-1">Member Phone</div>
+                <div className="text-xs font-medium text-subtext mb-1">Member Phone</div>
                 <input
-                  className="w-full border rounded px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                   value={editPhone}
                   onChange={(e) => setEditPhone(e.target.value)}
                   disabled={editBusy || bulkBusy}
                 />
               </div>
             </div>
-            <div className="text-xs text-gray-600">
+            <div className="text-xs text-muted">
               {editPaymentOption === 'Loan'
                 ? (() => {
                     const o = (orders || []).find((x) => Number(x?.id) === Number(showModal?.id))
@@ -994,13 +1016,13 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
           </div>
         ) : showModal?.type === 'cancel' ? (
           <div className="space-y-3">
-            <div className="text-sm text-gray-700">
-              Cancel <b>{showModal?.ids?.length || 0}</b> order(s)? Cancelled orders will be excluded from reports and exports.
+            <div className="text-sm text-muted">
+              Cancel <b className="text-fg">{showModal?.ids?.length || 0}</b> order(s)? Cancelled orders will be excluded from reports and exports.
             </div>
             <div>
-              <div className="text-xs font-medium text-gray-700 mb-1">Reason (optional)</div>
+              <div className="text-xs font-medium text-subtext mb-1">Reason (optional)</div>
               <textarea
-                className="w-full border rounded px-3 py-2 text-sm bg-white"
+                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                 rows={3}
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
@@ -1010,15 +1032,23 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
             </div>
           </div>
         ) : showModal?.type === 'restore' ? (
-          <div className="text-sm text-gray-700">
-            Restore <b>{showModal?.ids?.length || 0}</b> order(s) back to <b>Pending</b>?
+          <div className="text-sm text-muted">
+            Restore <b className="text-fg">{showModal?.ids?.length || 0}</b> order(s) back to <b className="text-fg">Pending</b>?
           </div>
         ) : (
-          <div className="text-sm text-gray-700">
-            Update <b>{showModal?.ids?.length || 0}</b> order(s) to <b>{showModal?.nextStatus}</b>?
+          <div className="text-sm text-muted">
+            Update <b className="text-fg">{showModal?.ids?.length || 0}</b> order(s) to <b className="text-fg">{showModal?.nextStatus}</b>?
           </div>
         )}
       </DraggableModal>
+
+      {/* Order activity — audit trail: who did what and when */}
+      <RamOrderAuditModal
+        open={!!auditOrder}
+        order={auditOrder}
+        endpoint="/api/admin/ram/orders/audit"
+        onClose={() => setAuditOrder(null)}
+      />
     </div>
   )
 }

@@ -470,11 +470,14 @@ function RamDataContent() {
   const pagedLocations = filteredLocations.slice((safePage - 1) * pageSize, safePage * pageSize)
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <h1 className="text-base sm:text-lg md:text-xl font-semibold break-words">Admin — Ram Sales — Data</h1>
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 flex flex-col gap-2">
+        <h1 className="text-h2 font-bold tracking-tight text-fg">Ram Sales · Data</h1>
+        <p className="text-sm text-muted">Manage ram cycles, pricing, delivery locations and shopping status.</p>
+      </div>
+      <div className="mb-4 flex justify-end">
         <button
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2 justify-center"
+          className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
           onClick={refreshAll}
           disabled={refreshing || loading || loadingCycles}
         >
@@ -495,23 +498,23 @@ function RamDataContent() {
       {!!msg && (
         <div
           className={`mb-4 rounded-lg border p-3 text-sm ${
-            msg.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'
+            msg.type === 'error' ? 'border-danger-border bg-danger-bg text-danger-fg' : 'border-success-border bg-success-bg text-success-fg'
           }`}
         >
           {msg.text}
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 mb-4">
+      <div className="ui-card p-4 mb-4">
         <div className="text-sm font-semibold mb-3">Ram Cycles</div>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="border border-gray-100 rounded-xl p-4 bg-gray-50/40">
-            <div className="text-xs text-gray-600 mb-2">Set Active Cycle</div>
+          <div className="rounded-xl border border-line bg-subtle/40 p-4">
+            <div className="text-xs text-muted mb-2">Set Active Cycle</div>
             <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
               <div className="flex-1">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Cycle</label>
+                <label className="block text-xs font-medium text-subtext mb-1">Cycle</label>
                 <select
-                  className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+                  className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
                   value={selectedCycleId ?? ''}
                   onChange={(e) => setSelectedCycleId(e.target.value ? Number(e.target.value) : null)}
                   disabled={loadingCycles || cycles.length === 0}
@@ -521,7 +524,7 @@ function RamDataContent() {
                   ) : (
                     cycles.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.name} ({c.code}){c.is_active ? ' — Active' : ''}
+                        {c.name} ({c.code}){c.is_active ? ' · Active' : ''}
                       </option>
                     ))
                   )}
@@ -529,7 +532,7 @@ function RamDataContent() {
               </div>
               <button
                 type="button"
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
                 onClick={setActiveCycle}
                 disabled={activatingCycle || selectedCycleId == null || selectedCycleId === activeCycleId}
               >
@@ -538,18 +541,18 @@ function RamDataContent() {
             </div>
           </div>
 
-          <div className="border border-gray-100 rounded-xl p-4 bg-gray-50/40">
-            <div className="text-xs text-gray-600 mb-2">Create New Cycle</div>
+          <div className="rounded-xl border border-line bg-subtle/40 p-4">
+            <div className="text-xs text-muted mb-2">Create New Cycle</div>
             <form onSubmit={createCycle} className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <input
-                className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white"
+                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                 placeholder="Code (e.g. RAM-APR-2026)"
                 value={newCycleCode}
                 onChange={(e) => setNewCycleCode(e.target.value)}
                 required
               />
               <input
-                className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white"
+                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                 placeholder="Name (e.g. April 2026)"
                 value={newCycleName}
                 onChange={(e) => setNewCycleName(e.target.value)}
@@ -557,24 +560,24 @@ function RamDataContent() {
               />
               <input
                 type="datetime-local"
-                className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white"
+                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                 value={newCycleStartsAt}
                 onChange={(e) => setNewCycleStartsAt(e.target.value)}
               />
               <input
                 type="datetime-local"
-                className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white"
+                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                 value={newCycleEndsAt}
                 onChange={(e) => setNewCycleEndsAt(e.target.value)}
               />
-              <label className="flex items-center gap-2 text-xs sm:text-sm text-gray-700">
+              <label className="flex items-center gap-2 text-xs sm:text-sm text-subtext">
                 <input type="checkbox" checked={!!newCycleMakeActive} onChange={(e) => setNewCycleMakeActive(e.target.checked)} />
                 Make active
               </label>
               <div className="sm:col-span-2">
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-lg bg-success-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
                   disabled={creatingCycle}
                 >
                   {creatingCycle ? 'Creating...' : 'Create Cycle'}
@@ -585,44 +588,44 @@ function RamDataContent() {
         </div>
 
         <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-            <div className="p-4 border-b border-gray-100">
-              <div className="text-sm font-semibold text-gray-900">Eligible Members (Loan)</div>
-              <div className="text-xs text-gray-600 mt-1">Sets the maximum Loan quantity per cycle.</div>
+          <div className="ui-card overflow-hidden">
+            <div className="p-4 border-b border-line">
+              <div className="text-sm font-semibold text-fg">Eligible Members (Loan)</div>
+              <div className="text-xs text-muted mt-1">Sets the maximum Loan quantity per cycle.</div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs sm:text-sm">
-                <thead className="bg-gray-50 border-b">
+                <thead className="bg-subtle border-b border-line">
                   <tr>
-                    <th className="p-2 text-left">Category</th>
-                    <th className="p-2 text-left">Max Qty</th>
-                    <th className="p-2 text-right">Action</th>
+                    <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Category</th>
+                    <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Max Qty</th>
+                    <th className="p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loadingCycles ? (
                     <>
                       {Array.from({ length: 3 }).map((_, i) => (
-                        <tr key={`sk-el-${i}`} className="border-b last:border-b-0 animate-pulse">
+                        <tr key={`sk-el-${i}`} className="border-b border-line last:border-b-0 animate-pulse">
                           <td className="p-2">
-                            <div className="h-4 w-24 bg-gray-100 rounded" />
+                            <div className="h-4 w-24 sakani-skeleton rounded" />
                           </td>
                           <td className="p-2">
-                            <div className="h-9 w-full bg-gray-100 rounded-xl" />
+                            <div className="h-9 w-full sakani-skeleton rounded-xl" />
                           </td>
                           <td className="p-2 text-right">
-                            <div className="h-9 w-20 bg-gray-100 rounded-lg inline-block" />
+                            <div className="h-9 w-20 sakani-skeleton rounded-lg inline-block" />
                           </td>
                         </tr>
                       ))}
                     </>
                   ) : (
                     <>
-                      <tr className="border-b last:border-b-0 hover:bg-gray-50">
+                      <tr className="border-b border-line last:border-b-0 hover:bg-subtle">
                         <td className="p-2 font-medium">Pensioner</td>
                         <td className="p-2">
                           <input
-                            className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+                            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
                             value={eligiblePensionerQty}
                             onChange={(e) => setEligiblePensionerQty(e.target.value)}
                             inputMode="numeric"
@@ -632,7 +635,7 @@ function RamDataContent() {
                         <td className="p-2 text-right">
                           <button
                             type="button"
-                            className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
                             onClick={() => handleInlineEditOrSave('eligible_loan_qty_pensioner', eligiblePensionerQty)}
                             disabled={savingPolicy || selectedCycleId == null}
                           >
@@ -640,11 +643,11 @@ function RamDataContent() {
                           </button>
                         </td>
                       </tr>
-                      <tr className="border-b last:border-b-0 hover:bg-gray-50">
+                      <tr className="border-b border-line last:border-b-0 hover:bg-subtle">
                         <td className="p-2 font-medium">Retiree</td>
                         <td className="p-2">
                           <input
-                            className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+                            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
                             value={eligibleRetireeQty}
                             onChange={(e) => setEligibleRetireeQty(e.target.value)}
                             inputMode="numeric"
@@ -654,7 +657,7 @@ function RamDataContent() {
                         <td className="p-2 text-right">
                           <button
                             type="button"
-                            className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
                             onClick={() => handleInlineEditOrSave('eligible_loan_qty_retiree', eligibleRetireeQty)}
                             disabled={savingPolicy || selectedCycleId == null}
                           >
@@ -662,11 +665,11 @@ function RamDataContent() {
                           </button>
                         </td>
                       </tr>
-                      <tr className="border-b last:border-b-0 hover:bg-gray-50">
+                      <tr className="border-b border-line last:border-b-0 hover:bg-subtle">
                         <td className="p-2 font-medium">Active (Others)</td>
                         <td className="p-2">
                           <input
-                            className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+                            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
                             value={eligibleActiveQty}
                             onChange={(e) => setEligibleActiveQty(e.target.value)}
                             inputMode="numeric"
@@ -676,7 +679,7 @@ function RamDataContent() {
                         <td className="p-2 text-right">
                           <button
                             type="button"
-                            className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
                             onClick={() => handleInlineEditOrSave('eligible_loan_qty_active', eligibleActiveQty)}
                             disabled={savingPolicy || selectedCycleId == null}
                           >
@@ -691,44 +694,44 @@ function RamDataContent() {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-            <div className="p-4 border-b border-gray-100">
-              <div className="text-sm font-semibold text-gray-900">Non-Eligible Members (Grace / Loan)</div>
-              <div className="text-xs text-gray-600 mt-1">Sets the one-time grace quantity for members who are not eligible by loan amount.</div>
+          <div className="ui-card overflow-hidden">
+            <div className="p-4 border-b border-line">
+              <div className="text-sm font-semibold text-fg">Non-Eligible Members (Grace / Loan)</div>
+              <div className="text-xs text-muted mt-1">Sets the one-time grace quantity for members who are not eligible by loan amount.</div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs sm:text-sm">
-                <thead className="bg-gray-50 border-b">
+                <thead className="bg-subtle border-b border-line">
                   <tr>
-                    <th className="p-2 text-left">Category</th>
-                    <th className="p-2 text-left">Max Qty</th>
-                    <th className="p-2 text-right">Action</th>
+                    <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Category</th>
+                    <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Max Qty</th>
+                    <th className="p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loadingCycles ? (
                     <>
                       {Array.from({ length: 3 }).map((_, i) => (
-                        <tr key={`sk-ne-${i}`} className="border-b last:border-b-0 animate-pulse">
+                        <tr key={`sk-ne-${i}`} className="border-b border-line last:border-b-0 animate-pulse">
                           <td className="p-2">
-                            <div className="h-4 w-24 bg-gray-100 rounded" />
+                            <div className="h-4 w-24 sakani-skeleton rounded" />
                           </td>
                           <td className="p-2">
-                            <div className="h-9 w-full bg-gray-100 rounded-xl" />
+                            <div className="h-9 w-full sakani-skeleton rounded-xl" />
                           </td>
                           <td className="p-2 text-right">
-                            <div className="h-9 w-20 bg-gray-100 rounded-lg inline-block" />
+                            <div className="h-9 w-20 sakani-skeleton rounded-lg inline-block" />
                           </td>
                         </tr>
                       ))}
                     </>
                   ) : (
                     <>
-                      <tr className="border-b last:border-b-0 hover:bg-gray-50">
+                      <tr className="border-b border-line last:border-b-0 hover:bg-subtle">
                         <td className="p-2 font-medium">Pensioner</td>
                         <td className="p-2">
                           <input
-                            className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+                            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
                             value={nonEligiblePensionerQty}
                             onChange={(e) => setNonEligiblePensionerQty(e.target.value)}
                             inputMode="numeric"
@@ -738,7 +741,7 @@ function RamDataContent() {
                         <td className="p-2 text-right">
                           <button
                             type="button"
-                            className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
                             onClick={() => handleInlineEditOrSave('grace_loan_qty_pensioner', nonEligiblePensionerQty)}
                             disabled={savingPolicy || selectedCycleId == null}
                           >
@@ -746,11 +749,11 @@ function RamDataContent() {
                           </button>
                         </td>
                       </tr>
-                      <tr className="border-b last:border-b-0 hover:bg-gray-50">
+                      <tr className="border-b border-line last:border-b-0 hover:bg-subtle">
                         <td className="p-2 font-medium">Retiree</td>
                         <td className="p-2">
                           <input
-                            className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+                            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
                             value={nonEligibleRetireeQty}
                             onChange={(e) => setNonEligibleRetireeQty(e.target.value)}
                             inputMode="numeric"
@@ -760,7 +763,7 @@ function RamDataContent() {
                         <td className="p-2 text-right">
                           <button
                             type="button"
-                            className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
                             onClick={() => handleInlineEditOrSave('grace_loan_qty_retiree', nonEligibleRetireeQty)}
                             disabled={savingPolicy || selectedCycleId == null}
                           >
@@ -768,11 +771,11 @@ function RamDataContent() {
                           </button>
                         </td>
                       </tr>
-                      <tr className="border-b last:border-b-0 hover:bg-gray-50">
+                      <tr className="border-b border-line last:border-b-0 hover:bg-subtle">
                         <td className="p-2 font-medium">Active (Others)</td>
                         <td className="p-2">
                           <input
-                            className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+                            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
                             value={nonEligibleActiveQty}
                             onChange={(e) => setNonEligibleActiveQty(e.target.value)}
                             inputMode="numeric"
@@ -782,7 +785,7 @@ function RamDataContent() {
                         <td className="p-2 text-right">
                           <button
                             type="button"
-                            className="px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
                             onClick={() => handleInlineEditOrSave('grace_loan_qty_active', nonEligibleActiveQty)}
                             disabled={savingPolicy || selectedCycleId == null}
                           >
@@ -795,18 +798,18 @@ function RamDataContent() {
                 </tbody>
               </table>
             </div>
-            {policyMsg ? <div className="px-4 py-3 text-xs text-gray-700 border-t border-gray-100">{policyMsg}</div> : null}
+            {policyMsg ? <div className="px-4 py-3 text-xs text-subtext border-t border-line">{policyMsg}</div> : null}
           </div>
         </div>
 
-        <div className="mt-4 bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-          <div className="text-sm font-semibold text-gray-900">Cycle Pricing</div>
-          <div className="text-xs text-gray-600 mt-1 mb-3">Sets the unit price per ram category for this cycle.</div>
+        <div className="mt-4 ui-card p-4">
+          <div className="text-sm font-semibold text-fg">Cycle Pricing</div>
+          <div className="text-xs text-muted mt-1 mb-3">Sets the unit price per ram category for this cycle.</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Junior price</label>
+              <label className="block text-xs font-medium text-subtext mb-1">Junior price</label>
               <input
-                className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
                 value={priceJunior}
                 onChange={(e) => setPriceJunior(e.target.value)}
                 inputMode="numeric"
@@ -814,9 +817,9 @@ function RamDataContent() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Senior price</label>
+              <label className="block text-xs font-medium text-subtext mb-1">Senior price</label>
               <input
-                className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
                 value={priceSenior}
                 onChange={(e) => setPriceSenior(e.target.value)}
                 inputMode="numeric"
@@ -824,9 +827,9 @@ function RamDataContent() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Executive price</label>
+              <label className="block text-xs font-medium text-subtext mb-1">Executive price</label>
               <input
-                className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
                 value={priceExecutive}
                 onChange={(e) => setPriceExecutive(e.target.value)}
                 inputMode="numeric"
@@ -834,9 +837,9 @@ function RamDataContent() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Undefined price</label>
+              <label className="block text-xs font-medium text-subtext mb-1">Undefined price</label>
               <input
-                className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
                 value={priceUndefined}
                 onChange={(e) => setPriceUndefined(e.target.value)}
                 inputMode="numeric"
@@ -847,7 +850,7 @@ function RamDataContent() {
           <div className="mt-3 flex justify-end">
             <button
               type="button"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
               onClick={async () => {
                 if (!pricingEditing) {
                   setPricingEditing(true)
@@ -863,18 +866,18 @@ function RamDataContent() {
           </div>
         </div>
 
-        <div className="mt-4 bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-          <div className="text-sm font-semibold text-gray-900">Cycle Rates</div>
-          <div className="text-xs text-gray-600 mt-1 mb-3">Configure per-cycle rates for Loan interest and vendor payment deductions.</div>
+        <div className="mt-4 ui-card p-4">
+          <div className="text-sm font-semibold text-fg">Cycle Rates</div>
+          <div className="text-xs text-muted mt-1 mb-3">Configure per-cycle rates for Loan interest and vendor payment deductions.</div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <div className="border border-gray-100 rounded-xl p-3 bg-gray-50/40">
-              <div className="text-xs font-semibold text-gray-900 mb-1">Loan Interest Rate (Selected Cycle)</div>
-              <div className="text-xs text-gray-600 mb-2">Applied to members using the Loan payment option.</div>
+            <div className="rounded-xl border border-line bg-subtle/40 p-3">
+              <div className="text-xs font-semibold text-fg mb-1">Loan Interest Rate (Selected Cycle)</div>
+              <div className="text-xs text-muted mb-2">Applied to members using the Loan payment option.</div>
               <div className="flex flex-col sm:flex-row sm:items-end gap-2">
                 <div className="flex-1">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Rate (%)</label>
+                  <label className="block text-xs font-medium text-subtext mb-1">Rate (%)</label>
                   <input
-                    className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+                    className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
                     type="number"
                     min="0"
                     step="0.01"
@@ -885,7 +888,7 @@ function RamDataContent() {
                 </div>
                 <button
                   type="button"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
                   onClick={async () => {
                     if (!loanRateEditing) {
                       setLoanRateEditing(true)
@@ -901,14 +904,14 @@ function RamDataContent() {
               </div>
             </div>
 
-            <div className="border border-gray-100 rounded-xl p-3 bg-gray-50/40">
-              <div className="text-xs font-semibold text-gray-900 mb-1">Vendor Deduction Rate (Selected Cycle)</div>
-              <div className="text-xs text-gray-600 mb-2">Applied to “payment_vendor” (amount paid to vendors) for this cycle.</div>
+            <div className="rounded-xl border border-line bg-subtle/40 p-3">
+              <div className="text-xs font-semibold text-fg mb-1">Vendor Deduction Rate (Selected Cycle)</div>
+              <div className="text-xs text-muted mb-2">Applied to “payment_vendor” (amount paid to vendors) for this cycle.</div>
               <div className="flex flex-col sm:flex-row sm:items-end gap-2">
                 <div className="flex-1">
-                  <label className="block text-xs font-medium text-gray-700 mb-1">Rate (%)</label>
+                  <label className="block text-xs font-medium text-subtext mb-1">Rate (%)</label>
                   <input
-                    className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+                    className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
                     type="number"
                     min="0"
                     step="0.01"
@@ -919,7 +922,7 @@ function RamDataContent() {
                 </div>
                 <button
                   type="button"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
                   onClick={async () => {
                     if (!vendorRateEditing) {
                       setVendorRateEditing(true)
@@ -938,42 +941,42 @@ function RamDataContent() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 mb-4">
+      <div className="ui-card p-4 mb-4">
         <div className="text-sm font-medium mb-3">Add Delivery Location</div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <input
-            className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white"
+            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             placeholder="Delivery location code/name"
             value={form.delivery_location}
             onChange={(e) => onFormChange('delivery_location', e.target.value)}
           />
-          <input className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white" placeholder="Contact name" value={form.name} onChange={(e) => onFormChange('name', e.target.value)} />
-          <input className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white" placeholder="Phone" value={form.phone} onChange={(e) => onFormChange('phone', e.target.value)} />
+          <input className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="Contact name" value={form.name} onChange={(e) => onFormChange('name', e.target.value)} />
+          <input className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="Phone" value={form.phone} onChange={(e) => onFormChange('phone', e.target.value)} />
           <input
-            className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white"
+            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             placeholder="Rep passcode"
             value={form.rep_code}
             onChange={(e) => onFormChange('rep_code', e.target.value)}
           />
           <input
-            className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm sm:col-span-2 bg-white"
+            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 sm:col-span-2"
             placeholder="Address"
             value={form.address}
             onChange={(e) => onFormChange('address', e.target.value)}
           />
           <input
-            className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white"
+            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             placeholder="Sort order"
             value={form.sort_order}
             onChange={(e) => onFormChange('sort_order', e.target.value)}
           />
-          <label className="flex items-center gap-2 text-xs sm:text-sm text-gray-700">
+          <label className="flex items-center gap-2 text-xs sm:text-sm text-subtext">
             <input type="checkbox" checked={!!form.is_active} onChange={(e) => onFormChange('is_active', e.target.checked)} />
             Active
           </label>
           <div className="sm:col-span-2 lg:col-span-3">
             <button
-              className="px-4 py-2 bg-green-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-success-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
               onClick={createLocation}
               disabled={saving || !String(form.delivery_location).trim()}
             >
@@ -983,18 +986,18 @@ function RamDataContent() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-gray-50/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <div className="ui-card overflow-hidden">
+        <div className="p-4 border-b border-line bg-subtle flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <input
-            className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full sm:max-w-sm bg-white"
+            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full sm:max-w-sm"
             placeholder="Search delivery locations..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <div className="flex items-center justify-between sm:justify-end gap-2 text-xs text-gray-700">
+          <div className="flex items-center justify-between sm:justify-end gap-2 text-xs text-subtext">
             <button
               type="button"
-              className="px-2 py-1 rounded border bg-white hover:bg-gray-50 disabled:opacity-50"
+              className="px-2 py-1 rounded border border-line bg-surface hover:bg-subtle disabled:opacity-50"
               onClick={() => setPage(Math.max(1, safePage - 1))}
               disabled={safePage <= 1}
             >
@@ -1005,7 +1008,7 @@ function RamDataContent() {
             </div>
             <button
               type="button"
-              className="px-2 py-1 rounded border bg-white hover:bg-gray-50 disabled:opacity-50"
+              className="px-2 py-1 rounded border border-line bg-surface hover:bg-subtle disabled:opacity-50"
               onClick={() => setPage(Math.min(pageCount, safePage + 1))}
               disabled={safePage >= pageCount}
             >
@@ -1015,26 +1018,26 @@ function RamDataContent() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs sm:text-sm">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-subtle border-b border-line">
             <tr>
-              <th className="p-2 text-left">Delivery Location</th>
-              <th className="p-2 text-left">Contact</th>
-              <th className="p-2 text-left">Phone</th>
-              <th className="p-2 text-left">Rep Passcode</th>
-              <th className="p-2 text-left">Address</th>
-              <th className="p-2 text-right">Sort</th>
-              <th className="p-2 text-center">This Cycle</th>
-              <th className="p-2 text-center">Active</th>
-              <th className="p-2 text-right">Actions</th>
+              <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Delivery Location</th>
+              <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Contact</th>
+              <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Phone</th>
+              <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Rep Passcode</th>
+              <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Address</th>
+              <th className="p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Sort</th>
+              <th className="p-2 text-center text-xs font-semibold uppercase tracking-wide text-subtext">This Cycle</th>
+              <th className="p-2 text-center text-xs font-semibold uppercase tracking-wide text-subtext">Active</th>
+              <th className="p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <>
                 {Array.from({ length: 8 }).map((_, i) => (
-                  <tr key={`sk-loc-${i}`} className="animate-pulse border-b last:border-b-0">
+                  <tr key={`sk-loc-${i}`} className="border-b border-line last:border-b-0">
                     <td className="p-2" colSpan={9}>
-                      <div className="h-4 bg-gray-100 rounded w-full" />
+                      <div className="h-4 sakani-skeleton rounded w-full" />
                     </td>
                   </tr>
                 ))}
@@ -1042,13 +1045,13 @@ function RamDataContent() {
             )}
             {!loading && filteredLocations.length === 0 && (
               <tr>
-                <td className="p-3 text-gray-600" colSpan={9}>
+                <td className="p-3 text-muted" colSpan={9}>
                   {locations.length === 0 ? 'No delivery locations.' : 'No matches.'}
                 </td>
               </tr>
             )}
             {pagedLocations.map((l) => (
-              <tr key={l.id} className="border-b last:border-b-0 hover:bg-gray-50">
+              <tr key={l.id} className="border-b border-line last:border-b-0 hover:bg-subtle">
                 <td className="p-2 font-medium">{l.delivery_location}</td>
                 <td className="p-2">{l.name || ''}</td>
                 <td className="p-2">{l.phone || ''}</td>
@@ -1058,7 +1061,7 @@ function RamDataContent() {
                 <td className="p-2 text-center">
                   <button
                     className={`px-2 py-1 rounded text-xs ${
-                      l?.cycle_active ? 'bg-blue-50 text-blue-800 border border-blue-200' : 'bg-gray-50 text-gray-700 border border-gray-200'
+                      l?.cycle_active ? 'bg-success-bg text-success-fg border border-success-border' : 'bg-subtle text-muted border border-line'
                     } disabled:opacity-50`}
                     onClick={() => toggleCycleActive(l)}
                     disabled={saving || selectedCycleId == null}
@@ -1069,7 +1072,7 @@ function RamDataContent() {
                 </td>
                 <td className="p-2 text-center">
                   <button
-                    className={`px-2 py-1 rounded text-xs ${l.is_active ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-gray-50 text-gray-700 border border-gray-200'} disabled:opacity-50`}
+                    className={`px-2 py-1 rounded text-xs ${l.is_active ? 'bg-success-bg text-success-fg border border-success-border' : 'bg-subtle text-muted border border-line'} disabled:opacity-50`}
                     onClick={() => toggleActive(l)}
                     disabled={saving}
                   >
@@ -1078,7 +1081,7 @@ function RamDataContent() {
                 </td>
                 <td className="p-2 text-right">
                   <button
-                    className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:opacity-50"
+                    className="inline-flex items-center rounded-lg bg-brand px-3 py-1 text-xs font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
                     onClick={() => setEditing({ ...l, sort_order: l.sort_order ?? '', rep_code: l.rep_code || '' })}
                     disabled={saving}
                   >
@@ -1092,22 +1095,22 @@ function RamDataContent() {
         </div>
       </div>
 
-      <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
-        <div className="text-sm font-semibold text-blue-900">Ram Shopping Control</div>
-        <div className="mt-1 text-xs sm:text-sm text-blue-700">Toggle whether members can start Ram shopping from the portal.</div>
+      <div className="mt-4 rounded-xl border border-line bg-subtle p-4">
+        <div className="text-sm font-semibold text-fg">Ram Shopping Control</div>
+        <div className="mt-1 text-sm text-muted">Toggle whether members can start Ram shopping from the portal.</div>
         <div className="mt-3 flex items-center gap-3">
           <label className="flex items-center gap-2 cursor-pointer select-none" onClick={() => setShoppingOpen(!shoppingOpen)}>
-            <div className={`w-12 h-6 rounded-full px-1 flex items-center ${shoppingOpen ? 'bg-green-500 justify-end' : 'bg-gray-300 justify-start'}`}>
-              <div className="w-4 h-4 bg-white rounded-full shadow" />
+            <div className={`h-6 w-12 rounded-full px-1 flex items-center ${shoppingOpen ? 'justify-end bg-success' : 'justify-start bg-muted'}`}>
+              <div className="h-4 w-4 rounded-full bg-surface shadow" />
             </div>
-            <span className={`text-sm font-medium ${shoppingOpen ? 'text-green-700' : 'text-gray-600'}`}>{shoppingOpen ? 'Open' : 'Closed'}</span>
+            <span className={`text-sm font-medium ${shoppingOpen ? 'text-success-fg' : 'text-muted'}`}>{shoppingOpen ? 'Open' : 'Closed'}</span>
           </label>
           <input type="checkbox" checked={shoppingOpen} onChange={(e) => setShoppingOpen(e.target.checked)} className="hidden" />
           <button
             type="button"
             onClick={saveShoppingStatus}
             disabled={shoppingLoading}
-            className={`px-3 py-2 rounded text-white text-sm ${shoppingLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+            className={`inline-flex items-center rounded-lg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani ${shoppingLoading ? 'cursor-not-allowed bg-muted' : 'bg-brand hover:bg-brand-hover'}`}
           >
             {shoppingLoading ? 'Saving…' : 'Save'}
           </button>
@@ -1115,7 +1118,7 @@ function RamDataContent() {
         {shoppingMsg && (
           <div
             className={`mt-2 p-2 rounded text-sm ${
-              shoppingMsg.startsWith('Error') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'
+              shoppingMsg.startsWith('Error') ? 'border-danger-border bg-danger-bg text-danger-fg' : 'border-success-border bg-success-bg text-success-fg'
             }`}
           >
             {shoppingMsg}
@@ -1129,12 +1132,12 @@ function RamDataContent() {
         title="Edit Delivery Location"
         footer={
           <div className="flex gap-2 justify-end">
-            <button type="button" className="px-4 py-2 rounded bg-gray-100 hover:bg-gray-200 text-sm" onClick={() => setEditing(null)} disabled={saving}>
+            <button type="button" className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle" onClick={() => setEditing(null)} disabled={saving}>
               Close
             </button>
             <button
               type="button"
-              className="px-4 py-2 rounded bg-green-600 hover:bg-green-700 text-white text-sm disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-success-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
               onClick={saveEdit}
               disabled={saving || !String(editing?.delivery_location || '').trim()}
             >
@@ -1145,27 +1148,27 @@ function RamDataContent() {
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <input
-            className="border rounded px-3 py-2 text-xs sm:text-sm"
+            className="rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             placeholder="Delivery location code/name"
             value={editing?.delivery_location || ''}
             onChange={(e) => onEditChange('delivery_location', e.target.value)}
           />
-          <input className="border rounded px-3 py-2 text-xs sm:text-sm" placeholder="Contact name" value={editing?.name || ''} onChange={(e) => onEditChange('name', e.target.value)} />
-          <input className="border rounded px-3 py-2 text-xs sm:text-sm" placeholder="Phone" value={editing?.phone || ''} onChange={(e) => onEditChange('phone', e.target.value)} />
+          <input className="rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="Contact name" value={editing?.name || ''} onChange={(e) => onEditChange('name', e.target.value)} />
+          <input className="rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="Phone" value={editing?.phone || ''} onChange={(e) => onEditChange('phone', e.target.value)} />
           <input
-            className="border rounded px-3 py-2 text-xs sm:text-sm"
+            className="rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             placeholder="Rep passcode"
             value={editing?.rep_code || ''}
             onChange={(e) => onEditChange('rep_code', e.target.value)}
           />
-          <input className="border rounded px-3 py-2 text-xs sm:text-sm" placeholder="Sort order" value={editing?.sort_order ?? ''} onChange={(e) => onEditChange('sort_order', e.target.value)} />
+          <input className="rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="Sort order" value={editing?.sort_order ?? ''} onChange={(e) => onEditChange('sort_order', e.target.value)} />
           <input
-            className="border rounded px-3 py-2 text-xs sm:text-sm sm:col-span-2"
+            className="rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 sm:col-span-2"
             placeholder="Address"
             value={editing?.address || ''}
             onChange={(e) => onEditChange('address', e.target.value)}
           />
-          <label className="flex items-center gap-2 text-xs sm:text-sm text-gray-700">
+          <label className="flex items-center gap-2 text-xs sm:text-sm text-subtext">
             <input type="checkbox" checked={!!editing?.is_active} onChange={(e) => onEditChange('is_active', e.target.checked)} />
             Active
           </label>
@@ -1175,21 +1178,21 @@ function RamDataContent() {
       <DraggableModal
         open={!!cycleSetup}
         onClose={() => setCycleSetup(null)}
-        title="New cycle created — setup required"
+        title="New cycle created. Setup required"
         footer={
           <div className="flex justify-end">
-            <button type="button" className="px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white text-sm" onClick={() => setCycleSetup(null)}>
+            <button type="button" className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover" onClick={() => setCycleSetup(null)}>
               Okay
             </button>
           </div>
         }
       >
-        <div className="text-sm text-gray-800">
+        <div className="text-sm text-fg">
           <div className="font-medium">
             {cycleSetup?.name ? `${cycleSetup.name}${cycleSetup?.code ? ` (${cycleSetup.code})` : ''}` : 'New cycle'}
           </div>
-          <div className="mt-2 text-sm text-gray-700">Please set up these areas for the new cycle:</div>
-          <ul className="mt-2 list-disc pl-5 text-sm text-gray-700 space-y-1">
+          <div className="mt-2 text-sm text-subtext">Please set up these areas for the new cycle:</div>
+          <ul className="mt-2 list-disc pl-5 text-sm text-subtext space-y-1">
             <li>Eligible Members (Loan) max qty</li>
             <li>Non‑Eligible Members (Grace / Loan) max qty</li>
             <li>Cycle Pricing (Junior / Senior / Executive / Undefined)</li>

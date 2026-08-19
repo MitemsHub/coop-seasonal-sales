@@ -1,63 +1,481 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --ring: rgba(37, 99, 235, 0.35);
+/* ─────────────────────────────────────────────────────────────
+   Coop Sakani Design System
+   Token architecture: Primitives → Semantic → Components
+   Adapted from the Sakani Design System (samzydd/Sakani-design-system)
+   Brand: warm neutrals + harvest forest green (#1D6746)
+   ───────────────────────────────────────────────────────────── */
+
+/* Class-based dark mode — add `.dark` to <html> to re-theme everything */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ─── Primitives: brand (burnt orange) scale ─────────────────── */
+@theme {
+  --color-brand-50: #effaf3;
+  --color-brand-100: #dbf2e4;
+  --color-brand-200: #bce2cc;
+  --color-brand-300: #93cdad;
+  --color-brand-400: #69b48d;
+  --color-brand-500: #479d73;
+  --color-brand-600: #30825c;
+  --color-brand-700: #1d6746;
+  --color-brand-800: #134e34;
+  --color-brand-900: #0d3926;
+  --color-brand-950: #052315;
+
+  /* Primitive status palettes (Untitled-UI derived, same as Sakani) */
+  --color-success-50: #f1fef6;
+  --color-success-100: #d1fadf;
+  --color-success-200: #a6f4c5;
+  --color-success-300: #6ce9a6;
+  --color-success-400: #32d583;
+  --color-success-500: #12b76a;
+  --color-success-600: #039855;
+  --color-success-700: #027a48;
+  --color-success-800: #05603a;
+  --color-success-900: #054f31;
+  --color-success-950: #033524;
+
+  --color-warning-50: #fffbf0;
+  --color-warning-100: #fef0c7;
+  --color-warning-200: #fedf89;
+  --color-warning-300: #fec84b;
+  --color-warning-400: #fdb022;
+  --color-warning-500: #f79009;
+  --color-warning-600: #dc6803;
+  --color-warning-700: #b54708;
+  --color-warning-800: #93370d;
+  --color-warning-900: #7a2e0e;
+  --color-warning-950: #4e1d09;
+
+  --color-danger-50: #fef3f2;
+  --color-danger-100: #fee4e2;
+  --color-danger-200: #fecdca;
+  --color-danger-300: #fda29b;
+  --color-danger-400: #f97066;
+  --color-danger-500: #f04438;
+  --color-danger-600: #d92d20;
+  --color-danger-700: #b42318;
+  --color-danger-800: #912018;
+  --color-danger-900: #7a271a;
+  --color-danger-950: #55160c;
+
+  --color-info-50: #eff8ff;
+  --color-info-100: #d1e9ff;
+  --color-info-200: #b2ddff;
+  --color-info-300: #84caff;
+  --color-info-400: #53b1fd;
+  --color-info-500: #2e90fa;
+  --color-info-600: #1570ef;
+  --color-info-700: #175cd3;
+  --color-info-800: #1849a9;
+  --color-info-900: #194185;
+  --color-info-950: #102a56;
+
+  /* ─── Fluid radii scale ──────────────────────────────────────
+     Clamp-based border-radius: each value interpolates between a
+     MOBILE size (at 360px) and a DESKTOP size (at 1024px), the
+     same band as the type and spacing scales. Mobile anchors match
+     the original static values, so nothing changes on phones —
+     corners just breathe a little larger on wide screens. Used via
+     the standard rounded-* utilities (rounded-md, rounded-2xl …)
+     plus the explicit rounded-fluid-* utilities.
+     ──────────────────────────────────────────────────────────── */
+  --radius-xs: clamp(0.1875rem, 0.1875rem + 0.04vw, 0.375rem); /* 3px → 6px */
+  --radius-sm: clamp(0.3125rem, 0.3125rem + 0.04vw, 0.5rem); /* 5px → 8px */
+  --radius-md: clamp(0.4375rem, 0.4375rem + 0.04vw, 0.625rem); /* 7px → 10px */
+  --radius-lg: clamp(0.625rem, 0.625rem + 0.09vw, 1rem); /* 10px → 16px */
+  --radius-xl: clamp(0.8125rem, 0.8125rem + 0.09vw, 1.25rem); /* 13px → 20px */
+  --radius-2xl: clamp(1.25rem, 1.25rem + 0.15vw, 2rem); /* 20px → 32px */
+  --radius-3xl: clamp(1.4375rem, 1.4375rem + 0.19vw, 2.25rem); /* 23px → 36px */
+
+  /* ─── Fluid shadows scale ────────────────────────────────────
+     Softer, more lifted shadows at larger viewports: blur and
+     spread grow with the same 360→1024px clamp band, while the
+     mobile anchors match the original static values. At phone
+     widths shadows stay crisp and flat; on desktop they soften and
+     rise. Used via the standard shadow-* utilities plus the
+     explicit shadow-fluid-* utilities.
+     ──────────────────────────────────────────────────────────── */
+  --shadow-xs: 0 clamp(1px, 0.04vw, 2px) 2px 0 rgba(16, 15, 12, 0.05);
+  --shadow-sm: 0 clamp(1px, 0.15vw, 2px) clamp(3px, 0.45vw, 6px) 0 rgba(16, 15, 12, 0.1), 0 clamp(1px, 0.15vw, 2px) clamp(2px, 0.3vw, 4px) 0 rgba(16, 15, 12, 0.06);
+  --shadow-md: 0 clamp(4px, 0.3vw, 6px) clamp(8px, 1.2vw, 16px) -2px rgba(16, 15, 12, 0.1), 0 clamp(2px, 0.15vw, 3px) clamp(4px, 0.6vw, 8px) -2px rgba(16, 15, 12, 0.06);
+  --shadow-lg: 0 clamp(12px, 0.6vw, 16px) clamp(16px, 1.8vw, 28px) -4px rgba(16, 15, 12, 0.08), 0 clamp(4px, 0.3vw, 6px) clamp(6px, 0.9vw, 14px) -2px rgba(16, 15, 12, 0.03);
+  --shadow-xl: 0 clamp(20px, 0.6vw, 24px) clamp(24px, 2.4vw, 40px) -4px rgba(16, 15, 12, 0.1), 0 clamp(8px, 0.3vw, 10px) clamp(8px, 1.2vw, 20px) -4px rgba(16, 15, 12, 0.03);
+  --shadow-2xl: 0 clamp(24px, 1.2vw, 32px) clamp(48px, 3.6vw, 72px) -12px rgba(16, 15, 12, 0.18);
+
+  /* Motion */
+  --ease-sakani: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-out-sakani: cubic-bezier(0.33, 1, 0.68, 1);
 }
 
+/* ─── Semantic tokens (light) — components bind ONLY to these ── */
+:root {
+  --bg-canvas: #fafaf9;
+  --bg-surface: #ffffff;
+  --bg-subtle: #f5f4f2;
+  --bg-muted: #e7e5e1;
+  --bg-inverse: #1f1f1f;
+
+  --fg-default: #141414;
+  --fg-muted: #57534e;
+  --fg-subtle: #76706a;
+  --fg-on-accent: #ffffff;
+  --fg-on-inverse: #fafaf9;
+
+  --line-subtle: #e7e5e1;
+  --line-default: #dbdad7;
+  --line-strong: #a8a29b;
+  --line-focus: #1d6746;
+
+  --brand: #1d6746;
+  --brand-hover: #134e34;
+  --brand-active: #0d3926;
+  --brand-subtle: #dbf2e4;
+  --brand-fg: #134e34;
+
+  /* Harvest Gold — secondary accent (pairs with Harvest green brand) */
+  --accent: #b45309;
+  --accent-hover: #92400e;
+  --accent-active: #78350f;
+  --accent-subtle: #fdeed2;
+  --accent-fg: #ffffff;
+
+  --success-bg: #f1fef6;
+  --success-border: #a6f4c5;
+  --success-fg: #027a48;
+  --success-solid: #12b76a;
+
+  --warning-bg: #fffbf0;
+  --warning-border: #fedf89;
+  --warning-fg: #b54708;
+  --warning-solid: #f79009;
+
+  --danger-bg: #fef3f2;
+  --danger-border: #fecdca;
+  --danger-fg: #b42318;
+  --danger-solid: #f04438;
+
+  --info-bg: #eff8ff;
+  --info-border: #b2ddff;
+  --info-fg: #175cd3;
+  --info-solid: #2e90fa;
+
+  /* ─── Fluid type scale ────────────────────────────────────────
+     Responsive baseline: every --fs-* value is a clamp() that
+     interpolates between a MOBILE size (at 360px) and a DESKTOP
+     size (at 1024px). New pages inherit sensible mobile sizes by
+     default — no more hand-rolled `text-xl sm:text-2xl` chains.
+     Used via the text-display / text-h1…h6 / text-body /
+     text-caption / text-kicker utilities (mapped below).
+     ──────────────────────────────────────────────────────────── */
+  --fs-fluid-min: 360px;
+  --fs-fluid-max: 1024px;
+
+  --fs-display: clamp(1.1875rem, 1.1875rem + 0.77vw, 2.125rem); /* 19px → 34px */
+  --fs-h1: clamp(1.0625rem, 1.0625rem + 0.64vw, 1.875rem); /* 17px → 30px */
+  --fs-h2: clamp(0.9375rem, 0.9375rem + 0.38vw, 1.5rem); /* 15px → 24px */
+  --fs-h3: clamp(0.875rem, 0.875rem + 0.26vw, 1.25rem); /* 14px → 20px */
+  --fs-h4: clamp(0.8125rem, 0.8125rem + 0.13vw, 1rem); /* 13px → 16px */
+  --fs-body: clamp(0.8125rem, 0.8125rem + 0.13vw, 1rem); /* 13px → 16px */
+  --fs-caption: clamp(0.625rem, 0.625rem + 0.06vw, 0.8125rem); /* 10px → 13px */
+  --fs-chips: clamp(0.625rem, 0.625rem + 0.06vw, 0.6875rem); /* 10px → 11px — chips & pills */
+  --fs-kicker: 0.625rem; /* 10px — labels stay fixed for legibility */
+
+  /* ─── Fluid spacing scale ─────────────────────────────────────
+     Companion to the type scale: every --sp-* value is a clamp()
+     interpolating between a MOBILE size (360px) and a DESKTOP
+     size (1024px). Used via spacing utilities that derive from
+     them — p-fluid, gap-fluid, mt-fluid-xl, p-fluid-2xs, etc.
+     Containers should use --sp-fluid; gaps use the size steps
+     below. Utilities are prefixed `fluid` to avoid colliding with
+     Tailwind's built-in max-w-* / container namespace.
+     ──────────────────────────────────────────────────────────── */
+  --sp-2xs: clamp(0.1875rem, 0.1875rem + 0.19vw, 0.4375rem); /* 3px → 7px */
+  --sp-xs: clamp(0.3125rem, 0.3125rem + 0.19vw, 0.5625rem); /* 5px → 9px */
+  --sp-sm: clamp(0.4375rem, 0.4375rem + 0.19vw, 0.6875rem); /* 7px → 11px */
+  --sp-md: clamp(0.625rem, 0.625rem + 0.38vw, 1.125rem); /* 10px → 18px */
+  --sp-lg: clamp(0.875rem, 0.875rem + 0.64vw, 1.625rem); /* 14px → 26px */
+  --sp-xl: clamp(1.0625rem, 1.0625rem + 0.9vw, 2.125rem); /* 17px → 34px */
+  --sp-fluid: clamp(0.625rem, 0.625rem + 0.75vw, 1.5rem); /* 10px → 24px — page gutters */
+
+  /* Chart tokens (light) */
+  --chart-1: #479d73;
+  --chart-2: #2e90fa;
+  --chart-3: #12b76a;
+  --chart-4: #f04438;
+  --chart-5: #a8a29b;
+
+  /* Skeleton shimmer */
+  --skeleton-base: #e7e5e1;
+  --skeleton-shine: #f5f4f2;
+}
+
+/* ─── Semantic tokens (dark) — flip everything with .dark ────── */
+.dark {
+  --bg-canvas: #0f0e0c;
+  --bg-surface: #141414;
+  --bg-subtle: #1f1f1f;
+  --bg-muted: #3a3837;
+  --bg-inverse: #fafaf9;
+
+  --fg-default: #fafaf9;
+  --fg-muted: #a8a29b;
+  --fg-subtle: #9c968f;
+  --fg-on-accent: #141414;
+  --fg-on-inverse: #0f0e0c;
+
+  --line-subtle: #2a2826;
+  --line-default: #3a3837;
+  --line-strong: #78716a;
+  --line-focus: #69b48d;
+
+  --brand: #69b48d;
+  --brand-hover: #93cdad;
+  --brand-active: #bce2cc;
+  --brand-subtle: #052315;
+  --brand-fg: #93cdad;
+
+  --accent: #f2c26a;
+  --accent-hover: #e8a53d;
+  --accent-active: #d4861c;
+  --accent-subtle: #381c06;
+  --accent-fg: #141414;
+
+  --success-bg: #033524;
+  --success-border: #05603a;
+  --success-fg: #6ce9a6;
+  --success-solid: #12b76a;
+
+  --warning-bg: #4e1d09;
+  --warning-border: #93370d;
+  --warning-fg: #fec84b;
+  --warning-solid: #f79009;
+
+  --danger-bg: #55160c;
+  --danger-border: #912018;
+  --danger-fg: #fda29b;
+  --danger-solid: #f04438;
+
+  --info-bg: #102a56;
+  --info-border: #1849a9;
+  --info-fg: #84caff;
+  --info-solid: #2e90fa;
+
+  --chart-1: #69b48d;
+  --chart-2: #53b1fd;
+  --chart-3: #32d583;
+  --chart-4: #f97066;
+  --chart-5: #78716a;
+
+  --skeleton-base: #2a2826;
+  --skeleton-shine: #3a3837;
+}
+
+/* ─── Tailwind mapping — utilities like bg-canvas, text-fg, text-muted,
+      border-line, bg-brand, bg-surface, text-success, dark:bg-surface ─── */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-brand: #2563eb;
-  --color-brand2: #16a34a;
-  --color-accent: #7c3aed;
-  --color-danger: #dc2626;
-  --color-warning: #d97706;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --color-canvas: var(--bg-canvas);
+  --color-surface: var(--bg-surface);
+  --color-subtle: var(--bg-subtle);
+  --color-inverse: var(--bg-inverse);
+
+  --color-fg: var(--fg-default);
+  --color-muted: var(--fg-muted);
+  --color-subtext: var(--fg-subtle);
+  --color-on-accent: var(--fg-on-accent);
+  --color-on-inverse: var(--fg-on-inverse);
+
+  --color-line: var(--line-default);
+  --color-line-subtle: var(--line-subtle);
+  --color-line-strong: var(--line-strong);
+
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-active: var(--brand-active);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-brand-fg: var(--brand-fg);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-active: var(--accent-active);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-accent-fg: var(--accent-fg);
+
+  --color-success: var(--success-solid);
+  --color-success-bg: var(--success-bg);
+  --color-success-border: var(--success-border);
+  --color-success-fg: var(--success-fg);
+
+  --color-warning: var(--warning-solid);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-border: var(--warning-border);
+  --color-warning-fg: var(--warning-fg);
+
+  --color-danger: var(--danger-solid);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-border: var(--danger-border);
+  --color-danger-fg: var(--danger-fg);
+
+  --color-info: var(--info-solid);
+  --color-info-bg: var(--info-bg);
+  --color-info-border: var(--info-border);
+  --color-info-fg: var(--info-fg);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* Fluid type scale → utilities (text-display, text-h1…h6, text-body,
+     text-caption, text-kicker). Sizes come from the --fs-* clamps above,
+     so they adapt to the viewport with no breakpoint classes needed. */
+  --text-display: var(--fs-display);
+  --text-h1: var(--fs-h1);
+  --text-h2: var(--fs-h2);
+  --text-h3: var(--fs-h3);
+  --text-h4: var(--fs-h4);
+  --text-body: var(--fs-body);
+  --text-caption: var(--fs-caption);
+  --text-chips: var(--fs-chips);
+  --text-kicker: var(--fs-kicker);
+
+  /* Fluid spacing scale → utilities (p-fluid, gap-fluid, mt-fluid-lg,
+     p-fluid-2xs…). The --sp-* clamps live in :root above, so every
+     spacing utility adapts to the viewport automatically.
+     NOTE: names are prefixed `fluid` on purpose — bare names like
+     --spacing-md would collide with Tailwind's max-w-* container
+     scale and silently break every max-w-md/sm/lg/xl in the app. */
+  --spacing-fluid-2xs: var(--sp-2xs);
+  --spacing-fluid-xs: var(--sp-xs);
+  --spacing-fluid-sm: var(--sp-sm);
+  --spacing-fluid-md: var(--sp-md);
+  --spacing-fluid-lg: var(--sp-lg);
+  --spacing-fluid-xl: var(--sp-xl);
+  --spacing-fluid: var(--sp-fluid);
+
+  /* Fluid radii + shadows → utilities (rounded-fluid-md, shadow-fluid-lg…).
+     The standard rounded and shadow utilities are generated from the same
+     clamps in the @theme block above, so the whole app inherits the fluid
+     scale; the fluid-* names exist for explicit opt-in. */
+  --radius-fluid-xs: var(--radius-xs);
+  --radius-fluid-sm: var(--radius-sm);
+  --radius-fluid-md: var(--radius-md);
+  --radius-fluid-lg: var(--radius-lg);
+  --radius-fluid-xl: var(--radius-xl);
+  --radius-fluid-2xl: var(--radius-2xl);
+  --radius-fluid-3xl: var(--radius-3xl);
+
+  --shadow-fluid-xs: var(--shadow-xs);
+  --shadow-fluid-sm: var(--shadow-sm);
+  --shadow-fluid-md: var(--shadow-md);
+  --shadow-fluid-lg: var(--shadow-lg);
+  --shadow-fluid-xl: var(--shadow-xl);
+  --shadow-fluid-2xl: var(--shadow-2xl);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* ─── Base ───────────────────────────────────────────────────── */
+html {
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Fluid type scale (responsive baseline) ───────────────────
+   Prefer these over fixed-size chains for new pages — they adapt
+   to any screen width automatically:
+
+     text-display  hero / landing headline   (22px → 34px)
+     text-h1       page titles               (20px → 30px)
+     text-h2       section headings          (18px → 24px)
+     text-h3       card/group headings       (16px → 20px)
+     text-h4       small sub-headings        (14px → 16px)
+     text-body     default body copy         (14px → 16px)
+     text-caption  helper text / metadata    (12px → 13px)
+     text-chips    chips, pills & tags       (11px → 11px)
+     text-kicker   uppercase eyebrow labels  (11px, fixed)
+
+   Real <h1>–<h4> elements get these sizes automatically. Pair with
+   font-display + tracking-tight for display type. The scale comes
+   from --fs-* clamps in :root — tweak there, not per page.
+   ─────────────────────────────────────────────────────────────── */
+
+/* Type discipline (Mitems 07): tight tracking on display sizes, narrow weight band */
+h1,
+h2,
+h3,
+h4 {
+  letter-spacing: -0.015em;
+  font-weight: 650;
+}
+
+/* Fluid sizes on real headings: text-h1…h4 utilities are used for
+   non-heading elements; real headings pick up the scale by tag.
+   Layered @base so explicit size utilities (text-xl etc.) win. */
+@layer base {
+  h1 {
+    font-size: var(--fs-h1);
+  }
+
+  h2 {
+    font-size: var(--fs-h2);
+  }
+
+  h3 {
+    font-size: var(--fs-h3);
+  }
+
+  h4 {
+    font-size: var(--fs-h4);
   }
 }
 
+h1 {
+  letter-spacing: -0.02em;
+}
+
+.font-display {
+  letter-spacing: -0.02em;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
-    "Segoe UI Emoji";
-  text-rendering: optimizeLegibility;
+  background: var(--bg-canvas);
+  color: var(--fg-default);
 }
 
 button,
-[type='button'],
-[type='submit'],
-[type='reset'] {
+[type="button"],
+[type="submit"],
+[type="reset"] {
   cursor: pointer;
 }
 
 button:disabled,
-[type='button']:disabled,
-[type='submit']:disabled,
-[type='reset']:disabled {
+[type="button"]:disabled,
+[type="submit"]:disabled,
+[type="reset"]:disabled {
   cursor: not-allowed;
 }
 
 ::selection {
-  background: rgba(37, 99, 235, 0.18);
+  background: rgba(29, 103, 70, 0.16);
 }
 
 :focus-visible {
-  outline: 3px solid var(--ring);
+  outline: 2px solid var(--line-focus);
   outline-offset: 2px;
+  border-radius: 4px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, ::before, ::after {
+  *,
+  ::before,
+  ::after {
     scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
@@ -65,64 +483,109 @@ button:disabled,
   }
 }
 
-/* Performance optimizations for shop buttons */
+/* ─── Legacy classes re-themed so existing pages adopt the brand ── */
+.ui-surface {
+  background: var(--bg-canvas);
+}
+
+.ui-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+  transition: box-shadow 0.22s var(--ease-sakani), border-color 0.22s var(--ease-sakani);
+}
+
+.ui-card:hover {
+  box-shadow: var(--shadow-sm);
+  border-color: var(--line-strong);
+}
+
+/* Hide scrollbars on carousels (the exhibition hub slideshow) while keeping
+   native scrolling/swiping — Firefox + WebKit only, Edge uses WebKit here. */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Performance helpers (kept from the previous implementation) */
 .shop-button {
   will-change: transform;
   backface-visibility: hidden;
   transform: translateZ(0);
 }
-
 .shop-button:hover {
   transform: translateZ(0) scale(1.02);
 }
-
 .shop-button:active {
   transform: translateZ(0) scale(0.98);
 }
-
-/* Optimize loading spinner animation */
-@keyframes optimized-spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.optimized-spinner {
-  animation: optimized-spin 1s linear infinite;
-  will-change: transform;
-}
-
-/* Reduce paint operations */
 .shop-item-card {
   contain: layout style paint;
   transform: translateZ(0);
 }
-
-.ui-surface {
-  background: #f7f8fb;
+.optimized-spinner {
+  animation: optimized-spin 1s linear infinite;
+  will-change: transform;
 }
-
-@keyframes ui-pop {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
+/* Landing hero: soft brand-glow drift behind the copy */
+@keyframes glow-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+  33% {
+    transform: translate3d(26px, -20px, 0) scale(1.07);
+  }
+  66% {
+    transform: translate3d(-18px, 16px, 0) scale(0.97);
   }
 }
 
-.ui-card {
-  background: #ffffff;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 16px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 32px rgba(15, 23, 42, 0.06);
-  transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
-  animation: ui-pop 0.18s ease-out both;
+@keyframes optimized-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
-.ui-card:hover {
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06), 0 18px 48px rgba(15, 23, 42, 0.1);
-  transform: translateY(-1px);
-  border-color: rgba(37, 99, 235, 0.18);
+/* Skeleton shimmer */
+@keyframes sakani-shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+.sakani-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-base) 25%,
+    var(--skeleton-shine) 50%,
+    var(--skeleton-base) 75%
+  );
+  background-size: 800px 100%;
+  animation: sakani-shimmer 1.4s var(--ease-sakani) infinite;
+}
+
+/* Print: receipts and confirmations should land on paper cleanly — hide
+   site chrome (Navbar header, breadcrumbs) and force a white canvas. Pages
+   opt in with a print-hide class on anything that shouldn't print. */
+@media print {
+  header,
+  nav,
+  .print-hide {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
 }

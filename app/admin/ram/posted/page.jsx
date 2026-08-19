@@ -12,7 +12,7 @@ export default function RamPostedPage() {
 
   return (
     <ProtectedRoute allowedRoles={['admin']}>
-      <div className="p-6 text-sm text-gray-600">Redirecting…</div>
+      <div className="p-6 text-sm text-muted">Redirecting…</div>
     </ProtectedRoute>
   )
 }

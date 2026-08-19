@@ -1,12 +1,18 @@
 // app/rep/posted/page.jsx
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Clock, Package, Truck, XCircle, Zap } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import { announceRepFoodStats, onRepFoodStatsChanged } from '../../lib/repFoodStatsSync'
 import ProtectedRoute from '../../components/ProtectedRoute'
 import DraggableModal from '../../components/DraggableModal'
+import ExportButton from '../../components/ui/ExportButton'
+import PrintOrderSheet from '../../components/PrintOrderSheet'
+import { createManifestDoc, addManifestTable, renderTable, sanitizePdfText } from '../../lib/pdfExport'
 
-const Spinner = ({ className = 'h-4 w-4 text-white' }) => (
+
+const Spinner = ({ className = 'h-4 w-4 text-on-accent' }) => (
   <svg className={`animate-spin ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
     <path
@@ -38,7 +44,11 @@ function RepPostedPageContent() {
   const [pdfLoading, setPdfLoading] = useState(false)
   const [viewOpen, setViewOpen] = useState(false)
   const [viewOrder, setViewOrder] = useState(null)
+  const [sheetOrder, setSheetOrder] = useState(null) // order row for the print sheet
+  const [stats, setStats] = useState(null)
   const { user } = useAuth()
+
+  const naira = (v) => `₦${Number(v || 0).toLocaleString()}`
 
   const safeJson = async (res, label) => {
     const ct = res.headers.get('content-type') || ''
@@ -72,6 +82,47 @@ function RepPostedPageContent() {
     })()
   }, [user])
 
+  // Branch summary strip — today's pending queue + this cycle's posted figures.
+  const loadStats = useCallback(async () => {
+    try {
+      const res = await fetch('/api/rep/orders/stats', { cache: 'no-store' })
+      const j = await res.json()
+      if (j?.ok) setStats(j)
+    } catch {
+      // Best-effort — never block the page on the strip.
+    }
+  }, [])
+
+  useEffect(() => {
+    if (user?.type !== 'rep' || !user?.authenticated) return
+    loadStats()
+  }, [user, loadStats])
+
+  // Keep the strip (and the current page's order list) fresh without a
+  // reload: refetch on the shared rep-food-stats event (announced by admin
+  // pages after post/deliver/cancel/restore and by this page after its own
+  // deliver action), on tab re-focus, and on a 30s poll so posts made from
+  // another device still show up.
+  useEffect(() => {
+    if (user?.type !== 'rep' || !user?.authenticated) return
+    const refresh = () => {
+      loadStats()
+      fetchOrders(null, { silent: true })
+    }
+    const off = onRepFoodStatsChanged(refresh)
+    const t = setInterval(refresh, 30_000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      off()
+      clearInterval(t)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user])
+
   useEffect(() => { 
     if (user?.type !== 'rep' || !user?.authenticated) return
     fetchOrders(null) 
@@ -83,8 +134,9 @@ function RepPostedPageContent() {
     setNextCursor(null)
   }
 
-  const fetchOrders = async (cursorOverride) => {
-    setLoading(true); setMsg(null)
+  const fetchOrders = async (cursorOverride, opts = null) => {
+    const silent = opts?.silent === true
+    if (!silent) { setLoading(true); setMsg(null) }
     const ctl = new AbortController()
     const timer = setTimeout(() => ctl.abort(), 5000)
     try {
@@ -98,10 +150,10 @@ function RepPostedPageContent() {
       setOrders(json.orders || [])
       setNextCursor(json.nextCursor || null)
     } catch (e) {
-      if (e.name !== 'AbortError') setMsg({ type:'error', text:e.message })
+      if (e.name !== 'AbortError' && !silent) setMsg({ type:'error', text:e.message })
     } finally {
       clearTimeout(timer)
-      setLoading(false)
+      if (!silent) setLoading(false)
       setDidLoadOnce(true)
     }
   }
@@ -155,6 +207,8 @@ function RepPostedPageContent() {
       setOrders(orders.filter(o => o.order_id !== orderId))
       setMsg({ type:'success', text:`Order ${orderId} delivered successfully` })
       setModalInput('')
+      announceRepFoodStats()
+      loadStats()
     } catch (e) {
       if (e.name === 'AbortError') {
         setMsg({ type:'error', text:'Delivery request timed out after 8s. Please check network and try again.' })
@@ -175,29 +229,20 @@ function RepPostedPageContent() {
     if (!sourceOrders.length) return alert('No rows to export')
     setPdfLoading(true)
     try {
-      const { jsPDF } = await import('jspdf')
-      const { default: autoTable } = await import('jspdf-autotable')
-      // Use A4 landscape to give more horizontal room for 11 columns
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+      // Determine delivery branch from filtered data
+      const filteredForHeader = !search ? sourceOrders : sourceOrders.filter(o => {
+        const s = search.toLowerCase()
+        return String(o.order_id).toLowerCase().includes(s) || String(o.member_id).toLowerCase().includes(s)
+      })
+      const branchSet = new Set(filteredForHeader.map(o => o?.delivery?.name).filter(Boolean))
+      const branchLabel = branchSet.size === 1 ? [...branchSet][0] : (branchSet.size > 1 ? 'Multiple Delivery Branches' : 'All Delivery Branches')
 
-    // Determine delivery branch from filtered data
-    const filteredForHeader = !search ? sourceOrders : sourceOrders.filter(o => {
-      const s = search.toLowerCase()
-      return String(o.order_id).toLowerCase().includes(s) || String(o.member_id).toLowerCase().includes(s)
-    })
-    const branchSet = new Set(filteredForHeader.map(o => o?.delivery?.name).filter(Boolean))
-    const branchLabel = branchSet.size === 1 ? [...branchSet][0] : (branchSet.size > 1 ? 'Multiple Delivery Branches' : 'All Delivery Branches')
-
-    // Header (first page)
-    doc.setFontSize(14)
-    doc.text('Posted Orders Manifest', 12, 12)
-    doc.setFontSize(9)
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 12, 18)
-    doc.text(`Delivery Branch: ${branchLabel}${dept ? '  |  Department: ' + dept : ''}`, 12, 24)
-
-    // Build table rows
-    const headers = ['ID','Order','Member','Dept','Pay','Item','Qty','Unit Price','Amount','Remarks','Sign']
-    const sanitize = (s) => String(s ?? '').replace(/\u20A6|₦/g, 'NGN ').replace(/[\u2013\u2014]/g, '-')
+      const headers = ['ID','Order','Member','Dept','Pay','Item','Qty','Unit Price','Amount','Remarks','Sign']
+      const sanitize = sanitizePdfText
+      const doc = await createManifestDoc({
+        title: 'Posted Orders Manifest',
+        meta: `Delivery Branch: ${branchLabel}${dept ? '  |  Department: ' + dept : ''}`,
+      })
     const filtered = !search ? sourceOrders : sourceOrders.filter(o => {
       const s = search.toLowerCase()
       return String(o.order_id).toLowerCase().includes(s) || String(o.member_id).toLowerCase().includes(s)
@@ -243,19 +288,10 @@ function RepPostedPageContent() {
       return ''
     })
 
-    autoTable(doc, {
-      head: [headers],
+    await addManifestTable(doc, {
+      head: headers,
       body: rows,
-      foot: [footRow],
-      showFoot: 'lastPage',
       startY: 30,
-      margin: { top: 28, left: 10, right: 10 },
-      styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak', lineWidth: 0.1, lineColor: [0, 0, 0] },
-      theme: 'grid',
-      headStyles: { fillColor: [75, 85, 99], fontSize: 9, halign: 'center', valign: 'middle', textColor: [255,255,255] },
-      // Stronger, high-contrast styles for the totals row (match body font size)
-      footStyles: { fillColor: [75, 85, 99], textColor: [255,255,255], fontStyle: 'bold', fontSize: 8, halign: 'right', lineWidth: 0.1 },
-      alternateRowStyles: { fillColor: [249, 250, 251] },
       columnStyles: {
         0: { cellWidth: 16 },   // ID
         1: { cellWidth: 14 },   // Order
@@ -269,37 +305,43 @@ function RepPostedPageContent() {
         9: { cellWidth: 36 },   // Remarks
         10: { cellWidth: 14 },  // Signature
       },
-      // Ensure label and numeric cells are aligned appropriately in the foot
-      didParseCell: (data) => {
-        if (data.section === 'foot') {
-          if (data.column.index === 5) {
-            data.cell.styles.halign = 'center' // TOTAL label under Item
+      options: {
+        foot: [footRow],
+        showFoot: 'lastPage',
+        footStyles: { fillColor: [75, 85, 99], textColor: [255,255,255], fontStyle: 'bold', fontSize: 8, halign: 'right', lineWidth: 0.1 },
+        headStyles: { fillColor: [75, 85, 99], fontSize: 9, halign: 'center', valign: 'middle', textColor: [255,255,255] },
+        didParseCell: (data) => {
+          if (data.section === 'foot') {
+            if (data.column.index === 5) {
+              data.cell.styles.halign = 'center' // TOTAL label under Item
+            }
+            if (data.column.index === 6 || data.column.index === 8) {
+              data.cell.styles.halign = 'right' // Qty and Amount totals
+            }
           }
-          if (data.column.index === 6 || data.column.index === 8) {
-            data.cell.styles.halign = 'right' // Qty and Amount totals
+        },
+        didDrawPage: (data) => {
+          // Repeat header on subsequent pages
+          if (data.pageNumber > 1) {
+            doc.setFontSize(14)
+            doc.text('Posted Orders Manifest', 12, 12)
+            doc.setFontSize(9)
+            doc.text(`Generated: ${new Date().toLocaleString()}`, 12, 18)
+            doc.text(`Delivery Branch: ${branchLabel}${dept ? '  |  Department: ' + dept : ''}`, 12, 24)
           }
-        }
+        },
       },
-      didDrawPage: (data) => {
-        // Repeat header on subsequent pages
-        if (data.pageNumber > 1) {
-          doc.setFontSize(14)
-          doc.text('Posted Orders Manifest', 12, 12)
-          doc.setFontSize(9)
-          doc.text(`Generated: ${new Date().toLocaleString()}`, 12, 18)
-          doc.text(`Delivery Branch: ${branchLabel}${dept ? '  |  Department: ' + dept : ''}`, 12, 24)
-        }
-      }
     })
     // Footer rows appended after main table
     const makeRow = (mapper) => headers.map((_, i) => mapper(i))
     const sigDateRow = makeRow(i => i === 4 ? 'DATE' : (i === 5 ? 'SIGNATURE' : ''))
     const issuedRow = makeRow(i => i === 2 ? 'ITEMS ISSUED BY' : '')
     const receivedRow = makeRow(i => i === 2 ? 'ITEMS RECEIVED BY' : '')
-    autoTable(doc, {
+    await renderTable(doc, {
       head: [],
       body: [sigDateRow, issuedRow, receivedRow],
       startY: (doc.lastAutoTable && doc.lastAutoTable.finalY) ? doc.lastAutoTable.finalY + 6 : undefined,
+      rowPageBreak: 'avoid',
       styles: { fontSize: 9, lineWidth: 0.1, lineColor: [0,0,0], cellPadding: 2 },
       theme: 'grid'
     })
@@ -456,7 +498,7 @@ function RepPostedPageContent() {
       const ws = wb.addWorksheet('Items Pack')
 
       const branchLabel = json.branch?.name || json.branch?.code || (user?.branchCode || 'Branch')
-      const title = `Summary of Items from ${branchLabel}${dept ? ' — ' + dept : ''}`
+      const title = `Summary of Items from ${branchLabel}${dept ? ' · ' + dept : ''}`
       const headers = ['SN','Items','Category','Price','Quantity','Amount']
 
       ws.addRow([title])
@@ -559,7 +601,7 @@ function RepPostedPageContent() {
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
 
       const branchLabel = json.branch?.name || json.branch?.code || (user?.branchCode || 'Branch')
-      const title = `Summary of Items from ${branchLabel}${dept ? ' — ' + dept : ''}`
+      const title = `Summary of Items from ${branchLabel}${dept ? ' · ' + dept : ''}`
       doc.setFontSize(16); doc.text(title, 14, 22)
       doc.setFontSize(10); doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30)
 
@@ -606,6 +648,7 @@ function RepPostedPageContent() {
         head: [headers],
         body: tableData,
         startY: 36,
+        rowPageBreak: 'avoid',
         styles: { fontSize: 9, lineWidth: 0.1, lineColor: [0,0,0], cellPadding: 2, overflow: 'linebreak' },
         headStyles: { fillColor: [75, 85, 99], textColor: [255, 255, 255] },
         alternateRowStyles: { fillColor: [249, 250, 251] },
@@ -636,6 +679,7 @@ function RepPostedPageContent() {
         head: [],
         body: [sigDateRow, issuedRow, receivedRow],
         startY: (doc.lastAutoTable && doc.lastAutoTable.finalY) ? doc.lastAutoTable.finalY + 6 : undefined,
+      rowPageBreak: 'avoid',
         styles: { fontSize: 9, lineWidth: 0.1, lineColor: [0,0,0], cellPadding: 2 },
         theme: 'grid'
       })
@@ -648,28 +692,99 @@ function RepPostedPageContent() {
   }
 
   return (
-    <div className="p-3 sm:p-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8">
+      {/* Branch summary strip — today's pending queue the rep clears, plus this
+          cycle's posted / delivered totals, mirroring the exhibition strip. */}
+      {stats && (
+        <>
+        <div className="mb-3 flex flex-col gap-2 rounded-xl border border-brand/30 bg-brand/5 px-3.5 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+          <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-brand">
+            <Zap className="h-3.5 w-3.5" strokeWidth={2.2} />
+            Today's pending
+          </span>
+          <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-subtext sm:justify-end">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="font-semibold text-fg">
+                {(stats.todayPending?.count || 0).toLocaleString()} order{(stats.todayPending?.count || 0) === 1 ? '' : 's'}
+              </span>
+              <span className="text-line-strong">·</span>
+              <span className="font-semibold text-fg">{naira(stats.todayPending?.total || 0)}</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Package className="h-3.5 w-3.5 text-brand" strokeWidth={2.2} />
+              Posted this cycle
+              <span className="font-semibold text-fg">{(stats.postedCycle?.count || 0).toLocaleString()}</span>
+              <span className="text-line-strong">·</span>
+              <span className="font-semibold text-fg">{naira(stats.postedCycle?.total || 0)}</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Truck className="h-3.5 w-3.5 text-brand" strokeWidth={2.2} />
+              Delivered this cycle
+              <span className="font-semibold text-fg">{(stats.deliveredCycle?.count || 0).toLocaleString()}</span>
+              <span className="text-line-strong">·</span>
+              <span className="font-semibold text-fg">{naira(stats.deliveredCycle?.total || 0)}</span>
+            </span>
+          </span>
+        </div>
+        {/* Branch-wide status cards — the same at-a-glance overview the
+            exhibition pending view shows. The posted card is highlighted
+            because that's the queue this page clears. */}
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+          {[
+            { key: 'Pending', icon: Clock, delta: `${stats.todayPending?.count || 0} new today` },
+            { key: 'Posted', icon: Package, delta: 'awaiting delivery' },
+            { key: 'Delivered', icon: Truck, delta: 'handed to members' },
+            { key: 'Cancelled', icon: XCircle, delta: 'admin can restore' },
+          ].map(({ key, icon: Icon, delta }) => {
+            const st = stats.statuses?.[key] || { count: 0, total: 0 }
+            const active = key === 'Posted'
+            return (
+              <div
+                key={key}
+                className={[
+                  'rounded-xl border bg-surface p-3 transition-colors duration-200 ease-sakani',
+                  active ? 'border-brand/50 ring-1 ring-brand/25' : 'border-line-subtle',
+                ].join(' ')}
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">
+                    <Icon className="h-3.5 w-3.5" strokeWidth={2.2} />
+                    {key}
+                  </span>
+                  {active && <span className="rounded-full bg-brand/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand">Viewing</span>}
+                </div>
+                <p className="mt-1.5 text-[clamp(1.125rem,1.125rem+0.22vw,1.375rem)] font-semibold leading-tight tracking-tight text-fg">
+                  {st.count.toLocaleString()}
+                </p>
+                <p className="mt-0.5 truncate text-[11px] text-subtext">{naira(st.total)}</p>
+                <p className="mt-1 truncate text-[10px] text-muted">{delta}</p>
+              </div>
+            )
+          })}
+        </div>
+        </>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div>
-          <h1 className="text-base sm:text-lg md:text-xl font-semibold break-words">Rep — Food Distribution — Posted</h1>
-          <div className="text-xs text-gray-500">Current Branch: {user?.branchCode || '—'}</div>
+          <h1 className="text-h2 font-bold tracking-tight text-fg">Food Distribution · Posted</h1>
+          <div className="text-xs text-muted">Current Branch: {user?.branchCode || '—'}</div>
         </div>
         <button
           type="button"
-          className="px-4 py-2 rounded-lg bg-gray-900 hover:bg-black text-white text-xs sm:text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2 shadow-sm whitespace-nowrap"
+          className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50 whitespace-nowrap"
           disabled={itemsPackLoading}
           onClick={exportItemsPack}
           aria-busy={itemsPackLoading}
         >
-          {itemsPackLoading && <Spinner className="h-4 w-4 text-white" />}
+          {itemsPackLoading && <Spinner className="h-4 w-4 text-on-accent" />}
           <span>{itemsPackLoading ? 'Downloading…' : 'Items Pack'}</span>
         </button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 mb-4">
+      <div className="ui-card p-4 mb-4">
         <div className="flex flex-wrap items-center gap-2">
           <select
-            className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white w-full sm:w-56 shrink-0"
+            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full sm:w-56 shrink-0"
             value={dept}
             onChange={(e) => {
               const v = e.target.value
@@ -688,7 +803,7 @@ function RepPostedPageContent() {
 
           <div className="flex items-center gap-2 flex-1 min-w-[240px] sm:max-w-[560px]">
             <input
-              className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm flex-1 min-w-0 bg-white"
+              className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               placeholder="Search (Order / Member)"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
@@ -698,7 +813,7 @@ function RepPostedPageContent() {
             />
             <button
               type="button"
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs sm:text-sm font-medium transition-colors shadow-sm whitespace-nowrap disabled:opacity-50 shrink-0"
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50 whitespace-nowrap"
               onClick={() => setSearch(searchInput.trim())}
               disabled={loading}
             >
@@ -706,48 +821,42 @@ function RepPostedPageContent() {
             </button>
           </div>
 
-            <button
-              type="button"
-              className="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-900 text-white text-xs sm:text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
+            <ExportButton
+              format="excel"
               onClick={() => exportExcel().catch(() => null)}
               disabled={excelLoading}
-              aria-busy={excelLoading}
-            >
-              {excelLoading && <Spinner className="h-4 w-4 text-white" />}
-              <span>{excelLoading ? 'Downloading…' : 'Download Excel'}</span>
-            </button>
-            <button
-              type="button"
-              className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
+              busy={excelLoading}
+              busyText="Preparing…"
+            />
+            <ExportButton
+              format="pdf"
               onClick={() => exportPDF().catch(() => null)}
               disabled={pdfLoading}
-              aria-busy={pdfLoading}
-            >
-              {pdfLoading && <Spinner className="h-4 w-4 text-white" />}
-              <span>{pdfLoading ? 'Downloading…' : 'Download PDF'}</span>
-            </button>
+              busy={pdfLoading}
+              busyText="Preparing…"
+            />
             <button
               type="button"
-              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
               onClick={() => fetchOrders(undefined).catch(() => null)}
               disabled={loading}
               aria-busy={loading}
             >
-              {loading && <Spinner className="h-4 w-4 text-white" />}
+              {loading && <Spinner className="h-4 w-4 text-on-accent" />}
               <span>{loading ? 'Refreshing…' : 'Refresh'}</span>
             </button>
         </div>
       </div>
 
-      {msg && <div className={`mb-3 text-sm ${msg.type==='error'?'text-red-700':'text-green-700'}`}>{msg.text}</div>}
+      {msg && <div className={`mb-3 text-sm ${msg.type==='error'?'text-danger-fg':'text-success-fg'}`}>{msg.text}</div>}
 
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-gray-50/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <div className="ui-card overflow-hidden">
+        <div className="p-4 border-b border-line bg-subtle flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div className="text-sm font-semibold">Posted Orders</div>
-          <div className="flex items-center gap-2 text-xs font-normal text-gray-700">
+          <div className="flex items-center gap-2 text-xs font-normal text-subtext">
             <button
               type="button"
-              className="px-2 py-1 rounded border bg-white hover:bg-gray-50 disabled:opacity-50"
+              className="rounded-lg border border-line bg-surface px-2 py-1 text-xs font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => {
                 if (pageIndex <= 0) return
                 const prevIndex = pageIndex - 1
@@ -761,7 +870,7 @@ function RepPostedPageContent() {
             <div>Page {pageIndex + 1}</div>
             <button
               type="button"
-              className="px-2 py-1 rounded border bg-white hover:bg-gray-50 disabled:opacity-50"
+              className="rounded-lg border border-line bg-surface px-2 py-1 text-xs font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => {
                 if (!nextCursor) return
                 const nextIndex = pageIndex + 1
@@ -781,15 +890,15 @@ function RepPostedPageContent() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs sm:text-sm">
-            <thead className="bg-gray-50">
+            <thead className="bg-subtle border-b border-line">
               <tr>
-                <th className="px-3 py-3 text-left font-semibold text-gray-900">Order</th>
-                <th className="px-3 py-3 text-left font-semibold text-gray-900">Member</th>
-                <th className="px-3 py-3 text-left font-semibold text-gray-900">Department</th>
-                <th className="px-3 py-3 text-left font-semibold text-gray-900">Payment</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-900">Total + Int</th>
-                <th className="px-3 py-3 text-left font-semibold text-gray-900">Date</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-900">Actions</th>
+                <th className="px-3 py-3 text-left font-semibold text-fg">Order</th>
+                <th className="px-3 py-3 text-left font-semibold text-fg">Member</th>
+                <th className="px-3 py-3 text-left font-semibold text-fg">Department</th>
+                <th className="px-3 py-3 text-left font-semibold text-fg">Payment</th>
+                <th className="px-3 py-3 text-right font-semibold text-fg">Total + Int</th>
+                <th className="px-3 py-3 text-left font-semibold text-fg">Date</th>
+                <th className="px-3 py-3 text-right font-semibold text-fg">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -798,24 +907,24 @@ function RepPostedPageContent() {
                   <tr key={`sk_${i}`}>
                     {Array.from({ length: 7 }).map((__, j) => (
                       <td key={`sk_${i}_${j}`} className="px-3 py-3">
-                        <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
+                        <div className="h-4 w-full sakani-skeleton rounded animate-pulse" />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-gray-600">
+                  <td colSpan={7} className="px-4 py-10 text-center text-muted">
                     No Posted orders.
                   </td>
                 </tr>
               ) : (
                 filteredOrders.map((o) => (
-                  <tr key={o.order_id} className="hover:bg-gray-50">
-                    <td className="px-3 py-3 font-medium text-gray-900">#{o.order_id}</td>
+                  <tr key={o.order_id} className="hover:bg-subtle">
+                    <td className="px-3 py-3 font-medium text-fg">#{o.order_id}</td>
                     <td className="px-3 py-3">
-                      <div className="text-gray-900">{o.member_name_snapshot}</div>
-                      <div className="text-xs text-gray-500">{o.member_id}</div>
+                      <div className="text-fg">{o.member_name_snapshot}</div>
+                      <div className="text-xs text-muted">{o.member_id}</div>
                     </td>
                     <td className="px-3 py-3">{o.departments?.name || '-'}</td>
                     <td className="px-3 py-3">{o.payment_option}</td>
@@ -824,13 +933,14 @@ function RepPostedPageContent() {
                     <td className="px-3 py-3 text-right">
                       <select
                         defaultValue=""
-                        className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs sm:text-sm bg-white disabled:opacity-50"
+                        className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none disabled:opacity-50"
                         onChange={(e) => {
                           const v = e.target.value
                           e.target.value = ''
                           if (!v) return
                           if (v === 'view') openView(o)
                           if (v === 'deliver') deliverOne(o.order_id)
+                          if (v === 'sheet') setSheetOrder(o)
                         }}
                         disabled={deliveringOrder === o.order_id}
                       >
@@ -839,6 +949,7 @@ function RepPostedPageContent() {
                         </option>
                         <option value="view">View</option>
                         <option value="deliver">Deliver</option>
+                        <option value="sheet">Print sheet</option>
                       </select>
                     </td>
                   </tr>
@@ -856,20 +967,20 @@ function RepPostedPageContent() {
         widthClass="w-[94vw] max-w-4xl mx-4"
       >
         {!viewOrder ? (
-          <div className="text-sm text-gray-600">No order selected.</div>
+          <div className="text-sm text-muted">No order selected.</div>
         ) : (
           <div className="space-y-3">
             <div className="text-sm">
               <div>
-                <span className="text-gray-500">Member:</span> <span className="font-medium">{viewOrder.member_name_snapshot}</span>{' '}
-                <span className="text-gray-500">({viewOrder.member_id})</span>
+                <span className="text-muted">Member:</span> <span className="font-medium">{viewOrder.member_name_snapshot}</span>{' '}
+                <span className="text-muted">({viewOrder.member_id})</span>
               </div>
-              <div className="text-gray-600">
+              <div className="text-muted">
                 {viewOrder.member_branch?.name ? `Member Branch: ${viewOrder.member_branch.name} • ` : ''}
                 {viewOrder.delivery?.name ? `Delivery: ${viewOrder.delivery.name} • ` : ''}
                 {viewOrder.departments?.name ? `Department: ${viewOrder.departments.name}` : 'Department: -'}
               </div>
-              <div className="text-gray-600">
+              <div className="text-muted">
                 Payment: <span className="font-medium">{viewOrder.payment_option}</span> • Total:{' '}
                 <span className="font-semibold">₦{Number(viewOrder.total_amount || 0).toLocaleString()}</span>
               </div>
@@ -878,7 +989,7 @@ function RepPostedPageContent() {
             <div className="ui-card overflow-hidden">
               <div className="max-h-[60vh] overflow-auto">
                 <table className="w-full text-xs sm:text-sm min-w-[560px]">
-                  <thead className="bg-gray-50 sticky top-0 z-10">
+                  <thead className="sticky top-0 z-10 bg-surface">
                     <tr>
                       <th className="px-3 py-2 text-left w-40 hidden md:table-cell">SKU</th>
                       <th className="px-3 py-2 text-left">Item</th>
@@ -900,7 +1011,7 @@ function RepPostedPageContent() {
                       ))
                     ) : (
                       <tr>
-                        <td className="px-3 py-3 text-gray-600" colSpan={5}>
+                        <td className="px-3 py-3 text-muted" colSpan={5}>
                           No items found for this order.
                         </td>
                       </tr>
@@ -915,10 +1026,10 @@ function RepPostedPageContent() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">{showModal.title}</h3>
-            <p className="text-gray-600 mb-4">{showModal.message}</p>
+        <div className="fixed inset-0 bg-surface/10 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-surface p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <h3 className="text-[15px] font-semibold mb-4">{showModal.title}</h3>
+            <p className="text-muted mb-4">{showModal.message}</p>
             <input
               type="text"
               value={modalInput}
@@ -929,7 +1040,7 @@ function RepPostedPageContent() {
             />
             <div className="flex gap-2 justify-end">
               <button
-                className="px-4 py-2 border rounded hover:bg-gray-50"
+                className="px-4 py-2 border rounded hover:bg-subtle"
                 onClick={() => { setShowModal(null); setModalInput('') }}
               >
                 Cancel
@@ -937,15 +1048,15 @@ function RepPostedPageContent() {
               <button
                 className={`px-4 py-2 rounded transition-all duration-200 ${
                   deliveringOrder === showModal.orderId 
-                    ? 'bg-gray-400 text-white cursor-not-allowed' 
-                    : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                    ? 'cursor-not-allowed bg-muted text-on-accent' 
+                    : 'bg-success-fg text-on-accent hover:brightness-110'
                 }`}
                 onClick={handleDeliverSubmit}
                 disabled={deliveringOrder === showModal.orderId}
               >
                 {deliveringOrder === showModal.orderId ? (
                   <div className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-1 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin -ml-1 mr-1 h-4 w-4 text-on-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
@@ -960,7 +1071,13 @@ function RepPostedPageContent() {
         </div>
       )}
 
-      {/* Simple button-only loader (no overlay) */}
+      {/* Print-optimized order sheet — hand this to the packer/delivery team */}
+      <PrintOrderSheet
+        open={!!sheetOrder}
+        onClose={() => setSheetOrder(null)}
+        module="food"
+        order={sheetOrder}
+      />
     </div>
   )
 }

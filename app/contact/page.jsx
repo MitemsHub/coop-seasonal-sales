@@ -1,33 +1,24 @@
 'use client'
 
-import Link from 'next/link'
+// app/contact/page.jsx — the MitemsHub contact page (footer credit link).
+// Shares the landing page's header, section language, card styling and
+// footer so every guest-facing route feels like one product.
+
 import { useState } from 'react'
+import { ArrowRight, ArrowUpRight, Globe, Mail, Palette, Phone, Send } from 'lucide-react'
+import LandingHeader from '../components/LandingHeader'
+import Reveal from '../components/ui/Reveal'
+
+// Marketing anchors point back to the landing page's sections.
+const CONTACT_NAV = [
+  { href: '/#services', label: 'What we do' },
+  { href: '/#how', label: 'How it works' },
+  { href: '/#why', label: 'Why join' },
+  { href: '/#faq', label: 'FAQ' },
+]
 
 function Icon({ name, className }) {
-  if (name === 'mail') {
-    return (
-      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8m-18 8h18a2 2 0 002-2V8a2 2 0 00-2-2H3a2 2 0 00-2 2v6a2 2 0 002 2z"
-        />
-      </svg>
-    )
-  }
-  if (name === 'phone') {
-    return (
-      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.128a11.042 11.042 0 005.516 5.516l1.128-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-        />
-      </svg>
-    )
-  }
+  // WhatsApp + LinkedIn are brand marks, kept as inline paths (not in lucide).
   if (name === 'whatsapp') {
     return (
       <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -42,38 +33,40 @@ function Icon({ name, className }) {
       </svg>
     )
   }
-  if (name === 'globe') {
-    return (
-      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 21a9 9 0 100-18 9 9 0 000 18z" />
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.6 9h16.8M3.6 15h16.8M12 3a15.3 15.3 0 010 18M12 3a15.3 15.3 0 000 18" />
-      </svg>
-    )
-  }
   return null
 }
 
-function SocialButton({ href, label, icon, sub }) {
+const LUCIDE_ICONS = { phone: Phone, mail: Mail, globe: Globe, palette: Palette }
+
+function SocialButton({ href, label, icon, tint, sub }) {
+  const external = href.startsWith('http')
+  const Arrow = external ? ArrowUpRight : ArrowRight
+  const LucideIcon = LUCIDE_ICONS[icon]
   return (
     <a
       href={href}
-      target={href.startsWith('http') ? '_blank' : undefined}
-      rel={href.startsWith('http') ? 'noopener noreferrer' : undefined}
-      className="group flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 hover:border-gray-300 hover:shadow-sm transition-all"
+      target={external ? '_blank' : undefined}
+      rel={external ? 'noopener noreferrer' : undefined}
+      className="group flex items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3 transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
     >
-      <div className="h-10 w-10 rounded-xl bg-gray-50 border border-gray-200 flex items-center justify-center text-gray-700 group-hover:text-gray-900 group-hover:bg-gray-100 transition-colors">
-        <Icon name={icon} className={icon === 'whatsapp' || icon === 'linkedin' ? 'h-5 w-5' : 'h-5 w-5'} />
-      </div>
-      <div className="min-w-0">
-        <div className="text-sm font-semibold text-gray-900 truncate">{label}</div>
-        {!!sub && <div className="text-xs text-gray-600 truncate">{sub}</div>}
-      </div>
-      <div className="ml-auto text-gray-400 group-hover:text-gray-600 transition-colors" aria-hidden="true">
-        →
-      </div>
+      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tint} transition-transform duration-200 group-hover:scale-105`}>
+        {LucideIcon ? (
+          <LucideIcon className="h-5 w-5" strokeWidth={2} />
+        ) : (
+          <Icon name={icon} className="h-5 w-5" />
+        )}
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-semibold text-fg">{label}</span>
+        {!!sub && <span className="block truncate text-xs text-muted">{sub}</span>}
+      </span>
+      <Arrow className="ml-auto h-4 w-4 shrink-0 text-subtext transition-colors duration-200 group-hover:text-fg" aria-hidden="true" />
     </a>
   )
 }
+
+const INPUT_CLS =
+  'w-full rounded-xl border border-line bg-surface px-4 py-2.5 text-sm text-fg placeholder:text-subtext focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand transition-[border-color,box-shadow] duration-200'
 
 export default function ContactPage() {
   const [name, setName] = useState('')
@@ -119,133 +112,184 @@ export default function ContactPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-emerald-50 flex flex-col">
-      <main className="flex-1">
-      <div className="max-w-5xl mx-auto px-4 md:px-6 py-8 md:py-12">
-        <div className="flex items-center justify-between gap-3 mb-6">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Contact Me</h1>
-            <div className="mt-1 text-sm text-gray-600">
-              Need a customized portal, website, or management system for your organization? Send a message and I’ll respond promptly.
-            </div>
-          </div>
-          <Link
-            href="/portal"
-            className="shrink-0 inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50"
-          >
-            <span aria-hidden="true">←</span>
-            Back
-          </Link>
+    <div className="min-h-screen bg-canvas text-fg">
+      <LandingHeader navLinks={CONTACT_NAV} navLabel="Marketing" />
+
+      {/* ============================== HERO ============================== */}
+      <section className="border-b border-line">
+        <div className="mx-auto max-w-7xl px-4 py-12 sm:py-16 lg:px-6">
+          <Reveal className="mx-auto max-w-2xl text-center">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand">
+              Built by MitemsHub
+            </span>
+            <h1 className="mt-4 text-h1 font-bold tracking-tight text-fg">
+              Let&apos;s build what you need.
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-fg/80 sm:text-base">
+              Custom portals, websites and management systems for your organization. Tell me what
+              you want to build and I&apos;ll respond promptly.
+            </p>
+          </Reveal>
         </div>
+      </section>
 
-        {!!msg && (
-          <div
-            className={`mb-5 rounded-xl border p-3 text-sm ${
-              msg.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'
-            }`}
-          >
-            {msg.text}
+      {/* ============================== CONTENT ============================== */}
+      <section className="bg-canvas">
+        <div className="mx-auto max-w-7xl px-4 py-12 lg:px-6 lg:py-16">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-5">
+            {/* Form */}
+            <Reveal className="lg:col-span-3">
+              <div className="h-full rounded-2xl border border-line bg-surface p-5 shadow-xs sm:p-6">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-subtle text-brand">
+                    <Mail className="h-5 w-5" strokeWidth={2} />
+                  </span>
+                  <div className="leading-tight">
+                    <h2 className="text-sm font-bold text-fg">Quick Message</h2>
+                    <p className="mt-0.5 text-xs text-muted">Share what you need, and I&apos;ll reach out.</p>
+                  </div>
+                </div>
+
+                {!!msg && (
+                  <div
+                    className={`mt-4 rounded-xl border p-3 text-sm ${
+                      msg.type === 'error'
+                        ? 'border-danger-border bg-danger-bg text-danger-fg'
+                        : 'border-success-border bg-success-bg text-success-fg'
+                    }`}
+                    role="status"
+                  >
+                    {msg.text}
+                  </div>
+                )}
+
+                <form onSubmit={onSubmit} className="mt-5 space-y-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label htmlFor="contact-name" className="mb-1.5 block text-xs font-semibold text-fg">
+                        Your Name
+                      </label>
+                      <input
+                        id="contact-name"
+                        className={INPUT_CLS}
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="e.g. John Doe"
+                        autoComplete="name"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="contact-phone" className="mb-1.5 block text-xs font-semibold text-fg">
+                        Phone Number
+                      </label>
+                      <input
+                        id="contact-phone"
+                        className={INPUT_CLS}
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="e.g. 0812..."
+                        autoComplete="tel"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="contact-email" className="mb-1.5 block text-xs font-semibold text-fg">
+                      Email
+                    </label>
+                    <input
+                      id="contact-email"
+                      className={INPUT_CLS}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="e.g. you@company.com"
+                      autoComplete="email"
+                      inputMode="email"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="contact-request" className="mb-1.5 block text-xs font-semibold text-fg">
+                      Your Request
+                    </label>
+                    <textarea
+                      id="contact-request"
+                      className={`${INPUT_CLS} min-h-32 resize-y`}
+                      value={requests}
+                      onChange={(e) => setRequests(e.target.value)}
+                      placeholder="Tell me what you want to build or improve (features, timeline, budget range, etc.)"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand px-5 text-sm font-semibold text-on-accent shadow-xs transition-colors duration-200 hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-60"
+                  >
+                    <Send className="h-4 w-4" strokeWidth={2} />
+                    {submitting ? 'Submitting…' : 'Submit'}
+                  </button>
+                </form>
+              </div>
+            </Reveal>
+
+            {/* Contact channels */}
+            <Reveal delay={0.08} className="lg:col-span-2">
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-line bg-surface p-5 shadow-xs sm:p-6">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-subtle text-accent">
+                      <Phone className="h-5 w-5" strokeWidth={2} />
+                    </span>
+                    <div className="leading-tight">
+                      <h2 className="text-sm font-bold text-fg">Reach Me Directly</h2>
+                      <p className="mt-0.5 text-xs text-muted">Call, chat or email</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 space-y-2.5">
+                    <SocialButton href="tel:08122763992" label="Call" sub="08122763992" icon="phone" tint="bg-brand-subtle text-brand" />
+                    <SocialButton href="tel:08149100561" label="Call" sub="08149100561" icon="phone" tint="bg-brand-subtle text-brand" />
+                    <SocialButton href="https://wa.me/2348122763992" label="WhatsApp" icon="whatsapp" tint="bg-success-bg text-success-fg" />
+                    <SocialButton href="mailto:chuksmitti@gmail.com" label="Email" icon="mail" tint="bg-accent-subtle text-accent" />
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-line bg-surface p-5 shadow-xs sm:p-6">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-info-bg text-info-fg">
+                      <Globe className="h-5 w-5" strokeWidth={2} />
+                    </span>
+                    <div className="leading-tight">
+                      <h2 className="text-sm font-bold text-fg">Social</h2>
+                      <p className="mt-0.5 text-xs text-muted">Find me around the web</p>
+                    </div>
+                  </div>
+                  <div className="mt-4 space-y-2.5">
+                    <SocialButton href="http://linkedin.com/in/mitems" label="LinkedIn" icon="linkedin" tint="bg-info-bg text-info-fg" />
+                    <SocialButton href="https://mitemshub.github.io/mitems-portfolio/" label="Portfolio" icon="globe" tint="bg-brand-subtle text-brand" />
+                    <SocialButton href="/design-system" label="Design System" icon="palette" tint="bg-accent-subtle text-accent" />
+                  </div>
+                </div>
+              </div>
+            </Reveal>
           </div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
-          <section className="lg:col-span-3 bg-white rounded-2xl border border-gray-200 shadow-sm p-5 md:p-6">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold text-gray-900">Quick Message</div>
-                <div className="text-xs text-gray-600 mt-1">Share what you need, and I’ll reach out.</div>
-              </div>
-            </div>
-
-            <form onSubmit={onSubmit} className="mt-5 space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Your Name</label>
-                  <input
-                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. John Doe"
-                    autoComplete="name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Phone Number</label>
-                  <input
-                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="e.g. 0812..."
-                    autoComplete="tel"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Email</label>
-                <input
-                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. you@company.com"
-                  autoComplete="email"
-                  inputMode="email"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">Your Request</label>
-                <textarea
-                  className="w-full min-h-32 rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-500"
-                  value={requests}
-                  onChange={(e) => setRequests(e.target.value)}
-                  placeholder="Tell me what you want to build or improve (features, timeline, budget range, etc.)"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-emerald-600 px-4 py-3 text-white text-sm font-semibold hover:from-blue-700 hover:to-emerald-700 disabled:opacity-60"
-              >
-                <Icon name="mail" className="h-4 w-4" />
-                {submitting ? 'Submitting…' : 'Submit'}
-              </button>
-            </form>
-          </section>
-
-          <aside className="lg:col-span-2 space-y-3">
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 md:p-6">
-              <div className="text-sm font-semibold text-gray-900">Reach Me Directly</div>
-              <div className="mt-4 space-y-2">
-                <SocialButton href="tel:08122763992" label="Call" sub="08122763992" icon="phone" />
-                <SocialButton href="tel:08149100561" label="Call" sub="08149100561" icon="phone" />
-                <SocialButton href="https://wa.me/2348122763992" label="WhatsApp" icon="whatsapp" />
-                <SocialButton href="mailto:chuksmitti@gmail.com" label="Email" icon="mail" />
-              </div>
-            </div>
-
-            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 md:p-6">
-              <div className="text-sm font-semibold text-gray-900">Social</div>
-              <div className="mt-4 space-y-2">
-                <SocialButton href="http://linkedin.com/in/mitems" label="LinkedIn" icon="linkedin" />
-                <SocialButton href="https://mitemshub.github.io/mitems-portfolio/" label="Portfolio" icon="globe" />
-              </div>
-            </div>
-          </aside>
         </div>
-      </div>
-      </main>
+      </section>
 
-      <footer className="bg-gray-50 border-t border-gray-100">
-        <div className="max-w-5xl mx-auto px-4 md:px-6 py-4">
-          <div className="flex flex-col md:flex-row items-center justify-between space-y-2 md:space-y-0">
-            <div className="flex items-center space-x-1.5 text-gray-500">
-              <span className="text-xs">Powered by</span>
-              <span className="font-medium text-blue-500 text-xs">MitemsHub</span>
-            </div>
-            <div className="text-xs text-gray-400">© 2026 CBN Coop Food Distribution</div>
-          </div>
+      {/* ============================== FOOTER ============================== */}
+      <footer className="border-t border-line bg-surface">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-6 text-center sm:flex-row sm:text-left lg:px-6">
+          <p className="text-xs text-muted">© 2026 CBN Coop Seasonal Sales. All rights reserved.</p>
+          <p className="text-xs text-muted">
+            Need help?{' '}
+            <span className="font-medium text-fg">
+              customerservice@cbncoopng.com, 09096797982, 08180578550
+            </span>
+          </p>
+          <p className="flex items-center gap-1.5 text-xs text-muted">
+            Powered by
+            <span className="font-semibold text-brand">MitemsHub</span>
+          </p>
         </div>
       </footer>
     </div>

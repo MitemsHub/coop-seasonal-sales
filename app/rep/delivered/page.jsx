@@ -4,8 +4,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import ProtectedRoute from '../../components/ProtectedRoute'
 import DraggableModal from '../../components/DraggableModal'
+import ExportButton from '../../components/ui/ExportButton'
+import { createManifestDoc, addManifestTable, sanitizePdfText } from '../../lib/pdfExport'
 
-const Spinner = ({ className = 'h-4 w-4 text-white' }) => (
+
+const Spinner = ({ className = 'h-4 w-4 text-on-accent' }) => (
   <svg className={`animate-spin ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
     <path
@@ -158,7 +161,7 @@ function RepDeliveredContent() {
       const ExcelJS = ExcelJSMod?.default ?? ExcelJSMod
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet('Delivered')
-      ws.addRow(['Food Distribution — Delivered Orders'])
+      ws.addRow(['Food Distribution · Delivered Orders'])
       ws.addRow([`Generated: ${new Date().toLocaleString()}`])
       ws.addRow([dept ? `Department: ${dept}` : 'Department: All'])
       ws.addRow([])
@@ -194,18 +197,12 @@ function RepDeliveredContent() {
         : source.filter((o) => `${o.order_id} ${o.member_id} ${o.member_name_snapshot || ''}`.toLowerCase().includes(s))
 
       if (!filtered.length) throw new Error('No rows to export')
-      const { jsPDF } = await import('jspdf')
-      const { default: autoTable } = await import('jspdf-autotable')
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-
-      doc.setFontSize(14)
-      doc.text('Delivered Orders Manifest', 12, 12)
-      doc.setFontSize(9)
-      doc.text(`Generated: ${new Date().toLocaleString()}`, 12, 18)
-      doc.text(`Department: ${dept || 'All'}`, 12, 24)
-
       const headers = ['ID', 'Order', 'Member', 'Dept', 'Pay', 'Item', 'Qty', 'Unit Price', 'Amount']
-      const sanitize = (v) => String(v ?? '').replace(/\u20A6|₦/g, 'NGN ').replace(/[\u2013\u2014]/g, '-')
+      const sanitize = sanitizePdfText
+      const doc = await createManifestDoc({
+        title: 'Delivered Orders Manifest',
+        meta: `Department: ${dept || 'All'}`,
+      })
       const body = filtered.flatMap((o) =>
         (o.order_lines || []).map((l) => [
           sanitize(o.member_id),
@@ -220,15 +217,10 @@ function RepDeliveredContent() {
         ])
       )
 
-      autoTable(doc, {
-        head: [headers],
+      await addManifestTable(doc, {
+        head: headers,
         body,
         startY: 30,
-        margin: { top: 28, left: 10, right: 10 },
-        theme: 'grid',
-        styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak', lineWidth: 0.1, lineColor: [0, 0, 0] },
-        headStyles: { fillColor: [75, 85, 99], textColor: [255, 255, 255], fontSize: 9 },
-        alternateRowStyles: { fillColor: [249, 250, 251] },
         columnStyles: {
           0: { cellWidth: 18 }, // ID
           1: { cellWidth: 14 }, // Order
@@ -256,18 +248,18 @@ function RepDeliveredContent() {
   }
 
   return (
-    <div className="p-3 sm:p-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div>
-          <h1 className="text-base sm:text-lg md:text-xl font-semibold break-words">Rep — Food Distribution — Delivered</h1>
-          <div className="text-xs text-gray-500">Current Branch: {user?.branchCode || '—'}</div>
+          <h1 className="text-h2 font-bold tracking-tight text-fg">Food Distribution · Delivered</h1>
+          <div className="text-xs text-muted">Current Branch: {user?.branchCode || '—'}</div>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 mb-4">
+      <div className="ui-card p-4 mb-4">
         <div className="flex flex-wrap items-center gap-2">
           <select
-            className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white w-full sm:w-56 shrink-0"
+            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full sm:w-56 shrink-0"
             value={dept}
             onChange={(e) => {
               const v = e.target.value
@@ -288,7 +280,7 @@ function RepDeliveredContent() {
 
           <div className="flex items-center gap-2 flex-1 min-w-[240px] sm:max-w-[560px]">
             <input
-              className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm flex-1 min-w-0 bg-white"
+              className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               placeholder="Search (Order / Member)"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
@@ -298,7 +290,7 @@ function RepDeliveredContent() {
             />
             <button
               type="button"
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs sm:text-sm font-medium transition-colors shadow-sm whitespace-nowrap disabled:opacity-50 shrink-0"
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50 whitespace-nowrap"
               onClick={() => setSearch(searchInput.trim())}
               disabled={loading}
             >
@@ -306,31 +298,27 @@ function RepDeliveredContent() {
             </button>
           </div>
 
-          <button
-            type="button"
-            className="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-900 text-white text-xs sm:text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
+          <ExportButton
+            format="excel"
             onClick={() => exportExcel().catch(() => null)}
             disabled={excelLoading}
-          >
-            {excelLoading && <Spinner className="h-4 w-4 text-white" />}
-            <span>{excelLoading ? 'Downloading…' : 'Download Excel'}</span>
-          </button>
-          <button
-            type="button"
-            className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
+            busy={excelLoading}
+            busyText="Preparing…"
+          />
+          <ExportButton
+            format="pdf"
             onClick={() => exportPDF().catch(() => null)}
             disabled={pdfLoading}
-          >
-            {pdfLoading && <Spinner className="h-4 w-4 text-white" />}
-            <span>{pdfLoading ? 'Downloading…' : 'Download PDF'}</span>
-          </button>
+            busy={pdfLoading}
+            busyText="Preparing…"
+          />
           <button
             type="button"
-            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
             onClick={() => fetchOrders(undefined).catch(() => null)}
             disabled={loading}
           >
-            {loading && <Spinner className="h-4 w-4 text-white" />}
+            {loading && <Spinner className="h-4 w-4 text-on-accent" />}
             <span>{loading ? 'Refreshing…' : 'Refresh'}</span>
           </button>
         </div>
@@ -339,20 +327,20 @@ function RepDeliveredContent() {
       {!!msg && (
         <div
           className={`mb-4 rounded-lg border p-3 text-sm ${
-            msg.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'
+            msg.type === 'error' ? 'border-danger-border bg-danger-bg text-danger-fg' : 'border-success-border bg-success-bg text-success-fg'
           }`}
         >
           {msg.text}
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-gray-50/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <div className="ui-card overflow-hidden">
+        <div className="p-4 border-b border-line bg-subtle flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div className="text-sm font-semibold">Delivered Orders</div>
-          <div className="flex items-center gap-2 text-xs font-normal text-gray-700">
+          <div className="flex items-center gap-2 text-xs font-normal text-subtext">
             <button
               type="button"
-              className="px-2 py-1 rounded border bg-white hover:bg-gray-50 disabled:opacity-50"
+              className="rounded-lg border border-line bg-surface px-2 py-1 text-xs font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => {
                 if (pageIndex <= 0) return
                 const prevIndex = pageIndex - 1
@@ -366,7 +354,7 @@ function RepDeliveredContent() {
             <div>Page {pageIndex + 1}</div>
             <button
               type="button"
-              className="px-2 py-1 rounded border bg-white hover:bg-gray-50 disabled:opacity-50"
+              className="rounded-lg border border-line bg-surface px-2 py-1 text-xs font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => {
                 if (!nextCursor) return
                 const nextIndex = pageIndex + 1
@@ -386,15 +374,15 @@ function RepDeliveredContent() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs sm:text-sm">
-            <thead className="bg-gray-50">
+            <thead className="bg-subtle border-b border-line">
               <tr>
-                <th className="px-3 py-3 text-left font-semibold text-gray-900">Order</th>
-                <th className="px-3 py-3 text-left font-semibold text-gray-900">Member</th>
-                <th className="px-3 py-3 text-left font-semibold text-gray-900">Department</th>
-                <th className="px-3 py-3 text-left font-semibold text-gray-900">Payment</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-900">Total + Int</th>
-                <th className="px-3 py-3 text-left font-semibold text-gray-900">Date</th>
-                <th className="px-3 py-3 text-right font-semibold text-gray-900">Action</th>
+                <th className="px-3 py-3 text-left font-semibold text-fg">Order</th>
+                <th className="px-3 py-3 text-left font-semibold text-fg">Member</th>
+                <th className="px-3 py-3 text-left font-semibold text-fg">Department</th>
+                <th className="px-3 py-3 text-left font-semibold text-fg">Payment</th>
+                <th className="px-3 py-3 text-right font-semibold text-fg">Total + Int</th>
+                <th className="px-3 py-3 text-left font-semibold text-fg">Date</th>
+                <th className="px-3 py-3 text-right font-semibold text-fg">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -403,24 +391,24 @@ function RepDeliveredContent() {
                   <tr key={`sk_${i}`}>
                     {Array.from({ length: 7 }).map((__, j) => (
                       <td key={`sk_${i}_${j}`} className="px-3 py-3">
-                        <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
+                        <div className="h-4 w-full sakani-skeleton rounded animate-pulse" />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-gray-600">
+                  <td colSpan={7} className="px-4 py-10 text-center text-muted">
                     No Delivered orders.
                   </td>
                 </tr>
               ) : (
                 filteredOrders.map((o) => (
-                  <tr key={o.order_id} className="hover:bg-gray-50">
-                    <td className="px-3 py-3 font-medium text-gray-900">#{o.order_id}</td>
+                  <tr key={o.order_id} className="hover:bg-subtle">
+                    <td className="px-3 py-3 font-medium text-fg">#{o.order_id}</td>
                     <td className="px-3 py-3">
-                      <div className="text-gray-900">{o.member_name_snapshot}</div>
-                      <div className="text-xs text-gray-500">{o.member_id}</div>
+                      <div className="text-fg">{o.member_name_snapshot}</div>
+                      <div className="text-xs text-muted">{o.member_id}</div>
                     </td>
                     <td className="px-3 py-3">{o.departments?.name || '-'}</td>
                     <td className="px-3 py-3">{o.payment_option}</td>
@@ -429,7 +417,7 @@ function RepDeliveredContent() {
                     <td className="px-3 py-3 text-right">
                       <button
                         type="button"
-                        className="px-3 py-1.5 rounded-lg bg-gray-900 hover:bg-black text-white text-xs font-semibold"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover"
                         onClick={() => openView(o)}
                       >
                         View
@@ -450,20 +438,20 @@ function RepDeliveredContent() {
         widthClass="w-[94vw] max-w-4xl mx-4"
       >
         {!viewOrder ? (
-          <div className="text-sm text-gray-600">No order selected.</div>
+          <div className="text-sm text-muted">No order selected.</div>
         ) : (
           <div className="space-y-3">
             <div className="text-sm">
               <div>
-                <span className="text-gray-500">Member:</span> <span className="font-medium">{viewOrder.member_name_snapshot}</span>{' '}
-                <span className="text-gray-500">({viewOrder.member_id})</span>
+                <span className="text-muted">Member:</span> <span className="font-medium">{viewOrder.member_name_snapshot}</span>{' '}
+                <span className="text-muted">({viewOrder.member_id})</span>
               </div>
-              <div className="text-gray-600">
+              <div className="text-muted">
                 {viewOrder.member_branch?.name ? `Member Branch: ${viewOrder.member_branch.name} • ` : ''}
                 {viewOrder.delivery?.name ? `Delivery: ${viewOrder.delivery.name} • ` : ''}
                 {viewOrder.departments?.name ? `Department: ${viewOrder.departments.name}` : 'Department: -'}
               </div>
-              <div className="text-gray-600">
+              <div className="text-muted">
                 Payment: <span className="font-medium">{viewOrder.payment_option}</span> • Total:{' '}
                 <span className="font-semibold">₦{Number(viewOrder.total_amount || 0).toLocaleString()}</span>
               </div>
@@ -472,7 +460,7 @@ function RepDeliveredContent() {
             <div className="ui-card overflow-hidden">
               <div className="max-h-[60vh] overflow-auto">
                 <table className="w-full text-xs sm:text-sm min-w-[560px]">
-                  <thead className="bg-gray-50 sticky top-0 z-10">
+                  <thead className="sticky top-0 z-10 bg-surface">
                     <tr>
                       <th className="px-3 py-2 text-left w-40 hidden md:table-cell">SKU</th>
                       <th className="px-3 py-2 text-left">Item</th>
@@ -494,7 +482,7 @@ function RepDeliveredContent() {
                       ))
                     ) : (
                       <tr>
-                        <td className="px-3 py-3 text-gray-600" colSpan={5}>
+                        <td className="px-3 py-3 text-muted" colSpan={5}>
                           No items found for this order.
                         </td>
                       </tr>

@@ -2,6 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
+import RamOrderAuditModal from '../../../components/RamOrderAuditModal'
+import ExportButton from '../../../components/ui/ExportButton'
+import { createManifestDoc, addManifestTable, sanitizePdfText } from '../../../lib/pdfExport'
+
 
 function safeJsonFactory() {
   return async (res, label) => {
@@ -35,6 +39,7 @@ function RepRamDeliveredContent() {
   const [didLoadOnce, setDidLoadOnce] = useState(false)
   const [downloadingPdf, setDownloadingPdf] = useState(false)
   const [downloadingExcel, setDownloadingExcel] = useState(false)
+  const [auditOrder, setAuditOrder] = useState(null)
   const [pageSize, setPageSize] = useState(50)
   const [page, setPage] = useState(1)
   const fetchCtl = useRef(null)
@@ -70,7 +75,7 @@ function RepRamDeliveredContent() {
           if (!Number.isFinite(id) || id <= 0) continue
           const title = String(loc?.delivery_location || '').trim()
           const name = String(loc?.name || '').trim()
-          const label = [title, name].filter(Boolean).join(' — ')
+          const label = [title, name].filter(Boolean).join(' · ')
           if (!byId.has(id)) byId.set(id, { id, label: label || `Location ${id}` })
         }
         return Array.from(byId.values()).sort((a, b) => a.label.localeCompare(b.label))
@@ -136,7 +141,7 @@ function RepRamDeliveredContent() {
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet('Delivered')
 
-      ws.addRow(['Ram Sales — Delivered Orders (Rep)'])
+      ws.addRow(['Ram Sales · Delivered Orders (Rep)'])
       ws.addRow([`Delivery Location: ${selectedLocationLabel || 'All'} | Search: ${term || 'All'}`])
 
       const headers = Object.keys(rows[0] || { id: '' })
@@ -163,21 +168,15 @@ function RepRamDeliveredContent() {
     setDownloadingPdf(true)
     setMsg(null)
     try {
-      const { jsPDF } = await import('jspdf')
-      const { default: autoTable } = await import('jspdf-autotable')
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-
-      const sanitize = (s) => String(s ?? '').replace(/\u20A6|₦/g, 'NGN ').replace(/[\u2013\u2014]/g, '-')
+      const sanitize = sanitizePdfText
       const filters = [
         `Delivery: ${selectedLocationLabel || 'All'}`,
         `Search: ${term || 'All'}`,
       ].join('  |  ')
-
-      doc.setFontSize(14)
-      doc.text('Ram Sales — Delivered Orders', 12, 12)
-      doc.setFontSize(9)
-      doc.text(`Generated: ${new Date().toLocaleString()}`, 12, 18)
-      doc.text(`Filters: ${sanitize(filters)}`, 12, 24)
+      const doc = await createManifestDoc({
+        title: 'Ram Sales · Delivered Orders',
+        meta: `Filters: ${sanitize(filters)}`,
+      })
 
       const head = [
         [
@@ -245,13 +244,11 @@ function RepRamDeliveredContent() {
         '',
       ])
 
-      autoTable(doc, {
+      await addManifestTable(doc, {
         head,
         body,
         startY: 30,
-        styles: { fontSize: 7 },
-        headStyles: { fillColor: [75, 85, 99] },
-        alternateRowStyles: { fillColor: [249, 250, 251] },
+        variant: 'ram',
         columnStyles: {
           6: { halign: 'right' },
           7: { halign: 'right' },
@@ -260,13 +257,14 @@ function RepRamDeliveredContent() {
           10: { halign: 'right' },
           11: { halign: 'right' },
         },
-        didParseCell: (data) => {
-          if (data.section === 'body' && data.row.index === totalsRowIndex) {
-            data.cell.styles.fontStyle = 'bold'
-            data.cell.styles.fillColor = [243, 244, 246]
-          }
+        options: {
+          didParseCell: (data) => {
+            if (data.section === 'body' && data.row.index === totalsRowIndex) {
+              data.cell.styles.fontStyle = 'bold'
+              data.cell.styles.fillColor = [243, 244, 246]
+            }
+          },
         },
-        margin: { left: 12, right: 12 },
       })
 
       doc.save(`rep_ram_delivered_${new Date().toISOString().split('T')[0]}.pdf`)
@@ -284,30 +282,30 @@ function RepRamDeliveredContent() {
   const pageRows = useMemo(() => (orders || []).slice(startIndex, endIndex), [endIndex, orders, startIndex])
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
         <div>
-          <h1 className="text-base sm:text-lg md:text-xl font-semibold break-words">Rep — Ram Sales (Delivered)</h1>
-          <div className="text-xs sm:text-sm text-gray-600">Delivered ram orders for your delivery location(s).</div>
+          <h1 className="text-h2 font-bold tracking-tight text-fg">Ram Sales · Delivered</h1>
+          <div className="text-xs sm:text-sm text-muted">Delivered ram orders for your delivery location(s).</div>
         </div>
       </div>
 
       {!!msg && (
         <div
           className={`mb-4 rounded-xl border p-3 text-sm ${
-            msg.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'
+            msg.type === 'error' ? 'border-danger-border bg-danger-bg text-danger-fg' : 'border-success-border bg-success-bg text-success-fg'
           }`}
         >
           {msg.text}
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 mb-4">
+      <div className="ui-card p-4 mb-4">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col lg:flex-row gap-2 lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 min-w-0">
               <input
-                className="w-full max-w-[420px] border-2 border-gray-200 rounded-xl px-3 py-2 text-sm"
+                className="w-full max-w-[420px] min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               placeholder="Search (Order ID / Member ID / Name)"
               value={term}
               onChange={(e) => setTerm(e.target.value)}
@@ -315,13 +313,13 @@ function RepRamDeliveredContent() {
                 if (e.key === 'Enter') fetchOrders()
               }}
             />
-            <button type="button" onClick={fetchOrders} className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold">
+            <button type="button" onClick={fetchOrders} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover">
               Search
             </button>
           </div>
             <div className="flex flex-wrap items-center gap-2">
               <select
-                className="border-2 border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                 value={deliveryLocationId}
                 onChange={(e) => setDeliveryLocationId(e.target.value)}
               >
@@ -332,44 +330,41 @@ function RepRamDeliveredContent() {
                   </option>
                 ))}
               </select>
-              <button
-                type="button"
+              <ExportButton
+                format="excel"
                 onClick={exportExcel}
                 disabled={!orders.length || downloadingExcel || downloadingPdf}
-                className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-sm font-semibold disabled:opacity-50"
-              >
-                {downloadingExcel ? 'Preparing…' : 'Download Excel'}
-              </button>
-              <button
-                type="button"
+                busy={downloadingExcel}
+                busyText="Preparing…"
+              />
+              <ExportButton
+                format="pdf"
                 onClick={exportPDF}
                 disabled={!orders.length || downloadingExcel || downloadingPdf}
-                className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50"
-              >
-                {downloadingPdf ? 'Preparing…' : 'Download PDF'}
-              </button>
+                busy={downloadingPdf}
+                busyText="Preparing…"
+              />
             </div>
           </div>
-          <div className="text-xs text-gray-600">Orders: {orders.length.toLocaleString()}</div>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <div className="ui-card overflow-hidden">
+        <div className="p-4 border-b border-line flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <div className="text-sm font-semibold">Delivered Orders</div>
             <button
               type="button"
               onClick={fetchOrders}
               disabled={loading}
-              className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
             >
               {loading ? 'Loading…' : 'Refresh'}
             </button>
           </div>
           <div className="flex items-center gap-2">
             <select
-              className="border-2 border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white"
+              className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value) || 50)}
             >
@@ -379,18 +374,18 @@ function RepRamDeliveredContent() {
             </select>
             <button
               type="button"
-              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-xs sm:text-sm font-semibold text-gray-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={safePage <= 1}
             >
               Prev
             </button>
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-muted">
               Page {safePage} / {pageCount}
             </div>
             <button
               type="button"
-              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-xs sm:text-sm font-semibold text-gray-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
               disabled={safePage >= pageCount}
             >
@@ -401,54 +396,64 @@ function RepRamDeliveredContent() {
 
         <div className="overflow-x-auto">
           <table className="w-full text-xs sm:text-sm">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-subtle border-b border-line">
               <tr>
-                <th className="p-2 text-left">Order</th>
-                <th className="p-2 text-left">Member</th>
-                <th className="p-2 text-left">Delivery</th>
-                <th className="p-2 text-left">Payment</th>
-                <th className="p-2 text-right">Qty</th>
-                <th className="p-2 text-right">Total</th>
+                <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Order</th>
+                <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Member</th>
+                <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Delivery</th>
+                <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Payment</th>
+                <th className="p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Qty</th>
+                <th className="p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Total</th>
+                <th className="p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Action</th>
               </tr>
             </thead>
             <tbody>
               {!didLoadOnce || loading ? (
                 Array.from({ length: 10 }).map((_, i) => (
-                  <tr key={`sk_${i}`} className="border-b last:border-b-0">
-                    {Array.from({ length: 6 }).map((__, j) => (
+                  <tr key={`sk_${i}`} className="border-b border-line last:border-b-0">
+                    {Array.from({ length: 7 }).map((__, j) => (
                       <td key={`sk_${i}_${j}`} className="p-2">
-                        <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
+                        <div className="h-4 w-full sakani-skeleton rounded animate-pulse" />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : !pageRows.length ? (
                 <tr>
-                  <td className="p-3 text-gray-600" colSpan={6}>
+                  <td className="p-3 text-muted" colSpan={7}>
                     No delivered orders.
                   </td>
                 </tr>
               ) : (
                 pageRows.map((o) => (
-                  <tr key={o.id} className="border-b last:border-b-0 hover:bg-gray-50">
+                  <tr key={o.id} className="border-b border-line last:border-b-0 hover:bg-subtle">
                     <td className="p-2 align-top">
                       <div className="font-medium">#{o.id}</div>
-                      <div className="text-gray-600">{o.created_at ? new Date(o.created_at).toLocaleString() : ''}</div>
+                      <div className="text-muted">{o.created_at ? new Date(o.created_at).toLocaleString() : ''}</div>
                     </td>
                     <td className="p-2 align-top">
                       <div className="font-medium">{o.member_id}</div>
-                      <div className="text-gray-600">{o.member?.full_name || ''}</div>
-                      <div className="text-gray-600">{o.member?.phone || ''}</div>
+                      <div className="text-muted">{o.member?.full_name || ''}</div>
+                      <div className="text-muted">{o.member?.phone || ''}</div>
                     </td>
                     <td className="p-2 align-top whitespace-pre-line">
                       <div>{o.delivery_location?.delivery_location || ''}</div>
-                      <div className="text-gray-600">{o.delivery_location?.name || ''}</div>
-                      <div className="text-gray-600">{o.delivery_location?.phone || ''}</div>
+                      <div className="text-muted">{o.delivery_location?.name || ''}</div>
+                      <div className="text-muted">{o.delivery_location?.phone || ''}</div>
                     </td>
                     <td className="p-2 align-top">{o.payment_option || ''}</td>
                     <td className="p-2 align-top text-right">{Number(o.qty || 0).toLocaleString()}</td>
                     <td className="p-2 align-top text-right">
                       <div className="font-medium">{money(o.total_amount)}</div>
+                    </td>
+                    <td className="p-2 align-top text-right">
+                      <button
+                        type="button"
+                        onClick={() => setAuditOrder(o)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle"
+                      >
+                        Activity
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -457,6 +462,14 @@ function RepRamDeliveredContent() {
           </table>
         </div>
       </div>
+
+      {/* Order activity — audit trail: who did what and when */}
+      <RamOrderAuditModal
+        open={!!auditOrder}
+        order={auditOrder}
+        endpoint="/api/rep/ram/orders/audit"
+        onClose={() => setAuditOrder(null)}
+      />
     </div>
   )
 }

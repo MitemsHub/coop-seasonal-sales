@@ -23,6 +23,7 @@ export async function POST(req) {
       .eq('order_id', orderId)
 
     await supabase.from('audit_log').insert({
+      module: 'food',
       actor: adminId || 'admin',
       action: 'deliver',
       order_id: orderId,

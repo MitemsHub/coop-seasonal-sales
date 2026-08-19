@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { verify } from '@/lib/signing'
+import { logOrderAudit } from '@/lib/orderAudit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -46,8 +47,43 @@ export async function POST(req) {
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
+    // Build the no-leak "failed" list (same treatment as the exhibition rep
+    // routes). Out-of-scope ids — orders at another delivery location — come
+    // back as { id, reason: 'Not in your location' } WITHOUT their status, so
+    // a rep can never read another location's order state through this call.
+    // In-scope ids that simply weren't eligible (wrong status) get their own
+    // status back, which is fine — they belong to this rep.
+    const updatedIds = new Set((data || []).map((r) => Number(r.id)))
+    const { data: rowRows } = await supabase
+      .from('ram_orders')
+      .select('id, status, ram_delivery_location_id')
+      .in('id', ids)
+    const byId = new Map((rowRows || []).map((r) => [Number(r.id), r]))
+    const failed = ids
+      .filter((id) => !updatedIds.has(id))
+      .map((id) => {
+        const row = byId.get(id)
+        if (!row) return { id, status: '' }
+        if (!allowedLocationIds.includes(Number(row.ram_delivery_location_id))) {
+          return { id, reason: 'Not in your location' }
+        }
+        return { id, status: String(row.status || '') }
+      })
+
+    // Audit (food pattern) — record the delivery, tagged with the rep vendor.
+    await logOrderAudit(
+      supabase,
+      (data || []).map((r) => ({
+        actor: `rep:${claim.ram_vendor_code || claim.ram_delivery_location_id || 'ram'}`,
+        action: 'deliver',
+        order_id: String(r.id),
+        detail: { status },
+      })),
+      'ram'
+    )
+
     const updated = (data || []).map((r) => ({ id: r.id, status: r.status }))
-    return NextResponse.json({ ok: true, updated })
+    return NextResponse.json({ ok: true, updated, failed })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Internal server error' }, { status: 500 })
   }

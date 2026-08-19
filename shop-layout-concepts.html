@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shop Layout Concepts — Creative Direction</title>
+<style>
+  /* ─── Sakani tokens (mirrored from app/globals.css) ─── */
+  :root{
+    --bg-canvas:#fafaf9; --bg-surface:#ffffff; --bg-subtle:#f5f4f2; --bg-muted:#e7e5e1; --bg-inverse:#1f1f1f;
+    --fg-default:#141414; --fg-muted:#57534e; --fg-subtle:#76706a; --fg-on-accent:#ffffff; --fg-on-inverse:#fafaf9;
+    --line-subtle:#e7e5e1; --line-default:#dbdad7; --line-strong:#a8a29b;
+    --brand:#1d6746; --brand-hover:#134e34; --brand-active:#0d3926; --brand-subtle:#e2f5e9; --brand-fg:#0d3926;
+    --accent:#f2c26a; --accent-hover:#e8a53d; --accent-subtle:#fdf3dd; --accent-fg:#141414;
+    --success-bg:#f1fef6; --success-fg:#027a48; --warning-bg:#fffbf0; --warning-fg:#b54708;
+    --danger-bg:#fef3f2; --danger-fg:#b42318; --info-bg:#eff8ff; --info-fg:#175cd3;
+    --shadow-xs:0 1px 2px 0 rgba(16,15,12,.05); --shadow-sm:0 1px 3px 0 rgba(16,15,12,.1),0 1px 2px 0 rgba(16,15,12,.06);
+    --shadow-md:0 4px 8px -2px rgba(16,15,12,.1),0 2px 4px -2px rgba(16,15,12,.06);
+    --shadow-lg:0 12px 16px -4px rgba(16,15,12,.08),0 4px 6px -2px rgba(16,15,12,.03);
+    --shadow-xl:0 20px 24px -4px rgba(16,15,12,.1),0 8px 8px -4px rgba(16,15,12,.03);
+    --ease-sakani:cubic-bezier(.65,0,.35,1); --ease-out:cubic-bezier(.33,1,.68,1);
+    --r-sm:7px; --r-md:9px; --r-lg:14px; --r-xl:18px;
+  }
+  html[data-theme="dark"]{
+    --bg-canvas:#0f0e0c; --bg-surface:#141414; --bg-subtle:#1f1f1f; --bg-muted:#3a3837; --bg-inverse:#fafaf9;
+    --fg-default:#fafaf9; --fg-muted:#a8a29b; --fg-subtle:#9c968f; --fg-on-accent:#141414; --fg-on-inverse:#0f0e0c;
+    --line-subtle:#2a2826; --line-default:#3a3837; --line-strong:#78716a;
+    --brand:#69b48d; --brand-hover:#93cdad; --brand-active:#bce2cc; --brand-subtle:#052315; --brand-fg:#93cdad;
+    --accent:#f2c26a; --accent-hover:#e8a53d; --accent-subtle:#381c06; --accent-fg:#141414;
+    --success-bg:#033524; --success-fg:#6ce9a6; --warning-bg:#4e1d09; --warning-fg:#fec84b;
+    --danger-bg:#55160c; --danger-fg:#fda29b; --info-bg:#102a56; --info-fg:#84caff;
+    --shadow-xs:0 1px 2px 0 rgba(0,0,0,.4); --shadow-sm:0 1px 3px 0 rgba(0,0,0,.5),0 1px 2px 0 rgba(0,0,0,.3);
+    --shadow-md:0 4px 8px -2px rgba(0,0,0,.5),0 2px 4px -2px rgba(0,0,0,.3);
+    --shadow-lg:0 12px 16px -4px rgba(0,0,0,.5),0 4px 6px -2px rgba(0,0,0,.3);
+    --shadow-xl:0 20px 24px -4px rgba(0,0,0,.5),0 8px 8px -4px rgba(0,0,0,.3);
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:'Geist','Inter',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
+    background:var(--bg-canvas); color:var(--fg-default);
+    -webkit-font-smoothing:antialiased; transition:background .3s var(--ease-sakani),color .3s var(--ease-sakani);
+  }
+
+  /* ─── Showcase shell ─── */
+  .showcase{min-height:100vh}
+  .bar{
+    position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    padding:12px 20px;background:color-mix(in srgb,var(--bg-canvas) 82%,transparent);
+    backdrop-filter:blur(14px);border-bottom:1px solid var(--line-subtle);
+  }
+  .bar .mark{display:flex;align-items:center;gap:10px;margin-right:auto}
+  .bar .mark .dot{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--brand),var(--brand-hover));display:grid;place-items:center;color:var(--fg-on-accent);font-weight:700;font-size:14px;box-shadow:var(--shadow-sm)}
+  .bar h1{font-size:14px;font-weight:700;letter-spacing:-.01em}
+  .bar p{font-size:11px;color:var(--fg-muted)}
+  .seg{display:inline-flex;align-items:center;gap:2px;background:var(--bg-subtle);border:1px solid var(--line-subtle);border-radius:10px;padding:3px}
+  .seg button{
+    border:0;background:transparent;color:var(--fg-muted);font:inherit;font-size:11px;font-weight:600;
+    padding:5px 10px;border-radius:7px;cursor:pointer;transition:all .2s var(--ease-sakani);white-space:nowrap;
+  }
+  .seg button:hover{color:var(--fg-default)}
+  .seg button.active{background:var(--bg-surface);color:var(--fg-default);box-shadow:var(--shadow-xs)}
+  .icon-btn{
+    width:30px;height:30px;border-radius:9px;border:1px solid var(--line-subtle);background:var(--bg-surface);
+    display:grid;place-items:center;cursor:pointer;color:var(--fg-muted);font-size:14px;transition:all .2s var(--ease-sakani);
+  }
+  .icon-btn:hover{color:var(--fg-default);border-color:var(--line-strong)}
+
+  .stage{display:flex;flex-direction:column;align-items:center;padding:32px 16px 80px;gap:28px}
+  .device-frame{
+    width:min(100%,1200px);background:var(--bg-canvas);border:1px solid var(--line-subtle);border-radius:20px;
+    box-shadow:var(--shadow-xl);overflow:hidden;transition:width .4s var(--ease-out);
+  }
+  .device-frame.is-mobile{width:min(100%,400px)}
+  .device-topbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line-subtle);background:var(--bg-surface)}
+  .device-topbar .dot-dots{display:flex;gap:4px}
+  .device-topbar .dot-dots span{width:6px;height:6px;border-radius:50%;background:var(--line-strong)}
+  .device-topbar .url{flex:1;text-align:center;font-size:10px;color:var(--fg-subtle);background:var(--bg-subtle);border-radius:99px;padding:3px 10px;max-width:240px;margin:0 auto}
+  .device-topbar .moon{cursor:pointer;font-size:13px}
+
+  .concept-notes{
+    width:min(100%,1200px);display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:6px;
+  }
+  .concept-notes .note{
+    background:var(--bg-surface);border:1px solid var(--line-subtle);border-radius:12px;padding:12px 14px;font-size:11px;color:var(--fg-muted);line-height:1.5;
+  }
+  .concept-notes .note b{color:var(--fg-default);font-weight:600}
+  .concept-notes .note .tag{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--brand);background:var(--brand-subtle);border-radius:99px;padding:2px 8px;margin-bottom:5px}
+
+  .section-label{width:min(100%,1200px);display:flex;align-items:center;gap:10px;margin-top:8px}
+  .section-label h2{font-size:13px;font-weight:700;letter-spacing:-.01em}
+  .section-label span{font-size:11px;color:var(--fg-muted)}
+  .section-label::after{content:'';flex:1;height:1px;background:var(--line-subtle)}
+
+  /* ─── Shared shop bits ─── */
+  .shop-canvas{position:relative;min-height:640px;background:
+    radial-gradient(900px 340px at 12% -6%, color-mix(in srgb,var(--brand) 9%,transparent), transparent 60%),
+    radial-gradient(760px 300px at 92% 4%, color-mix(in srgb,var(--accent) 9%,transparent), transparent 60%),
+    var(--bg-canvas);
+  }
+  .shop-canvas.is-mobile{min-height:700px}
+  .pill{
+    display:inline-flex;align-items:center;gap:6px;border-radius:99px;font-size:10px;font-weight:600;
+    letter-spacing:.08em;text-transform:uppercase;padding:3px 9px;
+  }
+  .pill.brand{background:var(--brand-subtle);color:var(--brand-fg)}
+  .pill.muted{background:var(--bg-subtle);color:var(--fg-muted)}
+  .pill.accent{background:var(--accent-subtle);color:var(--accent-fg)}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;cursor:pointer;
+    font:inherit;font-size:12px;font-weight:600;border-radius:10px;padding:9px 14px;transition:all .2s var(--ease-sakani);
+  }
+  .btn.primary{background:var(--brand);color:var(--fg-on-accent)}
+  .btn.primary:hover{background:var(--brand-hover);transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+  .btn.secondary{background:var(--bg-surface);color:var(--fg-default);border:1px solid var(--line-default)}
+  .btn.secondary:hover{border-color:var(--line-strong)}
+  .btn.small{padding:6px 10px;font-size:11px;border-radius:8px}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none!important}
+  .card{background:var(--bg-surface);border:1px solid var(--line-subtle);border-radius:var(--r-lg);box-shadow:var(--shadow-xs)}
+  .input{
+    width:100%;border:1px solid var(--line-default);border-radius:10px;background:var(--bg-surface);
+    padding:9px 11px;font:inherit;font-size:12px;color:var(--fg-default);outline:none;transition:border .2s,box-shadow .2s;
+  }
+  .input:focus{border-color:var(--brand);box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 18%,transparent)}
+  .label{font-size:10px;color:var(--fg-muted);font-weight:500;margin-bottom:4px;display:block}
+  .item-img{
+    position:relative;border-radius:10px;background:
+      radial-gradient(80% 80% at 30% 20%, color-mix(in srgb,var(--brand) 22%,transparent), transparent 70%),
+      var(--bg-subtle);display:grid;place-items:center;font-size:26px;
+  }
+  .qty-btn{width:26px;height:26px;border-radius:50%;border:1px solid var(--line-default);background:var(--bg-surface);color:var(--fg-default);cursor:pointer;font-size:14px;line-height:1;display:grid;place-items:center;transition:all .15s var(--ease-sakani)}
+  .qty-btn:hover{border-color:var(--brand);color:var(--brand)}
+  .qty-btn:disabled{opacity:.3;cursor:not-allowed}
+  .badge-count{
+    position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:99px;background:var(--accent);
+    color:var(--accent-fg);font-size:10px;font-weight:700;display:grid;place-items:center;padding:0 5px;
+    box-shadow:var(--shadow-sm);animation:pop .3s var(--ease-out);
+  }
+  @keyframes pop{0%{transform:scale(.4)}60%{transform:scale(1.15)}100%{transform:scale(1)}}
+  .cart-bar-count{font-weight:700;font-size:14px;color:var(--fg-default)}
+
+  .divider{height:1px;background:var(--line-subtle)}
+
+  /* ─── Concept A: Baseline (current layout) ─── */
+  .concept-a .a-hero{padding:22px 16px 0}
+  .concept-a .a-member{padding:14px}
+  .concept-a .a-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+  .concept-a .a-stat{background:var(--bg-subtle);border-radius:10px;padding:10px;text-align:center}
+  .concept-a .a-stat .k{font-size:10px;color:var(--fg-muted);font-weight:500}
+  .concept-a .a-stat .v{font-size:16px;font-weight:700;margin-top:2px}
+  .a-cartbar{position:sticky;bottom:12px;z-index:20;margin:14px;border-radius:16px;background:color-mix(in srgb,var(--bg-surface) 92%,transparent);backdrop-filter:blur(12px);border:1px solid var(--line-subtle);box-shadow:var(--shadow-lg);padding:12px}
+
+  /* ─── Concept B: Category-first marketplace ─── */
+  .b-rail{display:flex;gap:6px;overflow-x:auto;padding:14px 16px 2px;scrollbar-width:none}
+  .b-rail::-webkit-scrollbar{display:none}
+  .b-chip{
+    flex:0 0 auto;border:1px solid var(--line-default);background:var(--bg-surface);color:var(--fg-muted);
+    border-radius:99px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;transition:all .2s var(--ease-sakani);
+  }
+  .b-chip:hover{border-color:var(--line-strong);color:var(--fg-default)}
+  .b-chip.active{background:var(--brand);border-color:var(--brand);color:var(--fg-on-accent)}
+  .b-section-header{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg-canvas) 88%,transparent);backdrop-filter:blur(8px);padding:10px 16px;display:flex;align-items:center;gap:8px}
+  .b-featured{display:flex;gap:10px;overflow-x:auto;padding:12px 16px;scrollbar-width:none}
+  .b-featured::-webkit-scrollbar{display:none}
+  .b-feature{flex:0 0 150px;border-radius:14px;padding:10px;background:linear-gradient(160deg,color-mix(in srgb,var(--brand) 14%,var(--bg-surface)),var(--bg-surface));border:1px solid var(--line-subtle)}
+  .b-member-strip{display:flex;align-items:center;gap:10px;margin:12px 16px;padding:10px 12px;border-radius:12px;background:var(--bg-surface);border:1px solid var(--line-subtle)}
+
+  /* ─── Concept C: Split checkout layout ─── */
+  .c-layout{display:grid;grid-template-columns:1fr}
+  @media(min-width:900px){.c-layout{grid-template-columns:300px 1fr;gap:16px;padding:16px 20px}}
+  .c-rail-card{padding:14px;display:flex;flex-direction:column;gap:14px}
+  @media(min-width:900px){.c-rail-card{position:sticky;top:70px;align-self:start}}
+  .c-fab{
+    position:fixed;bottom:16px;right:16px;z-index:40;width:54px;height:54px;border-radius:50%;border:0;cursor:pointer;
+    background:var(--brand);color:var(--fg-on-accent);font-size:20px;display:grid;place-items:center;
+    box-shadow:var(--shadow-xl);transition:transform .2s var(--ease-out);
+  }
+  .c-fab:hover{transform:scale(1.06)}
+  .c-sheet{position:fixed;left:0;right:0;bottom:0;z-index:45;background:var(--bg-surface);border-radius:20px 20px 0 0;box-shadow:var(--shadow-xl);padding:14px;transform:translateY(110%);transition:transform .35s var(--ease-out)}
+  .c-sheet.open{transform:translateY(0)}
+  .c-sheet .handle{width:36px;height:4px;border-radius:99px;background:var(--line-strong);margin:0 auto 12px}
+  .c-sheet-backdrop{position:fixed;inset:0;z-index:44;background:rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .3s}
+  .c-sheet-backdrop.open{opacity:1;pointer-events:auto}
+
+  /* ─── Concept D: Compact bazaar ─── */
+  .d-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:14px 12px}
+  @media(min-width:900px){.d-grid{grid-template-columns:repeat(4,1fr)}}
+  .d-item{background:var(--bg-surface);border:1px solid var(--line-subtle);border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:6px;transition:all .2s var(--ease-sakani)}
+  .d-item:hover{transform:translateY(-2px);box-shadow:var(--shadow-sm)}
+  .d-item .d-img{height:64px;font-size:22px}
+  .d-price-chip{
+    position:absolute;left:6px;bottom:6px;background:color-mix(in srgb,var(--bg-surface) 88%,transparent);
+    backdrop-filter:blur(6px);border:1px solid var(--line-subtle);border-radius:8px;padding:2px 7px;
+    font-size:11px;font-weight:700;
+  }
+  .d-add{
+    width:100%;border:1px solid var(--line-default);background:var(--bg-subtle);color:var(--fg-default);
+    border-radius:9px;padding:6px;font-size:11px;font-weight:600;cursor:pointer;transition:all .2s var(--ease-sakani);
+  }
+  .d-add:hover{background:var(--brand);border-color:var(--brand);color:var(--fg-on-accent)}
+  .d-add.added{background:var(--brand);border-color:var(--brand);color:var(--fg-on-accent)}
+  .d-statusbar{
+    position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:8px;padding:8px 14px;
+    background:color-mix(in srgb,var(--bg-canvas) 90%,transparent);backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line-subtle);font-size:11px;color:var(--fg-muted);
+  }
+  .d-mini-cart{
+    position:sticky;bottom:10px;z-index:20;margin:0 12px 12px;border-radius:14px;display:flex;align-items:center;gap:10px;
+    background:var(--bg-inverse);color:var(--fg-on-inverse);padding:10px 14px;box-shadow:var(--shadow-lg);
+  }
+  html[data-theme="dark"] .d-mini-cart{background:var(--bg-surface);color:var(--fg-default);border:1px solid var(--line-strong)}
+
+  /* shared item grid */
+  .item-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:4px 16px 20px}
+  @media(min-width:900px){.item-grid{grid-template-columns:repeat(4,1fr);gap:12px}}
+  .item-card{background:var(--bg-surface);border:1px solid var(--line-subtle);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:6px;transition:all .2s var(--ease-sakani)}
+  .item-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-sm)}
+  .item-card .img{height:70px;font-size:24px}
+  .item-card .name{font-size:11px;font-weight:600;line-height:1.3;color:var(--fg-default)}
+  .item-card .meta{font-size:9.5px;color:var(--fg-muted)}
+  .item-card .price-row{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:auto}
+  .item-card .price{font-size:13px;font-weight:700;color:var(--brand)}
+  .item-card .stepper{display:flex;align-items:center;gap:5px}
+  .item-card .stepper .n{min-width:18px;text-align:center;font-size:11px;font-weight:700}
+
+  .chip-row{display:flex;flex-wrap:wrap;gap:5px}
+  .tiny-chip{font-size:9.5px;font-weight:600;border-radius:99px;padding:2px 7px;background:var(--bg-subtle);color:var(--fg-muted)}
+  .tiny-chip.green{background:var(--success-bg);color:var(--success-fg)}
+  .tiny-chip.gold{background:var(--accent-subtle);color:var(--accent-fg)}
+
+  .status-banner{display:flex;align-items:center;gap:8px;font-size:11px;border-radius:10px;padding:8px 11px;background:var(--success-bg);color:var(--success-fg);margin:12px 16px 0}
+  .status-banner.closed{background:var(--danger-bg);color:var(--danger-fg)}
+
+  .section-title{display:flex;align-items:baseline;justify-content:space-between;padding:14px 16px 8px}
+  .section-title h3{font-size:13px;font-weight:700;letter-spacing:-.01em}
+  .section-title .see{font-size:10.5px;color:var(--brand);font-weight:600;cursor:pointer}
+
+  .hero-title{font-size:22px;font-weight:700;letter-spacing:-.02em;line-height:1.15}
+  .hero-sub{font-size:12px;color:var(--fg-muted);line-height:1.5;margin-top:4px}
+
+  /* hide all concepts, show active */
+  .concept{display:none}
+  .concept.active{display:block;animation:fadeUp .45s var(--ease-out)}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  .kbd-hint{font-size:10px;color:var(--fg-subtle);text-align:center;margin-top:8px}
+</style>
+</head>
+<body>
+<div class="showcase">
+
+  <!-- ─── Toolbar ─── -->
+  <div class="bar">
+    <div class="mark">
+      <div class="dot">S</div>
+      <div>
+        <h1>Shop Layout Concepts</h1>
+        <p>Creative direction · 4 arrangements · Sakani tokens</p>
+      </div>
+    </div>
+    <div class="seg" id="conceptTabs" role="tablist" aria-label="Concept">
+      <button class="active" data-concept="a">A · Baseline</button>
+      <button data-concept="b">B · Category-first</button>
+      <button data-concept="c">C · Split checkout</button>
+      <button data-concept="d">D · Compact bazaar</button>
+    </div>
+    <div class="seg" id="deviceTabs" role="tablist" aria-label="Device">
+      <button class="active" data-device="desktop">🖥 Desktop</button>
+      <button data-device="mobile">📱 Mobile</button>
+    </div>
+    <button class="icon-btn" id="themeBtn" title="Toggle theme" aria-label="Toggle theme">🌙</button>
+  </div>
+
+  <div class="stage">
+
+    <!-- ═══════════ CONCEPT A · Baseline (current) ═══════════ -->
+    <div class="concept active" data-concept-panel="a">
+      <div class="section-label"><h2>Concept A — Baseline</h2><span>the current arrangement, rebuilt clean · member card → delivery → items → sticky cart</span></div>
+      <div class="device-frame is-desktop" id="frame-a">
+        <div class="device-topbar">
+          <div class="dot-dots"><span></span><span></span><span></span></div>
+          <div class="url">coop.cbn.ng/shop</div>
+          <span class="moon">🌙</span>
+        </div>
+        <div class="shop-canvas concept-a">
+          <div class="a-hero">
+            <span class="pill brand">🛒 Cooperative Store</span>
+            <h1 class="hero-title" style="margin-top:8px">Welcome to the Shop</h1>
+            <p class="hero-sub">Order fresh from the cooperative store — pay with savings, loan, or cash.</p>
+          </div>
+
+          <div class="card a-member" style="margin:14px 16px 0">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="width:32px;height:32px;border-radius:9px;background:var(--brand-subtle);color:var(--brand-fg);display:grid;place-items:center">👤</span>
+              <div>
+                <div style="font-size:12px;font-weight:700">Member Information</div>
+                <div style="font-size:10px;color:var(--fg-muted)">Your cooperative account at a glance</div>
+              </div>
+            </div>
+            <div class="a-stats">
+              <div class="a-stat"><div class="k">Items</div><div class="v" data-cart-count-a>0</div></div>
+              <div class="a-stat"><div class="k">Total</div><div class="v">₦0</div></div>
+              <div class="a-stat"><div class="k">Remaining</div><div class="v">₦250,000</div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+              <div><label class="label">Delivery Branch</label><select class="input"><option>Marina Branch</option><option>Yaba Branch</option></select></div>
+              <div><label class="label">Department</label><select class="input"><option>All Departments</option></select></div>
+            </div>
+          </div>
+
+          <div class="card" style="margin:14px 16px 0;padding:12px 14px">
+            <div class="section-title" style="padding:0 0 10px">
+              <h3>Available Items</h3>
+              <span class="see">12 items</span>
+            </div>
+            <div class="item-grid" style="padding:0">
+              <div class="item-card">
+                <div class="item-img img">🍚</div>
+                <div class="name">Local Rice (50kg)</div>
+                <div class="meta">Bag · Grains</div>
+                <div class="price-row">
+                  <div class="price">₦85,000</div>
+                  <div class="stepper" data-stepper data-price="85000" data-count>
+                    <button class="qty-btn" data-minus>−</button>
+                    <span class="n">0</span>
+                    <button class="qty-btn" data-plus>+</button>
+                  </div>
+                </div>
+              </div>
+              <div class="item-card">
+                <div class="item-img img">🫘</div>
+                <div class="name">Brown Beans (25kg)</div>
+                <div class="meta">Bag · Pulses</div>
+                <div class="price-row">
+                  <div class="price">₦48,000</div>
+                  <div class="stepper" data-stepper data-price="48000" data-count>
+                    <button class="qty-btn" data-minus>−</button>
+                    <span class="n">0</span>
+                    <button class="qty-btn" data-plus>+</button>
+                  </div>
+                </div>
+              </div>
+              <div class="item-card">
+                <div class="item-img img">🌽</div>
+                <div class="name">Maize (25kg)</div>
+                <div class="meta">Bag · Cereals</div>
+                <div class="price-row">
+                  <div class="price">₦32,000</div>
+                  <div class="stepper" data-stepper data-price="32000" data-count>
+                    <button class="qty-btn" data-minus>−</button>
+                    <span class="n">0</span>
+                    <button class="qty-btn" data-plus>+</button>
+                  </div>
+                </div>
+              </div>
+              <div class="item-card">
+                <div class="item-img img">🫒</div>
+                <div class="name">Palm Oil (25L)</div>
+                <div class="meta">Jerrycan · Oils</div>
+                <div class="price-row">
+                  <div class="price">₦58,000</div>
+                  <div class="stepper" data-stepper data-price="58000" data-count>
+                    <button class="qty-btn" data-minus>−</button>
+                    <span class="n">0</span>
+                    <button class="qty-btn" data-plus>+</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="a-cartbar">
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
+              <div class="a-stat" style="background:var(--bg-subtle);border-radius:10px;padding:8px;text-align:center"><div class="k">Items</div><div class="v" data-summary-count-a>0</div></div>
+              <div class="a-stat" style="background:var(--bg-subtle);border-radius:10px;padding:8px;text-align:center"><div class="k">Total</div><div class="v" data-summary-total-a>₦0</div></div>
+              <div class="a-stat" style="background:var(--bg-subtle);border-radius:10px;padding:8px;text-align:center"><div class="k">Remaining</div><div class="v">₦250k</div></div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn secondary" style="flex:1">View Summary</button>
+              <button class="btn primary" style="flex:1">Go to Cart →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="concept-notes">
+        <div class="note"><span class="tag">Current state</span><b>Keeps the full member card + stats up top.</b> Trust-first: the member sees their limits before shopping. The trade-off is vertical distance between decision and product.</div>
+        <div class="note"><span class="tag">When to keep</span><b>Perfect for first-timers</b> and high-trust moments (loan spend). The sticky cart bar means the total is always visible without scrolling back up.</div>
+        <div class="note"><span class="tag">Friction</span><b>Three cards before products</b> — member info, branch, then items. On mobile the first product sits ~3 screens down.</div>
+      </div>
+    </div>
+
+    <!-- ═══════════ CONCEPT B · Category-first marketplace ═══════════ -->
+    <div class="concept" data-concept-panel="b">
+      <div class="section-label"><h2>Concept B — Category-first</h2><span>a marketplace feel · category rail up top, items grouped into sticky sections, member info compressed to a strip</span></div>
+      <div class="device-frame is-desktop" id="frame-b">
+        <div class="device-topbar">
+          <div class="dot-dots"><span></span><span></span><span></span></div>
+          <div class="url">coop.cbn.ng/shop</div>
+          <span class="moon">🌙</span>
+        </div>
+        <div class="shop-canvas concept-b">
+          <div class="a-hero" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 16px 0">
+            <div>
+              <span class="pill brand">🛒 Cooperative Store</span>
+              <h1 class="hero-title" style="margin-top:6px;font-size:20px">Welcome, Bello</h1>
+            </div>
+            <div style="position:relative">
+              <button class="icon-btn" style="width:38px;height:38px;font-size:16px">🛒</button>
+              <span class="badge-count" data-badge-b>0</span>
+            </div>
+          </div>
+
+          <div class="b-rail" id="bRail">
+            <button class="b-chip active">All</button>
+            <button class="b-chip">Grains</button>
+            <button class="b-chip">Pulses</button>
+            <button class="b-chip">Oils</button>
+            <button class="b-chip">Dairy</button>
+            <button class="b-chip">Spices</button>
+            <button class="b-chip">Proteins</button>
+          </div>
+
+          <div class="status-banner">✓ Shopping is open this cycle · Delivery to Marina Branch</div>
+
+          <div class="b-member-strip">
+            <span style="width:30px;height:30px;border-radius:9px;background:var(--brand-subtle);color:var(--brand-fg);display:grid;place-items:center">👤</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:11px;font-weight:700">Adebayo Bello · MEM-1024</div>
+              <div style="font-size:9.5px;color:var(--fg-muted)">Savings ₦310k · Loan ₦120k · Limit ₦250k</div>
+            </div>
+            <span class="tiny-chip gold">₦250k left</span>
+          </div>
+
+          <div class="section-title"><h3>Featured this week</h3><span class="see">See all →</span></div>
+          <div class="b-featured">
+            <div class="b-feature">
+              <div class="item-img" style="height:64px;font-size:24px">🍚</div>
+              <div style="font-size:10.5px;font-weight:700;margin-top:6px">Local Rice 50kg</div>
+              <div style="font-size:9.5px;color:var(--fg-muted)">Member price</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+                <span style="font-size:12px;font-weight:700;color:var(--brand)">₦85,000</span>
+                <button class="btn primary small" data-add-b data-price="85000">+ Add</button>
+              </div>
+            </div>
+            <div class="b-feature">
+              <div class="item-img" style="height:64px;font-size:24px">🫘</div>
+              <div style="font-size:10.5px;font-weight:700;margin-top:6px">Brown Beans 25kg</div>
+              <div style="font-size:9.5px;color:var(--fg-muted)">Best seller</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+                <span style="font-size:12px;font-weight:700;color:var(--brand)">₦48,000</span>
+                <button class="btn primary small" data-add-b data-price="48000">+ Add</button>
+              </div>
+            </div>
+            <div class="b-feature">
+              <div class="item-img" style="height:64px;font-size:24px">🫒</div>
+              <div style="font-size:10.5px;font-weight:700;margin-top:6px">Palm Oil 25L</div>
+              <div style="font-size:9.5px;color:var(--fg-muted)">New stock</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px">
+                <span style="font-size:12px;font-weight:700;color:var(--brand)">₦58,000</span>
+                <button class="btn primary small" data-add-b data-price="58000">+ Add</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="b-section-header" style="margin-top:6px">
+            <span style="font-size:12px;font-weight:700">🌾 Grains</span>
+            <span style="font-size:10px;color:var(--fg-muted)">4 items</span>
+          </div>
+          <div class="item-grid">
+            <div class="item-card">
+              <div class="item-img img">🍚</div>
+              <div class="name">Local Rice (50kg)</div>
+              <div class="meta">Bag · Grains</div>
+              <div class="price-row">
+                <div class="price">₦85,000</div>
+                <div class="stepper" data-stepper data-price="85000" data-count>
+                  <button class="qty-btn" data-minus>−</button><span class="n">0</span><button class="qty-btn" data-plus>+</button>
+                </div>
+              </div>
+            </div>
+            <div class="item-card">
+              <div class="item-img img">🌽</div>
+              <div class="name">Maize (25kg)</div>
+              <div class="meta">Bag · Cereals</div>
+              <div class="price-row">
+                <div class="price">₦32,000</div>
+                <div class="stepper" data-stepper data-price="32000" data-count>
+                  <button class="qty-btn" data-minus>−</button><span class="n">0</span><button class="qty-btn" data-plus>+</button>
+                </div>
+              </div>
+            </div>
+            <div class="item-card">
+              <div class="item-img img">🌾</div>
+              <div class="name">Wheat (25kg)</div>
+              <div class="meta">Bag · Cereals</div>
+              <div class="price-row">
+                <div class="price">₦39,000</div>
+                <div class="stepper" data-stepper data-price="39000" data-count>
+                  <button class="qty-btn" data-minus>−</button><span class="n">0</span><button class="qty-btn" data-plus>+</button>
+                </div>
+              </div>
+            </div>
+            <div class="item-card">
+              <div class="item-img img">🍠</div>
+              <div class="name">Garri (10kg)</div>
+              <div class="meta">Bag · Cassava</div>
+              <div class="price-row">
+                <div class="price">₦18,000</div>
+                <div class="stepper" data-stepper data-price="18000" data-count>
+                  <button class="qty-btn" data-minus>−</button><span class="n">0</span><button class="qty-btn" data-plus>+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="b-section-header"><span style="font-size:12px;font-weight:700">🥜 Pulses</span><span style="font-size:10px;color:var(--fg-muted)">2 items</span></div>
+          <div class="item-grid">
+            <div class="item-card">
+              <div class="item-img img">🫘</div>
+              <div class="name">Brown Beans (25kg)</div>
+              <div class="meta">Bag · Pulses</div>
+              <div class="price-row">
+                <div class="price">₦48,000</div>
+                <div class="stepper" data-stepper data-price="48000" data-count>
+                  <button class="qty-btn" data-minus>−</button><span class="n">0</span><button class="qty-btn" data-plus>+</button>
+                </div>
+              </div>
+            </div>
+            <div class="item-card">
+              <div class="item-img img">🥜</div>
+              <div class="name">Groundnut (20kg)</div>
+              <div class="meta">Bag · Pulses</div>
+              <div class="price-row">
+                <div class="price">₦41,000</div>
+                <div class="stepper" data-stepper data-price="41000" data-count>
+                  <button class="qty-btn" data-minus>−</button><span class="n">0</span><button class="qty-btn" data-plus>+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="concept-notes">
+        <div class="note"><span class="tag">Why it wins</span><b>Products appear immediately.</b> The member info compresses to a one-line strip and the category rail makes browsing feel like a marketplace — order first, keep the details within reach.</div>
+        <div class="note"><span class="tag">Key change</span><b>Sticky section headers + a floating cart badge.</b> Scrolling stays orientated; the cart is always one tap away in the header instead of a bottom bar taking up space.</div>
+        <div class="note"><span class="tag">Trade-off</span><b>The featured strip adds a section.</b> Great for cycle specials and rep-driven highlights, but needs curated content to stay meaningful.</div>
+      </div>
+    </div>
+
+    <!-- ═══════════ CONCEPT C · Split checkout ═══════════ -->
+    <div class="concept" data-concept-panel="c">
+      <div class="section-label"><h2>Concept C — Split checkout</h2><span>desktop: sticky cart rail beside the grid · mobile: floating cart button + slide-up summary sheet</span></div>
+      <div class="device-frame is-desktop" id="frame-c">
+        <div class="device-topbar">
+          <div class="dot-dots"><span></span><span></span><span></span></div>
+          <div class="url">coop.cbn.ng/shop</div>
+          <span class="moon">🌙</span>
+        </div>
+        <div class="shop-canvas concept-c" style="min-height:720px">
+          <div class="a-hero" style="padding:18px 16px 0;text-align:center">
+            <span class="pill brand">🛒 Cooperative Store</span>
+            <h1 class="hero-title" style="margin-top:8px">The Shop</h1>
+            <p class="hero-sub" style="max-width:380px;margin:4px auto 0">Pick what your household needs — we'll tally your savings and loan balance as you go.</p>
+          </div>
+
+          <div class="c-layout">
+            <aside class="c-rail-card card">
+              <div>
+                <span class="pill muted">Member</span>
+                <div style="font-size:13px;font-weight:700;margin-top:6px">Adebayo Bello</div>
+                <div style="font-size:10px;color:var(--fg-muted)">MEM-1024 · Marina Branch</div>
+              </div>
+              <div class="divider"></div>
+              <div>
+                <label class="label">Delivery branch</label>
+                <select class="input"><option>Marina Branch</option><option>Yaba Branch</option></select>
+              </div>
+              <div>
+                <label class="label">Department</label>
+                <select class="input"><option>All Departments</option></select>
+              </div>
+              <div class="divider"></div>
+              <div>
+                <div style="font-size:11px;font-weight:700;margin-bottom:8px">Your cart</div>
+                <div class="chip-row" data-cart-lines-c style="min-height:20px">
+                  <span class="tiny-chip" style="color:var(--fg-subtle)">Your cart is empty</span>
+                </div>
+              </div>
+              <div class="a-stat" style="background:var(--bg-subtle);border-radius:10px;padding:10px">
+                <div class="k">Total</div>
+                <div class="v" data-total-c>₦0</div>
+              </div>
+              <button class="btn primary" style="width:100%">Proceed to Checkout →</button>
+            </aside>
+
+            <div>
+              <div class="b-rail" style="padding:6px 0 0">
+                <button class="b-chip active">All</button>
+                <button class="b-chip">Grains</button>
+                <button class="b-chip">Pulses</button>
+                <button class="b-chip">Oils</button>
+              </div>
+              <div class="item-grid" style="grid-template-columns:repeat(2,1fr);padding:12px 0 20px">
+                <div class="item-card">
+                  <div class="item-img img">🍚</div>
+                  <div class="name">Local Rice (50kg)</div>
+                  <div class="meta">Bag · Grains</div>
+                  <div class="price-row">
+                    <div class="price">₦85,000</div>
+                    <div class="stepper" data-stepper data-price="85000" data-name="Rice" data-count data-cart-c>
+                      <button class="qty-btn" data-minus>−</button><span class="n">0</span><button class="qty-btn" data-plus>+</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="item-card">
+                  <div class="item-img img">🫘</div>
+                  <div class="name">Brown Beans (25kg)</div>
+                  <div class="meta">Bag · Pulses</div>
+                  <div class="price-row">
+                    <div class="price">₦48,000</div>
+                    <div class="stepper" data-stepper data-price="48000" data-name="Beans" data-count data-cart-c>
+                      <button class="qty-btn" data-minus>−</button><span class="n">0</span><button class="qty-btn" data-plus>+</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="item-card">
+                  <div class="item-img img">🌽</div>
+                  <div class="name">Maize (25kg)</div>
+                  <div class="meta">Bag · Cereals</div>
+                  <div class="price-row">
+                    <div class="price">₦32,000</div>
+                    <div class="stepper" data-stepper data-price="32000" data-name="Maize" data-count data-cart-c>
+                      <button class="qty-btn" data-minus>−</button><span class="n">0</span><button class="qty-btn" data-plus>+</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="item-card">
+                  <div class="item-img img">🫒</div>
+                  <div class="name">Palm Oil (25L)</div>
+                  <div class="meta">Jerrycan · Oils</div>
+                  <div class="price-row">
+                    <div class="price">₦58,000</div>
+                    <div class="stepper" data-stepper data-price="58000" data-name="Palm Oil" data-count data-cart-c>
+                      <button class="qty-btn" data-minus>−</button><span class="n">0</span><button class="qty-btn" data-plus>+</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="c-sheet-backdrop" id="sheetBackdrop"></div>
+          <div class="c-sheet" id="cartSheet">
+            <div class="handle"></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <div style="font-size:13px;font-weight:700">Your cart</div>
+              <button class="icon-btn" id="closeSheet" style="width:26px;height:26px">✕</button>
+            </div>
+            <div class="chip-row" data-cart-lines-c-sheet style="min-height:20px;margin-bottom:12px">
+              <span class="tiny-chip" style="color:var(--fg-subtle)">Your cart is empty</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:11px;color:var(--fg-muted)">Total</span>
+              <span style="font-size:16px;font-weight:700" data-total-c-sheet>₦0</span>
+            </div>
+            <button class="btn primary" style="width:100%;margin-top:12px">Proceed to Checkout →</button>
+          </div>
+          <button class="c-fab" id="cartFab">🛒</button>
+        </div>
+      </div>
+      <div class="concept-notes">
+        <div class="note"><span class="tag">Why it wins</span><b>Checkout context never leaves the screen.</b> The cart rail stays pinned beside the grid, so members see running totals while they shop — the pattern supermarkets use at the till.</div>
+        <div class="note"><span class="tag">Key change</span><b>Desktop/mobile split behavior.</b> Wide screens get the sticky rail; narrow screens get a floating cart button that opens a slide-up sheet — no permanent bottom bar eating product space.</div>
+        <div class="note"><span class="tag">Trade-off</span><b>Hero is stripped back.</b> The greeting becomes a single centered line to give the two-column layout room. Good for return shoppers, less warm for first visits.</div>
+      </div>
+    </div>
+
+    <!-- ═══════════ CONCEPT D · Compact bazaar ═══════════ -->
+    <div class="concept" data-concept-panel="d">
+      <div class="section-label"><h2>Concept D — Compact bazaar</h2><span>density first · more products per screen, price chips overlaid on images, tap-to-add, slim status bar</span></div>
+      <div class="device-frame is-desktop" id="frame-d">
+        <div class="device-topbar">
+          <div class="dot-dots"><span></span><span></span><span></span></div>
+          <div class="url">coop.cbn.ng/shop</div>
+          <span class="moon">🌙</span>
+        </div>
+        <div class="shop-canvas concept-d">
+          <div class="d-statusbar">
+            <span class="pill brand" style="padding:2px 7px">🛒 Shop</span>
+            <span style="flex:1;text-align:center;font-weight:600;color:var(--fg-default)">Bello · Marina</span>
+            <span class="tiny-chip gold">₦250k left</span>
+          </div>
+
+          <div class="b-rail" style="padding:10px 12px 2px">
+            <button class="b-chip active">All</button>
+            <button class="b-chip">Grains</button>
+            <button class="b-chip">Pulses</button>
+            <button class="b-chip">Oils</button>
+            <button class="b-chip">Dairy</button>
+          </div>
+
+          <div class="d-grid">
+            <div class="d-item">
+              <div class="item-img d-img">
+                <span class="d-price-chip">₦85k</span>
+                <span>🍚</span>
+              </div>
+              <div class="name">Local Rice 50kg</div>
+              <button class="d-add" data-add-d data-name="Rice">+ Add</button>
+            </div>
+            <div class="d-item">
+              <div class="item-img d-img">
+                <span class="d-price-chip">₦48k</span>
+                <span>🫘</span>
+              </div>
+              <div class="name">Brown Beans 25kg</div>
+              <button class="d-add" data-add-d data-name="Beans">+ Add</button>
+            </div>
+            <div class="d-item">
+              <div class="item-img d-img">
+                <span class="d-price-chip">₦32k</span>
+                <span>🌽</span>
+              </div>
+              <div class="name">Maize 25kg</div>
+              <button class="d-add" data-add-d data-name="Maize">+ Add</button>
+            </div>
+            <div class="d-item">
+              <div class="item-img d-img">
+                <span class="d-price-chip">₦58k</span>
+                <span>🫒</span>
+              </div>
+              <div class="name">Palm Oil 25L</div>
+              <button class="d-add" data-add-d data-name="Palm Oil">+ Add</button>
+            </div>
+            <div class="d-item">
+              <div class="item-img d-img">
+                <span class="d-price-chip">₦39k</span>
+                <span>🌾</span>
+              </div>
+              <div class="name">Wheat 25kg</div>
+              <button class="d-add" data-add-d data-name="Wheat">+ Add</button>
+            </div>
+            <div class="d-item">
+              <div class="item-img d-img">
+                <span class="d-price-chip">₦18k</span>
+                <span>🍠</span>
+              </div>
+              <div class="name">Garri 10kg</div>
+              <button class="d-add" data-add-d data-name="Garri">+ Add</button>
+            </div>
+            <div class="d-item">
+              <div class="item-img d-img">
+                <span class="d-price-chip">₦41k</span>
+                <span>🥜</span>
+              </div>
+              <div class="name">Groundnut 20kg</div>
+              <button class="d-add" data-add-d data-name="Groundnut">+ Add</button>
+            </div>
+            <div class="d-item">
+              <div class="item-img d-img">
+                <span class="d-price-chip">₦62k</span>
+                <span>🧂</span>
+              </div>
+              <div class="name">Salt 25kg</div>
+              <button class="d-add" data-add-d data-name="Salt">+ Add</button>
+            </div>
+          </div>
+
+          <div class="d-mini-cart" data-mini-cart-d style="display:none">
+            <span style="font-size:16px">🛒</span>
+            <span style="flex:1;font-size:12px;font-weight:600" data-mini-cart-text-d>Added · 0 items</span>
+            <button class="btn" style="background:var(--accent);color:var(--accent-fg);font-size:11px;padding:7px 12px">View cart →</button>
+          </div>
+        </div>
+      </div>
+      <div class="concept-notes">
+        <div class="note"><span class="tag">Why it wins</span><b>Maximum products per screen.</b> Four columns on desktop, two tight ones on mobile; price chips overlay the image so nothing needs its own row. Built for repeat, fast shoppers.</div>
+        <div class="note"><span class="tag">Key change</span><b>Tap-to-add instead of steppers.</b> One tap adds, the button flips to a confirmation, and a slim cart bar slides up at the bottom — minimum taps between wanting and ordering.</div>
+        <div class="note"><span class="tag">Trade-off</span><b>Member details are reduced to a status bar.</b> Savings/loan breakdowns move to a detail screen. Great for a power-user cohort; needs a trust fallback for new members.</div>
+      </div>
+    </div>
+
+    <div class="kbd-hint">Every concept is interactive — add items, switch theme, toggle desktop/mobile.</div>
+  </div>
+</div>
+
+<script>
+  const $ = s => document.querySelector(s);
+  const $$ = s => [...document.querySelectorAll(s)];
+
+  /* ─── Theme ─── */
+  const themeBtn = $('#themeBtn');
+  themeBtn.addEventListener('click', () => {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    themeBtn.textContent = next === 'dark' ? '☀️' : '🌙';
+  });
+
+  /* ─── Concept tabs ─── */
+  const conceptTabs = $$('#conceptTabs button');
+  conceptTabs.forEach(btn => btn.addEventListener('click', () => {
+    conceptTabs.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    $$('.concept').forEach(c => c.classList.remove('active'));
+    $(`.concept[data-concept-panel="${btn.dataset.concept}"]`).classList.add('active');
+  }));
+
+  /* ─── Device tabs ─── */
+  const deviceTabs = $$('#deviceTabs button');
+  deviceTabs.forEach(btn => btn.addEventListener('click', () => {
+    deviceTabs.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const mobile = btn.dataset.device === 'mobile';
+    $$('.device-frame').forEach(f => {
+      f.classList.toggle('is-mobile', mobile);
+      f.classList.toggle('is-desktop', !mobile);
+    });
+  }));
+
+  /* ─── Global stepper engine (concepts A & B & C) ─── */
+  function fmt(n){ return '₦' + Number(n).toLocaleString() }
+
+  $$('[data-stepper]').forEach(stepper => {
+    const btnMinus = stepper.querySelector('[data-minus]');
+    const btnPlus = stepper.querySelector('[data-plus]');
+    const num = stepper.querySelector('.n');
+    const price = Number(stepper.dataset.price);
+    const name = stepper.dataset.name || 'Item';
+    let qty = 0;
+    const refresh = () => {
+      num.textContent = qty;
+      btnMinus.disabled = qty === 0;
+      syncConceptTotals();
+    };
+    btnMinus.addEventListener('click', () => { qty = Math.max(0, qty - 1); refresh(); });
+    btnPlus.addEventListener('click', () => { qty += 1; refresh(); });
+
+    // concept C cart line tracking
+    if (stepper.hasAttribute('data-cart-c')) {
+      const updateLine = () => {
+        const lines = new Map();
+        $$('[data-cart-c]').forEach(s => {
+          const n = s.dataset.name, q = Number(s.querySelector('.n').textContent);
+          if (q > 0) lines.set(n, q);
+        });
+        renderLines(lines);
+        syncTotalsC();
+      };
+      const origMinus = btnMinus.onclick;
+      stepper.addEventListener('click', () => updateLine());
+    }
+  });
+
+  /* per-concept totals */
+  function syncConceptTotals(){
+    // A
+    const aSteppers = $$('.concept-a [data-stepper]');
+    const aCount = aSteppers.reduce((s,x)=>s+Number(x.querySelector('.n').textContent),0);
+    const aTotal = aSteppers.reduce((s,x)=>s+Number(x.querySelector('.n').textContent)*Number(x.dataset.price),0);
+    $$('[data-cart-count-a]').forEach(e=>e.textContent=aCount);
+    $$('[data-summary-count-a]').forEach(e=>e.textContent=aCount);
+    $$('[data-summary-total-a]').forEach(e=>e.textContent=fmt(aTotal));
+    // B
+    const bAdds = $$('[data-add-b]');
+    const bCount = bAdds.filter(b=>b.classList.contains('added')).length;
+    $$('[data-badge-b]').forEach(e=>e.textContent=bCount);
+    // D
+    const dAdds = $$('[data-add-d]');
+    const dCount = dAdds.filter(b=>b.classList.contains('added')).length;
+    if (dCount > 0){
+      const mc = $('[data-mini-cart-d]');
+      mc.style.display='flex';
+      mc.querySelector('[data-mini-cart-text-d]').textContent = dCount + ' item' + (dCount===1?'':'s') + ' added';
+    }
+  }
+
+  /* Concept B add buttons */
+  $$('[data-add-b]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      btn.classList.toggle('added');
+      btn.textContent = btn.classList.contains('added') ? '✓ Added' : '+ Add';
+      syncConceptTotals();
+    });
+  });
+
+  /* Concept D add buttons */
+  $$('[data-add-d]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const was = btn.classList.contains('added');
+      btn.classList.toggle('added');
+      btn.textContent = was ? '+ Add' : '✓ Added';
+      syncConceptTotals();
+    });
+  });
+
+  /* ─── Concept C cart sheet + lines ─── */
+  const fab = $('#cartFab'), sheet = $('#cartSheet'), backdrop = $('#sheetBackdrop');
+  function openSheet(){ sheet.classList.add('open'); backdrop.classList.add('open'); }
+  function closeSheet(){ sheet.classList.remove('open'); backdrop.classList.remove('open'); }
+  fab.addEventListener('click', openSheet);
+  $('#closeSheet').addEventListener('click', closeSheet);
+  backdrop.addEventListener('click', closeSheet);
+
+  function renderLines(lines){
+    const build = (containerSel) => {
+      const el = $(containerSel);
+      const has = [...lines.entries()].filter(([,q])=>q>0);
+      if (has.length === 0){
+        el.innerHTML = '<span class="tiny-chip" style="color:var(--fg-subtle)">Your cart is empty</span>';
+        return;
+      }
+      el.innerHTML = has.map(([n,q]) => `<span class="tiny-chip green">${n} × ${q}</span>`).join('');
+    };
+    build('[data-cart-lines-c]');
+    build('[data-cart-lines-c-sheet]');
+  }
+
+  function syncTotalsC(){
+    const total = $$('[data-cart-c]').reduce((s,x)=>s+Number(x.querySelector('.n').textContent)*Number(x.dataset.price),0);
+    $$('[data-total-c]').forEach(e=>e.textContent=fmt(total));
+    $$('[data-total-c-sheet]').forEach(e=>e.textContent=fmt(total));
+  }
+
+  /* Concept C steppers → live line render */
+  $$('[data-cart-c]').forEach(stepper => {
+    stepper.addEventListener('click', () => {
+      const lines = new Map();
+      $$('[data-cart-c]').forEach(s => {
+        const q = Number(s.querySelector('.n').textContent);
+        if (q > 0) lines.set(s.dataset.name, q);
+      });
+      renderLines(lines);
+      syncTotalsC();
+    });
+  });
+
+  /* Concept B rail chip switching (visual) */
+  $$('#bRail .b-chip, .concept-c .b-rail .b-chip, .concept-d .b-rail .b-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      chip.parentElement.querySelectorAll('.b-chip').forEach(c=>c.classList.remove('active'));
+      chip.classList.add('active');
+    });
+  });
+
+  syncConceptTotals();
+</script>
+</body>
+</html>

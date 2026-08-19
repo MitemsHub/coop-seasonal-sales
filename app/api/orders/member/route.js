@@ -7,6 +7,7 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
     const memberId = searchParams.get('member_id')
+    const statusOnly = searchParams.get('status_only') === '1'
     
     if (!memberId) {
       return NextResponse.json({ ok: false, error: 'Member ID is required' }, { status: 400 })
@@ -51,7 +52,10 @@ export async function GET(request) {
 
     let query = supabase
       .from('orders')
-      .select(`
+      .select(
+        statusOnly
+          ? 'order_id, status'
+          : `
         *,
         order_lines (
           *,
@@ -74,7 +78,8 @@ export async function GET(request) {
         departments (
           name
         )
-      `)
+      `
+      )
       .eq('member_id', memberId)
       .neq('status', 'Cancelled')
       .order('created_at', { ascending: false })

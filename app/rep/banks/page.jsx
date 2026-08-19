@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import DraggableModal from '../../components/DraggableModal'
 import ProtectedRoute from '../../components/ProtectedRoute'
 
-const Spinner = ({ className = 'h-4 w-4 text-white' }) => (
+const Spinner = ({ className = 'h-4 w-4 text-on-accent' }) => (
   <svg className={`animate-spin ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
     <path
@@ -292,11 +292,11 @@ function RepFoodBanksContent() {
   }
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
         <div>
-          <h1 className="text-lg sm:text-xl md:text-2xl font-semibold">Rep — Food Distribution — Banks</h1>
-          <div className="text-xs sm:text-sm text-gray-600">
+          <h1 className="text-h2 font-bold tracking-tight text-fg">Food Distribution · Banks</h1>
+          <div className="text-xs sm:text-sm text-muted">
             {cycle?.name ? `Cycle: ${cycle.name} (${cycle.code || ''})` : 'Cycle-sensitive (uses active cycle)'}
           </div>
         </div>
@@ -304,10 +304,10 @@ function RepFoodBanksContent() {
           type="button"
           onClick={fetchLocation}
           disabled={loading}
-          className="px-4 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-2"
+          className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
           aria-busy={loading}
         >
-          {loading && <Spinner className="h-4 w-4 text-white" />}
+          {loading && <Spinner className="h-4 w-4 text-on-accent" />}
           <span>{loading ? 'Refreshing…' : 'Refresh'}</span>
         </button>
       </div>
@@ -317,7 +317,7 @@ function RepFoodBanksContent() {
           <motion.div
             {...toastMotion}
             className={`mb-4 rounded-lg border px-3 py-2 text-sm ${
-              msg.type === 'error' ? 'bg-red-50 text-red-700 border-red-200' : 'bg-green-50 text-green-700 border-green-200'
+              msg.type === 'error' ? 'border-danger-border bg-danger-bg text-danger-fg' : 'border-success-border bg-success-bg text-success-fg'
             }`}
           >
             {msg.text}
@@ -326,26 +326,26 @@ function RepFoodBanksContent() {
       </AnimatePresence>
 
       <div className="grid gap-3">
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="ui-card p-4">
           {loading && !branch ? (
             <div className="space-y-2 animate-pulse">
-              <div className="h-5 w-64 bg-gray-200 rounded" />
-              <div className="h-4 w-40 bg-gray-200 rounded" />
-              <div className="h-4 w-56 bg-gray-200 rounded" />
+              <div className="h-5 w-64 sakani-skeleton rounded" />
+              <div className="h-4 w-40 sakani-skeleton rounded" />
+              <div className="h-4 w-56 sakani-skeleton rounded" />
             </div>
           ) : (
             <>
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-sm text-gray-500">Delivery Location</div>
-                  <div className="text-lg font-semibold text-gray-900">{branch?.name || '—'}</div>
-                  <div className="text-xs text-gray-500">{branch?.code || ''}</div>
+                  <div className="text-sm text-muted">Delivery Location</div>
+                  <div className="text-[15px] font-semibold text-fg">{branch?.name || '—'}</div>
+                  <div className="text-xs text-muted">{branch?.code || ''}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm text-gray-500">Status</div>
+                  <div className="text-sm text-muted">Status</div>
                   <span
                     className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      paid?.is_paid ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'
+                      paid?.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'
                     }`}
                   >
                     {paid?.is_paid ? 'Paid (Locked)' : 'Unpaid'}
@@ -355,16 +355,16 @@ function RepFoodBanksContent() {
 
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 <div className="border rounded-lg p-3">
-                  <div className="text-sm font-medium text-gray-900 mb-1">Bank Details</div>
-                  <div className="text-xs text-gray-600">Bank: {bank?.bank_name || '—'}</div>
-                  <div className="text-xs text-gray-600">Account Name: {bank?.account_name || '—'}</div>
-                  <div className="text-xs text-gray-600">Account No.: {maskAccountNumber(bank?.account_number || '')}</div>
+                  <div className="text-sm font-medium text-fg mb-1">Bank Details</div>
+                  <div className="text-xs text-muted">Bank: {bank?.bank_name || '—'}</div>
+                  <div className="text-xs text-muted">Account Name: {bank?.account_name || '—'}</div>
+                  <div className="text-xs text-muted">Account No.: {maskAccountNumber(bank?.account_number || '')}</div>
                   <div className="mt-2">
                     <button
                       type="button"
                       onClick={openBank}
                       disabled={paid?.is_paid}
-                      className="px-3 py-2 rounded-lg text-sm bg-gray-900 text-white hover:bg-black disabled:opacity-50"
+                      className="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
                     >
                       Edit Bank Details
                     </button>
@@ -372,24 +372,24 @@ function RepFoodBanksContent() {
                 </div>
 
                 <div className="border rounded-lg p-3">
-                  <div className="text-sm font-medium text-gray-900 mb-1">Invoices</div>
-                  <div className="text-xs text-gray-600">Uploaded: {Number(invoiceCount || 0).toLocaleString()}</div>
+                  <div className="text-sm font-medium text-fg mb-1">Invoices</div>
+                  <div className="text-xs text-muted">Uploaded: {Number(invoiceCount || 0).toLocaleString()}</div>
                   <div className="mt-2 flex gap-2 flex-wrap">
                     <button
                       type="button"
                       onClick={loadInvoices}
                       disabled={invoiceLoading}
-                      className="px-3 py-2 rounded-lg text-sm bg-gray-700 text-white hover:bg-gray-800 disabled:opacity-50 inline-flex items-center gap-2"
+                      className="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
                       aria-busy={invoiceLoading}
                     >
-                      {invoiceLoading && <Spinner className="h-4 w-4 text-white" />}
+                      {invoiceLoading && <Spinner className="h-4 w-4 text-on-accent" />}
                       <span>{invoiceLoading ? 'Loading…' : 'View Invoices'}</span>
                     </button>
                     <button
                       type="button"
                       onClick={openUpload}
                       disabled={paid?.is_paid}
-                      className="px-3 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                      className="inline-flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
                     >
                       Upload Invoice
                     </button>
@@ -407,31 +407,31 @@ function RepFoodBanksContent() {
             value={bankName}
             onChange={(e) => setBankName(e.target.value)}
             placeholder="Bank name"
-            className="w-full border rounded-lg px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             disabled={savingBank || paid?.is_paid}
           />
           <input
             value={accountName}
             onChange={(e) => setAccountName(e.target.value)}
             placeholder="Account name"
-            className="w-full border rounded-lg px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             disabled={savingBank || paid?.is_paid}
           />
           <input
             value={accountNumber}
             onChange={(e) => setAccountNumber(e.target.value)}
             placeholder="Account number"
-            className="w-full border rounded-lg px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             disabled={savingBank || paid?.is_paid}
           />
           <button
             type="button"
             onClick={saveBank}
             disabled={savingBank || paid?.is_paid}
-            className="px-3 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-2"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50 inline-flex items-center gap-2"
             aria-busy={savingBank}
           >
-            {savingBank && <Spinner className="h-4 w-4 text-white" />}
+            {savingBank && <Spinner className="h-4 w-4 text-on-accent" />}
             <span>{savingBank ? 'Saving…' : 'Save'}</span>
           </button>
         </div>
@@ -442,27 +442,27 @@ function RepFoodBanksContent() {
           {invoiceLoading ? (
             <div className="space-y-2">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={`inv_sk_${i}`} className="border rounded-lg p-3 bg-white animate-pulse">
-                  <div className="h-4 w-56 bg-gray-200 rounded" />
-                  <div className="mt-2 h-3 w-72 bg-gray-200 rounded" />
-                  <div className="mt-2 h-3 w-48 bg-gray-200 rounded" />
+                <div key={`inv_sk_${i}`} className="border rounded-lg p-3 bg-surface animate-pulse">
+                  <div className="h-4 w-56 sakani-skeleton rounded" />
+                  <div className="mt-2 h-3 w-72 sakani-skeleton rounded" />
+                  <div className="mt-2 h-3 w-48 sakani-skeleton rounded" />
                 </div>
               ))}
             </div>
           ) : invoices.length === 0 ? (
-            <div className="text-sm text-gray-600">No invoices uploaded.</div>
+            <div className="text-sm text-muted">No invoices uploaded.</div>
           ) : (
             <div className="space-y-2">
               {invoices.map((inv) => (
-                <div key={inv.id} className="border rounded-lg p-3 bg-white">
+                <div key={inv.id} className="border rounded-lg p-3 bg-surface">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm font-medium text-gray-900 truncate">{inv.file_name || 'Invoice'}</div>
-                      <div className="text-xs text-gray-600">
+                      <div className="text-sm font-medium text-fg truncate">{inv.file_name || 'Invoice'}</div>
+                      <div className="text-xs text-muted">
                         Ref: {inv.invoice_ref || '—'} • Date: {inv.invoice_date || '—'} • Amount:{' '}
                         {inv.amount != null && inv.amount !== '' ? `₦${Number(inv.amount || 0).toLocaleString()}` : '—'}
                       </div>
-                      {inv.notes && <div className="text-xs text-gray-500 mt-1">{inv.notes}</div>}
+                      {inv.notes && <div className="text-xs text-muted mt-1">{inv.notes}</div>}
                     </div>
                     <div className="shrink-0 flex items-center gap-2">
                       {inv.url ? (
@@ -470,18 +470,18 @@ function RepFoodBanksContent() {
                           href={inv.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex px-3 py-1.5 rounded-lg text-xs bg-gray-900 text-white hover:bg-black"
+                          className="inline-flex inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover"
                         >
                           Open
                         </a>
                       ) : (
-                        <span className="text-xs text-gray-500">No link</span>
+                        <span className="text-xs text-muted">No link</span>
                       )}
                       <button
                         type="button"
                         onClick={() => openEditInvoice(inv)}
                         disabled={paid?.is_paid}
-                        className="px-3 py-1.5 rounded-lg text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
                       >
                         Edit
                       </button>
@@ -489,7 +489,7 @@ function RepFoodBanksContent() {
                         type="button"
                         onClick={() => openDeleteInvoice(inv)}
                         disabled={paid?.is_paid}
-                        className="px-3 py-1.5 rounded-lg text-xs bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-danger-fg px-3 py-1.5 text-xs font-semibold text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
                       >
                         Delete
                       </button>
@@ -508,14 +508,14 @@ function RepFoodBanksContent() {
             value={invoiceRef}
             onChange={(e) => setInvoiceRef(e.target.value)}
             placeholder="Invoice reference (optional)"
-            className="w-full border rounded-lg px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             disabled={uploading || paid?.is_paid}
           />
           <textarea
             value={invoiceNotes}
             onChange={(e) => setInvoiceNotes(e.target.value)}
             placeholder="Notes (optional)"
-            className="w-full border rounded-lg px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             rows={3}
             disabled={uploading || paid?.is_paid}
           />
@@ -529,10 +529,10 @@ function RepFoodBanksContent() {
             type="button"
             onClick={uploadInvoice}
             disabled={uploading || paid?.is_paid || !invoiceFile}
-            className="px-3 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-2"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50 inline-flex items-center gap-2"
             aria-busy={uploading}
           >
-            {uploading && <Spinner className="h-4 w-4 text-white" />}
+            {uploading && <Spinner className="h-4 w-4 text-on-accent" />}
             <span>{uploading ? 'Uploading…' : 'Upload'}</span>
           </button>
         </div>
@@ -544,7 +544,7 @@ function RepFoodBanksContent() {
             value={invoiceEditRef}
             onChange={(e) => setInvoiceEditRef(e.target.value)}
             placeholder="Invoice reference"
-            className="w-full border rounded-lg px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             disabled={invoiceSaving || paid?.is_paid}
           />
           <div className="grid gap-2 sm:grid-cols-2">
@@ -552,14 +552,14 @@ function RepFoodBanksContent() {
               value={invoiceEditDate}
               onChange={(e) => setInvoiceEditDate(e.target.value)}
               placeholder="Invoice date (YYYY-MM-DD)"
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               disabled={invoiceSaving || paid?.is_paid}
             />
             <input
               value={invoiceEditAmount}
               onChange={(e) => setInvoiceEditAmount(e.target.value)}
               placeholder="Amount (optional)"
-              className="w-full border rounded-lg px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               disabled={invoiceSaving || paid?.is_paid}
             />
           </div>
@@ -567,7 +567,7 @@ function RepFoodBanksContent() {
             value={invoiceEditNotes}
             onChange={(e) => setInvoiceEditNotes(e.target.value)}
             placeholder="Notes"
-            className="w-full border rounded-lg px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             rows={3}
             disabled={invoiceSaving || paid?.is_paid}
           />
@@ -575,10 +575,10 @@ function RepFoodBanksContent() {
             type="button"
             onClick={saveInvoiceEdits}
             disabled={invoiceSaving || paid?.is_paid}
-            className="px-3 py-2 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-2"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50 inline-flex items-center gap-2"
             aria-busy={invoiceSaving}
           >
-            {invoiceSaving && <Spinner className="h-4 w-4 text-white" />}
+            {invoiceSaving && <Spinner className="h-4 w-4 text-on-accent" />}
             <span>{invoiceSaving ? 'Saving…' : 'Save'}</span>
           </button>
         </div>
@@ -586,7 +586,7 @@ function RepFoodBanksContent() {
 
       <DraggableModal open={invoiceDeleteOpen} onClose={() => setInvoiceDeleteOpen(false)} title="Delete Invoice">
         <div className="space-y-3">
-          <div className="text-sm text-gray-700">
+          <div className="text-sm text-subtext">
             Delete <span className="font-medium">{invoiceDeleteRow?.file_name || 'this invoice'}</span>?
           </div>
           <div className="flex gap-2">
@@ -594,17 +594,17 @@ function RepFoodBanksContent() {
               type="button"
               onClick={deleteInvoice}
               disabled={invoiceDeleting || paid?.is_paid}
-              className="px-3 py-2 rounded-lg text-sm bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 inline-flex items-center gap-2"
+              className="inline-flex items-center gap-2 rounded-lg bg-danger-fg px-3 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
               aria-busy={invoiceDeleting}
             >
-              {invoiceDeleting && <Spinner className="h-4 w-4 text-white" />}
+              {invoiceDeleting && <Spinner className="h-4 w-4 text-on-accent" />}
               <span>{invoiceDeleting ? 'Deleting…' : 'Delete'}</span>
             </button>
             <button
               type="button"
               onClick={() => setInvoiceDeleteOpen(false)}
               disabled={invoiceDeleting}
-              className="px-3 py-2 rounded-lg text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
             >
               Cancel
             </button>

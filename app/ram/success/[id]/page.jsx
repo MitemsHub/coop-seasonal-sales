@@ -1,3 +1,8 @@
+// app/ram/success/[id]/page.jsx
+// Order confirmation after a member submits a ram order.
+// Includes a print-friendly receipt layout + Print receipt / Download PDF
+// actions, matching the exhibition success page's standard. The sticky
+// summary keeps the paid total visible while viewing the receipt.
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -5,6 +10,9 @@ import { useRouter, useSearchParams, useParams } from 'next/navigation'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import { Suspense } from 'react'
 import { supabase } from '@/lib/supabaseClient'
+import { Beef, CheckCircle2, FileText, Home, Printer, Receipt } from 'lucide-react'
+import Button from '../../../components/ui/Button'
+import Skeleton from '../../../components/ui/Skeleton'
 
 function RamSuccessContent() {
   const router = useRouter()
@@ -114,7 +122,7 @@ function RamSuccessContent() {
       doc.rect(marginX, headerY, pageWidth - marginX * 2, headerH, 'F')
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(14)
-      doc.text('CBN Coop — Ram Sales Receipt', marginX + 6, headerY + 12)
+      doc.text('CBN Coop · Ram Sales Receipt', marginX + 6, headerY + 12)
 
       doc.setTextColor(0, 0, 0)
       doc.setFontSize(9)
@@ -131,6 +139,7 @@ function RamSuccessContent() {
         head: [['Order Details', '', '', '']],
         body: detailsBody,
         startY: headerY + headerH + 6,
+        rowPageBreak: 'avoid',
         theme: 'grid',
         styles: { fontSize: 10, cellPadding: 2, lineWidth: 0.1, lineColor: [220, 220, 220] },
         headStyles: { fillColor: [240, 253, 244], textColor: [21, 128, 61], fontStyle: 'bold' },
@@ -150,6 +159,7 @@ function RamSuccessContent() {
           ['Total', currencyPDF(total), ''],
         ],
         startY: (doc.lastAutoTable?.finalY || 0) + 6,
+        rowPageBreak: 'avoid',
         theme: 'grid',
         styles: { fontSize: 10, cellPadding: 2, lineWidth: 0.1, lineColor: [220, 220, 220] },
         headStyles: { fillColor: [240, 253, 244], textColor: [21, 128, 61], fontStyle: 'bold' },
@@ -174,6 +184,7 @@ function RamSuccessContent() {
         head: [['Vendor Details', '']],
         body: vendorRows,
         startY: (doc.lastAutoTable?.finalY || 0) + 6,
+        rowPageBreak: 'avoid',
         theme: 'grid',
         styles: { fontSize: 10, cellPadding: 2, lineWidth: 0.1, lineColor: [220, 220, 220] },
         headStyles: { fillColor: [240, 253, 244], textColor: [21, 128, 61], fontStyle: 'bold' },
@@ -189,106 +200,286 @@ function RamSuccessContent() {
     }
   }
 
-  return (
-    <main className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50">
-      <div className="max-w-2xl mx-auto px-4 md:px-6 py-10 md:py-14">
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 md:p-8">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Ram Order Submitted</h1>
-          <div className="mt-3 text-sm md:text-base text-gray-700">
-            Order ID: <span className="font-semibold">{String(orderId || '')}</span>
-          </div>
-          {!!memberId && (
-            <div className="mt-1 text-sm md:text-base text-gray-700">
-              Member ID: <span className="font-semibold">{memberId}</span>
+  if (error) {
+    return (
+      <ProtectedRoute allowedRoles={['member']}>
+        <div className="flex min-h-screen items-center justify-center bg-canvas px-4">
+          <div className="w-full max-w-sm text-center">
+            <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-danger-bg text-danger-fg">
+              <Receipt className="h-6 w-6" strokeWidth={1.8} />
             </div>
-          )}
-
-          {!!error && (
-            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
-          )}
-
-          {!!order && (
-            <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-800">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-gray-600">Member</div>
-                <div className="font-semibold text-right">{member?.full_name || '—'}</div>
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <div className="text-gray-600">Payment</div>
-                <div className="font-semibold text-right">{order.payment_option || '—'}</div>
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <div className="text-gray-600">Quantity</div>
-                <div className="font-semibold text-right">{Number(order.qty || 0).toLocaleString()}</div>
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <div className="text-gray-600">Unit Price</div>
-                <div className="font-semibold text-right">{currency(order.unit_price)}</div>
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <div className="text-gray-600">Principal</div>
-                <div className="font-semibold text-right">{currency(order.principal_amount)}</div>
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <div className="text-gray-600">Interest</div>
-                <div className="font-semibold text-right">{currency(order.interest_amount)}</div>
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-3 border-t border-gray-200 pt-2">
-                <div className="font-semibold">Total</div>
-                <div className="font-bold text-right">{currency(order.total_amount)}</div>
-              </div>
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <div className="text-gray-600">Delivery Location</div>
-                <div className="font-semibold text-right break-words">{location?.delivery_location || location?.name || '—'}</div>
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <div className="text-gray-600">Vendor Name</div>
-                <div className="font-semibold text-right break-words">{location?.name || '—'}</div>
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <div className="text-gray-600">Vendor Phone No</div>
-                <div className="font-semibold text-right break-words">{location?.phone || '—'}</div>
-              </div>
-            </div>
-          )}
-
-          <div className="mt-6">
-            <button
-              type="button"
-              onClick={downloadPDF}
-              disabled={!order || downloading}
-              className={`w-full inline-flex items-center justify-center px-4 py-3 text-white text-sm md:text-base font-semibold rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl ${
-                !order || downloading
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700'
-              }`}
-            >
-              {downloading ? (
-                <span className="inline-flex items-center gap-2">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  <span>Preparing PDF...</span>
-                </span>
-              ) : (
-                'Download PDF'
-              )}
-            </button>
+            <h2 className="text-base font-semibold text-fg">Couldn't load your order</h2>
+            <p className="mt-1 text-sm text-muted">{error}</p>
+            <Button className="mt-4" leftIcon={Home} onClick={() => router.push('/my-coop')}>
+              Back to My Coop
+            </Button>
           </div>
-
-          <button
-            type="button"
-            onClick={() => router.push('/ram/shop')}
-            disabled={!shoppingOpen || shoppingStatusLoading}
-            className={`mt-3 w-full inline-flex items-center justify-center px-4 py-3 text-sm md:text-base font-semibold rounded-xl transition-all duration-200 border ${
-              shoppingOpen && !shoppingStatusLoading
-                ? 'text-gray-700 border-gray-300 hover:bg-gray-50'
-                : 'text-gray-400 border-gray-200 bg-gray-50 cursor-not-allowed'
-            }`}
-          >
-            {shoppingOpen ? 'Back to Ram Shopping' : 'Ram Shopping Closed'}
-          </button>
         </div>
-      </div>
-    </main>
+      </ProtectedRoute>
+    )
+  }
+
+  if (!order) {
+    return (
+      <ProtectedRoute allowedRoles={['member']}>
+        <div className="flex min-h-screen items-center justify-center bg-canvas px-4">
+          <div className="w-full max-w-sm">
+            <Skeleton className="mx-auto h-5 w-2/3" />
+            <Skeleton className="mx-auto mt-3 h-5 w-1/2" />
+          </div>
+        </div>
+      </ProtectedRoute>
+    )
+  }
+
+  return (
+    <ProtectedRoute allowedRoles={['member']}>
+      {/* Print rules: only the receipt sheet survives on paper. */}
+      <style>{`
+        @media print {
+          .print-hide { display: none !important; }
+          html, body { background: #fff !important; }
+          .receipt-sheet {
+            box-shadow: none !important;
+            border: 1px solid #000 !important;
+            border-radius: 0 !important;
+            padding: 0 !important;
+          }
+          .receipt-sheet, .receipt-sheet * { color: #000 !important; }
+          .receipt-sheet img { display: none !important; }
+          .receipt-table th, .receipt-table td { border-color: #000 !important; }
+        }
+      `}</style>
+
+      <main className="min-h-screen bg-canvas">
+        <div className="relative mx-auto max-w-2xl px-4 pb-24 md:px-6">
+          {/* Confirmation card — screen only */}
+          <div className="print-hide ui-card mt-6 p-6 md:p-8 md:mt-10">
+            <div className="text-center">
+              <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-full bg-success-bg text-success-fg ring-8 ring-success-bg/40">
+                <CheckCircle2 className="h-8 w-8" strokeWidth={2} />
+              </div>
+              <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-accent-subtle px-3 py-1 text-chips font-semibold uppercase tracking-wide text-accent">
+                <Beef className="h-3.5 w-3.5" strokeWidth={2.2} />
+                Ram Sales
+              </div>
+              <h1 className="mt-2 font-display text-h1 font-semibold tracking-tight text-fg">Ram order placed!</h1>
+              <p className="mt-1 text-sm text-muted">
+                Your order is <span className="font-semibold text-warning-fg">Pending</span> — the branch rep will approve it, then the vendor delivers your ram at the delivery location.
+              </p>
+            </div>
+
+            <div className="mt-6 space-y-4">
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-line bg-canvas/60 px-4 py-3">
+                <span className="text-chips font-medium text-muted">Order ID</span>
+                <span className="text-sm font-bold tabular-nums text-fg">#{order.id}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-line bg-canvas/60 px-4 py-3">
+                <span className="text-chips font-medium text-muted">Member ID</span>
+                <span className="text-sm font-bold text-fg">{memberId}</span>
+              </div>
+
+              {!!error && (
+                <div className="rounded-xl border border-danger-border bg-danger-bg p-3 text-sm text-danger-fg">{error}</div>
+              )}
+
+              <div className="rounded-xl border border-line bg-canvas/60 p-4 text-sm text-fg">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-muted">Member</div>
+                  <div className="font-semibold text-right">{member?.full_name || '—'}</div>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="text-muted">Payment</div>
+                  <div className="font-semibold text-right">{order.payment_option || '—'}</div>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="text-muted">Quantity</div>
+                  <div className="font-semibold text-right">{Number(order.qty || 0).toLocaleString()}</div>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="text-muted">Unit Price</div>
+                  <div className="font-semibold text-right">{currency(order.unit_price)}</div>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="text-muted">Principal</div>
+                  <div className="font-semibold text-right">{currency(order.principal_amount)}</div>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="text-muted">Interest</div>
+                  <div className="font-semibold text-right">{currency(order.interest_amount)}</div>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3 border-t border-line pt-2">
+                  <div className="font-semibold">Total</div>
+                  <div className="font-bold text-right">{currency(order.total_amount)}</div>
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <div className="text-muted">Delivery Location</div>
+                  <div className="font-semibold text-right break-words">{location?.delivery_location || location?.name || '—'}</div>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="text-muted">Vendor Name</div>
+                  <div className="font-semibold text-right break-words">{location?.name || '—'}</div>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="text-muted">Vendor Phone No</div>
+                  <div className="font-semibold text-right break-words">{location?.phone || '—'}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Sticky order summary — keeps the paid total visible while viewing the receipt */}
+            <div className="sticky bottom-2 z-10 mt-4 rounded-2xl border border-line bg-surface/95 p-3 shadow-lg backdrop-blur-sm md:bottom-3">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="min-w-0 rounded-xl bg-subtle/70 px-2 py-2 text-center sm:px-3">
+                  <div className="text-chips font-medium text-muted">Rams</div>
+                  <div className="text-xs font-semibold tabular-nums text-fg sm:text-sm">{Number(order.qty || 0).toLocaleString()}</div>
+                </div>
+                <div className="min-w-0 rounded-xl bg-subtle/70 px-2 py-2 text-center sm:px-3">
+                  <div className="text-chips font-medium text-muted">Payment</div>
+                  <div className="text-xs font-semibold text-fg sm:text-sm">{order.payment_option || '—'}</div>
+                </div>
+                <div className="min-w-0 rounded-xl border border-brand/20 bg-brand-subtle/60 px-2 py-2 text-center sm:px-3">
+                  <div className="text-chips font-medium text-brand-fg">Paid total</div>
+                  <div className="text-xs font-semibold tabular-nums text-brand-fg sm:text-sm">{currency(order.total_amount)}</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <Button
+                variant="secondary"
+                className="w-full"
+                onClick={() => router.push('/ram/shop')}
+                disabled={!shoppingOpen || shoppingStatusLoading}
+              >
+                {shoppingOpen ? 'Back to Ram Shopping' : 'Ram Shopping Closed'}
+              </Button>
+            </div>
+          </div>
+
+          {/* Receipt — printable */}
+          <div className="mt-6 pb-6">
+            <div className="print-hide mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-chips font-semibold uppercase tracking-wider text-muted">Receipt</p>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="secondary" leftIcon={Printer} onClick={() => window.print()}>
+                  Print receipt
+                </Button>
+                <Button size="sm" leftIcon={FileText} onClick={downloadPDF} disabled={downloading}>
+                  {downloading ? 'Preparing…' : 'Download PDF'}
+                </Button>
+              </div>
+            </div>
+
+            <div className="receipt-sheet overflow-hidden rounded-2xl border border-line bg-white text-fg shadow-lg shadow-black/5">
+              {/* Receipt header */}
+              <div className="border-b border-line bg-gradient-to-r from-brand to-brand-active px-5 py-4 sm:px-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 text-white ring-1 ring-white/25">
+                      <Beef className="h-5 w-5" strokeWidth={2} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold tracking-wide text-white">CBN COOP</p>
+                      <p className="text-chips text-white/80">Seasonal Sales · Ram Sales</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-chips font-semibold uppercase tracking-wider text-white/80">Receipt</p>
+                    <p className="text-sm font-bold tabular-nums text-white">#{order.id}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Receipt meta */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 border-b border-line px-5 py-4 text-sm sm:grid-cols-3 sm:px-6">
+                <div>
+                  <p className="text-chips font-medium uppercase tracking-wider text-muted">Date</p>
+                  <p className="font-medium text-fg">{new Date(order.created_at).toLocaleDateString()}</p>
+                </div>
+                <div>
+                  <p className="text-chips font-medium uppercase tracking-wider text-muted">Status</p>
+                  <p className="font-medium text-fg">{order.status}</p>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <p className="text-chips font-medium uppercase tracking-wider text-muted">Payment</p>
+                  <p className="font-medium text-fg">{order.payment_option}</p>
+                </div>
+                <div className="col-span-2 sm:col-span-3">
+                  <p className="text-chips font-medium uppercase tracking-wider text-muted">Member</p>
+                  <p className="font-medium text-fg">
+                    {member?.full_name || memberId}
+                    <span className="text-muted"> · {memberId}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Receipt amounts */}
+              <div className="border-b border-line px-5 py-4 sm:px-6">
+                <div className="mb-3 text-chips font-semibold uppercase tracking-wider text-muted">Order details</div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
+                  <div>
+                    <p className="text-chips font-medium uppercase tracking-wider text-muted">Quantity</p>
+                    <p className="font-medium tabular-nums text-fg">{Number(order.qty || 0).toLocaleString()} ram(s)</p>
+                  </div>
+                  <div>
+                    <p className="text-chips font-medium uppercase tracking-wider text-muted">Unit price</p>
+                    <p className="font-medium tabular-nums text-fg">{currency(order.unit_price)}</p>
+                  </div>
+                  <div>
+                    <p className="text-chips font-medium uppercase tracking-wider text-muted">Principal</p>
+                    <p className="font-medium tabular-nums text-fg">{currency(order.principal_amount)}</p>
+                  </div>
+                  <div>
+                    <p className="text-chips font-medium uppercase tracking-wider text-muted">Interest</p>
+                    <p className="font-medium tabular-nums text-fg">{currency(order.interest_amount)}</p>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <p className="text-chips font-medium uppercase tracking-wider text-muted">Total</p>
+                    <p className="font-semibold tabular-nums text-fg">{currency(order.total_amount)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Receipt vendor */}
+              <div className="border-b border-line px-5 py-4 sm:px-6">
+                <div className="mb-3 text-chips font-semibold uppercase tracking-wider text-muted">Vendor details</div>
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted">Delivery location</span>
+                    <span className="font-medium text-right text-fg">{location?.delivery_location || location?.name || '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted">Vendor name</span>
+                    <span className="font-medium text-right text-fg">{location?.name || '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-muted">Vendor phone</span>
+                    <span className="font-medium text-right text-fg">{location?.phone || '—'}</span>
+                  </div>
+                  {location?.address && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-muted">Vendor address</span>
+                      <span className="font-medium text-right text-fg">{location.address}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Receipt total */}
+              <div className="flex items-center justify-between gap-3 bg-subtle/40 px-5 py-4 sm:px-6">
+                <p className="text-sm font-semibold uppercase tracking-wide text-fg">Total</p>
+                <p className="text-lg font-bold tabular-nums text-brand">{currency(order.total_amount)}</p>
+              </div>
+
+              <div className="px-5 py-4 text-center sm:px-6">
+                <p className="text-chips text-muted">Thank you for shopping with CBN Coop — every order keeps the Coop strong.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </ProtectedRoute>
   )
 }
 

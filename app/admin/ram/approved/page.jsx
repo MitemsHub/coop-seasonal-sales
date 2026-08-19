@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import { AnimatePresence, motion } from 'framer-motion'
 import DraggableModal from '../../../components/DraggableModal'
+import RamOrderAuditModal from '../../../components/RamOrderAuditModal'
+import ExportButton from '../../../components/ui/ExportButton'
+import { CheckSquare, ChevronLeft, ChevronRight, Inbox, RefreshCw, RotateCcw, Search, Truck } from 'lucide-react'
 
 function safeJsonFactory() {
   return async (res, label) => {
@@ -45,6 +48,7 @@ function RamApprovedContent() {
   const [rollbackConfirmOrder, setRollbackConfirmOrder] = useState(null)
   const [rollbackBulkConfirmOpen, setRollbackBulkConfirmOpen] = useState(false)
   const [rollbackBulkBusy, setRollbackBulkBusy] = useState(false)
+  const [auditOrder, setAuditOrder] = useState(null)
   const [pageSize, setPageSize] = useState(50)
   const [page, setPage] = useState(1)
   const fetchCtl = useRef(null)
@@ -197,7 +201,7 @@ function RamApprovedContent() {
       doc.rect(marginX, headerY, pageWidth - marginX * 2, headerH, 'F')
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(14)
-      doc.text('CBN Coop — Ram Sales Receipt', marginX + 6, headerY + 12)
+      doc.text('CBN Coop · Ram Sales Receipt', marginX + 6, headerY + 12)
 
       doc.setTextColor(0, 0, 0)
       doc.setFontSize(9)
@@ -214,6 +218,7 @@ function RamApprovedContent() {
         head: [['Order Details', '', '', '']],
         body: detailsBody,
         startY: headerY + headerH + 6,
+        rowPageBreak: 'avoid',
         theme: 'grid',
         styles: { fontSize: 10, cellPadding: 2, lineWidth: 0.1, lineColor: [220, 220, 220] },
         headStyles: { fillColor: [240, 253, 244], textColor: [21, 128, 61], fontStyle: 'bold' },
@@ -233,6 +238,7 @@ function RamApprovedContent() {
           ['Total', currencyPDF(total), ''],
         ],
         startY: (doc.lastAutoTable?.finalY || 0) + 6,
+        rowPageBreak: 'avoid',
         theme: 'grid',
         styles: { fontSize: 10, cellPadding: 2, lineWidth: 0.1, lineColor: [220, 220, 220] },
         headStyles: { fillColor: [240, 253, 244], textColor: [21, 128, 61], fontStyle: 'bold' },
@@ -257,6 +263,7 @@ function RamApprovedContent() {
         head: [['Vendor Details', '']],
         body: vendorRows,
         startY: (doc.lastAutoTable?.finalY || 0) + 6,
+        rowPageBreak: 'avoid',
         theme: 'grid',
         styles: { fontSize: 10, cellPadding: 2, lineWidth: 0.1, lineColor: [220, 220, 220] },
         headStyles: { fillColor: [240, 253, 244], textColor: [21, 128, 61], fontStyle: 'bold' },
@@ -268,6 +275,7 @@ function RamApprovedContent() {
         head: [['Signature', '']],
         body: [['', '']],
         startY: (doc.lastAutoTable?.finalY || 0) + 8,
+        rowPageBreak: 'avoid',
         theme: 'grid',
         styles: { fontSize: 10, cellPadding: 6, lineWidth: 0.1, lineColor: [220, 220, 220] },
         headStyles: { fillColor: [249, 250, 251], textColor: [55, 65, 81], fontStyle: 'bold' },
@@ -291,7 +299,7 @@ function RamApprovedContent() {
       .filter((l) => l.is_active !== false)
       .map((l) => {
         const id = Number(l.id)
-        const label = [String(l.delivery_location || '').trim(), String(l.name || '').trim()].filter(Boolean).join(' — ')
+        const label = [String(l.delivery_location || '').trim(), String(l.name || '').trim()].filter(Boolean).join(' · ')
         return { id, label: label || `Location ${id}` }
       })
       .filter((l) => Number.isFinite(l.id) && l.id > 0)
@@ -360,7 +368,7 @@ function RamApprovedContent() {
     const wb = new ExcelJS.Workbook()
     const ws = wb.addWorksheet('Approved')
 
-    ws.addRow(['Ram Sales — Approved Orders (Admin)'])
+    ws.addRow(['Ram Sales · Approved Orders (Admin)'])
     ws.addRow([`Delivery Location: ${selectedLocationLabel || 'All'} | Search: ${term || 'All'}`])
 
     const headers = Object.keys(rows[0] || { id: '' })
@@ -391,7 +399,7 @@ function RamApprovedContent() {
     ].join('  |  ')
 
     doc.setFontSize(14)
-    doc.text('Ram Sales — Approved Orders', 12, 12)
+    doc.text('Ram Sales · Approved Orders', 12, 12)
     doc.setFontSize(9)
     doc.text(`Generated: ${new Date().toLocaleString()}`, 12, 18)
     doc.text(`Filters: ${sanitize(filters)}`, 12, 24)
@@ -462,6 +470,7 @@ function RamApprovedContent() {
       head,
       body,
       startY: 30,
+      rowPageBreak: 'avoid',
       styles: { fontSize: 7 },
       headStyles: { fillColor: [75, 85, 99] },
       alternateRowStyles: { fillColor: [249, 250, 251] },
@@ -592,9 +601,10 @@ function RamApprovedContent() {
   }
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
-        <h1 className="text-base sm:text-lg md:text-xl font-semibold text-center sm:text-left break-words">Admin — Ram Sales — Approved</h1>
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 flex flex-col gap-2">
+        <h1 className="text-h2 font-bold tracking-tight text-fg">Ram Sales · Approved</h1>
+        <p className="text-sm text-muted">Deliver or roll back approved ram orders.</p>
       </div>
 
       <AnimatePresence mode="wait">
@@ -602,8 +612,8 @@ function RamApprovedContent() {
           <motion.div
             key={`${msg.type}-${msg.text}`}
             {...toastMotion}
-            className={`mb-4 rounded-lg border p-3 text-sm ${
-              msg.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'
+            className={`mb-4 rounded-xl border p-4 text-sm ${
+              msg.type === 'error' ? 'border-danger-border bg-danger-bg text-danger-fg' : 'border-success-border bg-success-bg text-success-fg'
             }`}
           >
             {msg.text}
@@ -611,12 +621,12 @@ function RamApprovedContent() {
         ) : null}
       </AnimatePresence>
 
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 mb-4">
+      <div className="ui-card p-4 mb-4">
         <div className="flex flex-col gap-2">
           <div className="flex flex-col lg:flex-row gap-2 lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 min-w-0">
               <input
-                className="w-full max-w-[420px] border-2 border-gray-200 rounded-xl px-3 py-2 text-sm"
+                className="w-full max-w-[420px] min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                 placeholder="Search (Order ID / Member ID)"
                 value={term}
                 onChange={(e) => setTerm(e.target.value)}
@@ -633,15 +643,16 @@ function RamApprovedContent() {
                   setPage(1)
                   fetchOrders({ page: 1 })
                 }}
-                className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:opacity-50"
               >
+                <Search className="h-4 w-4" />
                 Search
               </button>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <select
-                className="border-2 border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                 value={deliveryLocationId}
                 onChange={(e) => setDeliveryLocationId(e.target.value)}
               >
@@ -652,69 +663,67 @@ function RamApprovedContent() {
                   </option>
                 ))}
               </select>
-              <button
-                type="button"
-                onClick={exportExcel}
+              <ExportButton
+                format="excel"
+                onClick={() => exportExcel().catch((e) => setMsg({ type: 'error', text: e?.message || 'Export failed' }))}
                 disabled={!totalCount}
-                className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-sm font-semibold disabled:opacity-50"
-              >
-                Download Excel
-              </button>
-              <button
-                type="button"
-                onClick={exportPDF}
+              />
+              <ExportButton
+                format="pdf"
+                onClick={() => exportPDF().catch((e) => setMsg({ type: 'error', text: e?.message || 'Export failed' }))}
                 disabled={!totalCount}
-                className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50"
-              >
-                Download PDF
-              </button>
+              />
             </div>
           </div>
 
-          <div className="text-xs text-gray-600">Orders: {Number(totalCount || 0).toLocaleString()} · Selected: {selectedCount.toLocaleString()}</div>
+          <div className="text-sm text-muted">Orders: <span className="font-medium text-fg">{Number(totalCount || 0).toLocaleString()}</span> · Selected: <span className="font-medium text-fg">{selectedCount.toLocaleString()}</span></div>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <div className="ui-card overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-line bg-subtle p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="text-sm font-semibold">Approved Orders</div>
+            <div className="mr-1 text-sm font-semibold text-fg">Approved Orders</div>
             <button
               type="button"
               onClick={fetchOrders}
               disabled={loading}
-              className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
             >
+              <RefreshCw className={['h-3.5 w-3.5', loading ? 'animate-spin' : ''].join(' ')} />
               {loading ? 'Loading…' : 'Refresh'}
             </button>
             <button
               type="button"
               onClick={toggleSelectAll}
               disabled={!pagedOrders.length}
-              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-xs sm:text-sm font-semibold text-gray-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
             >
+              <CheckSquare className="h-3.5 w-3.5" />
               {allSelected ? 'Deselect All' : 'Select All'}
             </button>
             <button
               type="button"
               onClick={deliverSelected}
               disabled={!selectedCount || delivering}
-              className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-success-fg px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
             >
+              <Truck className="h-3.5 w-3.5" />
               {delivering && selectedCount ? 'Delivering…' : `Deliver Selected (${selectedCount})`}
             </button>
             <button
               type="button"
               onClick={requestRollbackSelected}
               disabled={!selectedCount || delivering || rollbackBulkBusy}
-              className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-warning-fg px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
             >
+              <RotateCcw className="h-3.5 w-3.5" />
               {rollbackBulkBusy && selectedCount ? 'Rolling back…' : `Rollback Selected (${selectedCount})`}
             </button>
           </div>
           <div className="flex items-center gap-2">
             <select
-              className="border-2 border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white"
+              className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={pageSize}
               onChange={(e) => {
                 const next = Number(e.target.value) || 50
@@ -729,7 +738,7 @@ function RamApprovedContent() {
             </select>
             <button
               type="button"
-              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-xs sm:text-sm font-semibold text-gray-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => {
                 const next = Math.max(1, safePage - 1)
                 setPage(next)
@@ -737,14 +746,15 @@ function RamApprovedContent() {
               }}
               disabled={safePage <= 1}
             >
+              <ChevronLeft className="h-3.5 w-3.5" />
               Prev
             </button>
-            <div className="text-xs text-gray-500">
-              Page {safePage} / {pageCount}
+            <div className="text-sm text-muted">
+              Page <span className="font-medium text-fg">{safePage}</span> / {pageCount}
             </div>
             <button
               type="button"
-              className="px-3 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-xs sm:text-sm font-semibold text-gray-700 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => {
                 const next = Math.min(pageCount, safePage + 1)
                 setPage(next)
@@ -753,41 +763,50 @@ function RamApprovedContent() {
               disabled={safePage >= pageCount}
             >
               Next
+              <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-xs sm:text-sm">
-            <thead className="bg-gray-50 border-b">
-            <tr>
-                <th className="p-2 text-left w-10">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 z-10 bg-surface">
+            <tr className="border-b border-line text-left">
+                <th className="p-3 w-10">
                   <input
                     type="checkbox"
                     checked={allSelected}
                     onChange={toggleSelectAll}
                     disabled={!pagedOrders.length}
-                    className="h-4 w-4"
+                    className="h-4 w-4 rounded border-line text-brand focus:ring-brand"
                     aria-label="Select all"
                   />
                 </th>
-              <th className="p-2 text-left">Order</th>
-              <th className="p-2 text-left">Member</th>
-              <th className="p-2 text-left">Delivery</th>
-              <th className="p-2 text-left">Payment</th>
-              <th className="p-2 text-right">Qty</th>
-              <th className="p-2 text-right">Total</th>
-              <th className="p-2 text-right">Actions</th>
+              <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Order</th>
+              <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Member</th>
+              <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Delivery</th>
+              <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Payment</th>
+              <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Qty</th>
+              <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Total</th>
+              <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Actions</th>
             </tr>
           </thead>
           <motion.tbody layout>
             {(!didLoadOnce || loading) && (
               <>
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <tr key={`sk-${i}`} className="animate-pulse">
-                    <td className="p-2" colSpan={8}>
-                      <div className="h-4 bg-gray-100 rounded w-full" />
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={`sk-${i}`} className="border-b border-line">
+                    <td className="p-3"><div className="sakani-skeleton h-4 w-4 rounded" /></td>
+                    <td className="p-3">
+                      <div className="sakani-skeleton h-4 w-24 rounded" />
+                      <div className="sakani-skeleton mt-2 h-3 w-32 rounded" />
                     </td>
+                    <td className="p-3"><div className="sakani-skeleton h-4 w-40 rounded" /></td>
+                    <td className="p-3"><div className="sakani-skeleton h-4 w-36 rounded" /></td>
+                    <td className="p-3"><div className="sakani-skeleton h-4 w-16 rounded" /></td>
+                    <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-4 w-10 rounded" /></td>
+                    <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-4 w-20 rounded" /></td>
+                    <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-8 w-24 rounded" /></td>
                   </tr>
                 ))}
               </>
@@ -795,8 +814,14 @@ function RamApprovedContent() {
 
             {didLoadOnce && !loading && orders.length === 0 && (
               <tr>
-                <td className="p-3 text-gray-600" colSpan={8}>
-                  No Approved ram orders.
+                <td className="p-10 text-center" colSpan={8}>
+                  <div className="mx-auto flex max-w-xs flex-col items-center gap-2">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-subtle">
+                      <Inbox className="h-6 w-6 text-subtext" />
+                    </div>
+                    <p className="text-sm font-medium text-fg">No approved ram orders</p>
+                    <p className="text-xs text-muted">Approve pending orders and they will appear here.</p>
+                  </div>
                 </td>
               </tr>
             )}
@@ -811,42 +836,46 @@ function RamApprovedContent() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
                     transition={{ duration: 0.16, ease: 'easeOut' }}
-                    className="border-b last:border-b-0 hover:bg-gray-50"
+                    className="border-b border-line last:border-b-0 transition-colors duration-150 ease-sakani hover:bg-subtle"
                   >
-                    <td className="p-2 align-top">
+                    <td className="p-3 align-top">
                       <input
                         type="checkbox"
                         checked={selectedIds.has(Number(o.id))}
                         onChange={() => toggleSelect(o.id)}
-                        className="h-4 w-4"
+                        className="h-4 w-4 rounded border-line text-brand focus:ring-brand"
                         aria-label={`Select order ${o.id}`}
                       />
                     </td>
-                    <td className="p-2 align-top">
-                      <div className="font-medium">#{o.id}</div>
-                      <div className="text-gray-600">{new Date(o.created_at).toLocaleString()}</div>
+                    <td className="p-3 align-top">
+                      <div className="font-medium text-fg">#{o.id}</div>
+                      <div className="text-xs text-subtext">{new Date(o.created_at).toLocaleString()}</div>
                     </td>
-                    <td className="p-2 align-top">
-                      <div className="font-medium">{o.member_id}</div>
-                      <div className="text-gray-600 break-words">{o.member?.full_name || '-'}</div>
-                      <div className="text-gray-600">{o.member?.phone || ''}</div>
+                    <td className="p-3 align-top">
+                      <div className="font-medium text-fg">{o.member_id}</div>
+                      <div className="text-muted break-words">{o.member?.full_name || '-'}</div>
+                      <div className="text-xs text-subtext">{o.member?.phone || ''}</div>
                     </td>
-                    <td className="p-2 align-top whitespace-pre-line">
-                      <div className="font-medium">{o.delivery_location?.delivery_location || '-'}</div>
-                      <div className="text-gray-600">{o.delivery_location?.name || ''}</div>
-                      <div className="text-gray-600">{o.delivery_location?.phone || ''}</div>
+                    <td className="p-3 align-top whitespace-pre-line">
+                      <div className="font-medium text-fg">{o.delivery_location?.delivery_location || '-'}</div>
+                      <div className="text-xs text-subtext">{o.delivery_location?.name || ''}</div>
+                      <div className="text-xs text-subtext">{o.delivery_location?.phone || ''}</div>
                     </td>
-                    <td className="p-2 align-top">{o.payment_option || '-'}</td>
-                    <td className="p-2 align-top text-right">{Number(o.qty || 0).toLocaleString()}</td>
-                    <td className="p-2 align-top text-right">
-                      <div className="font-medium">{money(o.total_amount)}</div>
+                    <td className="p-3 align-top">
+                      <span className="inline-flex items-center rounded-md bg-subtle px-2 py-0.5 text-xs font-medium text-fg">
+                        {o.payment_option || '-'}
+                      </span>
                     </td>
-                    <td className="p-2 align-top text-right">
+                    <td className="p-3 align-top text-right">{Number(o.qty || 0).toLocaleString()}</td>
+                    <td className="p-3 align-top text-right">
+                      <div className="font-medium text-fg">{money(o.total_amount)}</div>
+                    </td>
+                    <td className="p-3 align-top text-right">
                       <div className="flex justify-end">
                         <select
                           defaultValue=""
                           disabled={loading || delivering || rollbackBusyId === o.id || receiptBusyId === o.id || deliverBusyIds.has(Number(o.id))}
-                          className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs sm:text-sm bg-white disabled:opacity-50"
+                          className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none disabled:opacity-50"
                           onChange={(e) => {
                             const v = e.target.value
                             e.target.value = ''
@@ -854,6 +883,7 @@ function RamApprovedContent() {
                             if (v === 'deliver') requestDeliver([o.id])
                             else if (v === 'rollback') requestRollback(o)
                             else if (v === 'receipt') printReceipt(o)
+                            else if (v === 'activity') setAuditOrder(o)
                           }}
                         >
                           <option value="" disabled>
@@ -862,6 +892,7 @@ function RamApprovedContent() {
                           <option value="deliver">Deliver</option>
                           <option value="rollback">Rollback</option>
                           <option value="receipt">Receipt</option>
+                          <option value="activity">Activity</option>
                         </select>
                       </div>
                     </td>
@@ -886,7 +917,7 @@ function RamApprovedContent() {
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-sm font-semibold text-gray-700 disabled:opacity-50"
+              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => {
                 setDeliverConfirmOpen(false)
                 setDeliverConfirmIds([])
@@ -897,7 +928,7 @@ function RamApprovedContent() {
             </button>
             <button
               type="button"
-              className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-success-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
               onClick={confirmDeliver}
               disabled={delivering}
             >
@@ -906,14 +937,14 @@ function RamApprovedContent() {
           </div>
         }
       >
-        <div className="text-sm text-gray-800">
-          <div className="font-semibold text-gray-900">Has the member taken possession of the Ram?</div>
-          <div className="mt-1 text-gray-700">
+        <div className="text-sm text-muted">
+          <div className="font-semibold text-fg">Has the member taken possession of the Ram?</div>
+          <div className="mt-1">
             {deliverConfirmIds.length === 1
               ? `This will mark order #${deliverConfirmIds[0]} as Delivered.`
               : `This will mark ${deliverConfirmIds.length} order(s) as Delivered.`}
           </div>
-          <div className="mt-3 text-xs text-gray-600">This action can be rolled back by Admin if needed.</div>
+          <div className="mt-3 text-xs">This action can be rolled back by Admin if needed.</div>
         </div>
       </DraggableModal>
 
@@ -930,7 +961,7 @@ function RamApprovedContent() {
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-sm font-semibold text-gray-700 disabled:opacity-50"
+              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => {
                 setRollbackConfirmOpen(false)
                 setRollbackConfirmOrder(null)
@@ -941,7 +972,7 @@ function RamApprovedContent() {
             </button>
             <button
               type="button"
-              className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-warning-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
               onClick={confirmRollback}
               disabled={!!rollbackBusyId}
             >
@@ -950,26 +981,26 @@ function RamApprovedContent() {
           </div>
         }
       >
-        <div className="text-sm text-gray-800">
-          <div className="font-semibold text-gray-900">Are you sure you want to rollback this order?</div>
-          <div className="mt-1 text-gray-700">
-            This will move order #{rollbackConfirmOrder?.id ?? '—'} from <span className="font-semibold">Approved</span> to{' '}
-            <span className="font-semibold">Pending</span> records.
+        <div className="text-sm text-muted">
+          <div className="font-semibold text-fg">Are you sure you want to rollback this order?</div>
+          <div className="mt-1">
+            This will move order #{rollbackConfirmOrder?.id ?? '—'} from <span className="font-semibold text-fg">Approved</span> to{' '}
+            <span className="font-semibold text-fg">Pending</span> records.
           </div>
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-gray-700">
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-2">
-              <div className="text-gray-500">Member</div>
-              <div className="font-semibold">{rollbackConfirmOrder?.member_id || '—'}</div>
-              <div className="text-gray-600">{rollbackConfirmOrder?.member?.full_name || ''}</div>
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <div className="rounded-lg border border-line bg-subtle p-2">
+              <div className="text-subtext">Member</div>
+              <div className="font-semibold text-fg">{rollbackConfirmOrder?.member_id || '—'}</div>
+              <div className="text-muted">{rollbackConfirmOrder?.member?.full_name || ''}</div>
             </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-2">
-              <div className="text-gray-500">Delivery Location</div>
-              <div className="font-semibold">{rollbackConfirmOrder?.delivery_location?.delivery_location || '—'}</div>
-              <div className="text-gray-600">{rollbackConfirmOrder?.delivery_location?.name || ''}</div>
-              <div className="text-gray-600">{rollbackConfirmOrder?.delivery_location?.phone || ''}</div>
+            <div className="rounded-lg border border-line bg-subtle p-2">
+              <div className="text-subtext">Delivery Location</div>
+              <div className="font-semibold text-fg">{rollbackConfirmOrder?.delivery_location?.delivery_location || '—'}</div>
+              <div className="text-muted">{rollbackConfirmOrder?.delivery_location?.name || ''}</div>
+              <div className="text-muted">{rollbackConfirmOrder?.delivery_location?.phone || ''}</div>
             </div>
           </div>
-          <div className="mt-3 text-xs text-gray-600">After rollback, you’ll find it under Admin → Ram Sales → Pending.</div>
+          <div className="mt-3 text-xs">After rollback, you’ll find it under Admin → Ram Sales → Pending.</div>
         </div>
       </DraggableModal>
 
@@ -985,7 +1016,7 @@ function RamApprovedContent() {
           <div className="flex justify-end gap-2">
             <button
               type="button"
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-sm font-semibold text-gray-700 disabled:opacity-50"
+              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => setRollbackBulkConfirmOpen(false)}
               disabled={rollbackBulkBusy}
             >
@@ -993,7 +1024,7 @@ function RamApprovedContent() {
             </button>
             <button
               type="button"
-              className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-warning-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
               onClick={confirmRollbackSelected}
               disabled={rollbackBulkBusy}
             >
@@ -1002,14 +1033,22 @@ function RamApprovedContent() {
           </div>
         }
       >
-        <div className="text-sm text-gray-800">
-          <div className="font-semibold text-gray-900">Rollback selected orders to Pending?</div>
-          <div className="mt-1 text-gray-700">
-            This will move {selectedCount.toLocaleString()} order(s) from <span className="font-semibold">Approved</span> to{' '}
-            <span className="font-semibold">Pending</span>.
+        <div className="text-sm text-muted">
+          <div className="font-semibold text-fg">Rollback selected orders to Pending?</div>
+          <div className="mt-1">
+            This will move {selectedCount.toLocaleString()} order(s) from <span className="font-semibold text-fg">Approved</span> to{' '}
+            <span className="font-semibold text-fg">Pending</span>.
           </div>
         </div>
       </DraggableModal>
+
+      {/* Order activity — audit trail: who did what and when */}
+      <RamOrderAuditModal
+        open={!!auditOrder}
+        order={auditOrder}
+        endpoint="/api/admin/ram/orders/audit"
+        onClose={() => setAuditOrder(null)}
+      />
     </div>
   )
 }

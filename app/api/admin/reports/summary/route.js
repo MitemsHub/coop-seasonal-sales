@@ -217,8 +217,8 @@ export async function GET(request) {
         let ordersQ = supabase
           .from('orders')
           .select(ordersHasCategorySnapshot
-            ? 'order_id, status, branch_id, department_id, delivery_branch_id, member_category_snapshot'
-            : 'order_id, status, branch_id, department_id, delivery_branch_id, member_id'
+            ? 'order_id, status, branch_id, department_id, delivery_branch_id, member_category_snapshot, total_amount'
+            : 'order_id, status, branch_id, department_id, delivery_branch_id, member_id, total_amount'
           )
           .in('status', ['Pending', 'Posted', 'Delivered'])
           .eq('cycle_id', cycleId)
@@ -228,7 +228,7 @@ export async function GET(request) {
         const branchNameById = new Map((branches || []).map(b => [b.id, b.name]))
         const deptNameById = new Map((departments || []).map(d => [d.id, d.name]))
 
-        const byBranch = new Map((branches || []).map(b => [b.id, { branch_name: b.name, pending: 0, posted: 0, delivered: 0 }]))
+        const byBranch = new Map((branches || []).map(b => [b.id, { branch_name: b.name, pending: 0, posted: 0, delivered: 0, value: 0 }]))
         const byBranchDept = new Map()
         const byDeliveryMember = new Map()
         const byCategory = new Map()
@@ -256,10 +256,11 @@ export async function GET(request) {
 
         for (const o of (orders || [])) {
           const status = o.status
-          const br = byBranch.get(o.branch_id) || { branch_name: branchNameById.get(o.branch_id) || 'Unknown', pending: 0, posted: 0, delivered: 0 }
+          const br = byBranch.get(o.branch_id) || { branch_name: branchNameById.get(o.branch_id) || 'Unknown', pending: 0, posted: 0, delivered: 0, value: 0 }
           if (status === 'Pending') br.pending += 1
           else if (status === 'Posted') br.posted += 1
           else if (status === 'Delivered') br.delivered += 1
+          br.value += Number(o.total_amount || 0)
           byBranch.set(o.branch_id, br)
 
           const depKey = `${o.branch_id}:${o.department_id}`
@@ -316,6 +317,27 @@ export async function GET(request) {
           byDeliveryMember: deliveryMemberRows,
           byCategory: Array.from(byCategory.values()).sort((a, b) => (a.category || '').localeCompare(b.category || ''))
         }
+      }
+    }
+
+    // Per-branch order value (₦) for the top/bottom performance charts — attached here
+    // so every byBranch source (views, direct SQL, JS fallback) carries the same field.
+    if (hasDirect && breakdowns.byBranch.length) {
+      try {
+        const valueSql = ordersHasCycle
+          ? `SELECT b.name AS branch_name, COALESCE(SUM(CASE WHEN o.status IN ('Pending','Posted','Delivered') THEN o.total_amount ELSE 0 END),0)::numeric AS value
+             FROM branches b
+             LEFT JOIN orders o ON o.branch_id = b.id AND o.cycle_id = $1
+             GROUP BY b.id, b.name`
+          : `SELECT b.name AS branch_name, COALESCE(SUM(CASE WHEN o.status IN ('Pending','Posted','Delivered') THEN o.total_amount ELSE 0 END),0)::numeric AS value
+             FROM branches b
+             LEFT JOIN orders o ON o.branch_id = b.id
+             GROUP BY b.id, b.name`
+        const res = await queryDirect(valueSql, ordersHasCycle ? [cycleId] : [])
+        const valueByName = new Map((res?.rows || []).map(r => [String(r.branch_name), Number(r.value || 0)]))
+        breakdowns.byBranch = breakdowns.byBranch.map(r => ({ ...r, value: valueByName.get(String(r.branch_name)) ?? 0 }))
+      } catch (err) {
+        console.warn('Reports summary: per-branch value calc failed:', err?.message)
       }
     }
 
@@ -484,8 +506,10 @@ export async function GET(request) {
       loansTotal = loansAmountTotal
     }
 
-    // Unified total used by the Total Amount card: align with displayed Loan card which reads from orders
-    const totalUnified = Number(loansOrdersTotal || 0) + Number(savingsTotal || 0) + Number(cashTotal || 0)
+    // Unified total used by the Total Amount card: principal loan + savings +
+    // cash. Interest has its own card and must not be double-counted in the
+    // headline figure.
+    const totalUnified = Number(loansPrincipal || 0) + Number(savingsTotal || 0) + Number(cashTotal || 0)
 
     return NextResponse.json({
       ok: true,

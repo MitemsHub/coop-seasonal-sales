@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Button from './ui/Button'
 
 export default function DatabaseMigration() {
   const [migrationStatus, setMigrationStatus] = useState(null)
@@ -48,29 +49,29 @@ export default function DatabaseMigration() {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-      <h3 className="text-sm font-semibold text-gray-900 mb-1">🔧 Database Migration</h3>
-      <p className="text-xs text-gray-600 mb-4">
+    <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
+      <h3 className="text-sm font-semibold text-fg mb-1">🔧 Database Migration</h3>
+      <p className="text-xs text-muted mb-4">
         Run this once to add image support to your database. This adds an image_url column to the items table.
       </p>
 
       {migrationStatus && (
         <div className={`p-3 rounded-lg mb-4 text-sm ${
           migrationStatus.type === 'success' 
-            ? 'bg-green-50 text-green-700 border border-green-200'
+            ? 'bg-success-bg text-success-fg border border-success-border'
             : migrationStatus.type === 'manual'
             ? 'bg-yellow-50 text-yellow-700 border border-yellow-200'
-            : 'bg-red-50 text-red-700 border border-red-200'
+            : 'bg-danger-bg text-danger-fg border border-danger-border'
         }`}>
           <div className="font-medium mb-2">{migrationStatus.message}</div>
           {migrationStatus.instructions && (
             <div className="space-y-2">
               {migrationStatus.instructions.map((instruction, index) => (
-                <div key={index} className={index === 0 ? 'font-medium' : 'font-mono text-xs bg-gray-100 p-2 rounded'}>
+                <div key={index} className={index === 0 ? 'font-medium' : 'font-mono text-xs bg-muted p-2 rounded'}>
                   {instruction}
                 </div>
               ))}
-              <div className="mt-3 p-2 bg-blue-50 rounded text-blue-700">
+              <div className="mt-3 p-2 bg-info-bg rounded text-info-fg">
                 <strong>How to run manual migration:</strong>
                 <ol className="list-decimal list-inside mt-1 space-y-1 text-xs">
                   <li>Go to your Supabase dashboard</li>
@@ -85,22 +86,11 @@ export default function DatabaseMigration() {
         </div>
       )}
 
-      <button
-        onClick={runMigration}
-        disabled={loading}
-        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
-      >
-        {loading ? (
-          <div className="flex items-center">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-            Running Migration...
-          </div>
-        ) : (
-          'Run Database Migration'
-        )}
-      </button>
+      <Button onClick={runMigration} loading={loading}>
+        {loading ? 'Running Migration…' : 'Run Database Migration'}
+      </Button>
 
-      <div className="mt-3 text-xs text-gray-600">
+      <div className="mt-3 text-xs text-muted">
         <strong>Note:</strong> This is safe to run multiple times. If the column already exists, it will be skipped.
       </div>
     </div>

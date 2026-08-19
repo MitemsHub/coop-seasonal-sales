@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
+import ExportButton from '../../../components/ui/ExportButton'
+import { FileBarChart2 } from 'lucide-react'
 
 function safeJsonFactory() {
   return async (res, label) => {
@@ -120,14 +122,14 @@ function SummaryTable({ title, rows, pagination, loading }) {
   const pagedRows = pageSize ? (rows || []).slice((safePage - 1) * pageSize, safePage * pageSize) : rows
 
   return (
-    <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-      <div className="p-4 border-b border-gray-100 bg-gray-50/60 text-sm font-semibold flex items-center justify-between gap-2">
-        <div className="text-gray-900">{title}</div>
+    <div className="ui-card overflow-hidden">
+      <div className="p-4 border-b border-line bg-subtle text-sm font-semibold flex items-center justify-between gap-2">
+        <div className="text-fg">{title}</div>
         {pageSize ? (
-          <div className="flex items-center gap-2 text-xs font-normal text-gray-700">
+          <div className="flex items-center gap-2 text-xs font-normal text-subtext">
             <button
               type="button"
-              className="px-2 py-1 rounded border bg-white hover:bg-gray-50 disabled:opacity-50"
+              className="px-2 py-1 rounded border border-line bg-surface hover:bg-subtle disabled:opacity-50"
               onClick={() => pagination?.onChange?.(Math.max(1, safePage - 1))}
               disabled={safePage <= 1}
             >
@@ -138,7 +140,7 @@ function SummaryTable({ title, rows, pagination, loading }) {
             </div>
             <button
               type="button"
-              className="px-2 py-1 rounded border bg-white hover:bg-gray-50 disabled:opacity-50"
+              className="px-2 py-1 rounded border border-line bg-surface hover:bg-subtle disabled:opacity-50"
               onClick={() => pagination?.onChange?.(Math.min(pageCount, safePage + 1))}
               disabled={safePage >= pageCount}
             >
@@ -149,22 +151,22 @@ function SummaryTable({ title, rows, pagination, loading }) {
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-xs sm:text-sm">
-          <thead className="bg-gray-50 border-b">
+          <thead className="bg-subtle border-b border-line">
             <tr>
-              <th className="p-2 text-left">Key</th>
-              <th className="p-2 text-right">Orders</th>
-              <th className="p-2 text-right">Rams</th>
-              <th className="p-2 text-right">Principal</th>
-              <th className="p-2 text-right">Interest</th>
+              <th className="p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Key</th>
+              <th className="p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Orders</th>
+              <th className="p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Rams</th>
+              <th className="p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Principal</th>
+              <th className="p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Interest</th>
             </tr>
           </thead>
           <tbody>
             {!!loading && (
               <>
                 {Array.from({ length: pageSize ? Math.min(3, pageSize) : 5 }).map((_, i) => (
-                  <tr key={`sk-${title}-${i}`} className="animate-pulse border-b last:border-b-0">
+                  <tr key={`sk-${title}-${i}`} className="border-b border-line last:border-b-0">
                     <td className="p-2" colSpan={5}>
-                      <div className="h-4 bg-gray-100 rounded w-full" />
+                      <div className="h-4 sakani-skeleton rounded w-full" />
                     </td>
                   </tr>
                 ))}
@@ -172,14 +174,14 @@ function SummaryTable({ title, rows, pagination, loading }) {
             )}
             {!loading && !rows?.length && (
               <tr>
-                <td className="p-3 text-gray-600" colSpan={5}>
+                <td className="p-3 text-muted" colSpan={5}>
                   No data.
                 </td>
               </tr>
             )}
             {!loading &&
               (pagedRows || []).map((r) => (
-                <tr key={r.key} className="border-b last:border-b-0 hover:bg-gray-50">
+                <tr key={r.key} className="border-b border-line last:border-b-0 hover:bg-subtle">
                   <td className="p-2">{r.key}</td>
                   <td className="p-2 text-right">{r.orders}</td>
                   <td className="p-2 text-right">{r.qty}</td>
@@ -306,7 +308,7 @@ function RamReportsContent() {
       const marginX = 12
 
       doc.setFontSize(14)
-      doc.text('Ram Sales — Report', 12, 12)
+      doc.text('Ram Sales · Report', 12, 12)
       doc.setFontSize(9)
       doc.text(`Generated: ${new Date().toLocaleString()}`, 12, 18)
 
@@ -325,6 +327,7 @@ function RamReportsContent() {
           ['Total', asMoney(totals.amount), ''],
         ].map((r) => r.map(sanitize)),
         startY: 22,
+        rowPageBreak: 'avoid',
         tableWidth: metricTableW,
         styles: { fontSize: 9, cellPadding: 2, valign: 'middle' },
         headStyles: { fillColor: [75, 85, 99] },
@@ -366,6 +369,7 @@ function RamReportsContent() {
           head: [['Key', 'Orders', 'Rams', 'Principal', 'Interest']],
           body,
           startY,
+          rowPageBreak: 'avoid',
           tableWidth: summaryTableW,
           styles: { fontSize: 9, cellPadding: 2, valign: 'middle' },
           headStyles: { fillColor: [75, 85, 99] },
@@ -502,7 +506,7 @@ function RamReportsContent() {
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet('Applications')
       const locLabel = appsLocationId ? (locations.find((l) => String(l.id) === String(appsLocationId))?.delivery_location || String(appsLocationId)) : 'All delivery locations'
-      ws.addRow(['Ram Sales — Applications'])
+      ws.addRow(['Ram Sales · Applications'])
       ws.addRow([`Location: ${locLabel} | Status: ${appsStatus || 'All'} | Payment: ${appsPayment || 'All'} | From: ${appsFrom || 'Any'} | To: ${appsTo || 'Any'}`])
       const rows = toApplicationExportRows(orders)
       ws.addRow(Object.keys(rows[0] || { id: '' }))
@@ -552,7 +556,7 @@ function RamReportsContent() {
       ].join('  |  ')
 
       doc.setFontSize(14)
-      doc.text('Ram Sales — Applications', 12, 12)
+      doc.text('Ram Sales · Applications', 12, 12)
       doc.setFontSize(9)
       doc.text(`Generated: ${new Date().toLocaleString()}`, 12, 18)
       doc.text(`Filters: ${sanitize(filters)}`, 12, 24)
@@ -632,6 +636,7 @@ function RamReportsContent() {
         head,
         body,
         startY: 30,
+        rowPageBreak: 'avoid',
         styles: { fontSize: 7 },
         headStyles: { fillColor: [75, 85, 99] },
         alternateRowStyles: { fillColor: [249, 250, 251] },
@@ -708,7 +713,7 @@ function RamReportsContent() {
         }) : (ordersByLocationId.get(String(loc.id)) || [])
         const invoiceLink = await resolveInvoiceLink(loc.id, meta?.paid?.ram_cycle_id ?? null, invoicesUrl)
         const ws = wb.addWorksheet(safeName(loc.delivery_location || loc.name || `Location ${loc.id}`))
-        ws.addRow(['Ram Sales — Payment to Vendors'])
+        ws.addRow(['Ram Sales · Payment to Vendors'])
         ws.addRow([`Location: ${loc.delivery_location || loc.name || `Location ${loc.id}`}`])
         ws.addRow([`Filters: Status ${packStatus || 'All'} | Payment ${packPayment || 'All'} | From ${packFrom || 'Any'} | To ${packTo || 'Any'}`])
         ws.addRow([])
@@ -764,7 +769,7 @@ function RamReportsContent() {
       const sanitize = (s) => String(s ?? '').replace(/\u20A6|₦/g, 'NGN ').replace(/[\u2013\u2014]/g, '-')
 
       doc.setFontSize(14)
-      doc.text('Ram Sales — Payment to Vendors', 12, 12)
+      doc.text('Ram Sales · Payment to Vendors', 12, 12)
       doc.setFontSize(9)
       doc.text(`Generated: ${new Date().toLocaleString()}`, 12, 18)
       doc.text(
@@ -827,6 +832,7 @@ function RamReportsContent() {
             ['Paid At', meta?.paid?.paid_at ? formatDateTime(meta.paid.paid_at) : ''],
           ].map((r) => r.map(sanitize)),
           startY: y + 4,
+          rowPageBreak: 'avoid',
           styles: { fontSize: 8 },
           headStyles: { fillColor: [75, 85, 99] },
           alternateRowStyles: { fillColor: [249, 250, 251] },
@@ -898,6 +904,7 @@ function RamReportsContent() {
           head,
           body,
           startY: (doc.lastAutoTable?.finalY || y + 4) + 6,
+          rowPageBreak: 'avoid',
           styles: { fontSize: 7 },
           headStyles: { fillColor: [75, 85, 99] },
           alternateRowStyles: { fillColor: [249, 250, 251] },
@@ -956,10 +963,10 @@ function RamReportsContent() {
   return (
     <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <h1 className="text-base sm:text-lg md:text-xl font-semibold break-words">Admin — Ram Sales — Report</h1>
+        <h1 className="text-h2 font-bold tracking-tight text-fg">Ram Sales · Report</h1>
         <div className="flex gap-2">
           <button
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={refreshAll}
             disabled={loading}
           >
@@ -973,7 +980,7 @@ function RamReportsContent() {
             )}
           </button>
           <button
-            className="px-4 py-2 bg-gray-700 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-gray-800 transition-colors shadow-sm disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
             onClick={downloadReport}
             disabled={!summary || reportBusy}
           >
@@ -983,7 +990,10 @@ function RamReportsContent() {
                 Preparing…
               </span>
             ) : (
-              'Download Report'
+              <>
+                <FileBarChart2 className="h-4 w-4" />
+                Download Report
+              </>
             )}
           </button>
         </div>
@@ -992,7 +1002,7 @@ function RamReportsContent() {
       {!!msg && (
         <div
           className={`mb-4 rounded-lg border p-3 text-sm ${
-            msg.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'
+            msg.type === 'error' ? 'border-danger-border bg-danger-bg text-danger-fg' : 'border-success-border bg-success-bg text-success-fg'
           }`}
         >
           {msg.text}
@@ -1000,36 +1010,36 @@ function RamReportsContent() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-3 mb-4">
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-          <div className="text-xs text-gray-500">Total Orders</div>
-          {loading ? <div className="mt-2 h-6 w-20 bg-gray-100 rounded animate-pulse" /> : <div className="text-lg font-semibold">{totals.orders}</div>}
+        <div className="ui-card p-4">
+          <div className="text-xs text-muted">Total Orders</div>
+          {loading ? <div className="mt-2 h-6 w-20 sakani-skeleton rounded animate-pulse" /> : <div className="text-[13px] font-semibold sm:text-lg">{totals.orders}</div>}
         </div>
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-          <div className="text-xs text-gray-500">Total Rams</div>
-          {loading ? <div className="mt-2 h-6 w-20 bg-gray-100 rounded animate-pulse" /> : <div className="text-lg font-semibold">{totals.qty}</div>}
+        <div className="ui-card p-4">
+          <div className="text-xs text-muted">Total Rams</div>
+          {loading ? <div className="mt-2 h-6 w-20 sakani-skeleton rounded animate-pulse" /> : <div className="text-[13px] font-semibold sm:text-lg">{totals.qty}</div>}
         </div>
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-          <div className="text-xs text-gray-500">Cash</div>
-          {loading ? <div className="mt-2 h-6 w-28 bg-gray-100 rounded animate-pulse" /> : <div className="text-lg font-semibold">{money(cashPrincipalAmount)}</div>}
-          {loading ? <div className="mt-2 h-3 w-24 bg-gray-100 rounded animate-pulse" /> : <div className="text-xs text-gray-500 mt-1">{`${Number(cashAgg.orders || 0)} order(s)`}</div>}
+        <div className="ui-card p-4">
+          <div className="text-xs text-muted">Cash</div>
+          {loading ? <div className="mt-2 h-6 w-28 sakani-skeleton rounded animate-pulse" /> : <div className="text-[13px] font-semibold sm:text-lg">{money(cashPrincipalAmount)}</div>}
+          {loading ? <div className="mt-2 h-3 w-24 sakani-skeleton rounded animate-pulse" /> : <div className="text-xs text-muted mt-1">{`${Number(cashAgg.orders || 0)} order(s)`}</div>}
         </div>
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-          <div className="text-xs text-gray-500">Savings</div>
-          {loading ? <div className="mt-2 h-6 w-28 bg-gray-100 rounded animate-pulse" /> : <div className="text-lg font-semibold">{money(savingsPrincipalAmount)}</div>}
-          {loading ? <div className="mt-2 h-3 w-24 bg-gray-100 rounded animate-pulse" /> : <div className="text-xs text-gray-500 mt-1">{`${Number(savingsAgg.orders || 0)} order(s)`}</div>}
+        <div className="ui-card p-4">
+          <div className="text-xs text-muted">Savings</div>
+          {loading ? <div className="mt-2 h-6 w-28 sakani-skeleton rounded animate-pulse" /> : <div className="text-[13px] font-semibold sm:text-lg">{money(savingsPrincipalAmount)}</div>}
+          {loading ? <div className="mt-2 h-3 w-24 sakani-skeleton rounded animate-pulse" /> : <div className="text-xs text-muted mt-1">{`${Number(savingsAgg.orders || 0)} order(s)`}</div>}
         </div>
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-          <div className="text-xs text-gray-500">Loan</div>
-          {loading ? <div className="mt-2 h-6 w-28 bg-gray-100 rounded animate-pulse" /> : <div className="text-lg font-semibold">{money(loanPrincipalAmount)}</div>}
-          {loading ? <div className="mt-2 h-3 w-24 bg-gray-100 rounded animate-pulse" /> : <div className="text-xs text-gray-500 mt-1">{`${Number(loanAgg.orders || 0)} order(s)`}</div>}
+        <div className="ui-card p-4">
+          <div className="text-xs text-muted">Loan</div>
+          {loading ? <div className="mt-2 h-6 w-28 sakani-skeleton rounded animate-pulse" /> : <div className="text-[13px] font-semibold sm:text-lg">{money(loanPrincipalAmount)}</div>}
+          {loading ? <div className="mt-2 h-3 w-24 sakani-skeleton rounded animate-pulse" /> : <div className="text-xs text-muted mt-1">{`${Number(loanAgg.orders || 0)} order(s)`}</div>}
         </div>
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-          <div className="text-xs text-gray-500">Loan Interest</div>
-          {loading ? <div className="mt-2 h-6 w-28 bg-gray-100 rounded animate-pulse" /> : <div className="text-lg font-semibold">{money(totals.loan_interest)}</div>}
+        <div className="ui-card p-4">
+          <div className="text-xs text-muted">Loan Interest</div>
+          {loading ? <div className="mt-2 h-6 w-28 sakani-skeleton rounded animate-pulse" /> : <div className="text-[13px] font-semibold sm:text-lg">{money(totals.loan_interest)}</div>}
         </div>
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-          <div className="text-xs text-gray-500">Total</div>
-          {loading ? <div className="mt-2 h-6 w-28 bg-gray-100 rounded animate-pulse" /> : <div className="text-lg font-semibold">{money(totals.amount)}</div>}
+        <div className="ui-card p-4">
+          <div className="text-xs text-muted">Total</div>
+          {loading ? <div className="mt-2 h-6 w-28 sakani-skeleton rounded animate-pulse" /> : <div className="text-[13px] font-semibold sm:text-lg">{money(totals.amount)}</div>}
         </div>
       </div>
 
@@ -1045,14 +1055,14 @@ function RamReportsContent() {
         />
       </div>
 
-      <div className="mt-6 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-gray-50/60">
-          <div className="text-sm font-semibold text-gray-900">Applications by Delivery Location</div>
+      <div className="mt-6 ui-card overflow-hidden">
+        <div className="p-4 border-b border-line bg-subtle">
+          <div className="text-sm font-semibold text-fg">Applications by Delivery Location</div>
         </div>
         <div className="p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
             <select
-              className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               value={appsLocationId}
               onChange={(e) => setAppsLocationId(e.target.value)}
             >
@@ -1065,7 +1075,7 @@ function RamReportsContent() {
             </select>
 
             <select
-              className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               value={appsStatus}
               onChange={(e) => setAppsStatus(e.target.value)}
             >
@@ -1076,7 +1086,7 @@ function RamReportsContent() {
             </select>
 
             <select
-              className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               value={appsPayment}
               onChange={(e) => setAppsPayment(e.target.value)}
             >
@@ -1088,59 +1098,45 @@ function RamReportsContent() {
 
             <input
               type="date"
-              className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               value={appsFrom}
               onChange={(e) => setAppsFrom(e.target.value)}
             />
             <input
               type="date"
-              className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               value={appsTo}
               onChange={(e) => setAppsTo(e.target.value)}
             />
           </div>
 
           <div className="mt-3 flex flex-col sm:flex-row gap-2">
-            <button
-              className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50"
+            <ExportButton
+              format="excel"
               onClick={exportApplicationsExcel}
               disabled={appsBusy}
-            >
-              {appsExcelBusy ? (
-                <span className="inline-flex items-center gap-2">
-                  <Spinner className="w-4 h-4" />
-                  Preparing…
-                </span>
-              ) : (
-                'Download Excel'
-              )}
-            </button>
-            <button
-              className="px-4 py-2 bg-red-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
+              busy={appsExcelBusy}
+              busyText="Preparing…"
+            />
+            <ExportButton
+              format="pdf"
               onClick={exportApplicationsPdf}
               disabled={appsBusy}
-            >
-              {appsPdfBusy ? (
-                <span className="inline-flex items-center gap-2">
-                  <Spinner className="w-4 h-4" />
-                  Preparing…
-                </span>
-              ) : (
-                'Download PDF'
-              )}
-            </button>
+              busy={appsPdfBusy}
+              busyText="Preparing…"
+            />
           </div>
         </div>
       </div>
 
-      <div className="mt-4 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-gray-50/60">
-          <div className="text-sm font-semibold text-gray-900">Applications Pack by Payment to Vendors</div>
+      <div className="mt-4 ui-card overflow-hidden">
+        <div className="p-4 border-b border-line bg-subtle">
+          <div className="text-sm font-semibold text-fg">Applications Pack by Payment to Vendors</div>
         </div>
         <div className="p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
             <select
-              className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               value={packLocationId}
               onChange={(e) => setPackLocationId(e.target.value)}
             >
@@ -1152,7 +1148,7 @@ function RamReportsContent() {
             ))}
             </select>
             <select
-              className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               value={packStatus}
               onChange={(e) => setPackStatus(e.target.value)}
             >
@@ -1162,7 +1158,7 @@ function RamReportsContent() {
             <option value="Cancelled">Cancelled</option>
             </select>
             <select
-              className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               value={packPayment}
               onChange={(e) => setPackPayment(e.target.value)}
             >
@@ -1173,49 +1169,35 @@ function RamReportsContent() {
             </select>
             <input
               type="date"
-              className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               value={packFrom}
               onChange={(e) => setPackFrom(e.target.value)}
             />
             <input
               type="date"
-              className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               value={packTo}
               onChange={(e) => setPackTo(e.target.value)}
             />
           </div>
 
           <div className="mt-3 flex flex-col sm:flex-row items-start sm:items-center gap-2">
-            <button
-              className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50"
+            <ExportButton
+              format="excel"
               onClick={exportVendorPaymentsPackExcel}
               disabled={packBusy || !locations.length}
-            >
-              {packExcelBusy ? (
-                <span className="inline-flex items-center gap-2">
-                  <Spinner className="w-4 h-4" />
-                  Preparing…
-                </span>
-              ) : (
-                'Download Excel'
-              )}
-            </button>
-            <button
-              className="px-4 py-2 bg-red-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
+              busy={packExcelBusy}
+              busyText="Preparing…"
+            />
+            <ExportButton
+              format="pdf"
               onClick={exportVendorPaymentsPackPdf}
               disabled={packBusy || !locations.length}
-            >
-              {packPdfBusy ? (
-                <span className="inline-flex items-center gap-2">
-                  <Spinner className="w-4 h-4" />
-                  Preparing…
-                </span>
-              ) : (
-                'Download PDF'
-              )}
-            </button>
+              busy={packPdfBusy}
+              busyText="Preparing…"
+            />
             {packBusy && packProgress?.total ? (
-              <div className="text-xs sm:text-sm text-gray-600">
+              <div className="text-xs sm:text-sm text-muted">
                 {packProgress.current}/{packProgress.total}
               </div>
             ) : null}
@@ -1223,14 +1205,14 @@ function RamReportsContent() {
         </div>
       </div>
 
-      <div className="mt-4 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-gray-50/60">
-          <div className="text-sm font-semibold text-gray-900">Delivery Pack (Master/Cash/Loan/Savings)</div>
+      <div className="mt-4 ui-card overflow-hidden">
+        <div className="p-4 border-b border-line bg-subtle">
+          <div className="text-sm font-semibold text-fg">Delivery Pack (Master/Cash/Loan/Savings)</div>
         </div>
         <div className="p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             <select
-              className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               value={deliveryPackLocationId}
               onChange={(e) => setDeliveryPackLocationId(e.target.value)}
             >
@@ -1243,20 +1225,20 @@ function RamReportsContent() {
             </select>
             <input
               type="date"
-              className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               value={deliveryPackFrom}
               onChange={(e) => setDeliveryPackFrom(e.target.value)}
             />
             <input
               type="date"
-              className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm w-full bg-white"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               value={deliveryPackTo}
               onChange={(e) => setDeliveryPackTo(e.target.value)}
             />
           </div>
           <div className="mt-3">
             <button
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
               onClick={downloadDeliveryPack}
               disabled={deliveryPackBusy}
             >

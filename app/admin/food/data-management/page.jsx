@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import ItemManagement from '../../../components/ItemManagement'
 import DatabaseMigration from '../../../components/DatabaseMigration'
+import Button from '../../../components/ui/Button'
+import { Archive, FileSpreadsheet } from 'lucide-react'
 
 function DataManagementPageContent() {
   const [loading, setLoading] = useState(false)
@@ -12,7 +14,6 @@ function DataManagementPageContent() {
   const [confirmClearAll, setConfirmClearAll] = useState('')
   const [confirmClearDelivered, setConfirmClearDelivered] = useState('')
   const [confirmResetInventory, setConfirmResetInventory] = useState('')
-  const [confirmResetPins, setConfirmResetPins] = useState('')
   const [confirmRepriceOrders, setConfirmRepriceOrders] = useState('')
   const [processingAction, setProcessingAction] = useState(null)
   const router = useRouter()
@@ -399,41 +400,6 @@ function DataManagementPageContent() {
     setProcessingAction(null)
   }
 
-  const resetMemberPins = async (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-
-    if (loading || processingAction) return
-    if (confirmResetPins !== 'RESET PINS') {
-      setMessage('Please type "RESET PINS" to confirm')
-      return
-    }
-
-    setLoading(true)
-    setProcessingAction('resetPins')
-    setMessage('Resetting all member PINs...')
-
-    try {
-      const response = await fetch('/api/admin/data-management/reset-member-pins', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin'
-      })
-      const result = await response.json()
-      if (!response.ok || !result.ok) {
-        setMessage(`Error: ${result.error || 'Failed to reset PINs'}`)
-      } else {
-        setMessage(`Successfully reset ${result.updatedCount} member PINs`)
-        setConfirmResetPins('')
-      }
-    } catch (error) {
-      setMessage(`Error: ${error.message}`)
-    }
-
-    setLoading(false)
-    setProcessingAction(null)
-  }
-
   const repriceFoodOrders = async (e) => {
     e.preventDefault()
     e.stopPropagation()
@@ -516,6 +482,61 @@ function DataManagementPageContent() {
   const [shoppingLoading, setShoppingLoading] = useState(false)
   const [shoppingMsg, setShoppingMsg] = useState('')
 
+  // Items / Prices import state (moved from the food Import page — the Data
+  // page now hosts the items upload, right above Item Image Management).
+  const [pricesFile, setPricesFile] = useState(null)
+  const [pricesLog, setPricesLog] = useState('')
+  const [pricesLoading, setPricesLoading] = useState(false)
+  const [isDemandTrackingMode, setIsDemandTrackingMode] = useState(false)
+  const [loadingMode, setLoadingMode] = useState(true)
+
+  const uploadPrices = async () => {
+    if (!pricesFile) {
+      setPricesLog('Please choose a file first.')
+      return
+    }
+    setPricesLoading(true)
+    setPricesLog('')
+    try {
+      const fd = new FormData()
+      fd.append('file', pricesFile)
+      const res = await fetch('/api/admin/import/prices', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || `Upload failed with status ${res.status}`)
+      setPricesLog(JSON.stringify(json, null, 2))
+    } catch (e) {
+      setPricesLog(`Error: ${e.message}`)
+      console.error('Upload error:', e)
+    } finally {
+      setPricesLoading(false)
+    }
+  }
+
+  const downloadPricesTemplate = async () => {
+    const ExcelJSMod = await import('exceljs')
+    const ExcelJS = ExcelJSMod?.default ?? ExcelJSMod
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet('Items_Prices')
+    const templateData = {
+      sku: 'RICE50KG',
+      item_name: 'Rice (50kg)',
+      unit: 'bag',
+      category: 'Food',
+      branch_code: 'DUTSE',
+      price: 49500
+    }
+    ws.addRow(Object.keys(templateData))
+    ws.addRow(Object.values(templateData))
+    const buffer = await wb.xlsx.writeBuffer()
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'Items_Prices_Template.xlsx'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   // Load current shopping status
   const loadShoppingStatus = async () => {
     try {
@@ -582,23 +603,40 @@ function DataManagementPageContent() {
     return () => { cancelled = true }
   }, [])
 
+  // Demand tracking mode — when on, the items upload needs no initial stock column.
+  useEffect(() => {
+    let cancelled = false
+    const check = async () => {
+      try {
+        const res = await fetch('/api/admin/system/mode')
+        if (res.ok) {
+          const data = await res.json()
+          if (!cancelled) setIsDemandTrackingMode(!!data.isDemandTrackingMode)
+        }
+      } catch {
+        setIsDemandTrackingMode(false)
+      } finally {
+        if (!cancelled) setLoadingMode(false)
+      }
+    }
+    check()
+    return () => { cancelled = true }
+  }, [])
+
   return (
     <div className="p-3 sm:p-6 max-w-7xl mx-auto">
       <div className="grid grid-cols-2 sm:flex sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-2">
-        <h1 className="text-lg sm:text-2xl font-semibold col-span-1">Admin — Data Management</h1>
-        <button
-          onClick={() => router.back()}
-          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 hover:text-gray-900 rounded-lg border border-gray-300 transition-colors duration-200 justify-self-end col-span-1 text-sm sm:text-base"
-        >
+        <h1 className="text-h2 font-semibold col-span-1">Admin · Data Management</h1>
+        <Button variant="secondary" onClick={() => router.back()} className="justify-self-end col-span-1">
           ← Back
-        </button>
+        </Button>
       </div>
 
       {message && (
         <div className={`p-4 rounded-lg mb-6 ${
           message.includes('Error') 
-            ? 'bg-red-50 text-red-700 border border-red-200' 
-            : 'bg-green-50 text-green-700 border border-green-200'
+            ? 'bg-danger-bg text-danger-fg border border-danger-border' 
+            : 'bg-success-bg text-success-fg border border-success-border'
         }`}>
           {message}
         </div>
@@ -607,34 +645,10 @@ function DataManagementPageContent() {
       <div className="grid gap-2 lg:gap-3 xl:gap-4">
         <DatabaseMigration />
 
-        <div className="grid gap-2 lg:gap-3 xl:gap-4 sm:grid-cols-2">
-          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-            <h2 className="text-sm font-semibold text-gray-900 mb-1">🔐 Reset Member PINs</h2>
-            <p className="text-xs text-gray-600 mb-3">
-              Clears all member PINs so everyone must set a new PIN.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                value={confirmResetPins}
-                onChange={(e) => setConfirmResetPins(e.target.value)}
-                placeholder='Type "RESET PINS"'
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white"
-                disabled={loading || !!processingAction}
-              />
-              <button
-                type="button"
-                onClick={resetMemberPins}
-                disabled={loading || !!processingAction}
-                className="px-4 py-2 rounded-lg text-white text-sm font-medium bg-red-600 hover:bg-red-700 disabled:opacity-50"
-              >
-                {processingAction === 'resetPins' ? 'Resetting…' : 'Reset PINs'}
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-            <h2 className="text-sm font-semibold text-gray-900 mb-1">💱 Food Price Repricer</h2>
-            <p className="text-xs text-gray-600 mb-3">
+        <div className="grid gap-2 lg:grid-cols-2 lg:gap-3 xl:gap-4">
+        <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
+          <h2 className="text-sm font-semibold text-fg mb-1">💱 Food Price Repricer</h2>
+            <p className="text-xs text-muted mb-3">
               Recomputes order line prices and order totals using the latest branch prices and markups.
             </p>
             <div className="flex flex-col sm:flex-row gap-2">
@@ -642,33 +656,27 @@ function DataManagementPageContent() {
                 value={confirmRepriceOrders}
                 onChange={(e) => setConfirmRepriceOrders(e.target.value)}
                 placeholder='Type "REPRICE ORDERS"'
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white"
+                className="flex-1 px-3 py-2 text-sm border border-line rounded-lg bg-surface"
                 disabled={loading || !!processingAction}
               />
-              <button
-                type="button"
-                onClick={repriceFoodOrders}
-                disabled={loading || !!processingAction}
-                className="px-4 py-2 rounded-lg text-white text-sm font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-              >
+              <Button onClick={repriceFoodOrders} loading={processingAction === 'repriceOrders'} disabled={loading || !!processingAction}>
                 {processingAction === 'repriceOrders' ? 'Repricing…' : 'Reprice Orders'}
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
 
         {/* Shopping Control */}
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-          <h2 className="text-sm font-semibold text-gray-900 mb-1">🛍️ Shopping Control</h2>
-          <p className="text-xs text-gray-600 mb-3">
+        <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
+          <h2 className="text-sm font-semibold text-fg mb-1">🛍️ Shopping Control</h2>
+          <p className="text-xs text-muted mb-3">
             Toggle whether members can start shopping from the portal.
           </p>
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 cursor-pointer select-none" onClick={() => setShoppingOpen(!shoppingOpen)}>
-              <div className={`w-12 h-6 rounded-full px-1 flex items-center ${shoppingOpen ? 'bg-green-500 justify-end' : 'bg-gray-300 justify-start'}`}>
-                <div className="w-4 h-4 bg-white rounded-full shadow" />
+              <div className={`w-12 h-6 rounded-full px-1 flex items-center ${shoppingOpen ? 'bg-success-fg justify-end' : 'bg-muted justify-start'}`}>
+                <div className="w-4 h-4 bg-surface rounded-full shadow" />
               </div>
-              <span className={`text-sm font-medium ${shoppingOpen ? 'text-green-700' : 'text-gray-600'}`}>
+              <span className={`text-sm font-medium ${shoppingOpen ? 'text-success-fg' : 'text-muted'}`}>
                 {shoppingOpen ? 'Open' : 'Closed'}
               </span>
             </label>
@@ -678,41 +686,73 @@ function DataManagementPageContent() {
               onChange={(e) => setShoppingOpen(e.target.checked)}
               className="hidden"
             />
-            <button
-              onClick={saveShoppingStatus}
-              disabled={shoppingLoading}
-              className={`px-4 py-2 rounded-lg text-white text-sm font-medium ${shoppingLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
-            >
+            <Button onClick={saveShoppingStatus} loading={shoppingLoading} disabled={shoppingLoading}>
               {shoppingLoading ? 'Saving…' : 'Save'}
-            </button>
+            </Button>
           </div>
           {shoppingMsg && (
-            <div className={`mt-2 p-2 rounded text-sm ${shoppingMsg.startsWith('Error') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>{shoppingMsg}</div>
+            <div className={`mt-2 p-2 rounded text-sm ${shoppingMsg.startsWith('Error') ? 'bg-danger-bg text-danger-fg border border-danger-border' : 'bg-success-bg text-success-fg border border-success-border'}`}>{shoppingMsg}</div>
+          )}
+        </div>
+        </div>
+
+        {/* Items / Prices Import — moved here from the food Import page */}
+        <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
+          <h2 className="text-sm font-semibold text-fg mb-1">📥 Items / Prices Import</h2>
+          <p className="text-xs text-muted mb-3">
+            {loadingMode ? <span className="inline-block h-3 w-64 animate-pulse rounded bg-muted" /> : 'Expected columns: sku, item_name, unit, category, branch_code, price'}
+          </p>
+          {isDemandTrackingMode && (
+            <div className="mb-3 p-2 bg-info-bg border border-info-border rounded text-xs sm:text-sm text-info-fg">
+              Demand Tracking Mode: Initial stock column is not needed as items have unlimited availability based on member demand.
+            </div>
+          )}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={(e) => setPricesFile(e.target.files?.[0] || null)}
+              className="w-full sm:flex-1 sm:min-w-0 text-[11px] sm:text-sm p-2 border border-line-subtle rounded-lg"
+            />
+            <Button
+              onClick={uploadPrices}
+              loading={pricesLoading}
+              disabled={!pricesFile || loadingMode}
+              className="min-w-[170px]"
+            >
+              {pricesLoading ? 'Uploading…' : isDemandTrackingMode ? 'Upload Items/Prices' : 'Upload Items/Prices/Stock'}
+            </Button>
+            <Button variant="secondary" leftIcon={FileSpreadsheet} onClick={downloadPricesTemplate} disabled={loadingMode} className="min-w-[170px]">
+              Download Excel Template
+            </Button>
+          </div>
+          {pricesLog && (
+            <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-subtle p-3 text-xs text-fg overflow-x-auto">{pricesLog}</pre>
           )}
         </div>
 
         {/* Item Image Management */}
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-          <h2 className="text-sm font-semibold text-gray-900 mb-1">🖼️ Item Image Management</h2>
-          <p className="text-xs text-gray-600 mb-3">
+        <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
+          <h2 className="text-sm font-semibold text-fg mb-1">🖼️ Item Image Management</h2>
+          <p className="text-xs text-muted mb-3">
             Upload and manage images for inventory items to improve the shopping experience.
           </p>
           <ItemManagement />
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-          <h2 className="text-sm font-semibold text-gray-900 mb-1">🗓️ Cycles</h2>
-          <p className="text-xs text-gray-600 mb-3">
+        <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
+          <h2 className="text-sm font-semibold text-fg mb-1">🗓️ Cycles</h2>
+          <p className="text-xs text-muted mb-3">
             Cycles isolate quarterly/seasonal sales data. New uploads automatically attach to the currently active cycle.
           </p>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="border border-gray-200 rounded-xl p-3 bg-gray-50/40">
-              <div className="text-sm font-medium text-gray-900 mb-2">Select Cycle for Admin Actions</div>
+            <div className="border border-line-subtle rounded-xl p-3 bg-subtle/40">
+              <div className="text-sm font-medium text-fg mb-2">Select Cycle for Admin Actions</div>
               <select
                 value={selectedCycleId ?? ''}
                 onChange={(e) => setSelectedCycleId(e.target.value ? Number(e.target.value) : null)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white"
+                className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
                 disabled={loadingCycles || cycles.length === 0}
               >
                 {cycles.length === 0 ? (
@@ -720,43 +760,33 @@ function DataManagementPageContent() {
                 ) : (
                   cycles.map(c => (
                     <option key={c.id} value={c.id}>
-                      {c.name} ({c.code}){c.is_active ? ' — Active' : ''}
+                      {c.name} ({c.code}){c.is_active ? ' · Active' : ''}
                     </option>
                   ))
                 )}
               </select>
               <div className="mt-2 flex gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={setActiveCycle}
-                  disabled={selectedCycleId == null || activatingCycle}
-                  className="px-4 py-2 rounded-lg text-white text-sm font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-                >
+                <Button onClick={setActiveCycle} loading={activatingCycle} disabled={selectedCycleId == null}>
                   {activatingCycle ? 'Setting…' : 'Set Selected as Active'}
-                </button>
-                <button
-                  type="button"
-                  onClick={loadCycles}
-                  disabled={loadingCycles}
-                  className="px-4 py-2 rounded-lg text-sm font-medium bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 disabled:opacity-50"
-                >
+                </Button>
+                <Button variant="secondary" onClick={loadCycles} loading={loadingCycles} disabled={loadingCycles}>
                   {loadingCycles ? 'Refreshing…' : 'Refresh'}
-                </button>
+                </Button>
               </div>
-              <div className="mt-2 text-xs text-gray-600">
+              <div className="mt-2 text-xs text-muted">
                 Active cycle id: {activeCycleId ?? '—'}
               </div>
             </div>
 
-            <form onSubmit={createCycle} className="border border-gray-200 rounded-xl p-3 bg-gray-50/40">
-              <div className="text-sm font-medium text-gray-900 mb-2">Create New Cycle</div>
+            <form onSubmit={createCycle} className="border border-line-subtle rounded-xl p-3 bg-subtle/40">
+              <div className="text-sm font-medium text-fg mb-2">Create New Cycle</div>
               <div className="grid gap-2">
                 <input
                   type="text"
                   value={newCycleCode}
                   onChange={(e) => setNewCycleCode(e.target.value)}
                   placeholder="Code (e.g., 2026-Q2)"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white"
+                  className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
                   required
                 />
                 <input
@@ -764,7 +794,7 @@ function DataManagementPageContent() {
                   value={newCycleName}
                   onChange={(e) => setNewCycleName(e.target.value)}
                   placeholder="Name (e.g., Fresh Food Q2 2026)"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white"
+                  className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
                   required
                 />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -772,16 +802,16 @@ function DataManagementPageContent() {
                     type="date"
                     value={newCycleStartsAt}
                     onChange={(e) => setNewCycleStartsAt(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white"
+                    className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
                   />
                   <input
                     type="date"
                     value={newCycleEndsAt}
                     onChange={(e) => setNewCycleEndsAt(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white"
+                    className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
                   />
                 </div>
-                <label className="flex items-center gap-2 text-sm text-gray-800">
+                <label className="flex items-center gap-2 text-sm text-fg">
                   <input
                     type="checkbox"
                     checked={newCycleMakeActive}
@@ -789,115 +819,111 @@ function DataManagementPageContent() {
                   />
                   Make this cycle active immediately
                 </label>
-                <button
-                  type="submit"
-                  disabled={creatingCycle}
-                  className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white text-sm rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
-                >
+                <Button type="submit" loading={creatingCycle} disabled={creatingCycle} className="w-full sm:w-auto">
                   {creatingCycle ? 'Creating…' : 'Create Cycle'}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-          <h2 className="text-sm font-semibold text-gray-900 mb-1">💳 Food Loan Limits (Selected Cycle)</h2>
-          <p className="text-xs text-gray-600 mb-3">
+        <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
+          <h2 className="text-sm font-semibold text-fg mb-1">💳 Food Loan Limits (Selected Cycle)</h2>
+          <p className="text-xs text-muted mb-3">
             Set maximum Loan amounts per cycle for Eligible members and Non-Eligible (Grace) members.
           </p>
 
-          <div className="border border-gray-200 rounded-xl p-3 bg-gray-50/40">
-            <div className="text-sm font-medium text-gray-900 mb-3">Eligible (Loan)</div>
+          <div className="border border-line-subtle rounded-xl p-3 bg-subtle/40">
+            <div className="text-sm font-medium text-fg mb-3">Eligible (Loan)</div>
             <div className="grid gap-2 sm:grid-cols-3">
               <div>
-                <div className="text-xs text-gray-600 mb-1">Pensioner</div>
+                <div className="text-xs text-muted mb-1">Pensioner</div>
                 <input
                   type="number"
                   min="0"
                   step="1"
                   value={eligibleLoanMaxPensioner}
                   onChange={(e) => setEligibleLoanMaxPensioner(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white"
+                  className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
                   disabled={policyLoading || policySaving || selectedCycleId == null || !limitsEditing}
                 />
               </div>
               <div>
-                <div className="text-xs text-gray-600 mb-1">Retiree</div>
+                <div className="text-xs text-muted mb-1">Retiree</div>
                 <input
                   type="number"
                   min="0"
                   step="1"
                   value={eligibleLoanMaxRetiree}
                   onChange={(e) => setEligibleLoanMaxRetiree(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white"
+                  className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
                   disabled={policyLoading || policySaving || selectedCycleId == null || !limitsEditing}
                 />
               </div>
               <div>
-                <div className="text-xs text-gray-600 mb-1">Active (Other)</div>
+                <div className="text-xs text-muted mb-1">Active (Other)</div>
                 <input
                   type="number"
                   min="0"
                   step="1"
                   value={eligibleLoanMaxActive}
                   onChange={(e) => setEligibleLoanMaxActive(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white"
+                  className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
                   disabled={policyLoading || policySaving || selectedCycleId == null || !limitsEditing}
                 />
               </div>
             </div>
-            <div className="mt-2 text-xs text-gray-600">Applies to Loan orders that pass eligibility.</div>
+            <div className="mt-2 text-xs text-muted">Applies to Loan orders that pass eligibility.</div>
           </div>
 
-          <div className="mt-3 border border-gray-200 rounded-xl p-3 bg-gray-50/40">
-            <div className="text-sm font-medium text-gray-900 mb-3">Non-Eligible (Grace Loan)</div>
+          <div className="mt-3 border border-line-subtle rounded-xl p-3 bg-subtle/40">
+            <div className="text-sm font-medium text-fg mb-3">Non-Eligible (Grace Loan)</div>
             <div className="grid gap-2 sm:grid-cols-3">
               <div>
-                <div className="text-xs text-gray-600 mb-1">Pensioner</div>
+                <div className="text-xs text-muted mb-1">Pensioner</div>
                 <input
                   type="number"
                   min="0"
                   step="1"
                   value={graceLoanMaxPensioner}
                   onChange={(e) => setGraceLoanMaxPensioner(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white"
+                  className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
                   disabled={policyLoading || policySaving || selectedCycleId == null || !limitsEditing}
                 />
               </div>
               <div>
-                <div className="text-xs text-gray-600 mb-1">Retiree</div>
+                <div className="text-xs text-muted mb-1">Retiree</div>
                 <input
                   type="number"
                   min="0"
                   step="1"
                   value={graceLoanMaxRetiree}
                   onChange={(e) => setGraceLoanMaxRetiree(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white"
+                  className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
                   disabled={policyLoading || policySaving || selectedCycleId == null || !limitsEditing}
                 />
               </div>
               <div>
-                <div className="text-xs text-gray-600 mb-1">Active (Other)</div>
+                <div className="text-xs text-muted mb-1">Active (Other)</div>
                 <input
                   type="number"
                   min="0"
                   step="1"
                   value={graceLoanMaxActive}
                   onChange={(e) => setGraceLoanMaxActive(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white"
+                  className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
                   disabled={policyLoading || policySaving || selectedCycleId == null || !limitsEditing}
                 />
               </div>
             </div>
-            <div className="mt-2 text-xs text-gray-600">If eligibility fails, allowed once per cycle up to this max.</div>
+            <div className="mt-2 text-xs text-muted">If eligibility fails, allowed once per cycle up to this max.</div>
           </div>
 
           <div className="mt-3 grid gap-3 lg:grid-cols-2">
-            <div className="flex items-center justify-between gap-3 border border-gray-200 rounded-xl p-3 bg-gray-50/40">
+            <div className="flex items-center justify-between gap-3 border border-line-subtle rounded-xl p-3 bg-subtle/40">
               <div>
-                <div className="text-sm font-medium text-gray-900">Include Interest In Limit</div>
-                <div className="text-xs text-gray-600">
+                <div className="text-sm font-medium text-fg">Include Interest In Limit</div>
+                <div className="text-xs text-muted">
                   When ON, interest is counted inside the max. When OFF, max applies to principal only.
                 </div>
               </div>
@@ -905,31 +931,31 @@ function DataManagementPageContent() {
                 className={`flex items-center gap-2 cursor-pointer select-none ${!limitsEditing ? 'opacity-60 pointer-events-none' : ''}`}
                 onClick={() => setIncludeInterestInCap((v) => !v)}
               >
-                <div className={`w-12 h-6 rounded-full px-1 flex items-center ${includeInterestInCap ? 'bg-green-500 justify-end' : 'bg-gray-300 justify-start'}`}>
-                  <div className="w-4 h-4 bg-white rounded-full shadow" />
+                <div className={`w-12 h-6 rounded-full px-1 flex items-center ${includeInterestInCap ? 'bg-success-fg justify-end' : 'bg-muted justify-start'}`}>
+                  <div className="w-4 h-4 bg-surface rounded-full shadow" />
                 </div>
-                <span className={`text-sm font-medium ${includeInterestInCap ? 'text-green-700' : 'text-gray-600'}`}>
+                <span className={`text-sm font-medium ${includeInterestInCap ? 'text-success-fg' : 'text-muted'}`}>
                   {includeInterestInCap ? 'On' : 'Off'}
                 </span>
               </label>
             </div>
 
-            <div className="border border-gray-200 rounded-xl p-3 bg-gray-50/40">
-              <div className="text-sm font-medium text-gray-900 mb-2">Loan Interest Rate (Selected Cycle)</div>
+            <div className="border border-line-subtle rounded-xl p-3 bg-subtle/40">
+              <div className="text-sm font-medium text-fg mb-2">Loan Interest Rate (Selected Cycle)</div>
               <div className="flex flex-col sm:flex-row sm:items-end gap-2">
                 <div className="flex-1">
-                  <div className="text-xs text-gray-600 mb-1">Rate (%)</div>
+                  <div className="text-xs text-muted mb-1">Rate (%)</div>
                   <input
                     type="number"
                     min="0"
                     step="0.01"
                     value={loanInterestRatePct}
                     onChange={(e) => setLoanInterestRatePct(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white"
+                    className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
                     disabled={policyLoading || policySaving || loanRateSaving || selectedCycleId == null || !rateEditing}
                   />
                 </div>
-                <button
+                <Button
                   type="button"
                   onClick={async () => {
                     if (!rateEditing) {
@@ -938,20 +964,20 @@ function DataManagementPageContent() {
                     }
                     await saveFoodLoanRate()
                   }}
+                  loading={loanRateSaving}
                   disabled={policySaving || policyLoading || loanRateSaving || selectedCycleId == null}
-                  className="px-4 py-2 rounded-lg text-white text-sm font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
                 >
                   {loanRateSaving ? 'Saving…' : (rateEditing ? 'Save' : 'Edit')}
-                </button>
+                </Button>
               </div>
-              <div className="mt-2 text-xs text-gray-600">
+              <div className="mt-2 text-xs text-muted">
                 Applies to Loan orders for this cycle.
               </div>
             </div>
           </div>
 
           <div className="mt-3 flex gap-2 flex-wrap">
-            <button
+            <Button
               type="button"
               onClick={async () => {
                 if (!limitsEditing) {
@@ -960,25 +986,26 @@ function DataManagementPageContent() {
                 }
                 await saveFoodCyclePolicy()
               }}
+              loading={policySaving}
               disabled={policySaving || policyLoading || selectedCycleId == null}
-              className="px-4 py-2 rounded-lg text-white text-sm font-medium bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
             >
               {policySaving ? 'Saving…' : (limitsEditing ? 'Save' : 'Edit')}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="secondary"
               onClick={() => loadFoodCyclePolicy(selectedCycleId)}
+              loading={policyLoading}
               disabled={policySaving || policyLoading || selectedCycleId == null}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 disabled:opacity-50"
             >
               {policyLoading ? 'Refreshing…' : 'Refresh'}
-            </button>
+            </Button>
           </div>
 
           {policyMsg && (
             <div
               className={`mt-3 p-2 rounded text-sm ${
-                policyMsg.startsWith('Error') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'
+                policyMsg.startsWith('Error') ? 'bg-danger-bg text-danger-fg border border-danger-border' : 'bg-success-bg text-success-fg border border-success-border'
               }`}
             >
               {policyMsg}
@@ -987,25 +1014,27 @@ function DataManagementPageContent() {
         </div>
 
         {/* Backup Data */}
-        <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-          <h2 className="text-sm font-semibold text-gray-900 mb-1">💾 Backup Data</h2>
-          <p className="text-xs text-gray-600 mb-3">
+        <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
+          <h2 className="text-sm font-semibold text-fg mb-1">💾 Backup Data</h2>
+          <p className="text-xs text-muted mb-3">
             Download data for the selected cycle as an Excel file with separate sheets for each data type.
           </p>
-          <button
+          <Button
               type="button"
               onClick={exportBackup}
+              loading={processingAction === 'exportBackup'}
               disabled={processingAction !== null}
-              className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white text-sm rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
+              leftIcon={Archive}
+              className="w-full sm:w-auto"
             >
             {processingAction === 'exportBackup' ? 'Downloading...' : 'Download Backup'}
-          </button>
+          </Button>
         </div>
       </div>
 
-      <div className="mt-6 sm:mt-8 p-3 sm:p-4 bg-gray-50 rounded-lg">
-        <h3 className="text-sm sm:text-base font-medium text-gray-900 mb-2">💡 Recommended Workflow for a New Cycle:</h3>
-        <ol className="list-decimal list-inside space-y-1 text-xs sm:text-sm text-gray-700">
+      <div className="mt-6 sm:mt-8 p-3 sm:p-4 bg-subtle rounded-lg">
+        <h3 className="text-sm sm:text-base font-medium text-fg mb-2">💡 Recommended Workflow for a New Cycle:</h3>
+        <ol className="list-decimal list-inside space-y-1 text-xs sm:text-sm text-muted">
           <li>Create the new cycle and set it as Active</li>
           <li>Upload your new items/prices/inventory for the active cycle</li>
           <li>Use cycle-specific Backup any time you want an export snapshot</li>

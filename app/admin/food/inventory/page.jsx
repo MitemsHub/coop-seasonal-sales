@@ -3,8 +3,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
+import ExportButton from '../../../components/ui/ExportButton'
 
-const Spinner = ({ className = 'h-4 w-4 text-white' }) => (
+
+const Spinner = ({ className = 'h-4 w-4 text-on-accent' }) => (
   <svg className={`animate-spin ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
     <path
@@ -139,7 +141,7 @@ function DepartmentInventorySection() {
       const ExcelJS = ExcelJSMod?.default ?? ExcelJSMod
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet('Department Inventory')
-      ws.addRow(['Food Distribution — Department Inventory'])
+      ws.addRow(['Food Distribution · Department Inventory'])
       ws.addRow([`Branch: ${selectedBranch} | Department: ${selectedDepartment}`])
       ws.addRow(headers)
       for (const r of rows) ws.addRow(r)
@@ -193,6 +195,7 @@ function DepartmentInventorySection() {
         head: [['Branch', 'Department', 'SKU', 'Item', 'Pending', 'Posted', 'Delivered', 'Total Demand']],
         body: tableData,
         startY: 45,
+        rowPageBreak: 'avoid',
         theme: 'grid',
         styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak', lineWidth: 0.1, lineColor: [0, 0, 0] },
         headStyles: { fillColor: [75, 85, 99], textColor: [255, 255, 255] },
@@ -223,14 +226,14 @@ function DepartmentInventorySection() {
 
   return (
     <div className="mt-8">
-      <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-800">Admin — Inventory by Branch & Department</h2>
+      <h2 className="text-h2 font-bold mb-4 sm:mb-6 text-fg">Admin · Inventory by Branch & Department</h2>
       
       {/* Filters and Controls */}
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4 sm:mb-6">
         <button
           onClick={loadDepartmentInventory}
           disabled={loading}
-          className="px-3 py-2 rounded-lg bg-gray-900 hover:bg-gray-950 text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2"
+          className="px-3 py-2 rounded-lg bg-brand text-on-accent hover:bg-brand-hover text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-2"
         >
           {loading && <Spinner />}
           <span>{loading ? 'Loading…' : 'Refresh'}</span>
@@ -242,7 +245,7 @@ function DepartmentInventorySection() {
             setSelectedBranch(e.target.value)
             setCurrentPage(1)
           }}
-          className="border-2 border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
         >
           <option value="All Branches">All Branches</option>
           {branches.map(branch => (
@@ -256,7 +259,7 @@ function DepartmentInventorySection() {
             setSelectedDepartment(e.target.value)
             setCurrentPage(1)
           }}
-          className="border-2 border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
         >
           <option value="All Departments">All Departments</option>
           {departments.map(dept => (
@@ -264,46 +267,42 @@ function DepartmentInventorySection() {
           ))}
         </select>
         
-        <button
+        <ExportButton
+          format="excel"
           onClick={() => exportDepartmentExcel().catch(() => null)}
           disabled={departmentData.length === 0}
-          className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2"
-        >
-          {exportingExcel && <Spinner />}
-          <span>{exportingExcel ? 'Exporting…' : 'Download Excel'}</span>
-        </button>
+          busy={exportingExcel}
+        />
         
-        <button
+        <ExportButton
+          format="pdf"
           onClick={exportDepartmentPDF}
           disabled={departmentData.length === 0}
-          className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2"
-        >
-          {exportingPDF && <Spinner />}
-          <span>{exportingPDF ? 'Exporting…' : 'Download PDF'}</span>
-        </button>
+          busy={exportingPDF}
+        />
       </div>
       
       {/* Data Summary */}
       {departmentData.length > 0 && (
-        <div className="text-xs sm:text-sm text-gray-600 mb-3 p-2 sm:p-0">
+        <div className="text-xs sm:text-sm text-muted mb-3 p-2 sm:p-0">
           Showing {Math.min(startIndex + 1, departmentData.length)} to {Math.min(startIndex + (paginatedData?.length || 0), departmentData.length)} of {departmentData.length} items
         </div>
       )}
       
       {/* Department Inventory Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-surface rounded-lg shadow-sm border border-line-subtle overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs sm:text-sm">
-            <thead className="bg-gray-50">
+            <thead className="bg-subtle">
               <tr>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-gray-900">Branch</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-gray-900">Department</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-gray-900">SKU</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-gray-900">Item</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-gray-900">Pending</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-gray-900">Posted</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-gray-900">Delivered</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-gray-900">Total Demand</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-fg">Branch</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-fg">Department</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-fg">SKU</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-fg">Item</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-fg">Pending</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-fg">Posted</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-fg">Delivered</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-fg">Total Demand</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -312,14 +311,14 @@ function DepartmentInventorySection() {
                   <tr key={i}>
                     {Array.from({ length: 8 }).map((__, j) => (
                       <td key={j} className="px-2 sm:px-4 py-2 sm:py-3">
-                        <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
+                        <div className="h-4 w-full bg-muted rounded animate-pulse" />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : paginatedData.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan="8" className="px-4 py-8 text-center text-subtext">
                     No department inventory data found. Make sure to run the database migrations first.
                   </td>
                 </tr>
@@ -327,16 +326,16 @@ function DepartmentInventorySection() {
                 paginatedData.map((row, index) => (
                   <tr 
                     key={`${row.branch_code}-${row.department_id ?? 'no-dept'}-${row.item_id ?? row.sku ?? index}`}
-                    className="hover:bg-gray-50"
+                    className="hover:bg-subtle"
                   >
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-gray-900">{row.branch_name}</td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-gray-900">{row.department_name}</td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-gray-900 font-mono text-xs">{row.sku}</td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-gray-900 font-medium">{row.item_name}</td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-yellow-600">{row.pending_demand ?? ((row.allocated_qty || 0) - (row.pending_delivery_qty || 0)) ?? 0}</td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-purple-600">{row.confirmed_demand ?? row.pending_delivery_qty ?? 0}</td>
-                     <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-green-600">{row.delivered_qty ?? row.delivered_demand ?? 0}</td>
-                     <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-blue-600 font-medium">{((row.pending_demand ?? ((row.allocated_qty || 0) - (row.pending_delivery_qty || 0)) ?? 0) + (row.confirmed_demand ?? row.pending_delivery_qty ?? 0) + (row.delivered_qty ?? row.delivered_demand ?? 0))}</td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-fg">{row.branch_name}</td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-fg">{row.department_name}</td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-fg font-mono text-xs">{row.sku}</td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-fg font-medium">{row.item_name}</td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-warning-fg">{row.pending_demand ?? ((row.allocated_qty || 0) - (row.pending_delivery_qty || 0)) ?? 0}</td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-info-fg">{row.confirmed_demand ?? row.pending_delivery_qty ?? 0}</td>
+                     <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-success-fg">{row.delivered_qty ?? row.delivered_demand ?? 0}</td>
+                     <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-fg font-medium">{((row.pending_demand ?? ((row.allocated_qty || 0) - (row.pending_delivery_qty || 0)) ?? 0) + (row.confirmed_demand ?? row.pending_delivery_qty ?? 0) + (row.delivered_qty ?? row.delivered_demand ?? 0))}</td>
                   </tr>
                 ))
               )}
@@ -346,34 +345,34 @@ function DepartmentInventorySection() {
         
         {/* Pagination */}
         {showPagination && (
-          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
+          <div className="flex items-center justify-between px-4 py-3 bg-subtle border-t border-line-subtle">
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Previous
               </button>
-              <span className="text-sm text-gray-700">
+              <span className="text-sm text-muted">
                 Page {currentPage} of {totalPages}
               </span>
               <button
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}
-                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Next
               </button>
             </div>
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-subtext">
               Showing {Math.min((currentPage - 1) * itemsPerPage + 1, departmentData.length)} to {Math.min(currentPage * itemsPerPage, departmentData.length)} of {departmentData.length} items
             </div>
           </div>
         )}
       </div>
       
-      <div className="text-xs sm:text-sm text-gray-600 mt-2 sm:mt-3 p-2 sm:p-0">
+      <div className="text-xs sm:text-sm text-muted mt-2 sm:mt-3 p-2 sm:p-0">
         Department inventory shows demand allocation by department within each branch. Run the database migrations to enable this feature.
       </div>
     </div>
@@ -470,7 +469,7 @@ function ItemsInventorySection() {
       const ExcelJS = ExcelJSMod?.default ?? ExcelJSMod
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet('Items Inventory')
-      ws.addRow(['Food Distribution — Items Inventory'])
+      ws.addRow(['Food Distribution · Items Inventory'])
       ws.addRow([`Generated: ${new Date().toLocaleString()}`])
       ws.addRow(headers)
       for (const r of rows) ws.addRow(r)
@@ -519,6 +518,7 @@ function ItemsInventorySection() {
         head: [['SKU', 'Item', 'Pending', 'Posted', 'Delivered', 'Total Demand']],
         body: tableData,
         startY: 40,
+        rowPageBreak: 'avoid',
         theme: 'grid',
         styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak', lineWidth: 0.1, lineColor: [0, 0, 0] },
         headStyles: { fillColor: [75, 85, 99], textColor: [255, 255, 255] },
@@ -545,57 +545,53 @@ function ItemsInventorySection() {
 
   return (
     <div className="mt-8">
-      <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-800">Admin — Inventory by Items</h2>
+      <h2 className="text-h2 font-bold mb-4 sm:mb-6 text-fg">Admin · Inventory by Items</h2>
       
       {/* Controls */}
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4 sm:mb-6">
         <button
           onClick={loadItemsInventory}
           disabled={loading}
-          className="px-3 py-2 rounded-lg bg-gray-900 hover:bg-gray-950 text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2"
+          className="px-3 py-2 rounded-lg bg-brand text-on-accent hover:bg-brand-hover text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-2"
         >
           {loading && <Spinner />}
           <span>{loading ? 'Loading…' : 'Refresh'}</span>
         </button>
         
-        <button
+        <ExportButton
+          format="excel"
           onClick={() => exportItemsExcel().catch(() => null)}
           disabled={itemsData.length === 0}
-          className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2"
-        >
-          {exportingExcel && <Spinner />}
-          <span>{exportingExcel ? 'Exporting…' : 'Download Excel'}</span>
-        </button>
+          busy={exportingExcel}
+        />
         
-        <button
+        <ExportButton
+          format="pdf"
           onClick={exportItemsPDF}
           disabled={itemsData.length === 0}
-          className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2"
-        >
-          {exportingPDF && <Spinner />}
-          <span>{exportingPDF ? 'Exporting…' : 'Download PDF'}</span>
-        </button>
+          busy={exportingPDF}
+        />
       </div>
       
       {/* Data Summary */}
       {itemsData.length > 0 && (
-        <div className="text-xs sm:text-sm text-gray-600 mb-3 p-2 sm:p-0">
+        <div className="text-xs sm:text-sm text-muted mb-3 p-2 sm:p-0">
           Showing {itemsData.length} items (aggregated across all branches)
         </div>
       )}
       
       {/* Items Inventory Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-surface rounded-lg shadow-sm border border-line-subtle overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs sm:text-sm">
-            <thead className="bg-gray-50">
+            <thead className="bg-subtle">
               <tr>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-gray-900">SKU</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-gray-900">Item</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-gray-900">Pending</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-gray-900">Posted</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-gray-900">Delivered</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-gray-900">Total Demand</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-fg">SKU</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-fg">Item</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-fg">Pending</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-fg">Posted</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-fg">Delivered</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-fg">Total Demand</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -604,32 +600,32 @@ function ItemsInventorySection() {
                   <tr key={i}>
                     {Array.from({ length: 6 }).map((__, j) => (
                       <td key={j} className="px-2 sm:px-4 py-2 sm:py-3">
-                        <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
+                        <div className="h-4 w-full bg-muted rounded animate-pulse" />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : paginatedData.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan="6" className="px-4 py-8 text-center text-subtext">
                     No items inventory data found.
                   </td>
                 </tr>
               ) : (
                 paginatedData.map((row, index) => (
-                  <tr key={`${row.item_id ?? row.sku ?? index}-${row.branch_code ?? row.branch_name ?? 'all'}`} className="hover:bg-gray-50">
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-gray-900 font-mono text-xs">{row.sku}</td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-gray-900 font-medium">{row.item_name}</td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-yellow-600">
+                  <tr key={`${row.item_id ?? row.sku ?? index}-${row.branch_code ?? row.branch_name ?? 'all'}`} className="hover:bg-subtle">
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-fg font-mono text-xs">{row.sku}</td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-fg font-medium">{row.item_name}</td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-warning-fg">
                       {row.pending_demand ?? ((row.allocated_qty || 0) - (row.pending_delivery_qty || 0)) ?? 0}
                     </td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-purple-600">
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-info-fg">
                       {row.confirmed_demand ?? row.pending_delivery_qty ?? 0}
                     </td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-green-600">
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-success-fg">
                       {row.delivered_qty ?? row.delivered_demand ?? 0}
                     </td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-blue-600 font-medium">
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-fg font-medium">
                       {row.total_demand ?? ( (row.pending_demand ?? ((row.allocated_qty || 0) - (row.pending_delivery_qty || 0)) ?? 0) + (row.confirmed_demand ?? row.pending_delivery_qty ?? 0) + (row.delivered_qty ?? row.delivered_demand ?? 0) )}
                     </td>
                   </tr>
@@ -641,27 +637,27 @@ function ItemsInventorySection() {
         
         {/* Pagination */}
         {showPagination && (
-          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
+          <div className="flex items-center justify-between px-4 py-3 bg-subtle border-t border-line-subtle">
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Previous
               </button>
-              <span className="text-sm text-gray-700">
+              <span className="text-sm text-muted">
                 Page {currentPage} of {totalPages}
               </span>
               <button
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}
-                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Next
               </button>
             </div>
-            <div className="text-sm text-gray-700">
+            <div className="text-sm text-muted">
               Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, itemsData.length)} of {itemsData.length} items
             </div>
           </div>
@@ -761,7 +757,7 @@ function DeliveryMemberInventorySection() {
       const ExcelJS = ExcelJSMod?.default ?? ExcelJSMod
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet('Delivery vs Branch')
-      ws.addRow(['Food Distribution — Delivery Branch & Branch'])
+      ws.addRow(['Food Distribution · Delivery Branch & Branch'])
       ws.addRow([`Filters: Delivery=${deliveryBranch || 'All'} | Member=${memberBranch || 'All'}`])
       ws.addRow(headers)
       for (const r of dataRows) ws.addRow(r)
@@ -790,7 +786,7 @@ function DeliveryMemberInventorySection() {
       const { default: autoTable } = await import('jspdf-autotable')
       const doc = new jsPDF('l', 'mm', 'a4')
       doc.setFontSize(16)
-      doc.text('Inventory — Delivery Branch & Branch', 14, 15)
+      doc.text('Inventory · Delivery Branch & Branch', 14, 15)
       doc.setFontSize(10)
       doc.text(`Filters: Delivery=${deliveryBranch || 'All'} | Member=${memberBranch || 'All'}`, 14, 25)
       autoTable(doc, {
@@ -804,6 +800,7 @@ function DeliveryMemberInventorySection() {
           r.total || 0
         ]),
         startY: 32,
+        rowPageBreak: 'avoid',
         theme: 'grid',
         styles: { fontSize: 9, cellPadding: 2, overflow: 'linebreak', lineWidth: 0.1, lineColor: [0, 0, 0] },
         headStyles: { fillColor: [75, 85, 99], textColor: [255, 255, 255] },
@@ -830,13 +827,13 @@ function DeliveryMemberInventorySection() {
 
   return (
     <div className="mt-8">
-      <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-800">Admin — Inventory by Delivery Branch & Branch</h2>
+      <h2 className="text-h2 font-bold mb-4 sm:mb-6 text-fg">Admin · Inventory by Delivery Branch & Branch</h2>
 
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4 sm:mb-6">
         <button
           onClick={load}
           disabled={loading}
-          className="px-3 py-2 rounded-lg bg-gray-900 hover:bg-gray-950 text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2"
+          className="px-3 py-2 rounded-lg bg-brand text-on-accent hover:bg-brand-hover text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-2"
         >
           {loading && <Spinner />}
           <span>{loading ? 'Loading…' : 'Refresh'}</span>
@@ -844,7 +841,7 @@ function DeliveryMemberInventorySection() {
         <select
           value={deliveryBranch}
           onChange={(e) => setDeliveryBranch(e.target.value)}
-          className="border-2 border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
         >
           <option value="">All Delivery Branches</option>
           {branches.map(b => (<option key={`del-${b.code}`} value={b.name}>{b.name}</option>))}
@@ -852,40 +849,36 @@ function DeliveryMemberInventorySection() {
         <select
           value={memberBranch}
           onChange={(e) => setMemberBranch(e.target.value)}
-          className="border-2 border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
         >
           <option value="">All Member Branches</option>
           {branches.map(b => (<option key={`mem-${b.code}`} value={b.name}>{b.name}</option>))}
         </select>
-        <button
+        <ExportButton
+          format="excel"
           onClick={() => exportExcel().catch(() => null)}
           disabled={rows.length === 0}
-          className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2"
-        >
-          {exportingExcel && <Spinner />}
-          <span>{exportingExcel ? 'Exporting…' : 'Download Excel'}</span>
-        </button>
-        <button
+          busy={exportingExcel}
+        />
+        <ExportButton
+          format="pdf"
           onClick={exportPDF}
           disabled={rows.length === 0}
-          className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2"
-        >
-          {exportingPDF && <Spinner />}
-          <span>{exportingPDF ? 'Exporting…' : 'Download PDF'}</span>
-        </button>
+          busy={exportingPDF}
+        />
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className="bg-surface rounded-lg shadow-sm border border-line-subtle overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs sm:text-sm">
-            <thead className="bg-gray-50">
+            <thead className="bg-subtle">
               <tr>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-gray-900">Delivery Branch</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-gray-900">Member Branch</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-gray-900">Pending</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-gray-900">Posted</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-gray-900">Delivered</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-gray-900">Total</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-fg">Delivery Branch</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-fg">Member Branch</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-fg">Pending</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-fg">Posted</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-fg">Delivered</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-fg">Total</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -894,22 +887,22 @@ function DeliveryMemberInventorySection() {
                   <tr key={i}>
                     {Array.from({ length: 6 }).map((__, j) => (
                       <td key={j} className="px-2 sm:px-4 py-2 sm:py-3">
-                        <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
+                        <div className="h-4 w-full bg-muted rounded animate-pulse" />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : paginated.length === 0 ? (
-                <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-500">No data found.</td></tr>
+                <tr><td colSpan="6" className="px-4 py-8 text-center text-subtext">No data found.</td></tr>
               ) : (
                 paginated.map((r, idx) => (
-                  <tr key={`${r.delivery_branch_name}-${r.branch_name}-${idx}`} className="hover:bg-gray-50">
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-gray-900">{r.delivery_branch_name}</td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-gray-900">{r.branch_name}</td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-yellow-600">{r.pending || 0}</td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-purple-600">{r.posted || 0}</td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-green-600">{r.delivered || 0}</td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-blue-600 font-medium">{r.total || 0}</td>
+                  <tr key={`${r.delivery_branch_name}-${r.branch_name}-${idx}`} className="hover:bg-subtle">
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-fg">{r.delivery_branch_name}</td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-fg">{r.branch_name}</td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-warning-fg">{r.pending || 0}</td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-info-fg">{r.posted || 0}</td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-success-fg">{r.delivered || 0}</td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-fg font-medium">{r.total || 0}</td>
                   </tr>
                 ))
               )}
@@ -918,18 +911,18 @@ function DeliveryMemberInventorySection() {
         </div>
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
+          <div className="flex items-center justify-between px-4 py-3 bg-subtle border-t border-line-subtle">
             <div className="flex items-center space-x-2">
-              <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-              <span className="text-sm text-gray-700">Page {currentPage} of {totalPages}</span>
-              <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+              <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+              <span className="text-sm text-muted">Page {currentPage} of {totalPages}</span>
+              <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
             </div>
-            <div className="text-sm text-gray-500">Showing {Math.min(startIndex + 1, rows.length)} to {Math.min(startIndex + paginated.length, rows.length)} of {rows.length} items</div>
+            <div className="text-sm text-subtext">Showing {Math.min(startIndex + 1, rows.length)} to {Math.min(startIndex + paginated.length, rows.length)} of {rows.length} items</div>
           </div>
         )}
       </div>
 
-      <div className="text-xs sm:text-sm text-gray-600 mt-2 sm:mt-3 p-2 sm:p-0">
+      <div className="text-xs sm:text-sm text-muted mt-2 sm:mt-3 p-2 sm:p-0">
         This view groups applications by delivery branch (where items will be picked up) and member branch.
       </div>
     </div>
@@ -1095,7 +1088,7 @@ function InventoryPageContent() {
       const ExcelJS = ExcelJSMod?.default ?? ExcelJSMod
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet('Inventory')
-      ws.addRow(['Food Distribution — Inventory by Branch'])
+      ws.addRow(['Food Distribution · Inventory by Branch'])
       ws.addRow([`Filters: ${selectedBranch ? `Branch: ${selectedBranch}` : 'All branches'}`])
       ws.addRow(headers)
       for (const r of tableData) ws.addRow(r)
@@ -1172,6 +1165,7 @@ function InventoryPageContent() {
         head: [headers],
         body: tableData,
         startY: 30,
+        rowPageBreak: 'avoid',
         theme: 'grid',
         styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak', lineWidth: 0.1, lineColor: [0, 0, 0] },
         headStyles: { fillColor: [75, 85, 99], textColor: [255, 255, 255] },
@@ -1211,7 +1205,7 @@ function InventoryPageContent() {
   return (
     <div className="p-2 lg:p-3 xl:p-4 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 lg:mb-4">
-        <h1 className="text-xl sm:text-2xl font-bold mb-2 sm:mb-0">Admin — Inventory by Branch</h1>
+        <h1 className="text-h2 font-bold mb-2 sm:mb-0">Admin · Inventory by Branch</h1>
       </div>
 
       {/* Post Adjustment section removed - only demand tracking mode */}
@@ -1221,7 +1215,7 @@ function InventoryPageContent() {
         <button 
           onClick={() => load()}
           disabled={busy}
-          className="px-3 py-2 rounded-lg bg-gray-900 hover:bg-gray-950 text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2"
+          className="px-3 py-2 rounded-lg bg-brand text-on-accent hover:bg-brand-hover text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-2"
         >
           {busy && <Spinner />}
           <span>{busy ? 'Loading…' : 'Refresh'}</span>
@@ -1230,7 +1224,7 @@ function InventoryPageContent() {
         <select 
           value={selectedBranch}
           onChange={(e) => setSelectedBranch(e.target.value)}
-          className="border-2 border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
         >
           <option value="">All Branches</option>
           {branches.map(branch => (
@@ -1238,29 +1232,25 @@ function InventoryPageContent() {
           ))}
         </select>
         
-        <button 
+        <ExportButton
+          format="excel"
           onClick={() => exportToExcel().catch(() => null)}
           disabled={!Array.isArray(rows) || rows.length === 0}
-          className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2"
-        >
-          {exportingExcel && <Spinner />}
-          <span>{exportingExcel ? 'Exporting…' : 'Download Excel'}</span>
-        </button>
+          busy={exportingExcel}
+        />
         
-        <button 
+        <ExportButton
+          format="pdf"
           onClick={exportToPDF}
           disabled={!Array.isArray(rows) || rows.length === 0}
-          className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center justify-center gap-2"
-        >
-          {exportingPDF && <Spinner />}
-          <span>{exportingPDF ? 'Exporting…' : 'Download PDF'}</span>
-        </button>
+          busy={exportingPDF}
+        />
       </div>
       
       {msg && (
         <div
           className={`mb-4 rounded-lg border p-3 text-sm ${
-            msg.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'
+            msg.type === 'error' ? 'bg-danger-bg border-danger-border text-danger-fg' : 'bg-success-bg border-success-border text-success-fg'
           }`}
         >
           {msg.text}
@@ -1269,57 +1259,57 @@ function InventoryPageContent() {
       
       {/* Data Summary */}
       {busy && (!Array.isArray(rows) || rows.length === 0) ? (
-        <div className="text-xs sm:text-sm text-gray-600 mb-3 p-2 sm:p-0">
-          <div className="h-4 w-64 bg-gray-100 rounded animate-pulse" />
+        <div className="text-xs sm:text-sm text-muted mb-3 p-2 sm:p-0">
+          <div className="h-4 w-64 bg-muted rounded animate-pulse" />
         </div>
       ) : filteredAndPaginatedRows.rows.length > 0 ? (
-        <div className="text-xs sm:text-sm text-gray-600 mb-3 p-2 sm:p-0">
+        <div className="text-xs sm:text-sm text-muted mb-3 p-2 sm:p-0">
           Showing {filteredAndPaginatedRows.rows.length} of {filteredAndPaginatedRows.totalItems} items
           {selectedBranch && ` (filtered by ${selectedBranch})`}
         </div>
       ) : null}
 
       {/* Data Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-surface rounded-lg shadow overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-xs sm:text-sm">
-            <thead className="bg-gray-50">
+            <thead className="bg-subtle">
               <tr>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-gray-900">Branch</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-gray-900">SKU</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-gray-900">Item</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-gray-900">Pending</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-gray-900">Posted</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-gray-900">Delivered</th>
-                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-gray-900">Total Demand</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-fg">Branch</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-fg">SKU</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-left font-medium text-fg">Item</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-fg">Pending</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-fg">Posted</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-fg">Delivered</th>
+                <th className="px-2 sm:px-4 py-2 sm:py-3 text-center font-medium text-fg">Total Demand</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-surface divide-y divide-gray-200">
               {busy ? (
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i}>
                     {Array.from({ length: 7 }).map((__, j) => (
                       <td key={j} className="px-2 sm:px-4 py-2 sm:py-3">
-                        <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
+                        <div className="h-4 w-full bg-muted rounded animate-pulse" />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : filteredAndPaginatedRows.rows.length > 0 ? (
                 filteredAndPaginatedRows.rows.map((row, index) => (
-                  <tr key={index} className="hover:bg-gray-50">
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-gray-900">{row.branch_name}</td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-gray-900 font-mono text-xs">{row.sku}</td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-gray-900 font-medium">{row.item_name}</td>
-                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-yellow-600">{row.pending_demand ?? 0}</td>
-                     <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-purple-600">{row.confirmed_demand ?? 0}</td>
-                     <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-green-600">{row.delivered_qty ?? row.delivered_demand ?? 0}</td>
-                     <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-blue-600 font-medium">{row.total_demand ?? ((row.pending_demand || 0) + (row.confirmed_demand || 0) + (row.delivered_qty || row.delivered_demand || 0)) ?? ((row.allocated_qty || 0) + (row.delivered_qty || row.delivered_demand || 0)) ?? 0}</td>
+                  <tr key={index} className="hover:bg-subtle">
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-fg">{row.branch_name}</td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-fg font-mono text-xs">{row.sku}</td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-fg font-medium">{row.item_name}</td>
+                    <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-warning-fg">{row.pending_demand ?? 0}</td>
+                     <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-info-fg">{row.confirmed_demand ?? 0}</td>
+                     <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-success-fg">{row.delivered_qty ?? row.delivered_demand ?? 0}</td>
+                     <td className="px-2 sm:px-4 py-2 sm:py-3 text-center text-fg font-medium">{row.total_demand ?? ((row.pending_demand || 0) + (row.confirmed_demand || 0) + (row.delivered_qty || row.delivered_demand || 0)) ?? ((row.allocated_qty || 0) + (row.delivered_qty || row.delivered_demand || 0)) ?? 0}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="7" className="px-4 sm:px-6 py-8 text-center text-sm text-gray-500">
+                  <td colSpan="7" className="px-4 sm:px-6 py-8 text-center text-sm text-subtext">
                     {selectedBranch ? `No data for ${selectedBranch}` : 'No data'}
                   </td>
                 </tr>
@@ -1330,34 +1320,34 @@ function InventoryPageContent() {
         
         {/* Pagination */}
         {filteredAndPaginatedRows.totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
+          <div className="flex items-center justify-between px-4 py-3 bg-subtle border-t border-line-subtle">
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Previous
               </button>
-              <span className="text-sm text-gray-700">
+              <span className="text-sm text-muted">
                 Page {currentPage} of {filteredAndPaginatedRows.totalPages}
               </span>
               <button
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, filteredAndPaginatedRows.totalPages))}
                 disabled={currentPage === filteredAndPaginatedRows.totalPages}
-                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Next
               </button>
             </div>
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-subtext">
               Showing {Math.min((currentPage - 1) * itemsPerPage + 1, filteredAndPaginatedRows.totalItems)} to {Math.min(currentPage * itemsPerPage, filteredAndPaginatedRows.totalItems)} of {filteredAndPaginatedRows.totalItems} items
             </div>
           </div>
         )}
       </div>
       
-      <div className="text-xs sm:text-sm text-gray-600 mt-2 sm:mt-3 p-2 sm:p-0">
+      <div className="text-xs sm:text-sm text-muted mt-2 sm:mt-3 p-2 sm:p-0">
         Branch inventory shows demand allocation across all branches. Items are tracked by demand rather than physical stock.
       </div>
 

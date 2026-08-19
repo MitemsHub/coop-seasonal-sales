@@ -40,6 +40,24 @@ export async function DELETE() {
   return res
 }
 
+// GET — introspection for the client-side auth gate (ProtectedRoute): returns
+// the signed-in admin when a valid admin_token cookie is present, so a cold
+// load with a valid cookie but no localStorage user can hydrate the session
+// instead of bouncing to the landing page.
+export async function GET(req) {
+  try {
+    const token = req.cookies.get('admin_token')?.value
+    if (!token) return NextResponse.json({ ok: false, error: 'Not signed in' }, { status: 401 })
+    const claim = verify(token)
+    if (!claim || claim.role !== 'admin') {
+      return NextResponse.json({ ok: false, error: 'Invalid session' }, { status: 401 })
+    }
+    return NextResponse.json({ ok: true, type: 'admin', id: 'admin' })
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: e.message || 'Session error' }, { status: 500 })
+  }
+}
+
 // middleware.js (only the admin guard part shown)
 
 export async function middleware(req) {

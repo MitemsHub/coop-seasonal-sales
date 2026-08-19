@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '../../../../lib/supabaseServer'
-import { sign } from '@/lib/signingEdge'
+import { sign, verify } from '@/lib/signingEdge'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -40,11 +40,38 @@ export async function DELETE() {
   return res
 }
 
+// GET — introspection for the client-side auth gate (ProtectedRoute): returns
+// the signed-in rep session when a valid rep_token cookie is present, so a
+// cold load with a valid cookie but no localStorage user can hydrate the
+// session (including the module) instead of bouncing to the landing page.
+export async function GET(req) {
+  try {
+    const token = req.cookies.get('rep_token')?.value
+    if (!token) return NextResponse.json({ ok: false, error: 'Not signed in' }, { status: 401 })
+    const claim = await verify(token)
+    if (!claim || claim.role !== 'rep') {
+      return NextResponse.json({ ok: false, error: 'Invalid session' }, { status: 401 })
+    }
+    const mod = claim.module === 'ram' ? 'ram' : claim.module === 'exhibition' ? 'exhibition' : 'food'
+    return NextResponse.json({
+      ok: true,
+      type: 'rep',
+      id: String(claim.branch_code || claim.ram_vendor_code || 'rep'),
+      module: mod,
+      ...(claim.branch_id ? { branch_id: claim.branch_id } : {}),
+      ...(claim.branch_code ? { branch_code: claim.branch_code } : {}),
+    })
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: e.message || 'Session error' }, { status: 500 })
+  }
+}
+
 export async function POST(req) {
   try {
     const supabase = createClient()
     const body = await req.json().catch(() => ({}))
-    const portalModule = String(body?.module || 'food').toLowerCase() === 'ram' ? 'ram' : 'food'
+    const rawModule = String(body?.module || 'food').toLowerCase()
+    const portalModule = rawModule === 'ram' ? 'ram' : rawModule === 'exhibition' ? 'exhibition' : 'food'
     const code = String(body?.passcode || body?.branchCode || '').trim().toUpperCase()
     if (!code) return NextResponse.json({ ok:false, error:'passcode required' }, { status:400 })
 
@@ -112,11 +139,13 @@ export async function POST(req) {
       return res
     }
 
+    // Food + Exhibition both authenticate with the branch passcode and carry
+    // a branch_id claim (exhibition is branch-scoped like Food).
     const { data: br, error } = await supabase.from('branches').select('id, code, name').eq('code', code).single()
     if (error || !br) return NextResponse.json({ ok:false, error:'Invalid passcode' }, { status:401 })
 
-    const token = await sign({ role: 'rep', module: 'food', branch_id: br.id, branch_code: br.code }, 60 * 60 * 8) // 8h
-    const res = NextResponse.json({ ok:true, module: 'food', branch: br })
+    const token = await sign({ role: 'rep', module: portalModule, branch_id: br.id, branch_code: br.code }, 60 * 60 * 8) // 8h
+    const res = NextResponse.json({ ok:true, module: portalModule, branch: br })
     res.cookies.set('rep_token', token, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 60*60*8 })
     return res
   } catch (e) {

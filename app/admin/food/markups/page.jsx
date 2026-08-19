@@ -2,6 +2,11 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabaseClient'
 import ProtectedRoute from '../../../components/ProtectedRoute'
+import { Input } from '../../../components/ui/Input'
+import Select from '../../../components/ui/Select'
+import Label from '../../../components/ui/Label'
+import ExportButton from '../../../components/ui/ExportButton'
+import { FileSpreadsheet } from 'lucide-react'
 
 export default function AdminMarkupsPage() {
   const [branches, setBranches] = useState([])
@@ -39,7 +44,7 @@ export default function AdminMarkupsPage() {
   const [exportingExcel, setExportingExcel] = useState(false)
   const [exportingPDF, setExportingPDF] = useState(false)
 
-  const Spinner = ({ className = 'h-4 w-4 text-white' }) => (
+  const Spinner = ({ className = 'h-4 w-4 text-on-accent' }) => (
     <svg className={`animate-spin ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path
@@ -286,7 +291,7 @@ export default function AdminMarkupsPage() {
       const ExcelJS = ExcelJSMod?.default ?? ExcelJSMod
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet('Markups')
-      ws.addRow(['Food Distribution — Markups'])
+      ws.addRow(['Food Distribution · Markups'])
       ws.addRow([`Branch: ${markupBranchCode || 'N/A'} | Cycle: ${selectedCycleId || 'N/A'}`])
       ws.addRow(headers)
       for (const r of rows) ws.addRow(r)
@@ -339,6 +344,7 @@ export default function AdminMarkupsPage() {
         head: [headers],
         body,
         startY: 30,
+        rowPageBreak: 'avoid',
         theme: 'grid',
         styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak', lineWidth: 0.1, lineColor: [0, 0, 0] },
         headStyles: { fillColor: [75, 85, 99], textColor: [255, 255, 255] },
@@ -431,39 +437,39 @@ export default function AdminMarkupsPage() {
   return (
     <ProtectedRoute allowedRoles={['admin']}>
       <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
-        <h1 className="text-base sm:text-lg md:text-xl font-semibold mb-2">Admin — Food Distribution — Markups</h1>
-        <p className="text-sm text-gray-600 mb-6">
+        <h1 className="text-h2 font-bold tracking-tight text-fg mb-2">Admin · Food Distribution · Markups</h1>
+        <p className="text-sm text-muted mb-6">
           Set fixed markups (e.g., ₦500) per item per branch. Prices in the Shop and Checkout will include these markups.
         </p>
 
       {message && (
-        <div className="mb-4 p-3 rounded border border-gray-300 bg-gray-50">{message}</div>
+        <div className="mb-4 p-3 rounded border border-line bg-subtle">{message}</div>
       )}
 
-      <div className="mb-4 bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-        <h2 className="text-lg font-semibold mb-2">Update Base Price (Per Cycle)</h2>
-        <p className="text-sm text-gray-600 mb-3">Updates branch base price for a specific cycle. Existing orders for that branch/item will reprice automatically.</p>
+      <div className="mb-4 bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
+        <h2 className="text-[15px] font-semibold mb-2">Update Base Price (Per Cycle)</h2>
+        <p className="text-sm text-muted mb-3">Updates branch base price for a specific cycle. Existing orders for that branch/item will reprice automatically.</p>
         <form onSubmit={updateBasePrice} className="flex gap-4 items-end flex-wrap">
-          <div>
-            <label className="block text-sm font-medium mb-1">Branch</label>
-            <select
+          <div className="w-full sm:w-72">
+            <Label htmlFor="price-branch">Branch</Label>
+            <Select
+              id="price-branch"
               value={priceBranchCode}
               onChange={e => setPriceBranchCode(e.target.value)}
-              className="border rounded px-3 py-2 w-72"
               disabled={loadingBranches}
               required
             >
               {branches.map(b => (
                 <option key={b.code} value={b.code}>{b.name} ({b.code})</option>
               ))}
-            </select>
+            </Select>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Cycle</label>
-            <select
+          <div className="w-full sm:w-72">
+            <Label htmlFor="price-cycle">Cycle</Label>
+            <Select
+              id="price-cycle"
               value={selectedCycleId ?? ''}
               onChange={e => setSelectedCycleId(e.target.value ? Number(e.target.value) : null)}
-              className="border rounded px-3 py-2 w-72"
               disabled={loadingCycles || cycles.length === 0}
               required
             >
@@ -472,38 +478,38 @@ export default function AdminMarkupsPage() {
               ) : (
                 cycles.map(c => (
                   <option key={c.id} value={c.id}>
-                    {c.name} ({c.code}){c.is_active ? ' — Active' : ''}
+                    {c.name} ({c.code}){c.is_active ? ' · Active' : ''}
                   </option>
                 ))
               )}
-            </select>
+            </Select>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">SKU</label>
-            <input
+          <div className="w-full sm:w-64">
+            <Label htmlFor="price-sku">SKU</Label>
+            <Input
+              id="price-sku"
               type="text"
               value={priceSku}
               onChange={e => setPriceSku(e.target.value)}
               placeholder="e.g., RICE-25KG"
-              className="border rounded px-3 py-2 w-64"
               required
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Base Price (₦)</label>
-            <input
+          <div className="w-full sm:w-40">
+            <Label htmlFor="price-amount">Base Price (₦)</Label>
+            <Input
+              id="price-amount"
               type="number"
               value={basePrice}
               onChange={e => setBasePrice(e.target.value)}
               min={0}
               step={1}
-              className="border rounded px-3 py-2 w-40"
               required
             />
           </div>
           <button
             type="submit"
-            className="px-4 py-2 rounded-lg bg-gray-900 hover:bg-gray-950 text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center gap-2"
+            className="px-4 py-2 rounded-lg bg-brand text-on-accent hover:bg-brand-hover text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
             disabled={savingPrice || !priceBranchCode}
           >
             {savingPrice && <Spinner />}
@@ -512,28 +518,28 @@ export default function AdminMarkupsPage() {
         </form>
       </div>
 
-      <div className="mb-4 bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-        <h2 className="text-lg font-semibold mb-2">Markups (Per Cycle)</h2>
+      <div className="mb-4 bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
+        <h2 className="text-[15px] font-semibold mb-2">Markups (Per Cycle)</h2>
         <div className="flex gap-4 items-end flex-wrap">
-        <div>
-          <label className="block text-sm font-medium mb-1">Branch (for Markups)</label>
-          <select
+        <div className="w-full sm:w-64">
+          <Label htmlFor="markup-branch">Branch (for Markups)</Label>
+          <Select
+            id="markup-branch"
             value={markupBranchCode}
             onChange={e => setMarkupBranchCode(e.target.value)}
-            className="border rounded px-3 py-2 w-64"
             disabled={loadingBranches}
           >
             {branches.map(b => (
               <option key={b.code} value={b.code}>{b.name} ({b.code})</option>
             ))}
-          </select>
+          </Select>
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Cycle (for Markups)</label>
-          <select
+        <div className="w-full sm:w-64">
+          <Label htmlFor="markup-cycle">Cycle (for Markups)</Label>
+          <Select
+            id="markup-cycle"
             value={selectedCycleId ?? ''}
             onChange={e => setSelectedCycleId(e.target.value ? Number(e.target.value) : null)}
-            className="border rounded px-3 py-2 w-64"
             disabled={loadingCycles || cycles.length === 0}
             required
           >
@@ -542,41 +548,41 @@ export default function AdminMarkupsPage() {
             ) : (
               cycles.map(c => (
                 <option key={c.id} value={c.id}>
-                  {c.name} ({c.code}){c.is_active ? ' — Active' : ''}
+                  {c.name} ({c.code}){c.is_active ? ' · Active' : ''}
                 </option>
               ))
             )}
-          </select>
+          </Select>
         </div>
         </div>
         <form onSubmit={upsertMarkup} className="mt-4">
           <div className="flex gap-4 items-end flex-wrap">
-            <div>
-              <label className="block text-sm font-medium mb-1">SKU</label>
-              <input
+            <div className="w-full sm:w-64">
+              <Label htmlFor="markup-sku">SKU</Label>
+              <Input
+                id="markup-sku"
                 type="text"
                 value={sku}
                 onChange={e => setSku(e.target.value)}
                 placeholder="e.g., RICE-25KG"
-                className="border rounded px-3 py-2 w-64"
                 required
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Markup Amount (₦)</label>
-              <input
+            <div className="w-full sm:w-40">
+              <Label htmlFor="markup-amount">Markup Amount (₦)</Label>
+              <Input
+                id="markup-amount"
                 type="number"
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
                 min={0}
                 step={1}
-                className="border rounded px-3 py-2 w-40"
                 required
               />
             </div>
             <button
               type="submit"
-              className="px-4 py-2 rounded-lg bg-gray-900 hover:bg-gray-950 text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center gap-2"
+              className="px-4 py-2 rounded-lg bg-brand text-on-accent hover:bg-brand-hover text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
               disabled={saving}
             >
               {saving && <Spinner />}
@@ -587,28 +593,31 @@ export default function AdminMarkupsPage() {
       </div>
 
       {/* Bulk Upload Section */}
-      <div className="mb-4 bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-        <h2 className="text-lg font-semibold mb-2">Bulk Upload Markups (.xlsx)</h2>
-        <p className="text-sm text-gray-600 mb-3">Expected columns: branch_code, cycle_id, sku, amount, active</p>
+      <div className="mb-4 bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
+        <h2 className="text-[15px] font-semibold mb-2">Bulk Upload Markups (.xlsx)</h2>
+        <p className="text-sm text-muted mb-3">Expected columns: branch_code, cycle_id, sku, amount, active</p>
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={e => setUploadFile(e.target.files?.[0] || null)}
-            className="border-2 border-gray-200 rounded-lg px-3 py-2 w-full sm:w-auto text-sm bg-white"
-          />
+          <div className="w-full sm:w-auto">
+            <Input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={e => setUploadFile(e.target.files?.[0] || null)}
+              className="cursor-pointer py-1.5 file:mr-3 file:rounded-md file:border-0 file:bg-subtle file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-fg file:transition-colors hover:file:bg-muted"
+            />
+          </div>
           <div className="flex gap-2">
             <button
               onClick={downloadMarkupsTemplate}
               type="button"
-              className="px-3 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-sm font-semibold text-gray-700"
+              className="px-3 py-2 rounded-lg border border-line bg-surface hover:bg-subtle text-sm font-medium text-muted inline-flex items-center gap-2"
             >
+              <FileSpreadsheet className="h-4 w-4" />
               Download Excel Template
             </button>
             <button
               onClick={uploadMarkups}
               type="button"
-              className="px-3 py-2 rounded-lg bg-gray-900 hover:bg-gray-950 text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center gap-2"
+              className="px-3 py-2 rounded-lg bg-brand text-on-accent hover:bg-brand-hover text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
               disabled={uploading}
             >
               {uploading && <Spinner />}
@@ -617,54 +626,47 @@ export default function AdminMarkupsPage() {
           </div>
         </div>
         {uploadLog && (
-          <pre className="mt-3 text-xs bg-gray-50 border rounded p-2 overflow-auto max-h-48">{uploadLog}</pre>
+          <pre className="mt-3 text-xs bg-subtle border rounded p-2 overflow-auto max-h-48">{uploadLog}</pre>
         )}
       </div>
 
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-gray-50/60 flex flex-col lg:flex-row lg:items-center gap-3">
+      <div className="bg-surface rounded-xl shadow-lg border border-line-subtle overflow-hidden">
+        <div className="p-4 border-b border-line-subtle bg-subtle/60 flex flex-col lg:flex-row lg:items-center gap-3">
           <div className="text-sm font-semibold">Current Markups</div>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by SKU, item, category"
-            className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white w-full sm:w-72"
-          />
-          <select
-            value={activeFilter}
-            onChange={(e) => setActiveFilter(e.target.value)}
-            className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white w-full sm:w-44"
-          >
-            <option value="all">All statuses</option>
-            <option value="active">Active only</option>
-            <option value="inactive">Inactive only</option>
-          </select>
+          <div className="w-full sm:w-72">
+            <Input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by SKU, item, category"
+            />
+          </div>
+          <div className="w-full sm:w-44">
+            <Select value={activeFilter} onChange={(e) => setActiveFilter(e.target.value)}>
+              <option value="all">All statuses</option>
+              <option value="active">Active only</option>
+              <option value="inactive">Inactive only</option>
+            </Select>
+          </div>
           <div className="flex gap-2 lg:ml-auto">
-            <button
-              type="button"
+            <ExportButton
+              format="excel"
               onClick={() => exportMarkupsExcel().catch(() => null)}
-              className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-xs sm:text-sm font-semibold disabled:opacity-50 inline-flex items-center gap-2"
               disabled={!filteredMarkups.length || exportingExcel}
-            >
-              {exportingExcel && <Spinner />}
-              <span>{exportingExcel ? 'Exporting…' : 'Download Excel'}</span>
-            </button>
-            <button
-              type="button"
+              busy={exportingExcel}
+            />
+            <ExportButton
+              format="pdf"
               onClick={exportMarkupsPDF}
-              className="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-semibold disabled:opacity-50 inline-flex items-center gap-2"
               disabled={!filteredMarkups.length || exportingPDF}
-            >
-              {exportingPDF && <Spinner />}
-              <span>{exportingPDF ? 'Exporting…' : 'Download PDF'}</span>
-            </button>
+              busy={exportingPDF}
+            />
           </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="min-w-full text-xs sm:text-sm">
-            <thead className="bg-white sticky top-0 z-10">
+            <thead className="bg-surface sticky top-0 z-10">
               <tr className="text-left border-b">
                 <th className="p-3">SKU</th>
                 <th className="p-3">Item</th>
@@ -681,34 +683,36 @@ export default function AdminMarkupsPage() {
                   <tr key={i}>
                     {Array.from({ length: 7 }).map((__, j) => (
                       <td key={j} className="p-3">
-                        <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
+                        <div className="h-4 w-full bg-muted rounded animate-pulse" />
                       </td>
                     ))}
                   </tr>
                 ))
               ) : filteredMarkups.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-6 text-center text-gray-600">
+                  <td colSpan={7} className="p-6 text-center text-muted">
                     No markups configured for this branch.
                   </td>
                 </tr>
               ) : (
                 paginatedMarkups.map((m) => (
-                  <tr key={`${m.item_id}:${m.cycle_id || ''}`} className="hover:bg-gray-50/40">
+                  <tr key={`${m.item_id}:${m.cycle_id || ''}`} className="hover:bg-subtle/40">
                     <td className="p-3">{m.items?.sku || '—'}</td>
                     <td className="p-3">{m.items?.name || '—'}</td>
                     <td className="p-3">{m.items?.category || '—'}</td>
                     <td className="p-3">{m.items?.unit || '—'}</td>
                     <td className="p-3">
                       {editingRowKey === `${m.item_id}:${m.cycle_id || ''}` ? (
-                        <input
-                          type="number"
-                          className="border border-gray-300 rounded-lg px-2 py-1 w-28 text-xs sm:text-sm"
-                          min={0}
-                          step={1}
-                          value={editAmount}
-                          onChange={(e) => setEditAmount(e.target.value)}
-                        />
+                        <div className="w-28">
+                          <Input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={editAmount}
+                            onChange={(e) => setEditAmount(e.target.value)}
+                            className="h-8 px-2 text-xs sm:text-sm"
+                          />
+                        </div>
                       ) : (
                         Number(m.amount || 0)
                       )}
@@ -727,18 +731,18 @@ export default function AdminMarkupsPage() {
                       {editingRowKey === `${m.item_id}:${m.cycle_id || ''}` ? (
                         <div className="inline-flex gap-3">
                           <button
-                            className="text-blue-600 hover:underline disabled:opacity-60"
+                            className="text-accent hover:underline disabled:opacity-60"
                             onClick={() => saveEditRow(m)}
                             disabled={saving}
                             type="button"
                           >
                             Save
                           </button>
-                          <button className="text-gray-600 hover:underline" onClick={cancelEditRow} type="button">
+                          <button className="text-muted hover:underline" onClick={cancelEditRow} type="button">
                             Cancel
                           </button>
                           <button
-                            className="text-red-600 hover:underline disabled:opacity-60"
+                            className="text-danger-fg hover:underline disabled:opacity-60"
                             onClick={() => removeMarkup(m.items?.sku || '')}
                             disabled={removing}
                             type="button"
@@ -748,11 +752,11 @@ export default function AdminMarkupsPage() {
                         </div>
                       ) : (
                         <div className="inline-flex gap-3">
-                          <button className="text-blue-600 hover:underline" onClick={() => startEditRow(m)} type="button">
+                          <button className="text-accent hover:underline" onClick={() => startEditRow(m)} type="button">
                             Edit
                           </button>
                           <button
-                            className="text-red-600 hover:underline disabled:opacity-60"
+                            className="text-danger-fg hover:underline disabled:opacity-60"
                             onClick={() => removeMarkup(m.items?.sku || '')}
                             disabled={removing}
                             type="button"
@@ -769,23 +773,23 @@ export default function AdminMarkupsPage() {
           </table>
         </div>
 
-        <div className="p-4 border-t border-gray-100 bg-gray-50/60 flex items-center justify-between">
-          <div className="text-xs sm:text-sm text-gray-600">
+        <div className="p-4 border-t border-line-subtle bg-subtle/60 flex items-center justify-between">
+          <div className="text-xs sm:text-sm text-muted">
             Showing {filteredMarkups.length === 0 ? 0 : startIdx + 1}–{Math.min(startIdx + itemsPerPage, filteredMarkups.length)} of {filteredMarkups.length}
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="px-3 py-1.5 rounded border text-xs sm:text-sm bg-white hover:bg-gray-50 disabled:opacity-50"
+              className="px-3 py-1.5 rounded border text-xs sm:text-sm bg-surface hover:bg-subtle disabled:opacity-50"
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
             >
               Prev
             </button>
-            <span className="text-xs sm:text-sm text-gray-700">Page {currentPage} of {totalPages}</span>
+            <span className="text-xs sm:text-sm text-muted">Page {currentPage} of {totalPages}</span>
             <button
               type="button"
-              className="px-3 py-1.5 rounded border text-xs sm:text-sm bg-white hover:bg-gray-50 disabled:opacity-50"
+              className="px-3 py-1.5 rounded border text-xs sm:text-sm bg-surface hover:bg-subtle disabled:opacity-50"
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage >= totalPages}
             >

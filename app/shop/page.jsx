@@ -4,9 +4,77 @@
 import React, { useEffect, useMemo, useState, useCallback, Suspense } from 'react'
 import Image from 'next/image'
 import { useRouter, useSearchParams } from 'next/navigation'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Banknote,
+  CreditCard,
+  Info,
+  Landmark,
+  MapPin,
+  MessageCircle,
+  Minus,
+  Package,
+  Plus,
+  Search,
+  ShoppingCart,
+  User,
+  Wallet,
+} from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { touchCart } from '@/lib/cartTouch'
 import ProtectedRoute from '../components/ProtectedRoute'
+import CartStickyBar from '../components/CartStickyBar'
+import ContinueShoppingBanner from '../components/ContinueShoppingBanner'
 import { useAuth } from '../contexts/AuthContext'
+import useCartCount from '../hooks/useCartCount'
+import { useToast } from '../components/ui/Toast'
+import Badge from '../components/ui/Badge'
+import Button from '../components/ui/Button'
+import Card from '../components/ui/Card'
+import EmptyState from '../components/ui/EmptyState'
+import Input from '../components/ui/Input'
+import Label from '../components/ui/Label'
+import Select from '../components/ui/Select'
+import Skeleton from '../components/ui/Skeleton'
+import Spinner from '../components/ui/Spinner'
+import ModuleClosedPanel from '../components/ModuleClosedPanel'
+
+const naira = (v) => `₦${Number(v || 0).toLocaleString()}`
+
+function MemberInfoGrid({ member, eligibility }) {
+  const cells = [
+    { label: 'Full Name', value: member.full_name },
+    { label: 'Savings (Coop)', value: naira(member.savings) },
+    { label: 'Loans (Coop)', value: naira(member.loans) },
+    { label: 'Shopping Exposure', value: naira(eligibility.loanExposure) },
+    { label: 'Outstanding Total', value: naira(eligibility.outstandingLoansTotal) },
+    { label: 'Global Limit', value: naira(member.global_limit) },
+  ]
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      {cells.map((c) => (
+        <div key={c.label} className="rounded-xl border border-line-subtle bg-subtle/60 p-2.5">
+          <div className="text-chips font-medium text-muted">{c.label}</div>
+          <div className="mt-0.5 text-xs font-semibold break-words text-fg sm:text-sm">{c.value}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function MemberInfoSkeleton() {
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="rounded-xl border border-line-subtle bg-subtle/60 p-2.5">
+          <Skeleton className="mb-1.5 h-2.5 w-2/3" />
+          <Skeleton className="h-3.5 w-5/6" />
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function ShopPageContent() {
   const router = useRouter()
@@ -16,6 +84,9 @@ function ShopPageContent() {
 
   // Member + lookups
   const [memberId, setMemberId] = useState('')
+  const { announceCart, onChange: onCartChange } = useCartCount('food', { memberId })
+  const { announceCart: announceOrdersCount } = useCartCount('orders', { memberId })
+  const toast = useToast()
   const [member, setMember] = useState(null)
   const [branches, setBranches] = useState([])
   const [departments, setDepartments] = useState([])
@@ -42,12 +113,14 @@ function ShopPageContent() {
   // UI state
   const [submitting, setSubmitting] = useState(false)
   const [goingToCart, setGoingToCart] = useState(false)
+  const [cartSummaryOpen, setCartSummaryOpen] = useState(false)
   const [message, setMessage] = useState(null)
   const [loadingItems, setLoadingItems] = useState(new Set()) // Track items with pending API calls
   const [inputTimeouts, setInputTimeouts] = useState(new Map()) // Debounce input changes
   const [lookingUpMember, setLookingUpMember] = useState(false) // Track member lookup loading
   const [itemsBusy, setItemsBusy] = useState(false)
   const [ordersCount, setOrdersCount] = useState(null)
+  const [shoppingOpen, setShoppingOpen] = useState(true)
 
   // Safe JSON helper
   const safeJson = async (res, label) => {
@@ -113,31 +186,86 @@ function ShopPageContent() {
     }
   }
 
-  // Save cart data to localStorage whenever quantities change
+  // Save cart data to localStorage whenever quantities change. The cart write
+  // is skipped when the rebuilt lines already match the shared storage (a
+  // change adopted from another surface or tab — echoing our rebuilt view back
+  // would clobber the authoritative value). Only rebuild once the item catalog
+  // is loaded — with an empty `items` list every `items.find()` misses and the
+  // rebuild would collapse to [] right after adoption.
   useEffect(() => {
-    if (memberId && Object.keys(qty).length > 0) {
-      const cartItems = Object.entries(qty)
-        .filter(([sku, quantity]) => quantity > 0)
-        .map(([sku, quantity]) => {
-          const item = items.find(it => it.sku === sku)
-          return item ? {
-            sku,
-            name: item.name,
-            unit: item.unit,
-            category: item.category,
-            price: item.price,
-            qty: quantity
-          } : null
-        })
-        .filter(Boolean)
-      
-      localStorage.setItem(`cart_${memberId}`, JSON.stringify(cartItems))
-      localStorage.setItem(`member_${memberId}`, JSON.stringify(member))
-      localStorage.setItem(`deliveryBranch_${memberId}`, deliveryBranchCode)
-      localStorage.setItem(`department_${memberId}`, departmentName)
-      localStorage.setItem(`paymentOption_${memberId}`, paymentOption)
-    }
+    if (!(memberId && items.length > 0 && Object.keys(qty).length > 0)) return
+    const cartItems = Object.entries(qty)
+      .filter(([sku, quantity]) => quantity > 0)
+      .map(([sku, quantity]) => {
+        const item = items.find(it => it.sku === sku)
+        return item ? {
+          sku,
+          name: item.name,
+          unit: item.unit,
+          category: item.category,
+          price: item.price,
+          qty: quantity
+        } : null
+      })
+      .filter(Boolean)
+
+    try {
+      const raw = localStorage.getItem(`cart_${memberId}`)
+      const stored = raw ? JSON.parse(raw) : []
+      if (Array.isArray(stored)) {
+        const same =
+          stored.length === cartItems.length &&
+          cartItems.every(
+            (l, i) =>
+              stored[i]?.sku === l.sku &&
+              Number(stored[i]?.qty) === Number(l.qty)
+          )
+        if (same) return
+      }
+    } catch {}
+
+    localStorage.setItem(`cart_${memberId}`, JSON.stringify(cartItems))
+    localStorage.setItem(`member_${memberId}`, JSON.stringify(member))
+    localStorage.setItem(`deliveryBranch_${memberId}`, deliveryBranchCode)
+    localStorage.setItem(`department_${memberId}`, departmentName)
+    localStorage.setItem(`paymentOption_${memberId}`, paymentOption)
+    touchCart('food', memberId)
   }, [qty, memberId, member, deliveryBranchCode, departmentName, paymentOption, items])
+
+  // Instant Navbar badge sync — announce every cart change (incl. clearing the
+  // last item) so the badge updates the same tick instead of at the next poll.
+  useEffect(() => {
+    if (!memberId) return
+    const count = Object.values(qty).reduce((s, v) => s + Math.max(0, Number(v) || 0), 0)
+    announceCart(count)
+  }, [announceCart, memberId, qty])
+
+  // Live sync — the hook delivers the stored cart on mount (mount-time
+  // adoption) and on every external change (the /cart page, another tab).
+  // Own-announce echoes are skipped by the hook, so this only runs when the
+  // shared value genuinely changed; the functional-updater equality guard
+  // keeps no-op adoptions from re-rendering.
+  useEffect(() => {
+    if (!memberId) return
+    const syncCart = (value) => {
+      const next = {}
+      if (Array.isArray(value)) {
+        for (const it of value) {
+          const sku = String(it?.sku || '')
+          const q = Math.max(0, Math.trunc(Number(it?.qty || 0)))
+          if (sku && q > 0) next[sku] = q
+        }
+      }
+      setQty((prev) => {
+        const current = prev || {}
+        const same =
+          Object.keys(current).length === Object.keys(next).length &&
+          Object.entries(next).every(([k, v]) => current[k] === v)
+        return same ? prev : next
+      })
+    }
+    return onCartChange(syncCart)
+  }, [memberId, onCartChange])
 
   useEffect(() => {
     if (isAdmin) {
@@ -160,6 +288,23 @@ function ShopPageContent() {
     const mid = searchParams?.get('mid')
     if (mid && !isAdmin) router.replace('/shop')
   }, [isAdmin, router, searchParams])
+
+  // Food shopping availability — when the module is closed, show the shared
+  // closed panel instead of the shop UI (admins shopping on behalf are exempt).
+  useEffect(() => {
+    if (isAdmin) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/system/shopping', { cache: 'no-store' })
+        const json = await res.json().catch(() => null)
+        if (!cancelled && json) setShoppingOpen(!!json.open)
+      } catch {
+        // default to open when the availability check fails
+      }
+    })()
+    return () => { cancelled = true }
+  }, [isAdmin])
 
   useEffect(() => {
     if (!memberId) return
@@ -514,6 +659,7 @@ function ShopPageContent() {
   }, [items, qty])
 
   const cartTotal = useMemo(() => cartLines.reduce((s, l) => s + l.amount, 0), [cartLines])
+  const cartUnits = useMemo(() => cartLines.reduce((s, l) => s + l.qty, 0), [cartLines])
 
   // Loan interest computation (rate applied to cart total when payment=Loan)
   const loanInterest = useMemo(() => (
@@ -638,6 +784,13 @@ function ShopPageContent() {
         setMessage({ type: 'error', text: result.error || 'Stock adjustment failed' })
         return
       }
+
+      // Brief confirmation when an item is first added to the cart (0 → N).
+      // Increments and removals are already visible in the sticky bar/badge,
+      // so only a genuine add needs the explicit acknowledgement.
+      if (adjustment > 0 && currentQty === 0) {
+        toast.success(`${item.name} added to your cart`, { duration: 2200 })
+      }
       
       // Note: We don't update local stock here as the API already accounts for the adjustment
       // The optimistic update in qty state is sufficient for UI responsiveness
@@ -655,7 +808,7 @@ function ShopPageContent() {
         return newSet
       })
     }
-  }, [items, loanEligible, loanInterestRate, loanInterestRatePct, member, deliveryBranchCode, paymentOption, qty, savingsEligible])
+  }, [items, loanEligible, loanInterestRate, loanInterestRatePct, member, deliveryBranchCode, paymentOption, qty, savingsEligible, toast])
 
   // Debounced input handler for better performance
   const handleInputChange = useCallback((sku, value) => {
@@ -686,78 +839,71 @@ function ShopPageContent() {
     })
   }, [setQtySafe, inputTimeouts])
 
-  const itemCards = useMemo(() => (
-    items.map(it => {
-      const currentQty = qty[it.sku] || 0
-      const isLoading = loadingItems.has(it.sku)
-      const canDecrease = currentQty > 0 && !isLoading
-      const canIncrease = (it.demand_tracking_mode || false) && !isLoading
+const itemCards = useMemo(() => (
+  items.map((it) => {
+    const currentQty = qty[it.sku] || 0
+    const isLoading = loadingItems.has(it.sku)
+    const canDecrease = currentQty > 0 && !isLoading
+    const canIncrease = (it.demand_tracking_mode || false) && !isLoading
 
-      const stockColorClass = it.demand_tracking_mode
-        ? 'bg-green-100 text-green-700'
-        : 'bg-gray-100 text-gray-700'
-
-      const decreaseButtonClass = 'shop-button w-7 h-7 sm:w-8 sm:h-8 rounded-full font-bold transition-colors duration-200 flex items-center justify-center text-xs ' + (canDecrease ? 'bg-gray-100 hover:bg-gray-200 text-gray-700 cursor-pointer' : 'bg-gray-100 text-gray-400 cursor-not-allowed')
-      const increaseButtonClass = 'shop-button w-7 h-7 sm:w-8 sm:h-8 rounded-full font-bold transition-colors duration-200 flex items-center justify-center text-xs ' + (canIncrease ? 'bg-orange-100 hover:bg-orange-200 text-orange-700 cursor-pointer' : 'bg-orange-100 text-orange-400 cursor-not-allowed')
-
-      return (
-        <div key={it.sku} className="shop-item-card bg-gradient-to-br from-white to-gray-50 border-2 border-gray-100 rounded-lg xl:rounded-xl p-2 lg:p-3 shadow-sm hover:shadow-md hover:border-orange-200 transition-all duration-300">
-          <div className="mb-2">
-            <div className="relative w-full h-24 sm:h-28 bg-gray-100 rounded-lg overflow-hidden mb-2 flex items-center justify-center">
-              <Image
-                src={it.image_url || '/images/items/placeholder.svg'}
-                alt={it.name}
-                fill
-                sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 15vw"
-                className="object-contain"
-                loading="lazy"
-                onError={(e) => {
-                  e.currentTarget.src = '/images/items/placeholder.svg'
-                }}
-              />
-            </div>
-            <div className="font-semibold text-xs sm:text-sm text-gray-900 mb-1 leading-snug break-words">{it.name}</div>
-            <div className="text-[11px] sm:text-xs text-gray-500 mb-2 break-words">{it.unit} • {it.category}</div>
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="text-xs sm:text-sm font-bold text-orange-600">₦{it.price.toLocaleString()}</div>
-              <div className={`text-[11px] px-2 py-1 rounded-full text-center whitespace-nowrap font-medium ${stockColorClass}`}>
-                {it.demand_tracking_mode ? `Demand: ${it.total_demand || 0}` : 'No Stock Data'}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center justify-center gap-2">
-            <button
-              className={decreaseButtonClass}
-              onClick={() => setQtySafe(it.sku, currentQty - 1)}
-              type="button"
-              disabled={!canDecrease}
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-              </svg>
-            </button>
-            <div className="w-12 h-7 sm:w-14 sm:h-8 border-2 border-gray-200 rounded-lg text-center font-semibold text-gray-900 flex items-center justify-center text-xs tabular-nums">
-              {isLoading ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-400 border-t-transparent"></div>
-              ) : (
-                currentQty
-              )}
-            </div>
-            <button
-              className={increaseButtonClass}
-              onClick={() => setQtySafe(it.sku, currentQty + 1)}
-              type="button"
-              disabled={!canIncrease}
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-            </button>
-          </div>
+    return (
+      <div key={it.sku} className="group flex flex-col rounded-2xl border border-line bg-surface p-2.5 transition-all duration-200 ease-sakani hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md">
+        <div className="relative mb-2 flex h-24 w-full items-center justify-center overflow-hidden rounded-xl bg-subtle sm:h-28">
+          <Image
+            src={it.image_url || '/images/items/placeholder.svg'}
+            alt={it.name}
+            fill
+            sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 15vw"
+            className="object-contain transition-transform duration-500 ease-sakani group-hover:scale-[1.06]"
+            loading="lazy"
+            onError={(e) => {
+              e.currentTarget.src = '/images/items/placeholder.svg'
+            }}
+          />
         </div>
-      )
-    })
-  ), [items, qty, loadingItems, setQtySafe])
+        <div className="text-xs font-semibold leading-snug break-words text-fg sm:text-sm">{it.name}</div>
+        <div className="mb-2 mt-0.5 text-chips text-muted sm:text-xs">{it.unit} • {it.category}</div>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+          <div className="text-sm font-bold text-brand tabular-nums sm:text-base">₦{it.price.toLocaleString()}</div>
+          <Badge tone={it.demand_tracking_mode ? 'success' : 'neutral'} variant="subtle">
+            {it.demand_tracking_mode ? `Demand: ${it.total_demand || 0}` : 'No stock data'}
+          </Badge>
+        </div>
+        <div className="mt-auto flex items-center justify-center gap-2 rounded-lg bg-subtle/60 px-2 py-1.5">
+          <button
+            type="button"
+            aria-label={`Decrease ${it.name}`}
+            onClick={() => setQtySafe(it.sku, currentQty - 1)}
+            disabled={!canDecrease}
+            className={[
+              'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors duration-150',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
+              canDecrease ? 'bg-subtle text-fg hover:bg-line-subtle' : 'bg-subtle text-subtext',
+            ].join(' ')}
+          >
+            <Minus className="h-3.5 w-3.5" strokeWidth={2.5} />
+          </button>
+          <div className="flex h-7 w-12 items-center justify-center rounded-md border border-line-subtle bg-surface text-center text-xs font-semibold tabular-nums text-fg">
+            {isLoading ? <Spinner size={13} className="text-muted" /> : currentQty}
+          </div>
+          <button
+            type="button"
+            aria-label={`Increase ${it.name}`}
+            onClick={() => setQtySafe(it.sku, currentQty + 1)}
+            disabled={!canIncrease}
+            className={[
+              'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors duration-150',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
+              canIncrease ? 'bg-brand-subtle text-brand hover:bg-brand/20' : 'bg-brand-subtle text-brand/40',
+            ].join(' ')}
+          >
+            <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
+          </button>
+        </div>
+      </div>
+    )
+  })
+), [items, qty, loadingItems, setQtySafe])
 
   const submitOrder = async () => {
     setSubmitting(true)
@@ -830,7 +976,12 @@ function ShopPageContent() {
 
       setOrdersCount(prev => {
         const next = (Number.isFinite(Number(prev)) ? Number(prev) : 0) + 1
-        try { if (member?.member_id) localStorage.setItem(`ordersCount_${member.member_id}`, String(next)) } catch {}
+        try {
+          if (member?.member_id) {
+            localStorage.setItem(`ordersCount_${member.member_id}`, String(next))
+            announceOrdersCount(next)
+          }
+        } catch {}
         return next
       })
       
@@ -877,265 +1028,266 @@ function ShopPageContent() {
     }
   }
 
+  // When the food module is closed, show the shared closed panel instead of the
+  // shop UI (admins shopping on behalf of a member stay in the shop).
+  if (!shoppingOpen && !isAdmin) {
+    return (
+      <ProtectedRoute allowedRoles={['member']}>
+        <div className="min-h-screen bg-canvas">
+          <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
+            <div className="absolute -top-32 -left-24 h-80 w-80 rounded-full bg-brand/10 blur-3xl" />
+            <div className="absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-accent/10 blur-3xl" />
+          </div>
+          <ModuleClosedPanel
+            module="food"
+            variant="inline"
+            onViewOrders={() => router.push('/orders')}
+            onBack={() => router.push('/my-coop')}
+          />
+        </div>
+      </ProtectedRoute>
+    )
+  }
+
   return (
     <ProtectedRoute allowedRoles={['member']}>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-        <div className="p-3 sm:p-4 md:p-6 pb-20 sm:pb-24 md:pb-28 max-w-7xl mx-auto">
-          <div className="bg-white rounded-lg xl:rounded-xl shadow-xl p-4 md:p-8 mb-2 lg:mb-3">
+      <div className="min-h-screen bg-canvas">
+        {/* Ambient canvas glows (Sakani) */}
+        <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
+          <div className="absolute -top-32 -left-24 h-80 w-80 rounded-full bg-brand/10 blur-3xl" />
+          <div className="absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-accent/10 blur-3xl" />
+        </div>
+        <div className="relative p-fluid pb-24 sm:pb-28 md:pb-32 max-w-7xl mx-auto">
+          {/* Continue-shopping banner — surfaces ram/exhibition carts here;
+              the food cart is already covered by the sticky cart bar. */}
+          <ContinueShoppingBanner excludeModules={['food']} className="mb-fluid-lg" />
+
+          <div className="mb-fluid-lg flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="min-w-0">
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-brand-subtle px-fluid-xs py-fluid-2xs text-chips font-semibold uppercase tracking-wide text-brand-fg">
+                <ShoppingCart className="h-3.5 w-3.5" strokeWidth={2.2} />
+                Cooperative Store
+              </div>
+              <h1 className="mt-1.5 font-display text-[1.0625rem] font-semibold tracking-tight text-fg sm:text-h1">
+                {isAdmin
+                  ? 'Member Shopping'
+                  : member?.full_name
+                    ? `Welcome, ${member.full_name.split(' ')[0]}`
+                    : 'Welcome to the Shop'}
+              </h1>
+              <p className="mt-1 max-w-xl text-sm text-muted">
+                {isAdmin
+                  ? 'Shopping on behalf of a member'
+                  : 'Order fresh from the cooperative store. Pay with savings, loan, or cash.'}
+              </p>
+            </div>
             {isAdmin && (
-              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-2 lg:mb-3">
-                <div className="text-left">
-                  <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 mb-1 leading-tight">
-                    Admin - Member Shopping
-                  </h1>
-                  <p className="text-xs sm:text-sm text-gray-600">
-                    Shopping on behalf of member
-                  </p>
+              <Button variant="secondary" size="sm" leftIcon={ArrowLeft} onClick={() => router.push('/admin/food/cart')}>
+                Back to Admin
+              </Button>
+            )}
+          </div>
+
+          {isAdmin && (
+            <Card className="mb-3">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-subtle text-brand">
+                  <User className="h-4 w-4" strokeWidth={2} />
+                </span>
+                <div>
+                  <h2 className="text-sm font-semibold text-fg">Member Lookup</h2>
+                  <p className="text-xs text-muted">Find a member to shop on their behalf</p>
                 </div>
-                <div className="flex flex-wrap items-center justify-center md:justify-end gap-2">
-                  <button
-                    onClick={() => router.push('/admin/food/cart')}
-                    className="inline-flex items-center px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg border border-gray-200 transition-colors duration-200 text-xs sm:text-sm whitespace-nowrap"
+              </div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <div className="sm:col-span-2">
+                  <Label htmlFor="shop-member-id">Member ID</Label>
+                  <Input
+                    id="shop-member-id"
+                    type="text"
+                    value={memberId}
+                    onChange={(e) => setMemberId(e.target.value.toUpperCase())}
+                    disabled={lookingUpMember}
+                    placeholder="e.g. A12345"
+                    className="w-full"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button
+                    className="w-full"
+                    loading={lookingUpMember}
+                    leftIcon={Search}
+                    onClick={lookupMember}
+                    disabled={!memberId.trim()}
                   >
-                    <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-1 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                    </svg>
-                    Back to Admin
-                  </button>
+                    Lookup
+                  </Button>
                 </div>
               </div>
-            )}
-            {isAdmin && (
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-3 sm:p-4 md:p-5 mb-2 lg:mb-3">
-                <h2 className="text-sm sm:text-base font-semibold text-gray-800 mb-2 flex items-center">
-                  <svg className="w-4 h-4 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                  Member Lookup
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-                  <div className="sm:col-span-2">
-                    <label className="block text-[11px] sm:text-xs font-medium text-gray-700 mb-1">Member ID</label>
-                    <input
-                      type="text"
-                      value={memberId}
-                      onChange={e => setMemberId(e.target.value.toUpperCase())}
-                      disabled={lookingUpMember}
-                      className="w-full border-2 border-gray-200 rounded-lg px-3 py-2 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200 text-xs sm:text-sm disabled:bg-gray-50 disabled:cursor-not-allowed"
-                      placeholder="e.g. A12345"
-                    />
-                  </div>
-                  <div className="flex items-end">
-                    <button
-                      onClick={lookupMember}
-                      disabled={lookingUpMember || !memberId.trim()}
-                      className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 shadow-sm hover:shadow text-xs sm:text-sm disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:from-blue-500 disabled:hover:to-blue-600"
-                    >
-                      {lookingUpMember ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent mr-2 inline-block"></div>
-                          Looking up...
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                          </svg>
-                          Lookup
-                        </>
-                      )}
-                    </button>
-                  </div>
+              {lookingUpMember ? (
+                <div className="mt-3 border-t border-line-subtle pt-3">
+                  <MemberInfoSkeleton />
                 </div>
-
-                {(member || lookingUpMember) && (
-                  <div className="mt-3 bg-white rounded-lg p-3 shadow-sm border border-gray-100">
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <h3 className="text-xs sm:text-sm font-semibold text-gray-800">Member Information</h3>
-                      {lookingUpMember && <div className="text-[11px] text-gray-500">Loading…</div>}
-                    </div>
-                    {member ? (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                        <div className="bg-gray-50 rounded-lg p-2">
-                          <div className="text-[11px] text-gray-600 mb-0.5">Full Name</div>
-                          <div className="font-semibold text-gray-900 text-xs sm:text-sm break-words">{member.full_name}</div>
-                        </div>
-                        <div className="bg-gray-50 border border-gray-100 rounded-lg p-2">
-                          <div className="text-[11px] text-gray-600 mb-0.5">Savings (Coop)</div>
-                          <div className="font-semibold text-gray-900 text-xs sm:text-sm">₦{Number(member.savings || 0).toLocaleString()}</div>
-                        </div>
-                        <div className="bg-gray-50 border border-gray-100 rounded-lg p-2">
-                          <div className="text-[11px] text-gray-600 mb-0.5">Loans (Coop)</div>
-                          <div className="font-semibold text-gray-900 text-xs sm:text-sm">₦{Number(member.loans || 0).toLocaleString()}</div>
-                        </div>
-                        <div className="bg-gray-50 border border-gray-100 rounded-lg p-2">
-                          <div className="text-[11px] text-gray-600 mb-0.5">Shopping Exposure</div>
-                          <div className="font-semibold text-gray-900 text-xs sm:text-sm">₦{Number(eligibility.loanExposure || 0).toLocaleString()}</div>
-                        </div>
-                        <div className="bg-gray-50 border border-gray-100 rounded-lg p-2">
-                          <div className="text-[11px] text-gray-600 mb-0.5">Outstanding Total</div>
-                          <div className="font-semibold text-gray-900 text-xs sm:text-sm">₦{Number(eligibility.outstandingLoansTotal || 0).toLocaleString()}</div>
-                        </div>
-                        <div className="bg-gray-50 border border-gray-100 rounded-lg p-2">
-                          <div className="text-[11px] text-gray-600 mb-0.5">Global Limit</div>
-                          <div className="font-semibold text-gray-900 text-xs sm:text-sm">₦{Number(member.global_limit || 0).toLocaleString()}</div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 animate-pulse">
-                        {Array.from({ length: 6 }).map((_, i) => (
-                          <div key={i} className="bg-gray-100 rounded-lg p-2">
-                            <div className="h-3 bg-gray-200 rounded w-2/3 mb-2"></div>
-                            <div className="h-4 bg-gray-200 rounded w-5/6"></div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {!isAdmin && (
-              <div className="bg-white rounded-xl p-3 sm:p-4 shadow-lg border border-gray-100 mb-2 lg:mb-3">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <h2 className="text-sm sm:text-base font-semibold text-gray-800">Member Information</h2>
-                  {lookingUpMember && <div className="text-[11px] text-gray-500">Loading…</div>}
+              ) : member ? (
+                <div className="mt-3 border-t border-line-subtle pt-3">
+                  <MemberInfoGrid member={member} eligibility={eligibility} />
                 </div>
-                {member ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-                    <div className="bg-gray-50 rounded-lg p-2">
-                      <div className="text-[11px] text-gray-600 mb-0.5">Full Name</div>
-                      <div className="font-semibold text-gray-900 text-xs sm:text-sm break-words">{member.full_name}</div>
-                    </div>
-                    <div className="bg-gray-50 border border-gray-100 rounded-lg p-2">
-                      <div className="text-[11px] text-gray-600 mb-0.5">Savings (Coop)</div>
-                      <div className="font-semibold text-gray-900 text-xs sm:text-sm">₦{Number(member.savings || 0).toLocaleString()}</div>
-                    </div>
-                    <div className="bg-gray-50 border border-gray-100 rounded-lg p-2">
-                      <div className="text-[11px] text-gray-600 mb-0.5">Loans (Coop)</div>
-                      <div className="font-semibold text-gray-900 text-xs sm:text-sm">₦{Number(member.loans || 0).toLocaleString()}</div>
-                    </div>
-                    <div className="bg-gray-50 border border-gray-100 rounded-lg p-2">
-                      <div className="text-[11px] text-gray-600 mb-0.5">Shopping Exposure</div>
-                      <div className="font-semibold text-gray-900 text-xs sm:text-sm">₦{Number(eligibility.loanExposure || 0).toLocaleString()}</div>
-                    </div>
-                    <div className="bg-gray-50 border border-gray-100 rounded-lg p-2">
-                      <div className="text-[11px] text-gray-600 mb-0.5">Outstanding Total</div>
-                      <div className="font-semibold text-gray-900 text-xs sm:text-sm">₦{Number(eligibility.outstandingLoansTotal || 0).toLocaleString()}</div>
-                    </div>
-                    <div className="bg-gray-50 border border-gray-100 rounded-lg p-2">
-                      <div className="text-[11px] text-gray-600 mb-0.5">Global Limit</div>
-                      <div className="font-semibold text-gray-900 text-xs sm:text-sm">₦{Number(member.global_limit || 0).toLocaleString()}</div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 animate-pulse">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <div key={i} className="bg-gray-100 rounded-lg p-2">
-                        <div className="h-3 bg-gray-200 rounded w-2/3 mb-2"></div>
-                        <div className="h-4 bg-gray-200 rounded w-5/6"></div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+              ) : null}
+            </Card>
+          )}
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 lg:gap-3 mb-2 lg:mb-3">
-              <div className="bg-white rounded-xl p-3 sm:p-4 shadow-lg border border-gray-100">
-                <h2 className="text-sm sm:text-base font-semibold text-gray-800 mb-2 flex items-center">
-                  <svg className="w-4 h-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  Branch & Department
-                </h2>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {!isAdmin && (
+            <Card className="mb-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-subtle text-brand">
+                    <User className="h-4 w-4" strokeWidth={2} />
+                  </span>
                   <div>
-                    <label className="block text-[11px] sm:text-xs font-medium text-gray-700 mb-1">Member Branch</label>
-                    <select
+                    <h2 className="text-sm font-semibold text-fg">Member Information</h2>
+                    <p className="text-xs text-muted">Your cooperative account at a glance</p>
+                  </div>
+                </div>
+                {lookingUpMember && <Spinner size={16} className="text-muted" />}
+              </div>
+              <div className="mt-3">
+                {member ? (
+                  <MemberInfoGrid member={member} eligibility={eligibility} />
+                ) : (
+                  <MemberInfoSkeleton />
+                )}
+              </div>
+            </Card>
+          )}
+            <div className="mb-3 grid gap-3 lg:grid-cols-2">
+              <Card>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-subtle text-brand">
+                    <MapPin className="h-4 w-4" strokeWidth={2} />
+                  </span>
+                  <h2 className="text-sm font-semibold text-fg">Branch & Department</h2>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="member-branch">Member Branch</Label>
+                    <Select
+                      id="member-branch"
                       value={memberBranchCode || ''}
-                      onChange={e => updateMemberBranch(e.target.value)}
-                      className="w-full border-2 border-gray-200 rounded-lg px-3 py-2 focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all duration-200 text-xs sm:text-sm"
+                      onChange={(e) => updateMemberBranch(e.target.value)}
+                      className="w-full"
                     >
-                      <option key="select-member-branch" value="">Select member branch</option>
-                      {branches.map(b => (
+                      <option value="">Select member branch</option>
+                      {branches.map((b) => (
                         <option key={b.code} value={b.code}>{b.name}</option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                   <div>
-                    <label className="block text-[11px] sm:text-xs font-medium text-gray-700 mb-1">Delivery Location</label>
-                    <select
+                    <Label htmlFor="delivery-branch">Delivery Location</Label>
+                    <Select
+                      id="delivery-branch"
                       value={deliveryBranchCode}
-                      onChange={e => {
+                      onChange={(e) => {
                         const v = e.target.value
                         setDeliveryBranchCode(v)
                         try { if (memberId) localStorage.setItem(`deliveryBranch_${memberId}`, v || '') } catch {}
                       }}
-                      className="w-full border-2 border-gray-200 rounded-lg px-3 py-2 focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all duration-200 text-xs sm:text-sm"
+                      className="w-full"
                     >
-                      <option key="select-delivery-branch" value="">Select delivery branch</option>
-                      {branches.map(b => (
+                      <option value="">Select delivery branch</option>
+                      {branches.map((b) => (
                         <option key={b.code} value={b.code}>{b.name}</option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
-                  <div>
-                    <label className="block text-[11px] sm:text-xs font-medium text-gray-700 mb-1">Department</label>
-                    <select
+                  <div className="sm:col-span-2">
+                    <Label htmlFor="department">Department</Label>
+                    <Select
+                      id="department"
                       value={departmentName}
-                      onChange={e => updateMemberDepartment(e.target.value)}
-                      className="w-full border-2 border-gray-200 rounded-lg px-3 py-2 focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all duration-200 text-xs sm:text-sm"
+                      onChange={(e) => updateMemberDepartment(e.target.value)}
+                      className="w-full"
                     >
-                      <option key="select-department" value="">Select department</option>
-                      {departments.map(d => (
+                      <option value="">Select department</option>
+                      {departments.map((d) => (
                         <option key={d.name} value={d.name}>{d.name}</option>
                       ))}
-                    </select>
+                    </Select>
                   </div>
                 </div>
-
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  <div className="bg-green-50 rounded-lg p-2 border border-green-200">
-                    <div className="text-[11px] text-green-700 mb-0.5">Savings Limit</div>
-                    <div className="text-xs sm:text-sm font-semibold text-green-700">₦{savingsEligible.toLocaleString()}</div>
+                  <div className="flex items-center gap-2 rounded-lg border border-line-subtle bg-subtle/50 px-3 py-2">
+                    <Banknote className="h-4 w-4 shrink-0 text-muted" strokeWidth={2} />
+                    <div className="min-w-0">
+                      <div className="text-chips font-medium text-muted">Savings Limit</div>
+                      <div className="text-xs font-semibold tabular-nums text-fg sm:text-sm">₦{savingsEligible.toLocaleString()}</div>
+                    </div>
                   </div>
-                  <div className="bg-blue-50 rounded-lg p-2 border border-blue-200">
-                    <div className="text-[11px] text-blue-700 mb-0.5">Loan Limit</div>
-                    <div className="text-xs sm:text-sm font-semibold text-blue-700">₦{loanEligible.toLocaleString()}</div>
+                  <div className="flex items-center gap-2 rounded-lg border border-line-subtle bg-subtle/50 px-3 py-2">
+                    <Wallet className="h-4 w-4 shrink-0 text-muted" strokeWidth={2} />
+                    <div className="min-w-0">
+                      <div className="text-chips font-medium text-muted">Loan Limit</div>
+                      <div className="text-xs font-semibold tabular-nums text-fg sm:text-sm">₦{loanEligible.toLocaleString()}</div>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </Card>
 
-              <div className="bg-white rounded-xl p-3 sm:p-4 shadow-lg border border-gray-100">
-                <h2 className="text-sm sm:text-base font-semibold text-gray-800 mb-2 flex items-center">
-                  <svg className="w-4 h-4 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                  </svg>
-                  Payment
-                </h2>
-                <select
-                  value={paymentOption}
-                  onChange={e => setPaymentOption(e.target.value)}
-                  className="w-full border-2 border-gray-200 rounded-lg px-3 py-2 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all duration-200 text-xs sm:text-sm"
+              <Card>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-subtle text-brand">
+                    <CreditCard className="h-4 w-4" strokeWidth={2} />
+                  </span>
+                  <h2 className="text-sm font-semibold text-fg">Payment</h2>
+                </div>
+                <Label htmlFor="payment-option">Payment Method</Label>
+                <div
+                  id="payment-option"
+                  role="radiogroup"
+                  aria-label="Payment method"
+                  className="grid grid-cols-3 gap-1 rounded-xl bg-subtle p-1"
                 >
-                  <option key="savings" value="Savings" disabled={savingsEligible <= 0}>Savings {savingsEligible <= 0 ? '(Insufficient Balance)' : ''}</option>
-                  <option key="loan" value="Loan">Loan</option>
-                  <option key="cash" value="Cash">Cash</option>
-                </select>
+                  {[
+                    {
+                      key: 'Savings',
+                      icon: Banknote,
+                      disabled: savingsEligible <= 0,
+                      title: savingsEligible <= 0 ? 'Savings unavailable (insufficient balance)' : 'Pay from your savings balance',
+                    },
+                    { key: 'Loan', icon: Wallet, disabled: false, title: 'Pay on loan (interest applies)' },
+                    { key: 'Cash', icon: CreditCard, disabled: false, title: 'Pay in cash on delivery' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      role="radio"
+                      aria-checked={paymentOption === opt.key}
+                      disabled={opt.disabled}
+                      title={opt.title}
+                      onClick={() => setPaymentOption(opt.key)}
+                      className={[
+                        'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg text-sm font-medium transition-all duration-200 ease-sakani',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
+                        paymentOption === opt.key
+                          ? 'bg-brand text-on-accent shadow-xs'
+                          : opt.disabled
+                            ? 'cursor-not-allowed text-muted opacity-50'
+                            : 'text-muted hover:bg-surface hover:text-fg',
+                      ].join(' ')}
+                    >
+                      <opt.icon className="h-4 w-4" strokeWidth={2} />
+                      {opt.key}
+                    </button>
+                  ))}
+                </div>
 
                 {paymentOption === 'Savings' && savingsEligible > 0 && (
-                  <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="flex items-start">
-                      <svg className="w-4 h-4 text-green-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
+                  <div className="mt-3 rounded-lg border border-success-border bg-success-bg/60 p-3">
+                    <div className="flex items-start gap-2">
+                      <Banknote className="mt-0.5 h-4 w-4 shrink-0 text-success-fg" strokeWidth={2} />
                       <div>
-                        <div className="text-xs font-semibold text-green-800 mb-1">Savings Payment</div>
-                        <div className="text-xs text-green-700">
+                        <div className="text-xs font-semibold text-success-fg">Savings Payment</div>
+                        <div className="mt-0.5 text-xs text-muted">
                           Members can only use 50% of their total savings balance for purchases. Your current available savings limit is ₦{savingsEligible.toLocaleString()}.
                         </div>
                       </div>
@@ -1144,14 +1296,12 @@ function ShopPageContent() {
                 )}
 
                 {paymentOption === 'Loan' && (
-                  <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                    <div className="flex items-start">
-                      <svg className="w-4 h-4 text-orange-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
+                  <div className="mt-3 rounded-lg border border-warning-border bg-warning-bg/60 p-3">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning-fg" strokeWidth={2} />
                       <div>
-                        <div className="text-xs font-semibold text-orange-800 mb-1">Loan Payment</div>
-                        <div className="text-xs text-orange-700">
+                        <div className="text-xs font-semibold text-warning-fg">Loan Payment</div>
+                        <div className="mt-0.5 text-xs text-muted">
                           Interest Rate: {loanInterestRatePct}% interest will be charged on all items purchased using the loan payment option.
                         </div>
                       </div>
@@ -1160,142 +1310,117 @@ function ShopPageContent() {
                 )}
 
                 {paymentOption === 'Cash' && (
-                  <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="flex items-start">
-                      <svg className="w-4 h-4 text-blue-600 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <div>
-                        <div className="text-xs font-semibold text-blue-800 mb-1">Cash Payment</div>
-                        <div className="text-xs text-blue-700 mb-2">
+                  <div className="mt-3 rounded-lg border border-info-border bg-info-bg/60 p-3">
+                    <div className="flex items-start gap-2">
+                      <Info className="mt-0.5 h-4 w-4 shrink-0 text-info-fg" strokeWidth={2} />
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-info-fg">Cash Payment</div>
+                        <div className="mt-0.5 text-xs text-muted">
                           After placing your order, kindly send your payment receipt to the Cooperative (09061388502) for verification.
                         </div>
-                        <div className="mb-2 p-2 bg-white border border-blue-200 rounded-lg">
-                          <div className="text-[11px] font-semibold text-gray-700 mb-1">Bank Transfer Details</div>
-                          <div className="text-xs text-gray-800">Fidelity Bank</div>
-                          <div className="text-xs text-gray-800">Account Number: 5080056982</div>
-                          <div className="text-xs text-gray-800">Account Name: CBN Staff Multipurpose Coop. Soc. Ltd.</div>
+                        <div className="mt-2 rounded-lg border border-info-border bg-surface p-2.5">
+                          <div className="flex items-center gap-2 text-xs font-semibold text-fg">
+                            <Landmark className="h-4 w-4 text-info-fg" strokeWidth={2} />
+                            Bank Transfer Details
+                          </div>
+                          <div className="mt-1 space-y-0.5 text-xs text-muted">
+                            <div>Fidelity Bank</div>
+                            <div>Account Number: 5080056982</div>
+                            <div>Account Name: CBN Staff Multipurpose Coop. Soc. Ltd.</div>
+                          </div>
                         </div>
                         <a
                           href="https://wa.me/+2349061388502"
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center px-3 py-2 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors duration-200"
+                          className="mt-2 inline-flex items-center gap-2 rounded-lg bg-success-fg px-3 py-2 text-xs font-medium text-on-accent transition-[filter] duration-200 hover:brightness-110"
                         >
-                          <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.097z"/>
-                          </svg>
+                          <MessageCircle className="h-4 w-4" strokeWidth={2} />
                           Send Receipt via WhatsApp
                         </a>
                       </div>
                     </div>
                   </div>
                 )}
-              </div>
+              </Card>
             </div>
-
-            <div className="bg-white rounded-xl p-3 sm:p-4 shadow-lg border border-gray-100 mb-2 lg:mb-3">
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <h2 className="text-sm sm:text-base font-semibold text-gray-800 flex items-center">
-                  <svg className="w-4 h-4 mr-2 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                  </svg>
-                  Available Items — {deliveryBranchCode || 'Select delivery branch'}
-                </h2>
-                {itemsBusy && <div className="text-[11px] text-gray-500">Loading…</div>}
+            <Card className="mb-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-subtle text-brand">
+                    <Package className="h-4 w-4" strokeWidth={2} />
+                  </span>
+                  <div>
+                    <h2 className="text-sm font-semibold text-fg">Available Items</h2>
+                    <p className="text-xs text-muted">
+                      {deliveryBranchCode ? `Priced for delivery to ${deliveryBranchCode}` : 'Select a delivery branch to view items'}
+                    </p>
+                  </div>
+                </div>
+                {deliveryBranchCode && !itemsBusy && items.length > 0 && (
+                  <Badge tone="brand" variant="subtle">{items.length} item{items.length === 1 ? '' : 's'}</Badge>
+                )}
               </div>
 
               {!deliveryBranchCode ? (
-                <div className="text-center py-8 sm:py-10 text-xs sm:text-sm text-gray-500">
-                  Select a delivery branch to view items.
-                </div>
+                <EmptyState
+                  icon={MapPin}
+                  title="Select a delivery branch"
+                  description="Choose your delivery location above to see the items available for your order."
+                />
               ) : itemsBusy ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 2xl:grid-cols-7 gap-2 lg:gap-3 xl:gap-4 animate-pulse">
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7">
                   {Array.from({ length: 14 }).map((_, i) => (
-                    <div key={i} className="bg-gray-50 border-2 border-gray-100 rounded-lg xl:rounded-xl p-2 lg:p-3">
-                      <div className="w-full h-24 sm:h-28 bg-gray-200 rounded-lg mb-2"></div>
-                      <div className="h-3 bg-gray-200 rounded w-5/6 mb-2"></div>
-                      <div className="h-3 bg-gray-200 rounded w-2/3 mb-3"></div>
+                    <div key={i} className="rounded-xl border border-line bg-surface p-2.5">
+                      <Skeleton rounded="lg" className="mb-2 h-24 w-full sm:h-28" />
+                      <Skeleton className="mb-2 h-3 w-5/6" />
+                      <Skeleton className="mb-3 h-3 w-2/3" />
                       <div className="flex items-center justify-between gap-2">
-                        <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-                        <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+                        <Skeleton className="h-4 w-1/2" />
+                        <Skeleton className="h-4 w-1/3" />
                       </div>
-                      <div className="mt-3 h-7 bg-gray-200 rounded-lg"></div>
+                      <Skeleton rounded="lg" className="mt-3 h-8 w-full" />
                     </div>
                   ))}
                 </div>
               ) : items.length === 0 ? (
-                <div className="text-center py-8 sm:py-10">
-                  <svg className="w-10 h-10 sm:w-12 sm:h-12 mx-auto text-gray-300 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                  </svg>
-                  <p className="text-xs sm:text-sm text-gray-500">No items configured for this branch.</p>
-                </div>
+                <EmptyState
+                  icon={Package}
+                  title="No items available"
+                  description="No items are configured for this branch yet. Please check back later."
+                />
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 2xl:grid-cols-7 gap-2 lg:gap-3 xl:gap-4">
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7">
                   {itemCards}
                 </div>
               )}
-            </div>
-
-            <div className="sticky bottom-2 md:bottom-3 bg-white rounded-xl shadow-lg border border-gray-200 p-2 sm:p-3 backdrop-blur-sm">
-              <div className={`${paymentOption === 'Loan' ? 'grid grid-cols-4 sm:grid-cols-5' : 'grid grid-cols-3 sm:grid-cols-4'} gap-1 sm:gap-2`}>
-                <div className="bg-blue-50 rounded-lg p-1.5 sm:p-2 text-center">
-                  <div className="text-[11px] text-blue-700 mb-0.5">Items</div>
-                  <div className="text-xs font-semibold text-blue-800 tabular-nums">{cartLines.length}</div>
-                </div>
-                <div className="bg-green-50 rounded-lg p-1.5 sm:p-2 text-center">
-                  <div className="text-[11px] text-green-700 mb-0.5">Total</div>
-                  <div className="text-xs font-semibold text-green-800 tabular-nums">₦{cartTotal.toLocaleString()}</div>
-                </div>
-                {paymentOption === 'Loan' && (
-                  <div className="bg-orange-50 rounded-lg p-1.5 sm:p-2 text-center hidden sm:block">
-                    <div className="text-[11px] text-orange-700 mb-0.5">Interest ({loanInterestRatePct}%)</div>
-                    <div className="text-xs font-semibold text-orange-800 tabular-nums">₦{loanInterest.toLocaleString()}</div>
-                  </div>
-                )}
-                <div className={`rounded-lg p-1.5 sm:p-2 text-center ${overLimit ? 'bg-red-50' : 'bg-purple-50'}`}>
-                  <div className={`text-[11px] mb-0.5 ${overLimit ? 'text-red-700' : 'text-purple-700'}`}>Remaining</div>
-                  <div className={`text-xs font-semibold tabular-nums ${overLimit ? 'text-red-800' : 'text-purple-800'}`}>
-                    {paymentOption === 'Cash' ? 'No limit' : `₦${remainingLimit.toLocaleString()}`}
-                  </div>
-                </div>
-                <div className="flex items-center justify-center">
-                  <button
-                    disabled={cartLines.length === 0 || goingToCart}
-                    onClick={async () => {
-                      setGoingToCart(true)
-                      router.push(isAdmin ? `/cart?member_id=${memberId}&admin=true` : '/cart')
-                    }}
-                    className={`w-full py-2 px-2 rounded-lg font-semibold text-xs transition-all duration-200 ${
-                      cartLines.length > 0 && !goingToCart
-                        ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white shadow-sm'
-                        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                    }`}
-                  >
-                    {goingToCart ? 'Loading…' : 'Go to Cart'}
-                  </button>
-                </div>
-              </div>
-
-              {overLimit && (
-                <div className="text-red-700 text-xs mt-2">
-                  Total exceeds {paymentOption} limit. Reduce quantities or switch payment method.
-                </div>
-              )}
-              {message && (
-                <div className={`mt-2 text-xs ${message.type === 'success' ? 'text-green-700' : 'text-red-700'}`}>
-                  {message.text}
-                </div>
-              )}
-            </div>
+            </Card>
+            {/* Sticky cart bar — shared component so every shopping surface stays in sync */}
+            <CartStickyBar
+              variant="summary"
+              lines={cartLines}
+              units={cartUnits}
+              total={cartTotal}
+              loanInterest={loanInterest}
+              loanInterestRatePct={loanInterestRatePct}
+              totalWithInterest={totalWithInterest}
+              overLimit={overLimit}
+              remainingLimit={remainingLimit}
+              paymentOption={paymentOption}
+              summaryOpen={cartSummaryOpen}
+              onToggleSummary={() => setCartSummaryOpen((v) => !v)}
+              goingToCart={goingToCart}
+              onGoToCart={async () => {
+                setGoingToCart(true)
+                router.push(isAdmin ? `/cart?member_id=${memberId}&admin=true` : '/cart')
+              }}
+              message={message}
+            />
           </div>
         </div>
-      </div>
     </ProtectedRoute>
   )
 }
-
 export default function ShopPage() {
   return (
     <Suspense fallback={<div>Loading...</div>}>

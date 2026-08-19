@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shop Enhancements — Sample</title>
+<style>
+  /* ─── Sakani tokens (mirrored from app/globals.css) ─── */
+  :root{
+    --bg-canvas:#fafaf9; --bg-surface:#ffffff; --bg-subtle:#f5f4f2; --bg-muted:#e7e5e1; --bg-inverse:#1f1f1f;
+    --fg-default:#141414; --fg-muted:#57534e; --fg-subtle:#76706a; --fg-on-accent:#ffffff; --fg-on-inverse:#fafaf9;
+    --line-subtle:#e7e5e1; --line-default:#dbdad7; --line-strong:#a8a29b;
+    --brand:#1d6746; --brand-hover:#134e34; --brand-active:#0d3926; --brand-subtle:#e2f5e9; --brand-fg:#0d3926;
+    --accent:#f2c26a; --accent-hover:#e8a53d; --accent-subtle:#fdf3dd; --accent-fg:#141414;
+    --success-bg:#f1fef6; --success-fg:#027a48; --warning-bg:#fffbf0; --warning-fg:#b54708;
+    --danger-bg:#fef3f2; --danger-fg:#b42318; --info-bg:#eff8ff; --info-fg:#175cd3;
+    --shadow-xs:0 1px 2px 0 rgba(16,15,12,.05); --shadow-sm:0 1px 3px 0 rgba(16,15,12,.1),0 1px 2px 0 rgba(16,15,12,.06);
+    --shadow-md:0 4px 8px -2px rgba(16,15,12,.1),0 2px 4px -2px rgba(16,15,12,.06);
+    --shadow-lg:0 12px 16px -4px rgba(16,15,12,.08),0 4px 6px -2px rgba(16,15,12,.03);
+    --shadow-xl:0 20px 24px -4px rgba(16,15,12,.1),0 8px 8px -4px rgba(16,15,12,.03);
+    --ease-sakani:cubic-bezier(.65,0,.35,1); --ease-out:cubic-bezier(.33,1,.68,1);
+    --r-sm:7px; --r-md:9px; --r-lg:14px; --r-xl:18px;
+  }
+  html[data-theme="dark"]{
+    --bg-canvas:#0f0e0c; --bg-surface:#141414; --bg-subtle:#1f1f1f; --bg-muted:#3a3837; --bg-inverse:#fafaf9;
+    --fg-default:#fafaf9; --fg-muted:#a8a29b; --fg-subtle:#9c968f; --fg-on-accent:#141414; --fg-on-inverse:#0f0e0c;
+    --line-subtle:#2a2826; --line-default:#3a3837; --line-strong:#78716a;
+    --brand:#69b48d; --brand-hover:#93cdad; --brand-active:#bce2cc; --brand-subtle:#052315; --brand-fg:#93cdad;
+    --accent:#f2c26a; --accent-hover:#e8a53d; --accent-subtle:#381c06; --accent-fg:#141414;
+    --success-bg:#033524; --success-fg:#6ce9a6; --warning-bg:#4e1d09; --warning-fg:#fec84b;
+    --danger-bg:#55160c; --danger-fg:#fda29b; --info-bg:#102a56; --info-fg:#84caff;
+    --shadow-xs:0 1px 2px 0 rgba(0,0,0,.4); --shadow-sm:0 1px 3px 0 rgba(0,0,0,.5),0 1px 2px 0 rgba(0,0,0,.3);
+    --shadow-md:0 4px 8px -2px rgba(0,0,0,.5),0 2px 4px -2px rgba(0,0,0,.3);
+    --shadow-lg:0 12px 16px -4px rgba(0,0,0,.5),0 4px 6px -2px rgba(0,0,0,.3);
+    --shadow-xl:0 20px 24px -4px rgba(0,0,0,.5),0 8px 8px -4px rgba(0,0,0,.3);
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:'Geist','Inter',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
+    background:var(--bg-canvas); color:var(--fg-default);
+    -webkit-font-smoothing:antialiased; transition:background .3s var(--ease-sakani),color .3s var(--ease-sakani);
+  }
+
+  /* ─── Showcase shell ─── */
+  .bar{
+    position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    padding:12px 20px;background:color-mix(in srgb,var(--bg-canvas) 82%,transparent);
+    backdrop-filter:blur(14px);border-bottom:1px solid var(--line-subtle);
+  }
+  .bar .mark{display:flex;align-items:center;gap:10px;margin-right:auto}
+  .bar .mark .dot{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--brand),var(--brand-hover));display:grid;place-items:center;color:var(--fg-on-accent);font-weight:700;font-size:14px;box-shadow:var(--shadow-sm)}
+  .bar h1{font-size:14px;font-weight:700;letter-spacing:-.01em}
+  .bar p{font-size:11px;color:var(--fg-muted)}
+  .seg{display:inline-flex;align-items:center;gap:2px;background:var(--bg-subtle);border:1px solid var(--line-subtle);border-radius:10px;padding:3px}
+  .seg button{border:0;background:transparent;color:var(--fg-muted);font:inherit;font-size:11px;font-weight:600;padding:5px 10px;border-radius:7px;cursor:pointer;transition:all .2s var(--ease-sakani);white-space:nowrap}
+  .seg button:hover{color:var(--fg-default)}
+  .seg button.active{background:var(--bg-surface);color:var(--fg-default);box-shadow:var(--shadow-xs)}
+  .icon-btn{width:30px;height:30px;border-radius:9px;border:1px solid var(--line-subtle);background:var(--bg-surface);display:grid;place-items:center;cursor:pointer;color:var(--fg-muted);font-size:14px;transition:all .2s var(--ease-sakani)}
+  .icon-btn:hover{color:var(--fg-default);border-color:var(--line-strong)}
+
+  .stage{display:flex;flex-direction:column;align-items:center;padding:28px 16px 80px;gap:18px}
+  .device-frame{width:min(100%,1200px);background:var(--bg-canvas);border:1px solid var(--line-subtle);border-radius:20px;box-shadow:var(--shadow-xl);overflow:hidden;transition:width .4s var(--ease-out)}
+  .device-frame.is-mobile{width:min(100%,400px)}
+  .device-topbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line-subtle);background:var(--bg-surface)}
+  .device-topbar .dots{display:flex;gap:4px}
+  .device-topbar .dots span{width:6px;height:6px;border-radius:50%;background:var(--line-strong)}
+  .device-topbar .url{flex:1;text-align:center;font-size:10px;color:var(--fg-subtle);background:var(--bg-subtle);border-radius:99px;padding:3px 10px;max-width:240px;margin:0 auto}
+
+  .legend{width:min(100%,1200px);display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+  .legend .note{background:var(--bg-surface);border:1px solid var(--line-subtle);border-radius:12px;padding:12px 14px;font-size:11px;color:var(--fg-muted);line-height:1.55}
+  .legend .note b{color:var(--fg-default);font-weight:600}
+  .legend .note .tag{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--brand);background:var(--brand-subtle);border-radius:99px;padding:2px 8px;margin-bottom:5px}
+  .legend .note.new{border-color:color-mix(in srgb,var(--brand) 45%,var(--line-subtle));box-shadow:0 0 0 1px color-mix(in srgb,var(--brand) 12%,transparent)}
+  .legend .note.new .tag{background:var(--brand);color:var(--fg-on-accent)}
+
+  .kbd{font-size:10px;color:var(--fg-subtle);text-align:center}
+
+  /* ─── Shop (current arrangement, unchanged) ─── */
+  .shop-canvas{position:relative;min-height:700px;background:
+    radial-gradient(900px 340px at 12% -6%, color-mix(in srgb,var(--brand) 9%,transparent), transparent 60%),
+    radial-gradient(760px 300px at 92% 4%, color-mix(in srgb,var(--accent) 9%,transparent), transparent 60%),
+    var(--bg-canvas)}
+  .pill{display:inline-flex;align-items:center;gap:6px;border-radius:99px;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:3px 9px}
+  .pill.brand{background:var(--brand-subtle);color:var(--brand-fg)}
+  .pill.muted{background:var(--bg-subtle);color:var(--fg-muted)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;cursor:pointer;font:inherit;font-size:12px;font-weight:600;border-radius:10px;padding:9px 14px;transition:all .2s var(--ease-sakani)}
+  .btn.primary{background:var(--brand);color:var(--fg-on-accent)}
+  .btn.primary:hover{background:var(--brand-hover);transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+  .btn.secondary{background:var(--bg-surface);color:var(--fg-default);border:1px solid var(--line-default)}
+  .btn.secondary:hover{border-color:var(--line-strong)}
+  .card{background:var(--bg-surface);border:1px solid var(--line-subtle);border-radius:var(--r-lg);box-shadow:var(--shadow-xs)}
+  .input{width:100%;border:1px solid var(--line-default);border-radius:10px;background:var(--bg-surface);padding:9px 11px;font:inherit;font-size:12px;color:var(--fg-default);outline:none;transition:border .2s,box-shadow .2s}
+  .input:focus{border-color:var(--brand);box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 18%,transparent)}
+  .label{font-size:10px;color:var(--fg-muted);font-weight:500;margin-bottom:4px;display:block}
+  .item-img{position:relative;border-radius:10px;background:radial-gradient(80% 80% at 30% 20%,color-mix(in srgb,var(--brand) 22%,transparent),transparent 70%),var(--bg-subtle);display:grid;place-items:center;font-size:26px;overflow:hidden}
+  .qty-btn{width:26px;height:26px;border-radius:50%;border:1px solid var(--line-default);background:var(--bg-surface);color:var(--fg-default);cursor:pointer;font-size:14px;line-height:1;display:grid;place-items:center;transition:all .15s var(--ease-sakani)}
+  .qty-btn:hover{border-color:var(--brand);color:var(--brand)}
+  .qty-btn:disabled{opacity:.3;cursor:not-allowed}
+  .badge-count{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:99px;background:var(--accent);color:var(--accent-fg);font-size:10px;font-weight:700;display:grid;place-items:center;padding:0 5px;box-shadow:var(--shadow-sm)}
+  .tiny-chip{font-size:9.5px;font-weight:600;border-radius:99px;padding:2px 7px;background:var(--bg-subtle);color:var(--fg-muted)}
+  .tiny-chip.green{background:var(--success-bg);color:var(--success-fg)}
+  .tiny-chip.gold{background:var(--accent-subtle);color:var(--accent-fg)}
+
+  .hero{padding:22px 16px 0}
+  .hero-title{font-size:22px;font-weight:700;letter-spacing:-.02em;line-height:1.15;margin-top:8px}
+  .hero-sub{font-size:12px;color:var(--fg-muted);line-height:1.5;margin-top:4px}
+
+  /* ── ENHANCEMENT 1: cycle-context strip ── */
+  .cycle-strip{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:12px 16px 0;padding:8px 12px;border-radius:10px;background:var(--bg-surface);border:1px solid var(--line-subtle);font-size:11px;color:var(--fg-muted)}
+  .cycle-strip .dot{width:5px;height:5px;border-radius:50%;background:var(--success-fg);flex:0 0 auto}
+
+  /* ── ENHANCEMENT 4: toast ── */
+  .toast{
+    position:sticky;top:64px;z-index:55;margin:12px 16px 0;display:flex;align-items:center;gap:10px;
+    background:var(--bg-inverse);color:var(--fg-on-inverse);border-radius:12px;padding:10px 14px;
+    box-shadow:var(--shadow-lg);font-size:11.5px;animation:drop .45s var(--ease-out);
+  }
+  html[data-theme="dark"] .toast{background:var(--bg-surface);color:var(--fg-default);border:1px solid var(--line-strong)}
+  .toast .restore{margin-left:auto;border:0;cursor:pointer;background:var(--accent);color:var(--accent-fg);border-radius:8px;padding:5px 10px;font:inherit;font-size:10.5px;font-weight:700;white-space:nowrap}
+  .toast .x{border:0;background:transparent;color:inherit;opacity:.6;cursor:pointer;font-size:13px;padding:2px;line-height:1}
+  .toast.hide{animation:dropOut .3s var(--ease-sakani) forwards}
+  @keyframes drop{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:none}}
+  @keyframes dropOut{to{opacity:0;transform:translateY(-12px)}}
+
+  .member-card{padding:14px;margin:14px 16px 0}
+  .a-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+  .a-stat{background:var(--bg-subtle);border-radius:10px;padding:10px;text-align:center}
+  .a-stat .k{font-size:10px;color:var(--fg-muted);font-weight:500}
+  .a-stat .v{font-size:16px;font-weight:700;margin-top:2px}
+
+  /* ── ENHANCEMENT 2: search + sort bar ── */
+  .toolbar{display:flex;align-items:center;gap:8px;padding:14px 16px 0;flex-wrap:wrap}
+  .search-wrap{position:relative;flex:1;min-width:150px}
+  .search-wrap .mag{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:12px;opacity:.6;pointer-events:none}
+  .search-wrap input{width:100%;padding-left:30px}
+  .sort-group{display:inline-flex;gap:4px;background:var(--bg-subtle);border:1px solid var(--line-subtle);border-radius:10px;padding:3px}
+  .sort-group button{border:0;background:transparent;color:var(--fg-muted);font:inherit;font-size:10.5px;font-weight:600;padding:5px 9px;border-radius:7px;cursor:pointer;transition:all .2s var(--ease-sakani)}
+  .sort-group button:hover{color:var(--fg-default)}
+  .sort-group button.active{background:var(--bg-surface);color:var(--fg-default);box-shadow:var(--shadow-xs)}
+  .result-count{width:100%;font-size:10px;color:var(--fg-subtle);padding:2px 2px 0}
+
+  .items-card{margin:14px 16px 0;padding:12px 14px}
+  .items-head{display:flex;align-items:center;justify-content:space-between;padding:0 0 10px}
+  .items-head h3{font-size:13px;font-weight:700;letter-spacing:-.01em}
+  .items-head .see{font-size:10.5px;color:var(--brand);font-weight:600}
+  .item-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:0}
+  @media(min-width:900px){.item-grid{grid-template-columns:repeat(4,1fr);gap:12px}}
+  .item-card{background:var(--bg-surface);border:1px solid var(--line-subtle);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:6px;transition:all .2s var(--ease-sakani)}
+  .item-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-sm)}
+  .item-card .img{height:70px;font-size:24px}
+  .item-card .name{font-size:11px;font-weight:600;line-height:1.3;color:var(--fg-default)}
+  .item-card .meta{font-size:9.5px;color:var(--fg-muted)}
+  .item-card .price-row{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:auto}
+  .item-card .price{font-size:13px;font-weight:700;color:var(--brand)}
+  .item-card .stepper{display:flex;align-items:center;gap:5px}
+  .item-card .stepper .n{min-width:18px;text-align:center;font-size:11px;font-weight:700}
+  .demand-badge{font-size:9px;font-weight:700;border-radius:99px;padding:2px 7px;background:var(--success-bg);color:var(--success-fg);white-space:nowrap}
+  .demand-badge.neutral{background:var(--bg-subtle);color:var(--fg-muted)}
+
+  /* ── ENHANCEMENT 5: image fallback tile ── */
+  .img-fallback{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:repeating-linear-gradient(45deg,var(--bg-subtle),var(--bg-subtle) 8px,color-mix(in srgb,var(--bg-subtle) 70%,var(--line-subtle)) 8px,color-mix(in srgb,var(--bg-subtle) 70%,var(--line-subtle)) 9px)}
+  .img-fallback .ic{font-size:20px;opacity:.7}
+  .img-fallback .tx{font-size:8px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-subtle)}
+
+  .cartbar{position:sticky;bottom:12px;z-index:50;margin:14px;border-radius:16px;background:color-mix(in srgb,var(--bg-surface) 92%,transparent);backdrop-filter:blur(12px);border:1px solid var(--line-subtle);box-shadow:var(--shadow-lg);padding:12px}
+
+  .comparison{width:min(100%,1200px);margin-top:8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+  .comparison .col{background:var(--bg-surface);border:1px solid var(--line-subtle);border-radius:12px;padding:14px}
+  .comparison .col h4{font-size:12px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+  .comparison .col ul{list-style:none;font-size:11px;color:var(--fg-muted);line-height:1.7}
+  .comparison .col ul li::before{content:'— ';color:var(--line-strong)}
+  .comparison .col.old h4{color:var(--fg-subtle)}
+  .comparison .col.new h4{color:var(--brand)}
+  .comparison .col.new{border-color:color-mix(in srgb,var(--brand) 40%,var(--line-subtle))}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="mark">
+    <div class="dot">S</div>
+    <div>
+      <h1>Shop Enhancements — Sample</h1>
+      <p>Same arrangement · 5 layers on top · Sakani tokens</p>
+    </div>
+  </div>
+  <div class="seg" id="deviceTabs">
+    <button class="active" data-device="desktop">🖥 Desktop</button>
+    <button data-device="mobile">📱 Mobile</button>
+  </div>
+  <button class="icon-btn" id="themeBtn" title="Toggle theme">🌙</button>
+</div>
+
+<div class="stage">
+
+  <div class="legend">
+    <div class="note new"><span class="tag">New · 1</span><b>Cycle-context strip</b> — "Cycle 12 · Marina prices · Ram open" answers the two questions members have before adding anything.</div>
+    <div class="note new"><span class="tag">New · 2</span><b>Search + sort bar</b> — filters the existing grid client-side. Sort chips: Price ↑ / Price ↓ / Name.</div>
+    <div class="note new"><span class="tag">New · 3</span><b>Cart-restore toast</b> — a saved cart is detected on return and offered back in one tap.</div>
+    <div class="note new"><span class="tag">New · 4</span><b>Styled image fallback</b> — a deliberate "No photo yet" tile instead of a broken image (see the Milk item).</div>
+    <div class="note"><span class="tag">Unchanged</span><b>Demand badge stays as-is</b> — no out-of-stock states; the badge is the stock story, exactly as today.</div>
+  </div>
+
+  <div class="device-frame is-desktop" id="frame">
+    <div class="device-topbar">
+      <div class="dots"><span></span><span></span><span></span></div>
+      <div class="url">coop.cbn.ng/shop</div>
+    </div>
+
+    <div class="shop-canvas">
+      <!-- Hero (unchanged) -->
+      <div class="hero">
+        <span class="pill brand">🛒 Cooperative Store</span>
+        <h1 class="hero-title">Welcome to the Shop</h1>
+        <p class="hero-sub">Order fresh from the cooperative store — pay with savings, loan, or cash.</p>
+      </div>
+
+      <!-- ENHANCEMENT 1: cycle-context strip -->
+      <div class="cycle-strip">
+        <span class="dot"></span>
+        <span><b>Cycle 12</b> open</span>
+        <span>·</span>
+        <span>Marina Branch prices</span>
+        <span>·</span>
+        <span>Ram season active</span>
+        <span style="margin-left:auto" class="tiny-chip gold">₦250k left</span>
+      </div>
+
+      <!-- ENHANCEMENT 3: cart-restore toast -->
+      <div class="toast" id="toast">
+        <span>👋 Welcome back — your cart from last week has <b>2 items</b> saved.</span>
+        <button class="restore" id="restoreBtn">Restore cart</button>
+        <button class="x" id="toastX">✕</button>
+      </div>
+
+      <!-- Member card (unchanged) -->
+      <div class="card member-card">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="width:32px;height:32px;border-radius:9px;background:var(--brand-subtle);color:var(--brand-fg);display:grid;place-items:center">👤</span>
+          <div>
+            <div style="font-size:12px;font-weight:700">Member Information</div>
+            <div style="font-size:10px;color:var(--fg-muted)">Your cooperative account at a glance</div>
+          </div>
+        </div>
+        <div class="a-stats">
+          <div class="a-stat"><div class="k">Items</div><div class="v" data-count>0</div></div>
+          <div class="a-stat"><div class="k">Total</div><div class="v" data-total>₦0</div></div>
+          <div class="a-stat"><div class="k">Remaining</div><div class="v">₦250,000</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+          <div><label class="label">Delivery Branch</label><select class="input"><option>Marina Branch</option><option>Yaba Branch</option></select></div>
+          <div><label class="label">Department</label><select class="input"><option>All Departments</option></select></div>
+        </div>
+      </div>
+
+      <!-- ENHANCEMENT 2: search + sort toolbar -->
+      <div class="toolbar">
+        <div class="search-wrap">
+          <span class="mag">🔍</span>
+          <input class="input" id="searchInput" placeholder="Search rice, beans, oil…" />
+        </div>
+        <div class="sort-group" id="sortGroup">
+          <button data-sort="default" class="active">Default</button>
+          <button data-sort="price-asc">Price ↑</button>
+          <button data-sort="price-desc">Price ↓</button>
+          <button data-sort="name">A–Z</button>
+        </div>
+        <div class="result-count" id="resultCount">12 items</div>
+      </div>
+
+      <!-- Items card (unchanged, minus enhancements) -->
+      <div class="card items-card">
+        <div class="items-head">
+          <h3>Available Items</h3>
+          <span class="see">Demand-based stocking</span>
+        </div>
+        <div class="item-grid" id="grid"></div>
+      </div>
+
+      <!-- Sticky cart bar (unchanged) -->
+      <div class="cartbar">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
+          <div class="a-stat" style="background:var(--bg-subtle);padding:8px"><div class="k">Items</div><div class="v" data-count>0</div></div>
+          <div class="a-stat" style="background:var(--bg-subtle);padding:8px"><div class="k">Total</div><div class="v" data-total>₦0</div></div>
+          <div class="a-stat" style="background:var(--bg-subtle);padding:8px"><div class="k">Remaining</div><div class="v">₦250k</div></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn secondary" style="flex:1">View Summary</button>
+          <button class="btn primary" style="flex:1">Go to Cart →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="comparison">
+    <div class="col old">
+      <h4>Before</h4>
+      <ul>
+        <li>No cycle / branch / season context</li>
+        <li>Scrolling the grid to find an item</li>
+        <li>Returning members re-pick from scratch</li>
+        <li>Broken image tile if a photo is missing</li>
+        <li>Demand badge only</li>
+      </ul>
+    </div>
+    <div class="col new">
+      <h4>After (this sample)</h4>
+      <ul>
+        <li>Cycle · branch · season in one line</li>
+        <li>Search + price/name sort, live filtering</li>
+        <li>One-tap cart restore on return</li>
+        <li>Deliberate "No photo yet" fallback tile</li>
+        <li>Demand badge unchanged</li>
+      </ul>
+    </div>
+    <div class="col new">
+      <h4>Try it</h4>
+      <ul>
+        <li>Type in the search box — items filter live</li>
+        <li>Click sort chips — order re-sorts instantly</li>
+        <li>Hit "Restore cart" — 2 items come back</li>
+        <li>Find Milk — it has the image fallback tile</li>
+        <li>Add items — the sticky bar totals update</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="kbd">Every control in the sample is live · toggle theme and device above</div>
+</div>
+
+<script>
+  const ITEMS = [
+    { name:'Local Rice (50kg)', cat:'Grains', unit:'Bag', price:85000, emoji:'🍚', demand:null, noImg:false },
+    { name:'Brown Beans (25kg)', cat:'Pulses', unit:'Bag', price:48000, emoji:'🫘', demand:212, noImg:false },
+    { name:'Maize (25kg)', cat:'Cereals', unit:'Bag', price:32000, emoji:'🌽', demand:null, noImg:false },
+    { name:'Palm Oil (25L)', cat:'Oils', unit:'Jerrycan', price:58000, emoji:'🫒', demand:96, noImg:false },
+    { name:'Wheat (25kg)', cat:'Cereals', unit:'Bag', price:39000, emoji:'🌾', demand:null, noImg:false },
+    { name:'Garri (10kg)', cat:'Cassava', unit:'Bag', price:18000, emoji:'🍠', demand:340, noImg:false },
+    { name:'Groundnut (20kg)', cat:'Pulses', unit:'Bag', price:41000, emoji:'🥜', demand:null, noImg:false },
+    { name:'Salt (25kg)', cat:'Spices', unit:'Bag', price:6200, emoji:'🧂', demand:null, noImg:false },
+    { name:'Sugar (25kg)', cat:'Pantry', unit:'Bag', price:54000, emoji:'🍬', demand:null, noImg:false },
+    { name:'Milk (Tin 2.5kg)', cat:'Dairy', unit:'Tin', price:24500, emoji:'🥛', demand:null, noImg:true },
+    { name:'Tomato Paste (24×400g)', cat:'Pantry', unit:'Carton', price:38000, emoji:'🥫', demand:null, noImg:false },
+    { name:'Semovita (10kg)', cat:'Cereals', unit:'Bag', price:16000, emoji:'🍞', demand:null, noImg:false },
+  ];
+
+  const fmt = n => '₦' + n.toLocaleString();
+  let state = { query:'', sort:'default', cart:{} };
+
+  const grid = document.getElementById('grid');
+  const countEls = [...document.querySelectorAll('[data-count]')];
+  const totalEls = [...document.querySelectorAll('[data-total]')];
+
+  function visibleItems(){
+    let list = ITEMS.slice();
+    if (state.query){
+      const q = state.query.toLowerCase();
+      list = list.filter(i => i.name.toLowerCase().includes(q) || i.cat.toLowerCase().includes(q) || i.unit.toLowerCase().includes(q));
+    }
+    if (state.sort === 'price-asc') list.sort((a,b)=>a.price-b.price);
+    if (state.sort === 'price-desc') list.sort((a,b)=>b.price-a.price);
+    if (state.sort === 'name') list.sort((a,b)=>a.name.localeCompare(b.name));
+    return list;
+  }
+
+  function render(){
+    const list = visibleItems();
+    grid.innerHTML = list.map(it => {
+      const qty = state.cart[it.name] || 0;
+      const demand = it.demand !== null && it.demand !== undefined;
+      return `
+      <div class="item-card">
+        <div class="item-img img">
+          ${it.noImg ? `
+            <div class="img-fallback">
+              <span class="ic">${it.emoji}</span>
+              <span class="tx">No photo yet</span>
+            </div>` : `<span>${it.emoji}</span>`}
+        </div>
+        <div class="name">${it.name}</div>
+        <div class="meta">${it.unit} · ${it.cat}</div>
+        <div class="price-row">
+          <div class="price">${fmt(it.price)}</div>
+          <div class="stepper">
+            <button class="qty-btn" data-minus="${it.name}">−</button>
+            <span class="n">${qty}</span>
+            <button class="qty-btn" data-plus="${it.name}">+</button>
+          </div>
+        </div>
+        <div>${demand ? `<span class="demand-badge">Demand: ${it.demand}</span>` : `<span class="demand-badge neutral">No stock data</span>`}</div>
+      </div>`;
+    }).join('');
+    document.getElementById('resultCount').textContent = list.length + ' item' + (list.length===1?'':'s');
+    syncTotals();
+  }
+
+  function syncTotals(){
+    const count = Object.values(state.cart).reduce((a,b)=>a+b,0);
+    const total = Object.entries(state.cart).reduce((s,[name,q])=>{
+      const it = ITEMS.find(i=>i.name===name);
+      return s + (it ? it.price * q : 0);
+    },0);
+    countEls.forEach(e=>e.textContent=count);
+    totalEls.forEach(e=>e.textContent=fmt(total));
+  }
+
+  grid.addEventListener('click', e => {
+    const minus = e.target.closest('[data-minus]');
+    const plus = e.target.closest('[data-plus]');
+    if (minus || plus){
+      const name = (minus||plus).dataset.minus || (minus||plus).dataset.plus;
+      const q = state.cart[name] || 0;
+      state.cart[name] = minus ? Math.max(0,q-1) : q+1;
+      render();
+    }
+  });
+
+  document.getElementById('searchInput').addEventListener('input', e => {
+    state.query = e.target.value;
+    render();
+  });
+
+  document.querySelectorAll('#sortGroup button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#sortGroup button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      state.sort = btn.dataset.sort;
+      render();
+    });
+  });
+
+  /* toast */
+  document.getElementById('toastX').addEventListener('click', () => {
+    const t = document.getElementById('toast');
+    t.classList.add('hide');
+    setTimeout(()=>t.remove(), 320);
+  });
+  document.getElementById('restoreBtn').addEventListener('click', () => {
+    state.cart = { 'Local Rice (50kg)':1, 'Palm Oil (25L)':1 };
+    render();
+    const t = document.getElementById('toast');
+    t.classList.add('hide');
+    setTimeout(()=>t.remove(), 320);
+  });
+
+  /* theme + device */
+  document.getElementById('themeBtn').addEventListener('click', () => {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    document.getElementById('themeBtn').textContent = next === 'dark' ? '☀️' : '🌙';
+  });
+  document.querySelectorAll('#deviceTabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#deviceTabs button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('frame').classList.toggle('is-mobile', btn.dataset.device==='mobile');
+    });
+  });
+
+  render();
+</script>
+</body>
+</html>

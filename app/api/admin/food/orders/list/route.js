@@ -126,7 +126,69 @@ async function computeSummary({
     if (!cursor) break
   }
 
-  return { count, totalAmount }
+  // The strip's figures are admin-wide and independent of the page's status
+  // filter: today's pending queue (orders created today still awaiting
+  // approval) and delivered-this-cycle progress. Both stay within the active
+  // cycle the list already scopes to.
+  const countTotalFor = async ({ status: st, from: f, to: t }) => {
+    let n = 0
+    try {
+      let cq = supabase.from('orders').select('order_id', { count: 'exact', head: true })
+      cq = applyOrderFilters({
+        q: cq,
+        status: st,
+        cycleId,
+        ordersHasCycle,
+        ordersHasCategorySnapshot,
+        deliveryBranchId: null,
+        payment: '',
+        term: '',
+        termBranchId: null,
+        memberCategory: '',
+        from: f,
+        to: t,
+      })
+      const { count: c, error: cErr } = await cq
+      if (!cErr) n = c || 0
+    } catch {}
+    let total = 0
+    let cur = null
+    let g = 0
+    while (g < 500) {
+      g += 1
+      let sq = supabase.from('orders').select('order_id,total_amount').order('order_id', { ascending: false }).limit(1000)
+      sq = applyOrderFilters({
+        q: sq,
+        status: st,
+        cycleId,
+        ordersHasCycle,
+        ordersHasCategorySnapshot,
+        deliveryBranchId: null,
+        payment: '',
+        term: '',
+        termBranchId: null,
+        memberCategory: '',
+        from: f,
+        to: t,
+      })
+      if (cur) sq = sq.lt('order_id', Number(cur))
+      const { data, error } = await sq
+      if (error) break
+      const rows = data || []
+      if (!rows.length) break
+      for (const r of rows) total += Number(r.total_amount || 0)
+      if (rows.length < 1000) break
+      cur = rows[rows.length - 1]?.order_id
+      if (!cur) break
+    }
+    return { count: n, total: Math.round(total) }
+  }
+
+  const todayStart = `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`
+  const todayPending = await countTotalFor({ status: 'Pending', from: todayStart })
+  const deliveredCycle = await countTotalFor({ status: 'Delivered', from: '' })
+
+  return { count, totalAmount, todayPending, deliveredCycle }
 }
 
 export async function GET(req) {

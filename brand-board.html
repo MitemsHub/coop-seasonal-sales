@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CBN Coop — Brand Color Exploration</title>
+<style>
+  :root {
+    --canvas: #fafaf9; --surface: #ffffff; --ink: #141414; --muted: #57534e;
+    --line: #e7e5e1; --line-strong: #dbdad7;
+    --shadow: 0 1px 3px rgba(16,15,12,.08), 0 1px 2px rgba(16,15,12,.05);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Geist", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--canvas); color: var(--ink); -webkit-font-smoothing: antialiased;
+    padding: 48px 24px 72px;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 40px; }
+  .kicker { font-size: 12px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-size: 40px; font-weight: 650; letter-spacing: -.02em; margin: 8px 0 12px; }
+  .sub { font-size: 16px; color: var(--muted); max-width: 640px; margin: 0 auto; line-height: 1.55; }
+  .constraints { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 20px; }
+  .constraint { font-size: 13px; font-weight: 500; padding: 6px 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line-strong); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 24px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 18px; }
+  .panel.recommended { border: 2px solid #1d6746; position: relative; }
+  .star { position: absolute; top: -13px; left: 24px; background: #1d6746; color: #fff; font-size: 11px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; padding: 5px 12px; border-radius: 999px; }
+  .p-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .p-name { font-size: 22px; font-weight: 650; letter-spacing: -.01em; }
+  .p-role { font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .p-story { font-size: 14px; line-height: 1.6; color: var(--muted); }
+  .p-story b { color: var(--ink); font-weight: 600; }
+  .ramp { display: grid; grid-template-columns: repeat(11, 1fr); gap: 4px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+  .ramp div { height: 46px; position: relative; }
+  .ramp span { position: absolute; left: 4px; bottom: 3px; font-size: 9px; font-weight: 600; color: rgba(0,0,0,.55); text-shadow: 0 0 3px rgba(255,255,255,.7); }
+  .section-label { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .mock { border: 1px solid var(--line); border-radius: 12px; padding: 14px; background: var(--canvas); }
+  .mock.dark { background: #0f0e0c; border-color: #2a2826; }
+  .mock-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 8px; font-size: 14px; font-weight: 600; border: none; cursor: default; }
+  .badge { font-size: 11px; font-weight: 650; padding: 3px 8px; border-radius: 6px; font-variant-numeric: tabular-nums; }
+  .badge.pass { background: #d1fadf; color: #027a48; }
+  .badge.fail { background: #fee4e2; color: #b42318; }
+  .tile-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .tile { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; }
+  .focus { width: 14px; height: 14px; border-radius: 5px; }
+  .gradient-strip { height: 14px; border-radius: 7px; }
+  .hex-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  .hex-chip { font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--canvas); border: 1px solid var(--line-strong); border-radius: 6px; padding: 3px 7px; }
+  .verdict { margin-top: 36px; background: #dbf2e4; border: 1px solid #bce2cc; border-radius: 16px; padding: 20px 24px; }
+  .verdict h3 { font-size: 18px; font-weight: 650; letter-spacing: -.01em; margin-bottom: 8px; color: #134e34; }
+  .verdict p { font-size: 14px; line-height: 1.65; color: #0d3926; }
+  footer { margin-top: 40px; text-align: center; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">CBN Coop · Brand Exploration</div>
+    <h1>One color for a food co-op that holds members' money</h1>
+    <p class="sub">Every option below is OKLCH-built, perceptually even, and contrast-verified live by this page. Neutrals stay warm stone — only the brand changes.</p>
+    <div class="constraints">
+      <span class="constraint">✕ Not orange</span>
+      <span class="constraint">✓ AA ≥ 4.5:1 verified</span>
+      <span class="constraint">✓ Calm, not shouty</span>
+      <span class="constraint">✓ Distinct from status colors</span>
+    </div>
+  </header>
+
+  <div class="grid">
+
+    <!-- OPTION A: HARVEST -->
+    <div class="panel recommended">
+      <div class="star">★ My pick</div>
+      <div class="p-head">
+        <div class="p-name">Harvest</div>
+        <div class="p-role">Deep Forest Green</div>
+      </div>
+      <p class="p-story"><b>Food first.</b> Green is the international color of the cooperative movement — and the universal color of fresh food, agriculture and livestock, which is literally your entire catalogue: groceries + Ram. A deep forest green reads harvest, growth and thrift. Nothing about this project is better told by any other hue.</p>
+      <div>
+        <div class="section-label">Ramp · 50 → 950</div>
+        <div class="ramp" data-ramp="#effaf3,#dbf2e4,#bce2cc,#93cdad,#69b48d,#479d73,#30825c,#1d6746,#134e34,#0d3926,#052315"></div>
+      </div>
+      <div>
+        <div class="section-label">Light mode</div>
+        <div class="mock">
+          <div class="mock-row">
+            <button class="btn" data-bg="#1d6746" style="background:#1d6746;color:#fff">Order food</button>
+            <span class="badge pass" data-ratio data-fg="#ffffff" data-bg="#1d6746">…</span>
+          </div>
+          <div class="tile-row">
+            <span class="tile" data-bg="#dbf2e4" style="background:#dbf2e4;color:#134e34">Members Portal</span>
+            <span class="focus" data-ring="#1d6746" style="outline:2px solid #1d6746; outline-offset:2px"></span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="section-label">Dark mode</div>
+        <div class="mock dark">
+          <div class="mock-row">
+            <button class="btn" data-bg="#69b48d" style="background:#69b48d;color:#141414">Order food</button>
+            <span class="badge pass" data-ratio data-fg="#141414" data-bg="#69b48d">…</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="section-label">Hero gradient · 800 → 600 → 400</div>
+        <div class="gradient-strip" style="background:linear-gradient(90deg,#134e34,#30825c,#69b48d)"></div>
+        <div class="hex-row"><span class="hex-chip">#1d6746 primary</span><span class="hex-chip">#134e34 hover</span><span class="hex-chip">#dbf2e4 subtle</span><span class="hex-chip">#30825c dark</span></div>
+      </div>
+    </div>
+
+    <!-- OPTION B: HERITAGE -->
+    <div class="panel">
+      <div class="p-head">
+        <div class="p-name">Heritage</div>
+        <div class="p-role">Deep Burgundy</div>
+      </div>
+      <p class="p-story"><b>Institution first.</b> Deep burgundy carries the register of Nigeria's banking establishment — a staff co-op of the Central Bank deserves that weight. Warm (wine, cocoa, dried pepper), unmistakably established, and memorable because almost no food app dares it.</p>
+      <div>
+        <div class="section-label">Ramp · 50 → 950</div>
+        <div class="ramp" data-ramp="#fff3f2,#ffe4e2,#f7cbc9,#eaaba8,#d78987,#c16e6c,#a25755,#834241,#643130,#4a2322,#2f1413"></div>
+      </div>
+      <div>
+        <div class="section-label">Light mode</div>
+        <div class="mock">
+          <div class="mock-row">
+            <button class="btn" data-bg="#834241" style="background:#834241;color:#fff">Order food</button>
+            <span class="badge pass" data-ratio data-fg="#ffffff" data-bg="#834241">…</span>
+          </div>
+          <div class="tile-row">
+            <span class="tile" data-bg="#ffe4e2" style="background:#ffe4e2;color:#643130">Members Portal</span>
+            <span class="focus" data-ring="#834241" style="outline:2px solid #834241; outline-offset:2px"></span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="section-label">Dark mode</div>
+        <div class="mock dark">
+          <div class="mock-row">
+            <button class="btn" data-bg="#d78987" style="background:#d78987;color:#141414">Order food</button>
+            <span class="badge pass" data-ratio data-fg="#141414" data-bg="#d78987">…</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="section-label">Hero gradient · 800 → 600 → 400</div>
+        <div class="gradient-strip" style="background:linear-gradient(90deg,#643130,#a25755,#d78987)"></div>
+        <div class="hex-row"><span class="hex-chip">#834241 primary</span><span class="hex-chip">#643130 hover</span><span class="hex-chip">#ffe4e2 subtle</span><span class="hex-chip">#d78987 dark</span></div>
+      </div>
+    </div>
+
+    <!-- OPTION C: SOVEREIGN -->
+    <div class="panel">
+      <div class="p-head">
+        <div class="p-name">Sovereign</div>
+        <div class="p-role">Deep Slate Blue</div>
+      </div>
+      <p class="p-story"><b>Trust first.</b> The safe, professional register — the Paystack level of credibility. Calm, institutional, faultless. Its honest weakness: blue is the default of every fintech, so it differentiates the least.</p>
+      <div>
+        <div class="section-label">Ramp · 50 → 950</div>
+        <div class="ramp" data-ramp="#f0f8ff,#ddedff,#c0daf8,#9bc1ed,#75a5db,#588dc7,#4273a9,#2f5a89,#224469,#18324e,#0c1e31"></div>
+      </div>
+      <div>
+        <div class="section-label">Light mode</div>
+        <div class="mock">
+          <div class="mock-row">
+            <button class="btn" data-bg="#2f5a89" style="background:#2f5a89;color:#fff">Order food</button>
+            <span class="badge pass" data-ratio data-fg="#ffffff" data-bg="#2f5a89">…</span>
+          </div>
+          <div class="tile-row">
+            <span class="tile" data-bg="#ddedff" style="background:#ddedff;color:#224469">Members Portal</span>
+            <span class="focus" data-ring="#2f5a89" style="outline:2px solid #2f5a89; outline-offset:2px"></span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="section-label">Dark mode</div>
+        <div class="mock dark">
+          <div class="mock-row">
+            <button class="btn" data-bg="#75a5db" style="background:#75a5db;color:#141414">Order food</button>
+            <span class="badge pass" data-ratio data-fg="#141414" data-bg="#75a5db">…</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="section-label">Hero gradient · 800 → 600 → 400</div>
+        <div class="gradient-strip" style="background:linear-gradient(90deg,#224469,#4273a9,#75a5db)"></div>
+        <div class="hex-row"><span class="hex-chip">#2f5a89 primary</span><span class="hex-chip">#224469 hover</span><span class="hex-chip">#ddedff subtle</span><span class="hex-chip">#75a5db dark</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="verdict">
+    <h3>Why Harvest wins</h3>
+    <p>Your product <em>is</em> food — groceries and livestock. Green carries the cooperative movement's own identity, signals fresh produce and agriculture natively, and stays calm at depth. The one objection (green vs. the success-green status) is solved systemically, not cosmetically: <b>approve actions use the brand primary, and green is reserved for status badges only</b> — which is what the Mitems color chapter demands anyway. Burgundy is the strongest runner-up if you want institution-first gravitas; Sovereign is the safe floor. Say the word and I'll apply your pick to the live app.</p>
+  </div>
+
+  <footer>CBN Coop Food Distribution · brand exploration board · all contrast ratios computed in-page (WCAG 2.2)</footer>
+</div>
+
+<script>
+  // Live WCAG contrast (relative luminance)
+  function lum(hex) {
+    const n = hex.replace('#', '');
+    const c = (i) => { const v = parseInt(n.slice(i, i + 2), 16) / 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * c(0) + 0.7152 * c(2) + 0.0722 * c(4);
+  }
+  function ratio(fg, bg) {
+    const l1 = lum(fg), l2 = lum(bg);
+    const hi = Math.max(l1, l2), lo = Math.min(l1, l2);
+    return (hi + 0.05) / (lo + 0.05);
+  }
+  document.querySelectorAll('[data-ratio]').forEach((el) => {
+    const r = ratio(el.dataset.fg, el.dataset.bg);
+    el.textContent = r.toFixed(1) + ':1' + (r >= 4.5 ? ' ✓ AA' : ' ✗');
+    if (r < 4.5) el.classList.remove('pass');
+  });
+  // Build ramp strips
+  document.querySelectorAll('.ramp').forEach((strip) => {
+    const cols = strip.dataset.ramp.split(',');
+    strip.innerHTML = cols.map((h, i) => `<div style="background:${h}"><span>${i % 2 === 0 ? '' : ''}${i === 5 ? '500' : ''}</span></div>`).join('');
+  });
+</script>
+</body>
+</html>

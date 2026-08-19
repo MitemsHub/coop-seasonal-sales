@@ -53,8 +53,8 @@ export default function PinVerification({ memberId, onPinVerified, onCancel }) {
   return (
     <div className="space-y-3 md:space-y-4">
       <div className="text-center mb-4">
-        <h3 className="text-lg md:text-xl font-semibold text-gray-800 mb-2">Enter Your PIN</h3>
-        <p className="text-sm md:text-base text-gray-600">
+        <h3 className="text-base sm:text-lg font-semibold text-fg mb-2">Enter Your PIN</h3>
+        <p className="text-sm md:text-base text-muted">
           Welcome back! Please enter your PIN to continue
         </p>
       </div>
@@ -68,25 +68,25 @@ export default function PinVerification({ memberId, onPinVerified, onCancel }) {
             onChange={(e) => setPin(e.target.value.toUpperCase())}
             disabled={isLoading || isBlocked}
             maxLength={5}
-            className={`w-full px-3 py-2 md:px-4 md:py-3 border-2 rounded-xl focus:ring-2 focus:ring-blue-200 transition-all duration-200 outline-none text-sm md:text-base text-gray-700 placeholder-gray-400 disabled:bg-gray-50 disabled:cursor-not-allowed ${
-              !pin ? 'border-gray-200 focus:border-blue-500' :
-              error ? 'border-red-500 focus:border-red-500' :
-              'border-blue-500 focus:border-blue-500'
+            className={`w-full py-2 pl-3 pr-9 md:py-3 md:pl-4 md:pr-10 border-2 rounded-xl focus:ring-2 focus:ring-brand/20 transition-all duration-200 outline-none text-sm md:text-base text-fg placeholder-gray-400 disabled:bg-subtle disabled:cursor-not-allowed ${
+              !pin ? 'border-line focus:border-brand' :
+              error ? 'border-danger focus:border-danger' :
+              'border-info focus:border-info'
             }`}
             placeholder="Enter your PIN"
             autoFocus
           />
           <div className="absolute inset-y-0 right-0 flex items-center pr-2 md:pr-3">
             {!pin ? (
-              <svg className="w-4 h-4 md:w-5 md:h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 md:w-5 md:h-5 text-subtext" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             ) : error ? (
-              <svg className="w-4 h-4 md:w-5 md:h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 md:w-5 md:h-5 text-danger-fg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             ) : (
-              <svg className="w-4 h-4 md:w-5 md:h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 md:w-5 md:h-5 text-info-fg" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             )}
@@ -95,7 +95,7 @@ export default function PinVerification({ memberId, onPinVerified, onCancel }) {
 
         {/* Error Message */}
         {error && (
-          <div className="flex items-center text-red-600 text-xs md:text-sm">
+          <div className="flex items-center text-danger-fg text-xs md:text-sm">
             <svg className="w-3 h-3 md:w-4 md:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -105,7 +105,7 @@ export default function PinVerification({ memberId, onPinVerified, onCancel }) {
 
         {/* Attempts Indicator */}
         {attempts > 0 && !isBlocked && (
-          <div className="flex items-center text-orange-600 text-xs md:text-sm">
+          <div className="flex items-center text-warning-fg text-xs md:text-sm">
             <svg className="w-3 h-3 md:w-4 md:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.464 0L4.35 16.5c-.77.833.192 2.5 1.732 2.5z" />
             </svg>
@@ -119,17 +119,17 @@ export default function PinVerification({ memberId, onPinVerified, onCancel }) {
             type="button"
             onClick={onCancel}
             disabled={isLoading}
-            className="flex-1 px-4 py-2 md:px-6 md:py-3 text-gray-700 text-sm md:text-base font-semibold rounded-xl border-2 border-gray-300 hover:border-gray-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 px-4 py-2 md:px-6 md:py-3 text-fg text-sm md:text-base font-semibold rounded-xl border-2 border-line-strong hover:border-brand/50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Use Member ID Only
           </button>
           <button
             type="submit"
             disabled={isLoading || !pin.trim() || isBlocked}
-            className={`flex-1 inline-flex items-center justify-center px-4 py-2 md:px-6 md:py-3 text-white text-sm md:text-base font-semibold rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl ${
+            className={`flex-1 inline-flex items-center justify-center px-4 py-2 md:px-6 md:py-3 text-sm md:text-base font-semibold rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl ${
               pin.trim() && !isLoading && !isBlocked
-                ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700'
-                : 'bg-gray-400 cursor-not-allowed'
+                ? 'bg-brand hover:bg-brand-hover text-on-accent'
+                : 'bg-subtle text-muted cursor-not-allowed'
             }`}
           >
             {isLoading ? (
@@ -151,7 +151,7 @@ export default function PinVerification({ memberId, onPinVerified, onCancel }) {
 
       {/* Help Text */}
       <div className="text-center">
-        <p className="text-xs md:text-sm text-gray-500">
+        <p className="text-xs md:text-sm text-muted">
           Forgot your PIN? You can still access using Member ID only.
         </p>
       </div>

@@ -36,7 +36,7 @@ export async function POST(req) {
     }
 
     await supabase.from('orders').update({ admin_note: note || null }).eq('order_id', orderId)
-    await supabase.from('audit_log').insert({ actor:`rep:${claim.branch_code}`, action:'post', order_id: orderId, detail: { note } })
+    await supabase.from('audit_log').insert({ module:'food', actor:`rep:${claim.branch_code}`, action:'post', order_id: orderId, detail: { note } })
 
     return NextResponse.json({ ok:true })
   } catch (e) {

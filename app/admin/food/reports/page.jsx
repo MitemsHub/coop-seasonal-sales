@@ -3,46 +3,48 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
+import ExportButton from '../../../components/ui/ExportButton'
+import { FileBarChart2, Package } from 'lucide-react'
 
 function ReportsSkeleton() {
   return (
     <div className="p-3 sm:p-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-3">
-        <div className="h-7 w-40 bg-gray-100 rounded animate-pulse" />
+        <div className="h-7 w-40 bg-muted rounded animate-pulse" />
         <div className="flex gap-2">
-          <div className="h-10 w-28 bg-gray-100 rounded-lg animate-pulse" />
-          <div className="h-10 w-36 bg-gray-100 rounded-lg animate-pulse" />
+          <div className="h-10 w-28 bg-muted rounded-lg animate-pulse" />
+          <div className="h-10 w-36 bg-muted rounded-lg animate-pulse" />
         </div>
       </div>
 
       <section className="mb-4 sm:mb-6 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={`c1_${i}`} className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-            <div className="h-3 w-24 bg-gray-100 rounded animate-pulse" />
-            <div className="mt-2 h-6 w-20 bg-gray-100 rounded animate-pulse" />
+          <div key={`c1_${i}`} className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
+            <div className="h-3 w-24 bg-muted rounded animate-pulse" />
+            <div className="mt-2 h-6 w-20 bg-muted rounded animate-pulse" />
           </div>
         ))}
       </section>
 
       <section className="mb-4 sm:mb-6 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={`c2_${i}`} className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-            <div className="h-3 w-28 bg-gray-100 rounded animate-pulse" />
-            <div className="mt-2 h-6 w-24 bg-gray-100 rounded animate-pulse" />
+          <div key={`c2_${i}`} className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
+            <div className="h-3 w-28 bg-muted rounded animate-pulse" />
+            <div className="mt-2 h-6 w-24 bg-muted rounded animate-pulse" />
           </div>
         ))}
       </section>
 
       {Array.from({ length: 3 }).map((_, i) => (
-        <div key={`b_${i}`} className="mb-4 sm:mb-6 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-100 bg-gray-50/60 flex items-center justify-between">
-            <div className="h-4 w-40 bg-gray-100 rounded animate-pulse" />
-            <div className="h-8 w-44 bg-gray-100 rounded-lg animate-pulse" />
+        <div key={`b_${i}`} className="mb-4 sm:mb-6 bg-surface rounded-xl shadow-lg border border-line-subtle overflow-hidden">
+          <div className="p-4 border-b border-line-subtle bg-subtle/60 flex items-center justify-between">
+            <div className="h-4 w-40 bg-muted rounded animate-pulse" />
+            <div className="h-8 w-44 bg-muted rounded-lg animate-pulse" />
           </div>
           <div className="p-4">
             <div className="space-y-2">
               {Array.from({ length: 8 }).map((__, r) => (
-                <div key={`r_${i}_${r}`} className="h-4 w-full bg-gray-100 rounded animate-pulse" />
+                <div key={`r_${i}_${r}`} className="h-4 w-full bg-muted rounded animate-pulse" />
               ))}
             </div>
           </div>
@@ -123,7 +125,7 @@ function ReportsPageContent() {
       const amounts = data?.amounts || {}
 
       doc.setFontSize(14)
-      doc.text('Food Distribution — Report', 12, 12)
+      doc.text('Food Distribution · Report', 12, 12)
       doc.setFontSize(9)
       doc.text(`Generated: ${new Date().toLocaleString()}`, 12, 18)
 
@@ -145,6 +147,7 @@ function ReportsPageContent() {
           ['Total Amount', asMoney(amounts.totalAll || 0), ''],
         ].map((r) => r.map(sanitize)),
         startY: 22,
+        rowPageBreak: 'avoid',
         tableWidth: metricTableW,
         styles: { fontSize: 9, cellPadding: 2, valign: 'middle' },
         headStyles: { fillColor: [75, 85, 99] },
@@ -176,6 +179,7 @@ function ReportsPageContent() {
           head: [head],
           body,
           startY,
+          rowPageBreak: 'avoid',
           tableWidth: tableW,
           styles: { fontSize: 9, cellPadding: 2, valign: 'middle' },
           headStyles: { fillColor: [75, 85, 99] },
@@ -544,7 +548,7 @@ function ReportsPageContent() {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } }
             cell.alignment = { vertical: 'middle', horizontal: 'center' }
           })
-          ws.addRow(['', b.name || b.code || 'Unknown', 'Rate limited — no data', '', '', ''])
+          ws.addRow(['', b.name || b.code || 'Unknown', 'Rate limited (no data)', '', '', ''])
           const totalsRow = ws.addRow(['', '', 'TOTAL', 0, '', 0])
           totalsRow.eachCell(cell => { cell.border = { top: {style: 'thin'}, left: {style: 'thin'}, bottom: {style: 'thin'}, right: {style: 'thin'} }; cell.font = { bold: true } })
           ws.addRow(['', '', '', '', 'SIGNATURE', 'DATE'])
@@ -944,6 +948,7 @@ function ReportsPageContent() {
         head: [headers],
         body: tableData,
         startY: options.filters ? 44 : 40,
+        rowPageBreak: 'avoid',
         margin,
         styles: { fontSize: wide ? 8 : 9, lineWidth: 0.1, lineColor: [0,0,0], cellPadding: 2, overflow: 'linebreak' },
         headStyles: { fillColor: [75, 85, 99], textColor: [255, 255, 255] },
@@ -970,6 +975,7 @@ function ReportsPageContent() {
           head: [],
           body: [sigDateRow, issuedRow, receivedRow],
           startY: (doc.lastAutoTable && doc.lastAutoTable.finalY) ? doc.lastAutoTable.finalY + 6 : undefined,
+          rowPageBreak: 'avoid',
           styles: { fontSize: 9, lineWidth: 0.1, lineColor: [0,0,0], cellPadding: 2 },
           theme: 'grid'
         })
@@ -1355,8 +1361,8 @@ function ReportsPageContent() {
   if (loading && !data) return <ReportsSkeleton />
   if (err) return (
     <div className="p-6">
-      <div className="text-red-700 mb-3">Error: {err}</div>
-      <button className="px-3 py-2 bg-blue-600 text-white rounded" onClick={loadSummary}>Retry</button>
+      <div className="text-danger-fg mb-3">Error: {err}</div>
+      <button className="px-3 py-2 bg-brand text-on-accent rounded" onClick={loadSummary}>Retry</button>
     </div>
   )
   if (!data) return <div className="p-6">No data</div>
@@ -1366,10 +1372,10 @@ function ReportsPageContent() {
   return (
     <div className="p-3 sm:p-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
-        <h1 className="text-xl sm:text-2xl font-semibold mb-2 sm:mb-0">Admin — Reports</h1>
+        <h1 className="text-h2 font-semibold mb-2 sm:mb-0">Admin · Reports</h1>
         <div className="flex gap-2">
           <button
-            className="px-3 py-2 rounded-lg bg-gray-900 hover:bg-gray-950 text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center gap-2"
+            className="px-4 py-2 rounded-lg bg-brand text-on-accent hover:bg-brand-hover text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
             onClick={loadSummary}
             disabled={loading}
           >
@@ -1382,12 +1388,14 @@ function ReportsPageContent() {
             <span>{loading ? 'Refreshing…' : 'Refresh'}</span>
           </button>
           <button
-            className="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-sm font-semibold disabled:opacity-50 inline-flex items-center gap-2"
+            className="px-4 py-2 rounded-lg bg-brand text-on-accent hover:bg-brand-hover text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
             onClick={downloadReport}
             disabled={!data || reportBusy}
           >
-            {reportBusy && (
+            {reportBusy ? (
               <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+            ) : (
+              <FileBarChart2 className="h-4 w-4" />
             )}
             <span>{reportBusy ? 'Preparing…' : 'Download Report'}</span>
           </button>
@@ -1414,10 +1422,10 @@ function ReportsPageContent() {
 
       {/* Branch Pack */}
       <section className="mb-4 sm:mb-6">
-        <h2 className="text-lg sm:text-xl font-medium mb-2">Branch Pack (Excel)</h2>
+        <h2 className="text-[15px] sm:text-xl font-medium mb-2">Branch Pack (Excel)</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap items-center gap-2 sm:gap-3">
           <select
-            className="border rounded px-3 py-2 text-sm sm:text-base w-full sm:w-auto"
+            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full sm:w-auto"
             value={branchCode}
             onChange={e => setBranchCode(e.target.value)}
           >
@@ -1430,16 +1438,16 @@ function ReportsPageContent() {
           </select>
 
           <div className="flex items-center gap-2">
-            <label className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">From</label>
+            <label className="text-xs sm:text-sm text-muted whitespace-nowrap">From</label>
             <input type="date" className="border rounded px-2 py-1 text-sm sm:text-base flex-1" value={from} onChange={e => setFrom(e.target.value)} />
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">To</label>
+            <label className="text-xs sm:text-sm text-muted whitespace-nowrap">To</label>
             <input type="date" className="border rounded px-2 py-1 text-sm sm:text-base flex-1" value={to} onChange={e => setTo(e.target.value)} />
           </div>
 
           <button
-            className={`px-3 py-2 text-white text-sm sm:text-base rounded w-full sm:w-auto flex items-center justify-center gap-2 ${branchPackLoading ? 'bg-emerald-400 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'}`}
+            className={`px-3 py-2 text-on-accent text-sm sm:text-base rounded-lg w-full sm:w-auto flex items-center justify-center gap-2 ${branchPackLoading ? 'bg-subtle text-muted cursor-not-allowed' : 'bg-brand hover:bg-brand-hover'}`}
             disabled={branchPackLoading}
             aria-busy={branchPackLoading}
             onClick={async () => {
@@ -1485,7 +1493,7 @@ function ReportsPageContent() {
             {branchPackLoading && (
               <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true"></span>
             )}
-            {branchPackLoading ? 'Preparing…' : 'Download Branch Pack'}
+            {branchPackLoading ? 'Preparing…' : (<><Package className="h-4 w-4" /> Download Branch Pack</>)}
           </button>
         </div>
       </section>
@@ -1643,11 +1651,11 @@ function ReportsPageContent() {
         filter={(
           <div className="flex gap-6 mb-2">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Delivery Location</label>
+              <label className="block text-sm font-medium text-muted mb-2">Filter by Delivery Location</label>
               <select
                 value={selectedDeliveryCode}
                 onChange={e => setSelectedDeliveryCode(e.target.value)}
-                className="block w-56 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                className="block w-56 px-3 py-2 border border-line rounded-md shadow-sm focus:outline-none focus:ring-brand focus:border-brand sm:text-sm"
               >
                 <option value="all">All Delivery Locations</option>
                 {branches.map(b => (
@@ -1656,11 +1664,11 @@ function ReportsPageContent() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Department</label>
+              <label className="block text-sm font-medium text-muted mb-2">Filter by Department</label>
               <select
                 value={selectedDepartmentId}
                 onChange={e => setSelectedDepartmentId(e.target.value)}
-                className="block w-56 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                className="block w-56 px-3 py-2 border border-line rounded-md shadow-sm focus:outline-none focus:ring-brand focus:border-brand sm:text-sm"
               >
                 <option value="all">All Departments</option>
                 {departments.map(d => (
@@ -1720,11 +1728,11 @@ function ReportsPageContent() {
             filter={(
               <div className="flex gap-6 mb-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Delivery Location</label>
+                  <label className="block text-sm font-medium text-muted mb-2">Filter by Delivery Location</label>
                   <select
                     value={summarySelectedDeliveryCode}
                     onChange={e => setSummarySelectedDeliveryCode(e.target.value)}
-                    className="block w-56 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="block w-56 px-3 py-2 border border-line rounded-md shadow-sm focus:outline-none focus:ring-brand focus:border-brand sm:text-sm"
                   >
                     <option value="all">All Delivery Locations</option>
                     {branches.map(b => (
@@ -1733,11 +1741,11 @@ function ReportsPageContent() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Department</label>
+                  <label className="block text-sm font-medium text-muted mb-2">Filter by Department</label>
                   <select
                     value={summarySelectedDepartmentId}
                     onChange={e => setSummarySelectedDepartmentId(e.target.value)}
-                    className="block w-56 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="block w-56 px-3 py-2 border border-line rounded-md shadow-sm focus:outline-none focus:ring-brand focus:border-brand sm:text-sm"
                   >
                     <option value="all">All Departments</option>
                     {departments.map(d => (
@@ -1746,18 +1754,18 @@ function ReportsPageContent() {
                   </select>
                 </div>
                 <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Select Items</label>
+                  <label className="block text-sm font-medium text-muted mb-2">Select Items</label>
                   <div className="flex items-center gap-3 mb-2">
                     <button
                       type="button"
-                      className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
+                      className="px-3 py-1 text-sm border rounded hover:bg-subtle"
                       onClick={() => setSummarySelectedItems(summaryItemOptions)}
                     >
                       Select All
                     </button>
                     <button
                       type="button"
-                      className="px-3 py-1 text-sm border rounded hover:bg-gray-50"
+                      className="px-3 py-1 text-sm border rounded hover:bg-subtle"
                       onClick={() => setSummarySelectedItems([])}
                     >
                       Clear
@@ -1765,7 +1773,7 @@ function ReportsPageContent() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-48 overflow-auto border rounded p-2">
                     {summaryItemOptions.length === 0 && (
-                      <div className="text-sm text-gray-500">No items available for current filters.</div>
+                      <div className="text-sm text-subtext">No items available for current filters.</div>
                     )}
                     {summaryItemOptions.map(name => {
                       const checked = summarySelectedItems.includes(name)
@@ -1807,9 +1815,9 @@ function ReportsPageContent() {
 function Card({ title, value, currency = false }) {
   const display = currency ? `₦${Number(value || 0).toLocaleString()}` : Number(value || 0).toLocaleString()
   return (
-    <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4">
-      <div className="text-xs text-gray-500">{title}</div>
-      <div className="text-lg font-semibold">{display}</div>
+    <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
+      <div className="text-xs text-subtext">{title}</div>
+      <div className="text-[15px] font-semibold">{display}</div>
     </div>
   )
 }
@@ -1818,13 +1826,13 @@ function Card({ title, value, currency = false }) {
 function BranchFilter({ value, onChange, label, branches }) {
   return (
     <div className="mb-4">
-      <label className="block text-sm font-medium text-gray-700 mb-2">
+      <label className="block text-sm font-medium text-muted mb-2">
         {label}
       </label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="block w-48 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+        className="block w-48 px-3 py-2 border border-line rounded-md shadow-sm focus:outline-none focus:ring-brand focus:border-brand sm:text-sm"
       >
         <option value="all">All Branches</option>
         {branches.map(branch => (
@@ -1840,14 +1848,14 @@ function PaginatedSection({ title, data, allData, cols, currentPage, setCurrentP
 
   return (
     <section className="mb-4 sm:mb-6">
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-gray-50/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <div className="bg-surface rounded-xl shadow-lg border border-line-subtle overflow-hidden">
+        <div className="p-4 border-b border-line-subtle bg-subtle/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <h2 className="text-sm sm:text-base font-semibold">{title}</h2>
           <div className="flex gap-2">
           {onExportItemsPack && (
             <button
-              className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-semibold text-white flex items-center gap-2 ${
-                itemsPackLoading ? 'bg-gray-400 cursor-not-allowed' : 'bg-gray-800 hover:bg-gray-900'
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium text-on-accent flex items-center gap-2 ${
+                itemsPackLoading ? 'bg-subtle text-muted cursor-not-allowed' : 'bg-brand hover:bg-brand-hover'
               }`}
               onClick={onExportItemsPack}
               disabled={itemsPackLoading}
@@ -1865,22 +1873,8 @@ function PaginatedSection({ title, data, allData, cols, currentPage, setCurrentP
               )}
             </button>
           )}
-          {onExportExcel && (
-            <button 
-              className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-xs sm:text-sm font-semibold" 
-              onClick={onExportExcel}
-            >
-              Download Excel
-            </button>
-          )}
-          {onExportPDF && (
-            <button 
-              className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-semibold" 
-              onClick={onExportPDF}
-            >
-              Download PDF
-            </button>
-          )}
+            {onExportExcel && <ExportButton format="excel" onClick={onExportExcel} />}
+            {onExportPDF && <ExportButton format="pdf" onClick={onExportPDF} />}
           </div>
         </div>
       
@@ -1891,27 +1885,27 @@ function PaginatedSection({ title, data, allData, cols, currentPage, setCurrentP
         
         {/* Pagination */}
         {showPagination && (
-          <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200">
+          <div className="flex items-center justify-between px-4 py-3 bg-subtle border-t border-line-subtle">
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Previous
               </button>
-              <span className="text-sm text-gray-700">
+              <span className="text-sm text-muted">
                 Page {currentPage} of {totalPages}
               </span>
               <button
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}
-                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Next
               </button>
             </div>
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-subtext">
               Showing {Math.min((currentPage - 1) * itemsPerPage + 1, allData?.length || 0)} to {Math.min(currentPage * itemsPerPage, allData?.length || 0)} of {allData?.length || 0} items
             </div>
           </div>
@@ -1924,26 +1918,12 @@ function PaginatedSection({ title, data, allData, cols, currentPage, setCurrentP
 function Section({ title, onExportExcel, onExportPDF, loading = false, children }) {
   return (
     <section className="mb-4 sm:mb-6">
-      <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-gray-50/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <div className="bg-surface rounded-xl shadow-lg border border-line-subtle overflow-hidden">
+        <div className="p-4 border-b border-line-subtle bg-subtle/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <h2 className="text-sm sm:text-base font-semibold">{title}</h2>
           <div className="flex gap-2">
-            {onExportExcel && (
-              <button
-                className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-900 text-white text-xs sm:text-sm font-semibold"
-                onClick={onExportExcel}
-              >
-                Download Excel
-              </button>
-            )}
-            {onExportPDF && (
-              <button
-                className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-semibold"
-                onClick={onExportPDF}
-              >
-                Download PDF
-              </button>
-            )}
+            {onExportExcel && <ExportButton format="excel" onClick={onExportExcel} />}
+            {onExportPDF && <ExportButton format="pdf" onClick={onExportPDF} />}
           </div>
         </div>
         <div>{typeof children === 'function' ? children({ loading }) : children}</div>
@@ -1957,13 +1937,13 @@ function Table({ rows, cols, loading = false, stickyFirst = false, stickyIndices
     return (
       <div className="overflow-x-auto">
         <table className="w-full text-xs sm:text-sm min-w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
+          <thead className="bg-subtle border-b border-line-subtle">
             <tr>
               {cols.map(([key, label], idx) => (
                 <th
                   key={key}
-                  className={`px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider ${
-                    (stickyIndices.includes(idx) || (stickyFirst && idx === 0)) ? `sticky z-10 bg-gray-50 ${idx === 0 ? 'left-0' : 'left-[8rem]'}` : ''
+                  className={`px-4 py-3 text-left text-xs sm:text-sm font-medium text-muted uppercase tracking-wider ${
+                    (stickyIndices.includes(idx) || (stickyFirst && idx === 0)) ? `sticky z-10 bg-subtle ${idx === 0 ? 'left-0' : 'left-[8rem]'}` : ''
                   }`}
                 >
                   {label}
@@ -1971,17 +1951,17 @@ function Table({ rows, cols, loading = false, stickyFirst = false, stickyIndices
               ))}
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-surface divide-y divide-gray-200">
             {Array.from({ length: 8 }).map((_, i) => (
               <tr key={i}>
                 {cols.map(([key], idx) => (
                   <td
                     key={`${key}-${idx}`}
                     className={`px-4 py-3 ${
-                      (stickyIndices.includes(idx) || (stickyFirst && idx === 0)) ? `sticky z-10 ${idx === 0 ? 'left-0 bg-white' : 'left-[8rem] bg-white'}` : ''
+                      (stickyIndices.includes(idx) || (stickyFirst && idx === 0)) ? `sticky z-10 ${idx === 0 ? 'left-0 bg-surface' : 'left-[8rem] bg-surface'}` : ''
                     }`}
                   >
-                    <div className="h-4 w-full bg-gray-100 rounded animate-pulse" />
+                    <div className="h-4 w-full bg-muted rounded animate-pulse" />
                   </td>
                 ))}
               </tr>
@@ -1991,29 +1971,29 @@ function Table({ rows, cols, loading = false, stickyFirst = false, stickyIndices
       </div>
     )
   }
-  if (!rows?.length) return <div className="p-4 text-gray-600 text-sm text-center">No data available</div>
+  if (!rows?.length) return <div className="p-4 text-muted text-sm text-center">No data available</div>
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs sm:text-sm min-w-full">
-        <thead className="bg-gray-50 border-b border-gray-200">
+        <thead className="bg-subtle border-b border-line-subtle">
           <tr>
             {cols.map(([key, label], idx) => (
               <th
                 key={key}
-                className={`px-4 py-3 text-left text-xs sm:text-sm font-medium text-gray-700 uppercase tracking-wider ${ (stickyIndices.includes(idx) || (stickyFirst && idx === 0)) ? `sticky z-10 bg-gray-50 ${idx === 0 ? 'left-0' : 'left-[8rem]'}` : ''}`}
+                className={`px-4 py-3 text-left text-xs sm:text-sm font-medium text-muted uppercase tracking-wider ${ (stickyIndices.includes(idx) || (stickyFirst && idx === 0)) ? `sticky z-10 bg-subtle ${idx === 0 ? 'left-0' : 'left-[8rem]'}` : ''}`}
               >
                 {label}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
+        <tbody className="bg-surface divide-y divide-gray-200">
           {rows.map((r, i) => (
-             <tr key={i} className="hover:bg-gray-50 transition-colors duration-150">
+             <tr key={i} className="hover:bg-subtle transition-colors duration-150">
                {cols.map(([key], idx) => (
                  <td
                    key={key}
-                   className={`px-4 py-3 text-xs sm:text-sm text-gray-900 whitespace-nowrap ${ (stickyIndices.includes(idx) || (stickyFirst && idx === 0)) ? `sticky z-10 ${idx === 0 ? 'left-0 bg-white' : 'left-[8rem] bg-white'}` : ''}`}
+                   className={`px-4 py-3 text-xs sm:text-sm text-fg whitespace-nowrap ${ (stickyIndices.includes(idx) || (stickyFirst && idx === 0)) ? `sticky z-10 ${idx === 0 ? 'left-0 bg-surface' : 'left-[8rem] bg-surface'}` : ''}`}
                  >
                    {String(r[key] ?? '')}
                  </td>

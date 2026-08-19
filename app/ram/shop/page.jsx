@@ -2,10 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Link from 'next/link'
 import ProtectedRoute from '../../components/ProtectedRoute'
 import { useAuth } from '../../contexts/AuthContext'
 import DraggableModal from '../../components/DraggableModal'
+import ContinueShoppingBanner from '../../components/ContinueShoppingBanner'
+import ModuleClosedPanel from '../../components/ModuleClosedPanel'
 import { supabase } from '@/lib/supabaseClient'
+import { touchCart } from '@/lib/cartTouch'
+import useCartCount from '../../hooks/useCartCount'
+import { computeRamOrderState } from '@/lib/ramOrderMath'
 import { AnimatePresence, motion } from 'framer-motion'
 
 function RamShopPageContent() {
@@ -14,6 +20,12 @@ function RamShopPageContent() {
   const { user } = useAuth()
 
   const memberId = user?.id || ''
+
+  // Live cart-count wiring: the qty stepper IS the ram cart, so every persist
+  // (and the post-order reset) announces the new qty so the Navbar badge and
+  // other surfaces update instantly instead of waiting on a poll.
+  const memberIdKey = memberId ? String(memberId).trim().toUpperCase() : ''
+  const { announceCart, onChange: onCartChange } = useCartCount('ram', { memberId: memberIdKey })
 
   useEffect(() => {
     const mid = (searchParams.get('mid') || '').trim()
@@ -44,186 +56,86 @@ function RamShopPageContent() {
   useEffect(() => {
     try {
       if (!memberId) return
+      // Untouched initial state — don't clobber a stored cart with 0 on
+      // mount before the cart adoption restores it. The steppers only ever set
+      // qty to a stringified number (never ''), so this only gates the mount
+      // write.
+      if (qty === '') return
       localStorage.setItem(`ramCart_${String(memberId).trim().toUpperCase()}`, JSON.stringify({ qty: Math.max(0, Number(safeQty || 0)) }))
+      touchCart('ram', String(memberId).trim().toUpperCase())
+      announceCart(safeQty)
     } catch {}
-  }, [memberId, safeQty])
+  }, [memberId, safeQty, announceCart])
+
+  // Cart adoption + live sync — the hook delivers the stored ram qty on mount
+  // (restoring the member's cart) and whenever it changes from another
+  // surface or tab. Own-announce echoes are skipped by the hook, and the
+  // equality guard never clobbers the empty state.
+  useEffect(() => {
+    if (!memberIdKey) return
+    return onCartChange((value) => {
+      const stored = Number(value?.qty || 0)
+      if (!Number.isFinite(stored)) return
+      setQty((prev) => {
+        const cur = Number(prev || 0)
+        return cur === stored ? prev : String(stored)
+      })
+    })
+  }, [memberIdKey, onCartChange])
 
   const unitPrice = Number(eligibility?.pricing?.unit_price || 0)
   const interestRate = Number.isFinite(Number(eligibility?.rules?.loan_interest_rate)) ? Number(eligibility?.rules?.loan_interest_rate) : 0
   const interestRatePct = Number.isFinite(Number(eligibility?.rules?.loan_interest_rate_pct))
     ? Number(eligibility?.rules?.loan_interest_rate_pct)
     : Math.round(interestRate * 10000) / 100
-  const principal = unitPrice * Number(safeQty || 0)
-  const interest = paymentOption === 'Loan' ? Math.round(principal * interestRate) : 0
-  const total = principal + interest
 
-  const maxRamsAllowed =
-    paymentOption === 'Savings'
-      ? Number(eligibility?.eligibility?.maxRamsAllowedForSavings ?? eligibility?.eligibility?.maxRamsAllowedForLoanOrSavings ?? 0)
-      : Number(eligibility?.eligibility?.maxRamsAllowedForLoan ?? eligibility?.eligibility?.maxRamsAllowedForLoanOrSavings ?? 0)
-  const savingsEligible = Number(eligibility?.eligibility?.savingsEligible || 0)
-  const loanEligible = Number(eligibility?.eligibility?.loanEligible || 0)
-  const remainingLoanQtyThisCycle = Number(eligibility?.eligibility?.remainingLoanQtyThisCycle || 0)
-  const gradeText = String(eligibility?.member?.grade || member?.grade || '').toLowerCase()
-  const isRetiree = !!eligibility?.member?.is_retiree || gradeText.includes('retiree')
-  const isPensioner = !!eligibility?.member?.is_pensioner || gradeText.includes('pensioner')
-  const savingsBalance = Number(eligibility?.financial?.savings ?? member?.savings ?? 0)
-  const loansBalance = Number(eligibility?.financial?.loans ?? member?.loans ?? 0)
-  const phoneMissing = !String(member?.phone || '').trim()
+  // Sticky bar stats + Place Order gating — pure math in lib/ramOrderMath so
+  // the numbers and disabled reasons are unit-tested exactly as rendered.
+  const ramState = computeRamOrderState({
+    safeQty,
+    paymentOption,
+    deliveryLocationId,
+    shoppingOpen,
+    submitting,
+    unitPrice,
+    interestRate,
+    eligibility,
+    member,
+  })
+  const {
+    principal,
+    interest,
+    total,
+    maxRamsAllowed,
+    savingsEligible,
+    loanEligible,
+    remainingLoanQtyThisCycle,
+    isRetiree,
+    isPensioner,
+    savingsBalance,
+    loansBalance,
+    phoneMissing,
+    allowLoanGrace,
+    qtyCapApplies,
+    qtyExceeded,
+    maxStepperQty,
+    loanShortfall,
+    savingsIncreaseNeeded,
+    minLoanSavingsIncreaseNeeded,
+    notEligibleForPayment,
+    placeOrderDisabledReason,
+    canPlaceOrder,
+  } = ramState
 
   const derivedRamCategory = String(eligibility?.member?.derived_ram_category || eligibility?.member?.ram_category || '')
   const canOverrideRamCategory =
     (paymentOption === 'Cash' || paymentOption === 'Savings') && (paymentOption !== 'Savings' || savingsEligible > 0)
-
-  const usedLoanQtyThisCycle = Number(eligibility?.eligibility?.usedLoanQtyThisCycle || 0)
-  const loanGraceQty = Number(eligibility?.eligibility?.loanGraceQty || 0)
-  const allowLoanGrace =
-    paymentOption === 'Loan' &&
-    safeQty > 0 &&
-    safeQty <= loanGraceQty &&
-    unitPrice > 0 &&
-    remainingLoanQtyThisCycle > 0 &&
-    maxRamsAllowed >= safeQty &&
-    loanEligible < unitPrice &&
-    usedLoanQtyThisCycle <= 0
 
   const selectedLocation = useMemo(() => {
     const idNum = Number(deliveryLocationId)
     if (!Number.isFinite(idNum) || idNum <= 0) return null
     return deliveryLocations.find((l) => Number(l.id) === idNum) || null
   }, [deliveryLocationId, deliveryLocations])
-
-  const qtyCapApplies = paymentOption === 'Loan' || paymentOption === 'Savings'
-  const qtyExceeded = qtyCapApplies && safeQty > 0 && safeQty > maxRamsAllowed
-  const maxStepperQty = useMemo(() => {
-    if (!paymentOption) return 100
-    if (paymentOption === 'Cash') return 100
-    if (paymentOption === 'Savings') return Math.max(100, Math.max(0, Math.trunc(Number(maxRamsAllowed || 0))))
-    return Math.max(0, Math.trunc(Number(maxRamsAllowed || 0)))
-  }, [paymentOption, maxRamsAllowed])
-  const loanShortfall = useMemo(() => {
-    if (paymentOption !== 'Loan') return 0
-    if (allowLoanGrace) return 0
-    if (!Number.isFinite(principal) || principal <= 0) return 0
-    return Math.max(0, principal - loanEligible)
-  }, [allowLoanGrace, paymentOption, principal, loanEligible])
-  const savingsIncreaseNeeded = useMemo(() => {
-    if (paymentOption !== 'Loan') return 0
-    if (allowLoanGrace) return 0
-    if (!Number.isFinite(principal) || principal <= 0) return 0
-    if (principal <= loanEligible) return 0
-
-    const outstandingLoansTotal = Number(eligibility?.eligibility?.outstandingLoansTotal || 0)
-    const savingsNow = Number(savingsBalance || 0)
-    const globalLimit = Number(member?.global_limit || 0)
-    const requiredLimit = principal + outstandingLoansTotal
-
-    if (isRetiree) {
-      if (globalLimit > 0 && globalLimit < requiredLimit) return 0
-      const requiredSavings = requiredLimit
-      return Math.max(0, requiredSavings - savingsNow)
-    }
-
-    if (globalLimit > 0 && globalLimit < requiredLimit) return 0
-    const requiredSavings = Math.ceil(requiredLimit / 5)
-    return Math.max(0, requiredSavings - savingsNow)
-  }, [
-    allowLoanGrace,
-    eligibility?.eligibility?.outstandingLoansTotal,
-    isPensioner,
-    isRetiree,
-    loanEligible,
-    maxRamsAllowed,
-    member?.global_limit,
-    paymentOption,
-    principal,
-    remainingLoanQtyThisCycle,
-    savingsBalance,
-    safeQty,
-  ])
-
-  const minLoanSavingsIncreaseNeeded = useMemo(() => {
-    if (paymentOption !== 'Loan') return 0
-    if (allowLoanGrace) return 0
-    if (maxRamsAllowed > 0) return 0
-    if (!Number.isFinite(unitPrice) || unitPrice <= 0) return 0
-    if (!Number.isFinite(loanEligible) || loanEligible <= 0) return 0
-    if (unitPrice <= loanEligible) return 0
-
-    const outstandingLoansTotal = Number(eligibility?.eligibility?.outstandingLoansTotal || 0)
-    const savingsNow = Number(savingsBalance || 0)
-    const globalLimit = Number(member?.global_limit || 0)
-    const requiredLimit = unitPrice + outstandingLoansTotal
-
-    if (isRetiree) {
-      if (globalLimit > 0 && globalLimit < requiredLimit) return 0
-      const requiredSavings = requiredLimit
-      return Math.max(0, requiredSavings - savingsNow)
-    }
-
-    if (globalLimit > 0 && globalLimit < requiredLimit) return 0
-    const requiredSavings = Math.ceil(requiredLimit / 5)
-    return Math.max(0, requiredSavings - savingsNow)
-  }, [
-    allowLoanGrace,
-    eligibility?.eligibility?.outstandingLoansTotal,
-    isPensioner,
-    isRetiree,
-    loanEligible,
-    maxRamsAllowed,
-    member?.global_limit,
-    paymentOption,
-    remainingLoanQtyThisCycle,
-    savingsBalance,
-    unitPrice,
-  ])
-  const notEligibleForPayment =
-    paymentOption === 'Savings'
-      ? total > savingsEligible
-      : paymentOption === 'Loan'
-        ? principal > loanEligible && !allowLoanGrace
-        : false
-
-  const placeOrderDisabledReason = useMemo(() => {
-    if (!shoppingOpen) return 'Ram shopping is currently closed.'
-    if (submitting) return 'Submitting your order…'
-    if (unitPrice <= 0) return 'Unit price is not available yet. Please wait a moment and try again.'
-    if (phoneMissing) return 'Add your phone number before placing an order.'
-    if (!paymentOption) return 'Select a payment option to continue.'
-    if (!deliveryLocationId) return 'Select a delivery location to continue.'
-    if (paymentOption === 'Loan' && remainingLoanQtyThisCycle <= 0) return 'You have reached your loan quantity limit for this cycle.'
-    if (safeQty <= 0) return 'Select a quantity greater than 0.'
-    if (paymentOption !== 'Cash' && qtyCapApplies && maxRamsAllowed > 0 && safeQty > maxRamsAllowed) {
-      return `Max for ${paymentOption}: ${maxRamsAllowed} ram(s).`
-    }
-    if (paymentOption === 'Loan' && allowLoanGrace) return null
-    if (paymentOption === 'Savings' && notEligibleForPayment) return 'Your total exceeds your available savings eligibility.'
-    if (paymentOption === 'Loan' && savingsIncreaseNeeded > 0) {
-      return `Increase savings by ₦${Number(savingsIncreaseNeeded).toLocaleString()} to qualify for this loan purchase.`
-    }
-    if (paymentOption === 'Loan' && safeQty <= 0 && maxRamsAllowed <= 0 && minLoanSavingsIncreaseNeeded > 0) {
-      return `Increase savings by ₦${Number(minLoanSavingsIncreaseNeeded).toLocaleString()} to qualify for a 1-ram loan purchase.`
-    }
-    if (paymentOption === 'Loan' && notEligibleForPayment) return 'Your principal exceeds your loan eligibility.'
-    return null
-  }, [
-    allowLoanGrace,
-    deliveryLocationId,
-    isPensioner,
-    isRetiree,
-    maxRamsAllowed,
-    minLoanSavingsIncreaseNeeded,
-    notEligibleForPayment,
-    paymentOption,
-    phoneMissing,
-    qtyCapApplies,
-    remainingLoanQtyThisCycle,
-    savingsIncreaseNeeded,
-    safeQty,
-    shoppingOpen,
-    submitting,
-    unitPrice,
-  ])
 
   useEffect(() => {
     if (paymentOption !== 'Loan') return
@@ -473,6 +385,8 @@ function RamShopPageContent() {
 
       try {
         localStorage.setItem(`ramCart_${String(memberId).trim().toUpperCase()}`, JSON.stringify({ qty: 0 }))
+        touchCart('ram', String(memberId).trim().toUpperCase())
+        announceCart(0)
       } catch {}
 
       router.push(`/ram/success/${encodeURIComponent(json.order.id)}`)
@@ -490,12 +404,12 @@ function RamShopPageContent() {
         <div className="max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-12">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <div className="h-7 w-56 bg-gray-100 rounded-lg animate-pulse" />
-              <div className="mt-2 h-4 w-40 bg-gray-100 rounded animate-pulse" />
+              <div className="h-7 w-56 bg-muted rounded-lg animate-pulse" />
+              <div className="mt-2 h-4 w-40 bg-muted rounded animate-pulse" />
             </div>
             <div className="flex items-center gap-2">
-              <div className="h-10 w-28 bg-gray-100 rounded-lg animate-pulse" />
-              <div className="h-10 w-24 bg-gray-100 rounded-lg animate-pulse" />
+              <div className="h-10 w-28 bg-muted rounded-lg animate-pulse" />
+              <div className="h-10 w-24 bg-muted rounded-lg animate-pulse" />
             </div>
           </div>
 
@@ -505,55 +419,55 @@ function RamShopPageContent() {
             transition={{ duration: 0.22, ease: 'easeOut' }}
             className="grid grid-cols-1 lg:grid-cols-3 gap-4"
           >
-            <div className="lg:col-span-2 bg-white rounded-2xl shadow-lg border border-gray-100 p-5 md:p-6">
+            <div className="lg:col-span-2 bg-surface rounded-2xl shadow-lg border border-line-subtle p-5 md:p-6">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-green-600 to-blue-600 flex items-center justify-center shadow-md">
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                 </div>
                 <div className="min-w-0">
-                  <div className="text-sm font-semibold text-gray-900">Loading Ram Sales</div>
-                  <div className="text-xs text-gray-600">Fetching your eligibility and delivery locations…</div>
+                  <div className="text-sm font-semibold text-fg">Loading Ram Sales</div>
+                  <div className="text-xs text-muted">Fetching your eligibility and delivery locations…</div>
                 </div>
               </div>
 
               <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={`sk-card-${i}`} className="bg-gray-50 rounded-xl p-3">
-                    <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
-                    <div className="mt-2 h-4 w-28 bg-gray-200 rounded animate-pulse" />
+                  <div key={`sk-card-${i}`} className="bg-subtle rounded-xl p-3">
+                    <div className="h-3 w-20 bg-muted rounded animate-pulse" />
+                    <div className="mt-2 h-4 w-28 bg-muted rounded animate-pulse" />
                   </div>
                 ))}
               </div>
 
               <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                  <div className="h-4 w-40 bg-gray-200 rounded animate-pulse" />
-                  <div className="mt-3 h-10 w-full bg-gray-200 rounded-xl animate-pulse" />
+                <div className="bg-subtle rounded-xl p-4 border border-line-subtle">
+                  <div className="h-4 w-40 bg-muted rounded animate-pulse" />
+                  <div className="mt-3 h-10 w-full bg-muted rounded-xl animate-pulse" />
                 </div>
-                <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                  <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
-                  <div className="mt-3 h-10 w-full bg-gray-200 rounded-xl animate-pulse" />
+                <div className="bg-subtle rounded-xl p-4 border border-line-subtle">
+                  <div className="h-4 w-24 bg-muted rounded animate-pulse" />
+                  <div className="mt-3 h-10 w-full bg-muted rounded-xl animate-pulse" />
                 </div>
-                <div className="md:col-span-2 bg-gray-50 rounded-xl p-4 border border-gray-100">
-                  <div className="h-4 w-32 bg-gray-200 rounded animate-pulse" />
-                  <div className="mt-3 h-10 w-full bg-gray-200 rounded-xl animate-pulse" />
+                <div className="md:col-span-2 bg-subtle rounded-xl p-4 border border-line-subtle">
+                  <div className="h-4 w-32 bg-muted rounded animate-pulse" />
+                  <div className="mt-3 h-10 w-full bg-muted rounded-xl animate-pulse" />
                 </div>
               </div>
 
-              <div className="mt-6 h-12 w-full bg-gray-200 rounded-xl animate-pulse" />
+              <div className="mt-6 h-12 w-full bg-muted rounded-xl animate-pulse" />
             </div>
 
-            <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-5 md:p-6">
-              <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
+            <div className="bg-surface rounded-2xl shadow-lg border border-line-subtle p-5 md:p-6">
+              <div className="h-4 w-24 bg-muted rounded animate-pulse" />
               <div className="mt-4 space-y-3">
                 {Array.from({ length: 6 }).map((_, i) => (
                   <div key={`sk-line-${i}`} className="flex items-center justify-between gap-3">
-                    <div className="h-3 w-24 bg-gray-200 rounded animate-pulse" />
-                    <div className="h-3 w-20 bg-gray-200 rounded animate-pulse" />
+                    <div className="h-3 w-24 bg-muted rounded animate-pulse" />
+                    <div className="h-3 w-20 bg-muted rounded animate-pulse" />
                   </div>
                 ))}
               </div>
-              <div className="mt-6 h-28 w-full bg-gray-100 rounded-xl animate-pulse" />
+              <div className="mt-6 h-28 w-full bg-muted rounded-xl animate-pulse" />
             </div>
           </motion.div>
         </div>
@@ -561,11 +475,42 @@ function RamShopPageContent() {
     )
   }
 
+  // When the Ram module is closed, show the shared closed panel instead of the
+  // shopping form.
+  if (!shoppingOpen) {
+    return (
+      <main className="min-h-screen bg-canvas">
+        <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
+          <div className="absolute -top-32 -left-24 h-80 w-80 rounded-full bg-brand/10 blur-3xl" />
+          <div className="absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-accent/10 blur-3xl" />
+        </div>
+        <ModuleClosedPanel
+          module="ram"
+          variant="inline"
+          onViewOrders={() => router.push('/orders?tab=ram')}
+          onBack={() => router.push('/my-coop')}
+        />
+      </main>
+    )
+  }
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-green-50 via-white to-blue-50">
       <div className="max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-12">
+        <Link
+          href="/my-coop"
+          className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-muted transition-colors duration-200 hover:text-brand"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Dashboard
+        </Link>
+        {/* Continue-shopping banner — surfaces food/exhibition carts here;
+            the ram cart is already covered by the sticky bar. */}
+        <ContinueShoppingBanner excludeModules={['ram']} className="mb-fluid-lg" />
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
+          <h1 className="text-[1.0625rem] font-bold text-fg sm:text-h1">
             Ram Sales ({shoppingOpen ? 'Opened' : 'Closed'})
           </h1>
         </div>
@@ -580,8 +525,8 @@ function RamShopPageContent() {
               transition={{ duration: 0.18, ease: 'easeOut' }}
               className={`mb-4 rounded-xl border p-3 text-sm ${
                 message.type === 'error'
-                  ? 'bg-red-50 border-red-200 text-red-800'
-                  : 'bg-green-50 border-green-200 text-green-800'
+                  ? 'bg-danger-bg border-danger-border text-danger-fg'
+                  : 'bg-success-bg border-success-border text-success-fg'
               }`}
             >
               {message.text}
@@ -606,7 +551,7 @@ function RamShopPageContent() {
             </div>
           }
         >
-          <div className="text-sm text-gray-800">{popupText}</div>
+          <div className="text-sm text-fg">{popupText}</div>
         </DraggableModal>
 
         <motion.div
@@ -619,34 +564,34 @@ function RamShopPageContent() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
-            className="lg:col-span-2 bg-white rounded-2xl shadow-lg border border-gray-100 p-5 md:p-6"
+            className="lg:col-span-2 bg-surface rounded-2xl shadow-lg border border-line-subtle p-5 md:p-6"
           >
-            <div className="text-sm font-semibold text-gray-800">Member</div>
+            <div className="text-sm font-semibold text-fg">Member</div>
             <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              <div className="bg-gray-50 rounded-xl p-2">
-                <div className="text-[11px] text-gray-600">Full Name</div>
-                <div className="font-semibold text-sm text-gray-900">{member?.full_name || '—'}</div>
+              <div className="bg-subtle rounded-xl p-2">
+                <div className="text-chips text-muted">Full Name</div>
+                <div className="font-semibold text-sm text-fg">{member?.full_name || '—'}</div>
               </div>
-              <div className="bg-gray-50 rounded-xl p-2">
-                <div className="text-[11px] text-gray-600">Grade</div>
-                <div className="font-semibold text-sm text-gray-900">{eligibility?.member?.grade || member?.grade || '—'}</div>
+              <div className="bg-subtle rounded-xl p-2">
+                <div className="text-chips text-muted">Grade</div>
+                <div className="font-semibold text-sm text-fg">{eligibility?.member?.grade || member?.grade || '—'}</div>
               </div>
-              <div className="bg-gray-50 rounded-xl p-2">
-                <div className="text-[11px] text-gray-600">Savings</div>
-                <div className="font-semibold text-sm text-gray-900">₦{Number(savingsBalance || 0).toLocaleString()}</div>
+              <div className="bg-subtle rounded-xl p-2">
+                <div className="text-chips text-muted">Savings</div>
+                <div className="font-semibold text-sm text-fg">₦{Number(savingsBalance || 0).toLocaleString()}</div>
               </div>
-              <div className="bg-gray-50 rounded-xl p-2">
-                <div className="text-[11px] text-gray-600">Loans</div>
-                <div className="font-semibold text-sm text-gray-900">₦{Number(loansBalance || 0).toLocaleString()}</div>
+              <div className="bg-subtle rounded-xl p-2">
+                <div className="text-chips text-muted">Loans</div>
+                <div className="font-semibold text-sm text-fg">₦{Number(loansBalance || 0).toLocaleString()}</div>
               </div>
-              <div className="bg-gray-50 rounded-xl p-2">
-                <div className="text-[11px] text-gray-600">Phone</div>
+              <div className="bg-subtle rounded-xl p-2">
+                <div className="text-chips text-muted">Phone</div>
                 {String(member?.phone || '').trim() ? (
-                  <div className="font-semibold text-sm text-gray-900">{String(member?.phone || '').trim()}</div>
+                  <div className="font-semibold text-sm text-fg">{String(member?.phone || '').trim()}</div>
                 ) : (
                   <div className="mt-1 flex items-center gap-2">
                     <input
-                      className="w-full border rounded-lg px-2 py-1 text-sm bg-white"
+                      className="w-full border rounded-lg px-2 py-1 text-sm bg-surface"
                       placeholder="Enter phone number"
                       value={phoneDraft}
                       onChange={(e) => {
@@ -669,8 +614,8 @@ function RamShopPageContent() {
                   </div>
                 )}
               </div>
-              <div className="bg-gray-50 rounded-xl p-2">
-                <div className="text-[11px] text-gray-600">Ram Category</div>
+              <div className="bg-subtle rounded-xl p-2">
+                <div className="text-chips text-muted">Ram Category</div>
                 {canOverrideRamCategory ? (
                   <select
                     value={selectedRamCategory || derivedRamCategory || ''}
@@ -678,19 +623,19 @@ function RamShopPageContent() {
                       setCategoryTouched(true)
                       setSelectedRamCategory(e.target.value)
                     }}
-                    className="mt-1 w-full border-2 border-gray-200 rounded-xl px-3 py-1.5 focus:border-green-600 focus:ring-2 focus:ring-green-200 transition-all duration-200 text-sm bg-white"
+                    className="mt-1 w-full border-2 border-line-subtle rounded-xl px-3 py-1.5 focus:border-green-600 focus:ring-2 focus:ring-green-200 transition-all duration-200 text-sm bg-surface"
                   >
                     <option value="Junior">Junior</option>
                     <option value="Senior">Senior</option>
                     <option value="Executive">Executive</option>
                   </select>
                 ) : (
-                  <div className="font-semibold text-sm text-gray-900">{derivedRamCategory || '—'}</div>
+                  <div className="font-semibold text-sm text-fg">{derivedRamCategory || '—'}</div>
                 )}
               </div>
-              <div className="bg-gray-50 rounded-xl p-2">
-                <div className="text-[11px] text-gray-600">Unit Price per Category</div>
-                <div className="font-semibold text-sm text-gray-900">₦{unitPrice.toLocaleString()}</div>
+              <div className="bg-subtle rounded-xl p-2">
+                <div className="text-chips text-muted">Unit Price per Category</div>
+                <div className="font-semibold text-sm text-fg">₦{unitPrice.toLocaleString()}</div>
               </div>
             </div>
 
@@ -700,7 +645,7 @@ function RamShopPageContent() {
                 <select
                   value={paymentOption}
                   onChange={(e) => setPaymentOption(e.target.value)}
-                  className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 focus:border-green-600 focus:ring-2 focus:ring-green-200 transition-all duration-200 text-sm"
+                  className="w-full border-2 border-line-subtle rounded-xl px-3 py-2 focus:border-green-600 focus:ring-2 focus:ring-green-200 transition-all duration-200 text-sm"
                 >
                   <option value="" disabled>
                     Select payment option
@@ -709,7 +654,7 @@ function RamShopPageContent() {
                   <option value="Savings" disabled={savingsEligible <= 0}>Savings {savingsEligible <= 0 ? '(Not eligible)' : ''}</option>
                   <option value="Cash">Cash (Unlimited)</option>
                 </select>
-                <div className="mt-2 text-xs text-gray-600">
+                <div className="mt-2 text-xs text-muted">
                   Savings Eligible: ₦{savingsEligible.toLocaleString()} · Loan Eligible: ₦{loanEligible.toLocaleString()}
                 </div>
               </div>
@@ -717,33 +662,33 @@ function RamShopPageContent() {
               <div>
                 <label className="block text-sm font-medium mb-1">Quantity</label>
                 <div
-                  className={`grid grid-cols-[44px_1fr_44px] items-center rounded-xl border-2 bg-white ${
-                    qtyExceeded ? 'border-red-400' : 'border-gray-200'
+                  className={`grid grid-cols-[44px_1fr_44px] items-center rounded-xl border-2 bg-surface ${
+                    qtyExceeded ? 'border-red-400' : 'border-line-subtle'
                   }`}
                 >
                   <button
                     type="button"
                     onClick={() => setQty(String(Math.max(0, safeQty - 1)))}
                     disabled={submitting || safeQty <= 0}
-                    className="h-11 w-11 inline-flex items-center justify-center rounded-l-xl text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="h-11 w-11 inline-flex items-center justify-center rounded-l-xl text-muted hover:bg-subtle disabled:opacity-50 disabled:cursor-not-allowed"
                     aria-label="Decrease quantity"
                   >
                     −
                   </button>
-                  <div className="h-11 flex items-center justify-center text-sm font-semibold text-gray-900 tabular-nums">
+                  <div className="h-11 flex items-center justify-center text-sm font-semibold text-fg tabular-nums">
                     {safeQty || 0}
                   </div>
                   <button
                     type="button"
                     onClick={() => setQty(String(Math.min(maxStepperQty, Math.max(0, safeQty) + 1)))}
                     disabled={submitting || safeQty >= maxStepperQty}
-                    className="h-11 w-11 inline-flex items-center justify-center rounded-r-xl text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="h-11 w-11 inline-flex items-center justify-center rounded-r-xl text-muted hover:bg-subtle disabled:opacity-50 disabled:cursor-not-allowed"
                     aria-label="Increase quantity"
                   >
                     +
                   </button>
                 </div>
-                <div className={`mt-2 text-xs ${qtyExceeded ? 'text-red-700' : 'text-gray-600'}`}>
+                <div className={`mt-2 text-xs ${qtyExceeded ? 'text-danger-fg' : 'text-muted'}`}>
                   {paymentOption ? (
                     paymentOption === 'Cash' ? (
                       <>Max (UI): {maxStepperQty} ram(s)</>
@@ -755,7 +700,7 @@ function RamShopPageContent() {
                   )}
                 </div>
                 {paymentOption === 'Loan' && savingsIncreaseNeeded > 0 && (
-                  <div className="mt-2 text-xs text-red-700">
+                  <div className="mt-2 text-xs text-danger-fg">
                     Increase savings by ₦{Number(savingsIncreaseNeeded).toLocaleString()} to qualify for this loan purchase.
                   </div>
                 )}
@@ -763,7 +708,7 @@ function RamShopPageContent() {
 
               <div className="md:col-span-2">
                 {paymentOption === 'Savings' && savingsEligible > 0 && (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
+                  <div className="p-4 bg-success-bg border border-success-border rounded-xl">
                     <div className="flex items-start">
                       <svg
                         className="w-5 h-5 text-green-600 mr-3 mt-0.5 flex-shrink-0"
@@ -779,8 +724,8 @@ function RamShopPageContent() {
                         />
                       </svg>
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-green-800 mb-2">Savings Payment Information</div>
-                        <div className="text-sm text-green-700">
+                        <div className="text-sm font-semibold text-success-fg mb-2">Savings Payment Information</div>
+                        <div className="text-sm text-success-fg">
                           Members can only use 50% of their total savings balance for purchases. Your current available savings
                           limit is ₦{savingsEligible.toLocaleString()}.
                         </div>
@@ -820,10 +765,10 @@ function RamShopPageContent() {
                 )}
 
                 {paymentOption === 'Cash' && (
-                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                  <div className="p-4 bg-info-bg border border-info-border rounded-xl">
                     <div className="flex items-start">
                       <svg
-                        className="w-5 h-5 text-blue-600 mr-3 mt-0.5 flex-shrink-0"
+                        className="w-5 h-5 text-info-fg mr-3 mt-0.5 flex-shrink-0"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -836,16 +781,16 @@ function RamShopPageContent() {
                         />
                       </svg>
                       <div className="min-w-0 w-full">
-                        <div className="text-sm font-semibold text-blue-800 mb-2">Cash Payment Instructions</div>
-                        <div className="text-sm text-blue-700 mb-3">
+                        <div className="text-sm font-semibold text-info-fg mb-2">Cash Payment Instructions</div>
+                        <div className="text-sm text-info-fg mb-3">
                           After placing your order, kindly send your payment receipt to the Cooperative (09061388502) for
                           verification.
                         </div>
-                        <div className="mb-3 p-3 bg-white border border-blue-200 rounded-lg w-full">
-                          <div className="text-xs font-semibold text-gray-700 mb-1">Bank Transfer Details</div>
-                          <div className="text-sm text-gray-800">Fidelity Bank</div>
-                          <div className="text-sm text-gray-800">Account Number: 5080056982</div>
-                          <div className="text-sm text-gray-800">Account Name: CBN Staff Multipurpose Coop. Soc. Ltd.</div>
+                        <div className="mb-3 p-3 bg-surface border border-info-border rounded-lg w-full">
+                          <div className="text-xs font-semibold text-muted mb-1">Bank Transfer Details</div>
+                          <div className="text-sm text-fg">Fidelity Bank</div>
+                          <div className="text-sm text-fg">Account Number: 5080056982</div>
+                          <div className="text-sm text-fg">Account Name: CBN Staff Multipurpose Coop. Soc. Ltd.</div>
                         </div>
                         <a
                           href="https://wa.me/+2349061388502"
@@ -869,7 +814,7 @@ function RamShopPageContent() {
                 <select
                   value={deliveryLocationId}
                   onChange={(e) => setDeliveryLocationId(e.target.value)}
-                  className="w-full border-2 border-gray-200 rounded-xl px-3 py-2 focus:border-green-600 focus:ring-2 focus:ring-green-200 transition-all duration-200 text-sm"
+                  className="w-full border-2 border-line-subtle rounded-xl px-3 py-2 focus:border-green-600 focus:ring-2 focus:ring-green-200 transition-all duration-200 text-sm"
                 >
                   <option value="" disabled>
                     Select delivery location
@@ -893,40 +838,16 @@ function RamShopPageContent() {
               type="button"
               onClick={placeOrder}
               disabled={
-                !shoppingOpen ||
-                submitting ||
-                unitPrice <= 0 ||
-                phoneMissing ||
-                !paymentOption ||
-                !deliveryLocationId ||
-                safeQty <= 0 ||
-                qtyExceeded ||
-                notEligibleForPayment
+                !canPlaceOrder
               }
               className={`mt-6 w-full inline-flex items-center justify-center px-4 py-3 text-white text-sm md:text-base font-semibold rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl ${
-                !shoppingOpen ||
-                submitting ||
-                unitPrice <= 0 ||
-                phoneMissing ||
-                !paymentOption ||
-                !deliveryLocationId ||
-                safeQty <= 0 ||
-                qtyExceeded ||
-                notEligibleForPayment
-                  ? 'bg-gray-400 cursor-not-allowed'
+                !canPlaceOrder
+                  ? 'bg-subtle text-muted cursor-not-allowed'
                   : 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700'
               }`}
               whileHover={{
                 y:
-                  !shoppingOpen ||
-                  submitting ||
-                  unitPrice <= 0 ||
-                  phoneMissing ||
-                  !paymentOption ||
-                  !deliveryLocationId ||
-                  safeQty <= 0 ||
-                  qtyExceeded ||
-                  notEligibleForPayment
+                  !canPlaceOrder
                     ? 0
                     : -1,
               }}
@@ -941,16 +862,66 @@ function RamShopPageContent() {
                 'Place Order'
               )}
             </motion.button>
+
+            <div className="sticky bottom-2 z-10 mt-6 rounded-2xl border border-line bg-surface/95 p-3 shadow-lg backdrop-blur-sm md:bottom-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="grid flex-1 grid-cols-3 gap-2">
+                  <div className="rounded-xl bg-subtle/70 px-3 py-2 text-center">
+                    <div className="text-chips font-medium text-muted">Rams</div>
+                    <div className="text-sm font-semibold tabular-nums text-fg">{Number(safeQty || 0).toLocaleString()}</div>
+                  </div>
+                  <div className="rounded-xl bg-subtle/70 px-3 py-2 text-center">
+                    <div className="text-chips font-medium text-muted">Total</div>
+                    <div className="text-sm font-semibold tabular-nums text-fg">₦{total.toLocaleString()}</div>
+                    {paymentOption === 'Loan' && interest > 0 && (
+                      <div className="text-chips font-medium text-muted">incl. ₦{interest.toLocaleString()} interest</div>
+                    )}
+                  </div>
+                  <div className={['rounded-xl px-3 py-2 text-center', qtyExceeded ? 'bg-danger-bg' : 'bg-subtle/70'].join(' ')}>
+                    <div className={['text-chips font-medium', qtyExceeded ? 'text-danger-fg' : 'text-muted'].join(' ')}>Max</div>
+                    <div className={['text-sm font-semibold tabular-nums', qtyExceeded ? 'text-danger-fg' : 'text-fg'].join(' ')}>
+                      {paymentOption === 'Cash' ? 'No limit' : `${Number(maxRamsAllowed || 0).toLocaleString()} ram(s)`}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={placeOrder}
+                  disabled={
+                    !canPlaceOrder
+                  }
+                  className={`relative inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold shadow-lg transition-all duration-200 sm:w-auto sm:flex-none ${
+                    !canPlaceOrder
+                      ? 'bg-subtle text-muted cursor-not-allowed'
+                      : 'bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700'
+                  }`}
+                >
+                  {submitting ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                      <span>Submitting...</span>
+                    </span>
+                  ) : (
+                    'Place Order'
+                  )}
+                  {safeQty > 0 && (
+                    <span className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold tabular-nums text-accent-fg shadow-sm">
+                      {safeQty}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.22, ease: 'easeOut', delay: 0.03 }}
-            className="bg-white rounded-2xl shadow-lg border border-gray-100 p-5 md:p-6"
+            className="bg-surface rounded-2xl shadow-lg border border-line-subtle p-5 md:p-6"
           >
-            <div className="text-sm font-semibold text-gray-800">Summary</div>
-            <div className="mt-3 space-y-2 text-sm text-gray-700">
+            <div className="text-sm font-semibold text-fg">Summary</div>
+            <div className="mt-3 space-y-2 text-sm text-muted">
               <div className="flex items-center justify-between">
                 <div>Quantity</div>
                   <div className="font-semibold">{Number(safeQty || 0).toLocaleString()}</div>
@@ -967,25 +938,25 @@ function RamShopPageContent() {
                 <div>Interest</div>
                 <div className="font-semibold">₦{interest.toLocaleString()}</div>
               </div>
-              <div className="pt-2 border-t border-gray-200 flex items-center justify-between">
+              <div className="pt-2 border-t border-line-subtle flex items-center justify-between">
                 <div className="font-semibold">Total</div>
-                <div className="font-bold text-gray-900">₦{total.toLocaleString()}</div>
+                <div className="font-bold text-fg">₦{total.toLocaleString()}</div>
               </div>
             </div>
 
             <div className="mt-6">
-              <div className="text-sm font-semibold text-gray-800">Vendor Details</div>
-              <div className="mt-3 space-y-2 text-sm text-gray-700">
+              <div className="text-sm font-semibold text-fg">Vendor Details</div>
+              <div className="mt-3 space-y-2 text-sm text-muted">
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-gray-600">Name</div>
+                  <div className="text-muted">Name</div>
                   <div className="font-semibold text-right break-words">{selectedLocation?.name || '—'}</div>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-gray-600">Phone No</div>
+                  <div className="text-muted">Phone No</div>
                   <div className="font-semibold text-right break-words">{selectedLocation?.phone || '—'}</div>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-gray-600">Address</div>
+                  <div className="text-muted">Address</div>
                   <div className="font-semibold text-right break-words">{selectedLocation?.address || '—'}</div>
                 </div>
               </div>

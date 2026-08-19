@@ -54,6 +54,7 @@ export async function POST(req) {
       }
 
       await supabase.from('audit_log').insert({
+        module: 'food',
         actor: adminId,
         action: 'rollback',
         order_id: orderId,

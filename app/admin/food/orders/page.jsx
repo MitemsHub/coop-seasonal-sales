@@ -94,14 +94,14 @@ function AdminOrdersPageContent() {
 
   const getStatusBadge = (status) => {
     const statusStyles = {
-      'pending': 'bg-yellow-100 text-yellow-800',
-      'posted': 'bg-blue-100 text-blue-800',
-      'delivered': 'bg-green-100 text-green-800',
-      'cancelled': 'bg-red-100 text-red-800'
+      'pending': 'bg-warning-bg text-warning-fg',
+      'posted': 'bg-info-bg text-info-fg',
+      'delivered': 'bg-success-bg text-success-fg',
+      'cancelled': 'bg-danger-bg text-danger-fg'
     }
     
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusStyles[status] || 'bg-gray-100 text-gray-800'}`}>
+      <span className={`px-fluid-xs py-fluid-2xs rounded-full text-xs font-medium ${statusStyles[status] || 'bg-subtle text-muted'}`}>
         {status?.charAt(0).toUpperCase() + status?.slice(1) || 'Unknown'}
       </span>
     )
@@ -109,36 +109,36 @@ function AdminOrdersPageContent() {
 
   return (
     <ProtectedRoute allowedRoles={['admin']}>
-      <div className="p-2 lg:p-3 xl:p-4 max-w-7xl mx-auto">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-3 lg:mb-4">
-          <div className="text-center md:text-left">
-            <h1 className="text-lg sm:text-xl md:text-2xl font-semibold mb-2 break-words">Admin — All Member Orders</h1>
-            <p className="text-sm sm:text-base text-gray-600">View and manage all member orders across the system</p>
+      <div className="p-4 sm:p-6 lg:p-8">
+        <div className="mb-6 flex flex-col gap-2">
+          <div>
+            <h1 className="text-h2 font-bold tracking-tight text-fg">All Member Orders</h1>
+            <p className="text-sm text-muted">View and manage all member orders across the system</p>
           </div>
         </div>
 
         {message && (
-          <div className={`mb-4 p-3 rounded-lg ${
-            message.type === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : 
-            'bg-green-50 text-green-700 border border-green-200'
+          <div role="alert" className={`mb-4 rounded-xl border p-4 text-sm ${
+            message.type === 'error' ? 'border-danger-border bg-danger-bg text-danger-fg' : 
+            'border-success-border bg-success-bg text-success-fg'
           }`}>
             {message.text}
           </div>
         )}
 
         {/* Filters */}
-        <div className="bg-white rounded-lg xl:rounded-xl shadow-sm lg:shadow-md p-2 lg:p-3 xl:p-4 mb-3 lg:mb-4">
-          <h2 className="text-base sm:text-lg font-semibold mb-2 lg:mb-3">Filters</h2>
+        <div className="ui-card p-4 mb-4">
+          <h2 className="text-[13px] font-semibold text-fg mb-3">Filters</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Member</label>
+              <label className="mb-2 block text-sm font-medium text-muted">Member</label>
               <select
                 value={selectedMember}
                 onChange={(e) => {
                   setSelectedMember(e.target.value)
                   setTimeout(handleFilterChange, 100)
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               >
                 <option value="">All Members</option>
                 {members.map(member => (
@@ -150,14 +150,14 @@ function AdminOrdersPageContent() {
             </div>
             
             <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Status</label>
+              <label className="mb-2 block text-sm font-medium text-muted">Status</label>
               <select
                 value={statusFilter}
                 onChange={(e) => {
                   setStatusFilter(e.target.value)
                   setTimeout(handleFilterChange, 100)
                 }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
               >
                 <option value="">All Statuses</option>
                 <option value="pending">Pending</option>
@@ -170,7 +170,7 @@ function AdminOrdersPageContent() {
             <div className="flex items-end">
               <button
                 onClick={handleFilterChange}
-                className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                className="w-full rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
                 disabled={loading}
               >
                 {loading ? 'Loading...' : 'Refresh'}
@@ -180,58 +180,58 @@ function AdminOrdersPageContent() {
         </div>
 
         {/* Orders List */}
-        <div className="bg-white rounded-xl shadow-lg">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-lg font-semibold">Orders ({orders.length})</h2>
+        <div className="ui-card overflow-hidden">
+          <div className="border-b border-line p-6">
+            <h2 className="text-[15px] font-semibold text-fg">Orders ({orders.length})</h2>
           </div>
           
           {loading ? (
-            <div className="text-center py-8">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <p className="mt-2 text-gray-600">Loading orders...</p>
+            <div className="py-12 text-center">
+              <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-line border-t-brand"></div>
+              <p className="mt-3 text-sm text-muted">Loading orders...</p>
             </div>
           ) : orders.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <svg className="w-16 h-16 mx-auto mb-2 lg:mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="py-12 text-center text-muted">
+              <svg className="mx-auto mb-3 h-16 w-16 text-subtext" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <p>No orders found</p>
+              <p className="text-sm">No orders found</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-200">
+            <div className="divide-y divide-line">
               {orders.map(order => (
                 <div key={order.order_id} className="p-6">
-                  <div className="flex items-start justify-between mb-2 lg:mb-3">
+                  <div className="mb-2 flex items-start justify-between lg:mb-3">
                     <div>
-                      <div className="flex items-center gap-3 mb-2">
-                        <h3 className="font-semibold text-lg">Order #{order.order_id}</h3>
+                      <div className="mb-2 flex items-center gap-3">
+                        <h3 className="text-[15px] font-semibold text-fg">Order #{order.order_id}</h3>
                         {getStatusBadge(order.status)}
                       </div>
-                      <div className="text-sm text-gray-600 space-y-1">
-                        <p><strong>Member:</strong> {order.members?.full_name} ({order.member_id})</p>
-                        <p><strong>Branch:</strong> {order.members?.branch_code}</p>
-                        <p><strong>Delivery:</strong> {order.branches?.name}</p>
-                        <p><strong>Department:</strong> {order.departments?.name}</p>
-                        <p><strong>Payment:</strong> {order.payment_option}</p>
-                        <p><strong>Date:</strong> {new Date(order.created_at).toLocaleString()}</p>
+                      <div className="space-y-1 text-sm text-muted">
+                        <p><strong className="font-medium text-fg">Member:</strong> {order.members?.full_name} ({order.member_id})</p>
+                        <p><strong className="font-medium text-fg">Branch:</strong> {order.members?.branch_code}</p>
+                        <p><strong className="font-medium text-fg">Delivery:</strong> {order.branches?.name}</p>
+                        <p><strong className="font-medium text-fg">Department:</strong> {order.departments?.name}</p>
+                        <p><strong className="font-medium text-fg">Payment:</strong> {order.payment_option}</p>
+                        <p><strong className="font-medium text-fg">Date:</strong> {new Date(order.created_at).toLocaleString()}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-2xl font-bold text-green-600 mb-2">
+                      <div className="mb-2 text-[15px] font-bold text-success-fg sm:text-xl">
                         ₦{Number(order.total_amount || 0).toLocaleString()}
                       </div>
                       <div className="flex gap-2">
                         {(order.status === 'delivered' || order.status === 'posted') && (
                           <button
                             onClick={() => downloadReceipt(order.order_id, order.member_id)}
-                            className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                            className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover"
                           >
                             Receipt
                           </button>
                         )}
                         <button
                           onClick={() => router.push(`/admin/food/pending`)}
-                          className="px-3 py-1 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm"
+                          className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover"
                         >
                           Manage
                         </button>
@@ -240,18 +240,18 @@ function AdminOrdersPageContent() {
                   </div>
                   
                   {/* Order Items */}
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="font-medium mb-3">Order Items</h4>
+                  <div className="rounded-lg bg-subtle p-4">
+                    <h4 className="mb-3 font-medium text-fg">Order Items</h4>
                     <div className="space-y-2">
                       {(order.order_lines || []).map(line => (
                         <div key={line.id} className="flex justify-between items-center text-sm">
                           <div>
-                            <span className="font-medium">{line.items?.name}</span>
-                            <span className="text-gray-500 ml-2">({line.items?.sku})</span>
+                            <span className="font-medium text-fg">{line.items?.name}</span>
+                            <span className="ml-2 text-subtext">({line.items?.sku})</span>
                           </div>
                           <div className="text-right">
-                            <div>{line.qty} {line.items?.unit} × ₦{Number(line.unit_price).toLocaleString()}</div>
-                            <div className="font-medium">₦{Number(line.amount).toLocaleString()}</div>
+                            <div className="text-muted">{line.qty} {line.items?.unit} × ₦{Number(line.unit_price).toLocaleString()}</div>
+                            <div className="font-medium text-fg">₦{Number(line.amount).toLocaleString()}</div>
                           </div>
                         </div>
                       ))}

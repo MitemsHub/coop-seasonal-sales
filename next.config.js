@@ -117,20 +117,10 @@ const createConfig = (phase) => {
     // Other experimental features can go here
   },
   
-  // Redirects for security
+  // The rep dashboard now lives at /rep (protected by middleware like every
+  // other rep page), so no config-level redirect is needed here.
   async redirects() {
-    return [
-      {
-        source: '/admin',
-        destination: '/admin/pin',
-        permanent: false
-      },
-      {
-        source: '/rep',
-        destination: '/rep/login',
-        permanent: false
-      }
-    ]
+    return []
   },
   
   // Rewrites for API versioning and security

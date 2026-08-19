@@ -1,15 +1,18 @@
-# Coop Food Distribution System
+# Coop Seasonal Sales
 
-A comprehensive food distribution management system built with Next.js and Supabase for cooperative food distribution operations.
+A comprehensive seasonal sales management system built with Next.js and Supabase for cooperative food distribution, exhibition, and ram sales operations.
 
 ## Features
 
 - **Member Management**: Handle member registrations, eligibility, and order tracking
+- **Food Distribution**: Complete food order lifecycle from placement to delivery
+- **Exhibition Shop**: Seasonal vendor exhibitions with per-vendor product catalogs
+- **RAM Sales**: Separate sales module for RAM (rapid allocation market) items
 - **Inventory Management**: Track stock levels, pricing, and item availability
-- **Order Processing**: Complete order lifecycle from placement to delivery
 - **Branch Operations**: Multi-branch support with branch-specific configurations
 - **Admin Dashboard**: Comprehensive administrative tools and reporting
 - **Representative Portal**: Tools for field representatives to manage deliveries
+- **Vendor Portal**: Self-service vendor hubs for managing products and orders
 
 ## Getting Started
 
@@ -44,3 +47,8 @@ This project uses Supabase as the backend database. Run the migrations in the `/
 ## Security
 
 The system implements comprehensive security measures including rate limiting, authentication, and data validation. See `/docs/SECURITY_IMPLEMENTATION.md` for details.
+
+## Deployment
+
+- **Frontend**: Vercel — [coopseasonalsales.vercel.app](https://coopseasonalsales.vercel.app)
+- **Database**: Supabase — project `coop-seasonal-sales`

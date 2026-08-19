@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
+import useFocusTrap from '../hooks/useFocusTrap'
 
 export default function DraggableModal({
   open,
@@ -13,12 +14,16 @@ export default function DraggableModal({
 }) {
   const dragging = useRef(false)
   const start = useRef({ x: 0, y: 0 })
+  const panelRef = useRef(null)
   const [pos, setPos] = useState({ x: 0, y: 0 })
 
   useEffect(() => {
     // Reset position whenever the modal opens
     if (open) setPos({ x: 0, y: 0 })
   }, [open])
+
+  // Tab trap, focus in/restore, ESC close and scroll lock for the modal.
+  useFocusTrap({ open, panelRef, breakpoint: null, lockScroll: true, onClose })
 
   const onPointerDown = (e) => {
     if (e?.target && e.target.closest) {
@@ -48,9 +53,6 @@ export default function DraggableModal({
   }
 
   const stop = (e) => e.stopPropagation()
-  const onKeyDown = (e) => {
-    if (e.key === 'Escape') onClose?.()
-  }
 
   return (
     <AnimatePresence>
@@ -58,7 +60,6 @@ export default function DraggableModal({
         <motion.div
           className={`fixed inset-0 ${overlayClassName} flex items-start justify-center z-50 p-4 overflow-auto`}
           onClick={onClose}
-          onKeyDown={onKeyDown}
           role="dialog"
           aria-modal="true"
           tabIndex={-1}
@@ -68,27 +69,29 @@ export default function DraggableModal({
           transition={{ duration: 0.16, ease: 'easeOut' }}
         >
           <motion.div
+            ref={panelRef}
             onClick={stop}
             style={{ x: pos.x, y: pos.y }}
+            tabIndex={-1}
             initial={{ opacity: 0, scale: 0.985 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.985 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
-            className={`bg-gradient-to-b from-white to-gray-50 rounded-2xl shadow-2xl border border-gray-200 ${widthClass}`}
+            className={`bg-surface rounded-xl border border-line shadow-xl outline-none ${widthClass}`}
           >
             <div className="p-6">
               <div
                 className="flex items-center justify-between mb-4 cursor-move select-none touch-none"
                 onPointerDown={onPointerDown}
               >
-                <h3 className="text-lg font-semibold">{title}</h3>
+                <h3 className="text-[15px] font-semibold text-fg">{title}</h3>
                 <button
                   type="button"
                   aria-label="Close"
                   onClick={onClose}
-                  className="px-2 py-1 rounded hover:bg-gray-100"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-subtext transition-colors duration-200 ease-sakani hover:bg-subtle hover:text-fg"
                 >
-                  ×
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
               {children}

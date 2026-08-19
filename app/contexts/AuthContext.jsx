@@ -48,6 +48,8 @@ function AuthProviderContent({ children }) {
         await fetch('/api/admin/pin/session', { method: 'DELETE', credentials: 'include' }).catch(() => null)
       } else if (currentUserType === 'rep') {
         await fetch('/api/rep/session', { method: 'DELETE', credentials: 'include' }).catch(() => null)
+      } else if (currentUserType === 'member') {
+        await fetch('/api/members/session', { method: 'DELETE', credentials: 'include' }).catch(() => null)
       }
     } catch {}
 

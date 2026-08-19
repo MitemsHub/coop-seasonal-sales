@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import DraggableModal from '../../../components/DraggableModal'
+import ExportButton from '../../../components/ui/ExportButton'
+import PrintOrderSheet from '../../../components/PrintOrderSheet'
+import { createManifestDoc, addManifestTable, sanitizePdfText } from '../../../lib/pdfExport'
+import { announceRepFoodStats } from '../../../lib/repFoodStatsSync'
+import { CheckSquare, ChevronLeft, ChevronRight, Inbox, RefreshCw, RotateCcw, Send, Truck, XCircle, Zap } from 'lucide-react'
 
 export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
   const [orders, setOrders] = useState([])
@@ -28,6 +33,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
   const [cancellingOrder, setCancellingOrder] = useState(false)
   const [restoringOrders, setRestoringOrders] = useState(false)
   const [viewing, setViewing] = useState(null)
+  const [sheetOrder, setSheetOrder] = useState(null) // order row for the print sheet
   const fetchCtl = useRef(null)
   // Draggable modal now handled by reusable component
 
@@ -190,6 +196,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
       setMsg({ type:'success', text:`Order ${orderId} posted` })
       fetchOrders(); setSelected(new Set())
       setModalInput('')
+      announceRepFoodStats()
     } catch (e) {
       if (e.name === 'AbortError') {
         setMsg({ type:'error', text:'Post timed out after 8s. Please check network and try again.' })
@@ -243,12 +250,13 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
       let message = `Posted ${json.posted?.length || 0} order(s)`
       if (json.failed?.length > 0) {
         const reasons = json.failed.slice(0, 5).map(f => `#${f.order_id}: ${f.error}`).join('; ')
-        message += `, ${json.failed.length} failed — ${reasons}`
+        message += `, ${json.failed.length} failed: ${reasons}`
       }
 
       setMsg({ type:'success', text: message })
       fetchOrders(); setSelected(new Set())
       setModalInput('')
+      announceRepFoodStats()
     } catch (e) {
       if (e.name === 'AbortError') {
         setMsg({ type:'error', text:'Bulk post timed out after 8s. Please check network and try again.' })
@@ -305,6 +313,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
       fetchOrders(); setSelected(new Set())
       setShowModal(null)
       setModalInput('')
+      announceRepFoodStats()
     } catch (e) {
       setMsg({ type:'error', text:e.message })
     } finally {
@@ -356,6 +365,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
       setSelected(new Set())
       setShowModal(null)
       setModalInput('')
+      announceRepFoodStats()
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
     } finally {
@@ -430,7 +440,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
     const ws = wb.addWorksheet('Pending')
 
     const headers = Object.keys(rows[0])
-    ws.addRow(['Food Distribution — Pending Orders (Admin)'])
+    ws.addRow(['Food Distribution · Pending Orders (Admin)'])
     ws.addRow([`Search: ${term || 'All'} | Payment: ${payment || 'All'}`])
     ws.addRow(headers)
     for (const r of rows) ws.addRow(headers.map((h) => r[h]))
@@ -452,17 +462,11 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
       alert('No rows to export')
       return
     }
-    const { jsPDF } = await import('jspdf')
-    const { default: autoTable } = await import('jspdf-autotable')
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-
-    const sanitize = (s) => String(s ?? '').replace(/\u20A6|₦/g, 'NGN ').replace(/[\u2013\u2014]/g, '-')
-
-    doc.setFontSize(14)
-    doc.text('Pending Orders Manifest (Admin)', 12, 12)
-    doc.setFontSize(9)
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 12, 18)
-    doc.text(`Search: ${term || 'All'}  |  Payment: ${payment || 'All'}`, 12, 24)
+    const sanitize = sanitizePdfText
+    const doc = await createManifestDoc({
+      title: 'Pending Orders Manifest (Admin)',
+      meta: `Search: ${term || 'All'}  |  Payment: ${payment || 'All'}`,
+    })
 
     const headers = ['Order', 'Member', 'Dept', 'Pay', 'SKU', 'Item', 'Qty', 'Unit Price', 'Amount']
     const rows = srcOrders.flatMap((o) =>
@@ -479,15 +483,10 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
       ])
     )
 
-    autoTable(doc, {
-      head: [headers],
+    await addManifestTable(doc, {
+      head: headers,
       body: rows,
       startY: 30,
-      margin: { top: 28, left: 10, right: 10 },
-      theme: 'grid',
-      styles: { fontSize: 8, cellPadding: 1.5, overflow: 'linebreak', lineWidth: 0.1, lineColor: [0, 0, 0] },
-      headStyles: { fillColor: [75, 85, 99], textColor: [255, 255, 255], fontSize: 9 },
-      alternateRowStyles: { fillColor: [249, 250, 251] },
       columnStyles: {
         0: { cellWidth: 14 }, // Order
         1: { cellWidth: 40 }, // Member
@@ -505,15 +504,46 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
   }
 
   return (
-    <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <h1 className="text-base sm:text-lg md:text-xl font-semibold break-words">Admin — Food Distribution — {status}</h1>
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="mb-6 flex flex-col gap-2">
+        <h1 className="text-h2 font-bold tracking-tight text-fg">Food Distribution · {status}</h1>
+        <p className="text-sm text-muted">Browse, filter, post and manage {status.toLowerCase()} orders.</p>
       </div>
+
+      {/* At-a-glance strip — today's pending queue plus delivered-this-cycle
+          progress, mirroring the rep pages. Admin-wide and independent of the
+          page's status filter. Only on the actionable Pending view (the
+          component is shared with the Cancelled page). */}
+      {status === 'Pending' && summary && (
+        <div className="mb-4 flex flex-col gap-2 rounded-xl border border-brand/30 bg-brand/5 px-3.5 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+          <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-brand">
+            <Zap className="h-3.5 w-3.5" strokeWidth={2.2} />
+            Today's pending
+          </span>
+          <span className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-subtext sm:justify-end">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="font-semibold text-fg">
+                {(summary.todayPending?.count || 0).toLocaleString()} order{(summary.todayPending?.count || 0) === 1 ? '' : 's'}
+              </span>
+              <span className="text-line-strong">·</span>
+              <span className="font-semibold text-fg">{money(summary.todayPending?.total || 0)}</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <Truck className="h-3.5 w-3.5 text-brand" strokeWidth={2.2} />
+              Delivered this cycle
+              <span className="font-semibold text-fg">{(summary.deliveredCycle?.count || 0).toLocaleString()}</span>
+              <span className="text-line-strong">·</span>
+              <span className="font-semibold text-fg">{money(summary.deliveredCycle?.total || 0)}</span>
+            </span>
+          </span>
+        </div>
+      )}
 
       {!!msg && (
         <div
-          className={`mb-4 rounded-lg border p-3 text-sm ${
-            msg.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 'bg-green-50 border-green-200 text-green-800'
+          role="alert"
+          className={`mb-4 rounded-xl border p-4 text-sm ${
+            msg.type === 'error' ? 'border-danger-border bg-danger-bg text-danger-fg' : 'border-success-border bg-success-bg text-success-fg'
           }`}
         >
           {msg.text}
@@ -525,7 +555,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
           <div className="flex flex-col lg:flex-row gap-2 lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 min-w-0">
               <input
-                className="w-full max-w-[420px] min-w-0 border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white"
+                className="w-full max-w-[420px] min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                 placeholder="Search (Order / Member / Branch)"
                 value={term}
                 onChange={(e) => setTerm(e.target.value)}
@@ -533,17 +563,18 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
               />
               <button
                 type="button"
-                className="shrink-0 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs sm:text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:opacity-50"
                 onClick={handleSearch}
                 disabled={loading}
               >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                 Search
               </button>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <select
-                className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white"
+                className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                 value={payment}
                 onChange={(e) => {
                   const next = e.target.value
@@ -562,7 +593,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
               {status === 'Cancelled' && (
                 <>
                   <select
-                    className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white"
+                    className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                     value={deliveryBranch}
                     onChange={(e) => {
                       const next = e.target.value
@@ -580,7 +611,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
                     ))}
                   </select>
                   <input
-                    className="border-2 border-gray-200 rounded-xl px-3 py-2 text-xs sm:text-sm bg-white"
+                    className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
                     placeholder="Member category (e.g. Pensioner)"
                     value={memberCategory}
                     onChange={(e) => {
@@ -596,87 +627,76 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
 
               {status === 'Pending' && (
                 <>
-                  <button
-                    type="button"
-                    className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-800 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+                  <ExportButton
+                    format="excel"
                     onClick={() => exportExcel().catch((e) => setMsg({ type: 'error', text: e?.message || 'Export failed' }))}
                     disabled={loading || !orders.length}
-                  >
-                    Download Excel
-                  </button>
+                  />
 
-                  <button
-                    type="button"
-                    className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+                  <ExportButton
+                    format="pdf"
                     onClick={() => exportPDF().catch((e) => setMsg({ type: 'error', text: e?.message || 'Export failed' }))}
                     disabled={loading || !orders.length}
-                  >
-                    Download PDF
-                  </button>
+                  />
                 </>
               )}
             </div>
           </div>
         </div>
 
-        <div className="mt-3 text-xs sm:text-sm text-gray-600">
-          Orders: {summary?.count ?? orders.length} · Total: {money(summary?.totalAmount ?? 0)} · Selected: {selected.size}
+        <div className="mt-3 text-sm text-muted">
+          Total: <span className="font-medium text-fg">{money(orders.reduce((s, o) => s + Number(o.total_amount || 0), 0))}</span>
         </div>
       </div>
 
       <div className="ui-card overflow-hidden">
-        <div className="p-4 border-b border-gray-100 bg-gray-50/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <div className="text-sm font-semibold">{status} Orders</div>
+        <div className="flex flex-col gap-3 border-b border-line bg-subtle p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="mr-1 text-sm font-semibold text-fg">{status} Orders</div>
             <button
               type="button"
-              className="px-3 py-1.5 rounded-lg bg-gray-900 text-white text-xs sm:text-sm font-semibold disabled:opacity-50 inline-flex items-center gap-2"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
               onClick={() => fetchOrders(null)}
               disabled={loading}
             >
-              {loading && (
-                <svg className="animate-spin h-3.5 w-3.5 text-gray-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-              )}
+              <RefreshCw className={['h-3.5 w-3.5', loading ? 'animate-spin' : ''].join(' ')} />
               <span>{loading ? 'Loading…' : 'Refresh'}</span>
             </button>
             <button
               type="button"
-              className="px-3 py-1.5 rounded-lg border text-xs sm:text-sm bg-white hover:bg-gray-50 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={selectAll}
               disabled={loading || !orders.length}
             >
+              <CheckSquare className="h-3.5 w-3.5" />
               {selected.size === orders.length && orders.length > 0 ? 'Deselect All' : 'Select All'}
             </button>
             {status === 'Pending' && (
               <button
-                className="px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-success-fg px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
                 disabled={selected.size === 0 || postingBulk}
                 onClick={postSelected}
               >
+                <Send className="h-3.5 w-3.5" />
                 {postingBulk ? 'Posting…' : `Post Selected (${selected.size})`}
               </button>
             )}
             {status === 'Pending' ? (
               <button
-                className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-danger-fg px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
                 disabled={selected.size === 0 || cancellingOrder}
                 onClick={cancelSelected}
               >
+                <XCircle className="h-3.5 w-3.5" />
                 {cancellingOrder ? 'Cancelling…' : `Cancel Selected (${selected.size})`}
               </button>
             ) : (
               <button
-                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
                 disabled={selected.size === 0 || restoringOrders}
                 onClick={restoreSelected}
               >
+                <RotateCcw className="h-3.5 w-3.5" />
                 {restoringOrders ? 'Restoring…' : `Restore Selected (${selected.size})`}
               </button>
             )}
@@ -684,7 +704,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
 
           <div className="flex items-center gap-2">
             <select
-              className="border rounded px-2 py-1 text-xs sm:text-sm bg-white"
+              className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={pageSize}
               onChange={(e) => {
                 const next = Number(e.target.value) || 50
@@ -701,7 +721,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
 
             <button
               type="button"
-              className="px-3 py-1.5 rounded border text-xs sm:text-sm bg-white hover:bg-gray-50 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => {
                 if (pageIndex <= 0) return
                 const nextIndex = pageIndex - 1
@@ -712,12 +732,13 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
               }}
               disabled={pageIndex <= 0 || loading}
             >
+              <ChevronLeft className="h-3.5 w-3.5" />
               Prev
             </button>
-            <div className="text-xs sm:text-sm text-gray-700">Page {pageIndex + 1}</div>
+            <div className="text-sm text-muted">Page <span className="font-medium text-fg">{pageIndex + 1}</span></div>
             <button
               type="button"
-              className="px-3 py-1.5 rounded border text-xs sm:text-sm bg-white hover:bg-gray-50 disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
               onClick={() => {
                 if (!nextCursor) return
                 const nextIndex = pageIndex + 1
@@ -730,109 +751,106 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
               disabled={!nextCursor || loading}
             >
               Next
+              <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="min-w-full text-xs sm:text-sm">
-            <thead className="bg-white sticky top-0 z-10">
-              <tr className="text-left border-b">
+          <table className="min-w-full text-sm">
+            <thead className="sticky top-0 z-10 bg-surface">
+              <tr className="border-b border-line text-left">
                 <th className="p-3 w-10">
                   <input
                     type="checkbox"
                     checked={orders.length > 0 && selected.size === orders.length}
                     onChange={selectAll}
                     disabled={loading || !orders.length}
-                    className="h-4 w-4"
+                    className="h-4 w-4 rounded border-line text-brand focus:ring-brand"
                   />
                 </th>
-                <th className="p-3">Order</th>
-                <th className="p-3">Member</th>
-                <th className="p-3">Delivery</th>
-                <th className="p-3">Payment</th>
-                <th className="p-3 text-right">Qty</th>
-                <th className="p-3 text-right">Total + Int</th>
-                <th className="p-3 text-right">Actions</th>
+                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Order</th>
+                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Member</th>
+                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Delivery</th>
+                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Payment</th>
+                <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Qty</th>
+                <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Total + Int</th>
+                <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
-                  <tr key={i} className="border-b">
+                  <tr key={i} className="border-b border-line">
+                    <td className="p-3"><div className="sakani-skeleton h-4 w-4 rounded" /></td>
                     <td className="p-3">
-                      <div className="h-4 w-4 bg-gray-100 rounded animate-pulse" />
+                      <div className="sakani-skeleton h-4 w-24 rounded" />
+                      <div className="sakani-skeleton mt-2 h-3 w-32 rounded" />
                     </td>
-                    <td className="p-3">
-                      <div className="h-4 w-24 bg-gray-100 rounded animate-pulse" />
-                      <div className="mt-2 h-3 w-32 bg-gray-100 rounded animate-pulse" />
-                    </td>
-                    <td className="p-3">
-                      <div className="h-4 w-40 bg-gray-100 rounded animate-pulse" />
-                    </td>
-                    <td className="p-3">
-                      <div className="h-4 w-36 bg-gray-100 rounded animate-pulse" />
-                    </td>
-                    <td className="p-3">
-                      <div className="h-4 w-16 bg-gray-100 rounded animate-pulse" />
-                    </td>
-                    <td className="p-3 text-right">
-                      <div className="ml-auto h-4 w-10 bg-gray-100 rounded animate-pulse" />
-                    </td>
-                    <td className="p-3 text-right">
-                      <div className="ml-auto h-4 w-20 bg-gray-100 rounded animate-pulse" />
-                    </td>
-                    <td className="p-3 text-right">
-                      <div className="ml-auto h-8 w-24 bg-gray-100 rounded animate-pulse" />
-                    </td>
+                    <td className="p-3"><div className="sakani-skeleton h-4 w-40 rounded" /></td>
+                    <td className="p-3"><div className="sakani-skeleton h-4 w-36 rounded" /></td>
+                    <td className="p-3"><div className="sakani-skeleton h-4 w-16 rounded" /></td>
+                    <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-4 w-10 rounded" /></td>
+                    <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-4 w-20 rounded" /></td>
+                    <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-8 w-24 rounded" /></td>
                   </tr>
                 ))
               ) : orders.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-6 text-center text-gray-600">
-                    No {status} orders.
+                  <td colSpan={8} className="p-10 text-center">
+                    <div className="mx-auto flex max-w-xs flex-col items-center gap-2">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-subtle">
+                        <Inbox className="h-6 w-6 text-subtext" />
+                      </div>
+                      <p className="text-sm font-medium text-fg">No {status} orders</p>
+                      <p className="text-xs text-muted">When members place orders, they will appear here.</p>
+                    </div>
                   </td>
                 </tr>
               ) : (
                 orders.map((o) => (
-                  <tr key={o.order_id} className="border-b hover:bg-gray-50/40">
+                  <tr key={o.order_id} className="border-b border-line transition-colors duration-150 ease-sakani hover:bg-subtle">
                     <td className="p-3">
                       <input
                         type="checkbox"
                         checked={selected.has(o.order_id)}
                         onChange={() => toggleSelect(o.order_id)}
-                        className="h-4 w-4"
+                        className="h-4 w-4 rounded border-line text-brand focus:ring-brand"
                       />
                     </td>
                     <td className="p-3">
-                      <div className="font-medium">#{o.order_id}</div>
-                      <div className="text-gray-500 text-xs">{new Date(o.created_at).toLocaleString()}</div>
+                      <div className="font-medium text-fg">#{o.order_id}</div>
+                      <div className="text-xs text-subtext">{new Date(o.created_at).toLocaleString()}</div>
                       {status === 'Cancelled' ? (
                         <>
-                          <div className="text-gray-500 text-xs">
+                          <div className="text-xs text-subtext">
                             Cancelled: {o.cancelled_at ? new Date(o.cancelled_at).toLocaleString() : '—'}
                           </div>
-                          <div className="text-gray-500 text-xs break-words">
+                          <div className="text-xs text-subtext break-words">
                             Reason: {String(o.cancelled_reason || '').trim() || '—'}
                           </div>
                         </>
                       ) : null}
                     </td>
                     <td className="p-3">
-                      <div className="font-medium">{o.member_id}</div>
-                      <div className="text-gray-600">{o.member_name_snapshot}</div>
-                      <div className="text-gray-500 text-xs">{o.member_branch?.name || '-'}</div>
+                      <div className="font-medium text-fg">{o.member_id}</div>
+                      <div className="text-muted">{o.member_name_snapshot}</div>
+                      <div className="text-xs text-subtext">{o.member_branch?.name || '-'}</div>
                     </td>
                     <td className="p-3">
-                      <div className="text-gray-900">{o.delivery?.name || '-'}</div>
-                      <div className="text-gray-500 text-xs">{o.departments?.name || '-'}</div>
+                      <div className="text-fg">{o.delivery?.name || '-'}</div>
+                      <div className="text-xs text-subtext">{o.departments?.name || '-'}</div>
                     </td>
-                    <td className="p-3">{o.payment_option}</td>
+                    <td className="p-3">
+                      <span className="inline-flex items-center rounded-md bg-subtle px-2 py-0.5 text-xs font-medium text-fg">
+                        {o.payment_option}
+                      </span>
+                    </td>
                     <td className="p-3 text-right">{orderQty(o)}</td>
-                    <td className="p-3 text-right font-medium">{money(o.total_amount)}</td>
+                    <td className="p-3 text-right font-medium text-fg">{money(o.total_amount)}</td>
                     <td className="p-3 text-right">
                       <select
-                        className="border border-gray-300 rounded-lg px-2 py-1.5 text-xs sm:text-sm bg-white disabled:opacity-50"
+                        className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none disabled:opacity-50"
                         defaultValue=""
                         onChange={(e) => {
                           const v = e.target.value
@@ -842,6 +860,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
                           if (v === 'post') doPost(o.order_id)
                           if (v === 'cancel') doCancel(o.order_id)
                           if (v === 'restore') doRestore(o.order_id)
+                          if (v === 'sheet') setSheetOrder(o)
                         }}
                         disabled={loading}
                       >
@@ -849,6 +868,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
                           Actions
                         </option>
                         <option value="view">View items</option>
+                        <option value="sheet">Print sheet</option>
                         {status === 'Pending' ? (
                           <>
                             <option value="edit">Edit</option>
@@ -874,24 +894,26 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
           open={!!editing}
           title={`Edit Order #${editing.order_id}`}
           onClose={() => setEditing(null)}
-          overlayClassName="bg-white/10 backdrop-blur-sm"
+          overlayClassName="bg-black/40"
           widthClass="max-w-2xl w-full mx-4"
           footer={(
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setEditing(null)}
-                className="px-4 py-2 border rounded hover:bg-gray-50"
+                className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle"
               >
                 Cancel
               </button>
               <button
-                className={`px-4 py-2 rounded text-white ${savingEdit ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+                className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani ${
+                  savingEdit ? 'cursor-not-allowed bg-muted' : 'bg-brand hover:bg-brand-hover'
+                }`}
                 onClick={saveEdit}
                 disabled={savingEdit}
               >
                 {savingEdit ? (
                   <div className="flex items-center justify-center">
-                    <svg className="animate-spin -ml-1 mr-1 h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin -ml-1 mr-1 h-3 w-3 text-on-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
@@ -904,13 +926,13 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
         >
           <div className="overflow-x-auto">
             <table className="w-full text-xs sm:text-sm border mb-3">
-              <thead className="bg-gray-50">
+              <thead className="bg-subtle">
                 <tr>
-                  <th className="text-left p-1 sm:p-2 border">SKU</th>
-                  <th className="text-left p-1 sm:p-2 border">Item</th>
-                  <th className="text-right p-1 sm:p-2 border">Qty</th>
-                  <th className="text-right p-1 sm:p-2 border">Unit Price</th>
-                  <th className="text-right p-1 sm:p-2 border">Amount</th>
+                  <th className="border border-line p-1 text-left text-xs font-semibold uppercase tracking-wide text-subtext sm:p-2">SKU</th>
+                  <th className="border border-line p-1 text-left text-xs font-semibold uppercase tracking-wide text-subtext sm:p-2">Item</th>
+                  <th className="border border-line p-1 text-right text-xs font-semibold uppercase tracking-wide text-subtext sm:p-2">Qty</th>
+                  <th className="border border-line p-1 text-right text-xs font-semibold uppercase tracking-wide text-subtext sm:p-2">Unit Price</th>
+                  <th className="border border-line p-1 text-right text-xs font-semibold uppercase tracking-wide text-subtext sm:p-2">Amount</th>
                 </tr>
               </thead>
               <tbody>
@@ -919,7 +941,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
                     <td className="p-1 sm:p-2 border text-xs">{l.sku}</td>
                     <td className="p-1 sm:p-2 border text-xs break-words">{l.name}</td>
                     <td className="p-1 sm:p-2 border text-right">
-                      <input type="number" min={0} value={l.qty} onChange={e=>setEditQty(idx, e.target.value)} className="border rounded px-1 py-1 w-16 sm:w-20 text-right text-xs" />
+                      <input type="number" min={0} value={l.qty} onChange={e=>setEditQty(idx, e.target.value)} className="w-16 rounded-md border border-line bg-surface px-1 py-1 text-right text-xs text-fg placeholder:text-subtext focus:border-brand focus:outline-none sm:w-20" />
                     </td>
                     <td className="p-1 sm:p-2 border text-right text-xs">₦{l.price.toLocaleString()}</td>
                     <td className="p-1 sm:p-2 border text-right text-xs">₦{(Number(l.qty) * l.price).toLocaleString()}</td>
@@ -929,8 +951,8 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
             </table>
           </div>
           <div className="flex items-center justify-end gap-2">
-            <div className="text-xs sm:text-sm text-gray-600">New Total</div>
-            <div className="text-lg sm:text-xl font-semibold">₦{editedTotal.toLocaleString()}</div>
+            <div className="text-sm text-muted">New Total</div>
+            <div className="text-[15px] font-semibold text-fg">₦{editedTotal.toLocaleString()}</div>
           </div>
         </DraggableModal>
       )}
@@ -941,12 +963,12 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
           open={!!showModal}
           title={showModal.title}
           onClose={() => { setShowModal(null); setModalInput('') }}
-          overlayClassName="bg-white/10 backdrop-blur-sm"
+          overlayClassName="bg-black/40"
           footer={(
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => { setShowModal(null); setModalInput('') }}
-                className="px-4 py-2 border rounded hover:bg-gray-50"
+                className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle"
               >
                 Cancel
               </button>
@@ -960,14 +982,10 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
                         ? handleCancelSubmit
                         : handleRestoreSubmit
                 }
-                className={`px-4 py-2 rounded text-white ${
-                  showModal.type === 'post'
-                    ? 'bg-blue-600 hover:bg-blue-700'
-                    : showModal.type === 'bulk-post'
-                      ? 'bg-blue-600 hover:bg-blue-700'
-                      : showModal.type === 'cancel'
-                        ? 'bg-red-600 hover:bg-red-700'
-                        : 'bg-blue-600 hover:bg-blue-700'
+                className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani ${
+                  showModal.type === 'cancel'
+                    ? 'bg-danger-fg hover:brightness-110'
+                    : 'bg-brand hover:bg-brand-hover'
                 }`}
                 disabled={
                   showModal.type === 'post'
@@ -982,7 +1000,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
                 {showModal.type === 'post' ? (
                   postingOrder === showModal.orderId ? (
                     <div className="flex items-center justify-center">
-                      <svg className="animate-spin -ml-1 mr-1 h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <svg className="animate-spin -ml-1 mr-1 h-3 w-3 text-on-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
@@ -992,7 +1010,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
                 ) : showModal.type === 'bulk-post' ? (
                   postingBulk ? (
                     <div className="flex items-center justify-center">
-                      <svg className="animate-spin -ml-1 mr-1 h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <svg className="animate-spin -ml-1 mr-1 h-3 w-3 text-on-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
@@ -1002,7 +1020,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
                 ) : showModal.type === 'cancel' ? (
                   cancellingOrder ? (
                     <div className="flex items-center justify-center">
-                      <svg className="animate-spin -ml-1 mr-1 h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <svg className="animate-spin -ml-1 mr-1 h-3 w-3 text-on-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
@@ -1012,7 +1030,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
                 ) : (
                   restoringOrders ? (
                     <div className="flex items-center justify-center">
-                      <svg className="animate-spin -ml-1 mr-1 h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <svg className="animate-spin -ml-1 mr-1 h-3 w-3 text-on-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
@@ -1024,7 +1042,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
             </div>
           )}
         >
-          <p className="text-gray-600 mb-4">
+          <p className="mb-4 text-sm text-muted">
             {showModal.message ||
               (showModal.type === 'post'
                 ? `Post order ${showModal.orderId}?`
@@ -1039,7 +1057,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
             value={modalInput}
             onChange={(e) => setModalInput(e.target.value)}
             placeholder={showModal.placeholder}
-            className="w-full p-2 border rounded"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             autoFocus
           />
         </DraggableModal>
@@ -1051,30 +1069,38 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
         widthClass="max-w-4xl w-full mx-4"
       >
         <div className="max-h-[60vh] overflow-auto">
-          <table className="w-full text-xs sm:text-sm border min-w-[560px]">
-            <thead className="bg-gray-50">
+          <table className="w-full min-w-[560px] border border-line text-sm">
+            <thead className="bg-subtle">
               <tr>
-                <th className="text-left p-2 border">SKU</th>
-                <th className="text-left p-2 border">Item</th>
-                <th className="text-right p-2 border">Qty</th>
-                <th className="text-right p-2 border">Unit Price</th>
-                <th className="text-right p-2 border">Amount</th>
+                <th className="border border-line p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">SKU</th>
+                <th className="border border-line p-2 text-left text-xs font-semibold uppercase tracking-wide text-subtext">Item</th>
+                <th className="border border-line p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Qty</th>
+                <th className="border border-line p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Unit Price</th>
+                <th className="border border-line p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Amount</th>
               </tr>
             </thead>
             <tbody>
               {(viewing?.order_lines || []).map((l) => (
-                <tr key={l.id}>
-                  <td className="p-2 border font-mono text-xs break-all">{l.items?.sku}</td>
-                  <td className="p-2 border break-words min-w-[220px]">{l.items?.name}</td>
-                  <td className="p-2 border text-right whitespace-nowrap">{l.qty}</td>
-                  <td className="p-2 border text-right whitespace-nowrap">{money(l.unit_price)}</td>
-                  <td className="p-2 border text-right whitespace-nowrap">{money(l.amount)}</td>
+                <tr key={l.id} className="transition-colors duration-150 ease-sakani hover:bg-subtle">
+                  <td className="break-all border border-line p-2 font-mono text-xs">{l.items?.sku}</td>
+                  <td className="break-words border border-line p-2 min-w-[220px]">{l.items?.name}</td>
+                  <td className="border border-line p-2 text-right whitespace-nowrap">{l.qty}</td>
+                  <td className="border border-line p-2 text-right whitespace-nowrap">{money(l.unit_price)}</td>
+                  <td className="border border-line p-2 text-right whitespace-nowrap">{money(l.amount)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </DraggableModal>
+
+      {/* Print-optimized order sheet — hand this to the packer/delivery team */}
+      <PrintOrderSheet
+        open={!!sheetOrder}
+        onClose={() => setSheetOrder(null)}
+        module="food"
+        order={sheetOrder}
+      />
     </div>
   )
 }

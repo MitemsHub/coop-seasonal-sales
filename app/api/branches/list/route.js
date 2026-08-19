@@ -8,9 +8,11 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   try {
     const supabase = createClient()
+    // id included so admin forms can post a numeric branch_id (the cycles and
+    // vendor pages select by id; existing consumers keep using code/name).
     const { data, error } = await supabase
       .from('branches')
-      .select('code, name')
+      .select('id, code, name')
       .order('name')
     
     if (error) {

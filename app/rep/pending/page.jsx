@@ -15,9 +15,9 @@ function RepPendingRedirect() {
   }, [router, user])
 
   return (
-    <div className="p-3 sm:p-6 max-w-3xl mx-auto">
-      <div className="bg-white border border-gray-200 rounded-lg p-4">
-        <div className="text-sm text-gray-700">Redirecting…</div>
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="ui-card p-4">
+        <div className="text-sm text-muted">Redirecting…</div>
       </div>
     </div>
   )

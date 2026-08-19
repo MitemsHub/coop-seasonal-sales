@@ -1,229 +1,254 @@
 'use client'
 
-// app/portal/page.jsx
+// app/portal/page.jsx — the members portal.
+// Shares the landing page's header, CTA language and card styling so the
+// guest journey (landing → portal → shop) feels like one product.
+
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
-import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { ArrowRight, MapPin, ShieldCheck, ShoppingBasket, Store, Truck } from 'lucide-react'
+import LandingHeader, { SIGNUP_URL } from '../components/LandingHeader'
 import MemberLauncher from '../components/MemberLauncher'
-import slide1 from '../../public/landing/slide1.png'
-import slide2 from '../../public/landing/slide2.png'
-import slide3 from '../../public/landing/slide3.png'
-import slide4 from '../../public/landing/slide4.png'
+import Reveal from '../components/ui/Reveal'
 
-export default function Landing() {
-  const reduceMotion = useReducedMotion()
-  const MotionImage = motion.create(Image)
-  const slides = useMemo(
-    () => [
-      { src: slide1, blur: true },
-      { src: slide2, blur: true },
-      { src: slide3, blur: true },
-      { src: slide4, blur: true },
-    ],
-    []
-  )
-  const [activeSlide, setActiveSlide] = useState(0)
-  const [paused, setPaused] = useState(false)
+const PORTAL_NAV = [
+  { href: '#member', label: 'Member sign in' },
+  { href: '#teams', label: 'Team portals' },
+]
 
-  useEffect(() => {
-    if (reduceMotion || paused || slides.length < 2) return
-    const intervalId = setInterval(() => {
-      setActiveSlide((i) => (i + 1) % slides.length)
-    }, 6500)
-    return () => clearInterval(intervalId)
-  }, [paused, reduceMotion, slides.length])
+const STAT_CHIPS = [
+  { icon: MapPin, label: '37 branches' },
+  { icon: ShoppingBasket, label: 'Seasonal sales' },
+]
+
+// Rotating module chip — same treatment as the landing page hero word, so the
+// portal chip cycles the seasonal modules instead of a static "Ram season".
+const SEASON_WORDS = ['Food season', 'Ram season', 'Coop Exhibition']
+
+function RotatingSeasonChip() {
+  const reduce = useReducedMotion()
+  const [i, setI] = useState(0)
+  const ROTATE_MS = 2800
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const next1 = slides[(activeSlide + 1) % slides.length]?.src
-    const next2 = slides[(activeSlide + 2) % slides.length]?.src
-    const candidates = [next1, next2]
-      .filter(Boolean)
-      .map((s) => (typeof s === 'string' ? s : s?.src))
-      .filter(Boolean)
-    for (const src of candidates) {
-      const img = new window.Image()
-      img.decoding = 'async'
-      img.loading = 'eager'
-      img.src = src
-    }
-  }, [activeSlide, slides])
+    if (reduce) return
+    const id = setInterval(() => setI((v) => (v + 1) % SEASON_WORDS.length), ROTATE_MS)
+    return () => clearInterval(id)
+  }, [reduce, ROTATE_MS])
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
-      {/* Hero Section */}
-      <div className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-slate-950" />
-        <div
-          className="absolute inset-0"
-          onMouseEnter={() => setPaused(true)}
-          onMouseLeave={() => setPaused(false)}
-        >
-          <AnimatePresence initial={false} mode="wait">
-            <MotionImage
-              key={activeSlide}
-              src={slides[activeSlide]?.src}
-              alt=""
-              fill
-              priority={activeSlide === 0}
-              quality={75}
-              placeholder={slides[activeSlide]?.blur ? 'blur' : undefined}
-              sizes="100vw"
-              className="object-cover object-center brightness-[1.43] contrast-105 saturate-110"
-              initial={
-                reduceMotion
-                  ? false
-                  : { opacity: 0, scale: 1.02, x: 0, y: 0 }
-              }
-              animate={
-                reduceMotion
-                  ? { opacity: 1 }
-                  : { opacity: 1, scale: 1.05, x: -10, y: -6 }
-              }
-              exit={reduceMotion ? { opacity: 1 } : { opacity: 0 }}
-              transition={
-                reduceMotion
-                  ? { duration: 0 }
-                  : {
-                      opacity: { duration: 0.65, ease: 'easeOut' },
-                      scale: { duration: 6.5, ease: 'easeOut' },
-                      x: { duration: 6.5, ease: 'easeOut' },
-                      y: { duration: 6.5, ease: 'easeOut' },
-                    }
-              }
-            />
-          </AnimatePresence>
-        </div>
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-950/45 via-slate-950/30 to-emerald-950/30" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.20),rgba(0,0,0,0.46))]" />
-        <div className="absolute inset-0 backdrop-blur-[0.5px]" />
-        <div className="relative px-4 md:px-6 py-8 md:py-16 text-center">
-          <div className="max-w-4xl mx-auto">
-            <div className="inline-block rounded-3xl border border-white/20 bg-white/10 px-4 py-4 md:px-8 md:py-7 shadow-2xl backdrop-blur-xl">
-              <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold text-white mb-2 md:mb-4">
-                CBN Coop
-              </h1>
-              <p className="text-lg md:text-2xl lg:text-3xl text-white/95 font-light mb-1 md:mb-2">
-                Food Distribution Portal
-              </p>
-              <p className="text-sm md:text-lg text-white/80 max-w-2xl mx-auto px-2">
-                Your one-stop platform for cooperative food distribution management
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-fluid-xs py-fluid-2xs text-chips font-medium text-white sm:text-xs">
+      <ShoppingBasket className="h-3 w-3 text-brand-200" strokeWidth={2} />
+      <span className="relative inline-flex">
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.span
+            key={SEASON_WORDS[i]}
+            initial={{ opacity: 0, y: 8, filter: 'blur(3px)' }}
+            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, y: -8, filter: 'blur(3px)' }}
+            transition={{ duration: 0.3, ease: [0.33, 1, 0.68, 1] }}
+          >
+            {SEASON_WORDS[i]}
+          </motion.span>
+        </AnimatePresence>
+      </span>
+    </span>
+  )
+}
 
-      {/* Main Content */}
-      <div className="px-4 md:px-6 pb-8 md:pb-16">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-8">
-            {/* Members Card */}
-            <div className="group relative bg-white rounded-lg xl:rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden md:col-span-2 lg:col-span-1">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-blue-600"></div>
-              <div className="p-3 lg:p-4 xl:p-5">
-                <div className="flex items-center mb-2 lg:mb-3">
-                  <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-100 rounded-xl flex items-center justify-center mr-1 lg:mr-2">
-                    <svg className="w-5 h-5 md:w-6 md:h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
+
+export default function PortalPage() {
+  return (
+    <div className="min-h-screen bg-canvas text-fg">
+      <LandingHeader
+        navLinks={PORTAL_NAV}
+        navLabel="Portal"
+        cta={{ label: 'Become a Member', href: SIGNUP_URL, external: true }}
+        drawerSecondary={{ label: 'Member Login', href: '#member' }}
+      />
+
+      {/* =================== HERO — brand gradient + member sign in =================== */}
+      <section id="member" className="relative scroll-mt-20 overflow-hidden">
+        {/* Ambient background tints */}
+        <div className="pointer-events-none absolute inset-0" aria-hidden>
+          <div className="absolute -top-24 right-[-8%] h-80 w-80 rounded-full bg-brand-500/10 blur-3xl" />
+          <div className="absolute bottom-[-30%] left-[-6%] h-72 w-72 rounded-full bg-accent/10 blur-3xl" />
+        </div>
+
+        <div className="relative mx-auto max-w-7xl px-4 py-10 sm:py-14 lg:px-6 lg:py-16">
+          <Reveal>
+            <div className="relative overflow-hidden rounded-2xl border border-brand-800 bg-gradient-to-br from-brand-900 via-brand-800 to-brand-700 shadow-xl">
+              <div
+                className="pointer-events-none absolute inset-0 opacity-20"
+                style={{
+                  backgroundImage:
+                    'radial-gradient(circle at 15% 15%, rgba(255,255,255,0.35), transparent 40%), radial-gradient(circle at 85% 90%, rgba(255,255,255,0.22), transparent 40%)',
+                }}
+                aria-hidden
+              />
+              <div className="relative grid gap-10 p-6 sm:p-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-14 lg:p-12">
+                {/* Copy */}
+                <div>
+                  <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-fluid-xs py-fluid-2xs text-chips font-semibold text-white shadow-xs sm:text-xs">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full motion-safe:animate-ping rounded-full bg-brand-200 opacity-60" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-brand-200" />
+                    </span>
+                    Members portal
+                  </span>
+
+                  {/* Hero headline — deliberately off the fluid text scale (like the
+                      design-system showcase): a marketing hero on a dark card, sized by
+                      breakpoint chain 26 → 36 → 44px rather than the text-h1 utility. */}
+                  <h1 className="mt-5 text-[1.4375rem] font-bold leading-[1.15] tracking-tight text-white sm:text-4xl lg:text-[2.75rem]">
+                    Welcome to{' '}
+                    <span className="whitespace-nowrap text-brand-200">Coop Seasonal Sales</span>
+                  </h1>
+
+                  <p className="mt-4 max-w-md text-sm leading-6 text-white/85 sm:text-base">
+                    Sign in to order this cycle&apos;s seasonal sales, then pick up at your branch.
+                  </p>
+
+                  {/* Stat chips + rotating module chip */}
+                  <div className="mt-6 flex flex-wrap gap-2">
+                    {STAT_CHIPS.map((c) => (
+                      <span
+                        key={c.label}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-fluid-xs py-fluid-2xs text-chips font-medium text-white sm:text-xs"
+                      >
+                        <c.icon className="h-3 w-3 text-brand-200" strokeWidth={2} />
+                        {c.label}
+                      </span>
+                    ))}
+                    <RotatingSeasonChip />
                   </div>
-                  <h2 className="text-xl md:text-2xl font-bold text-gray-800">Members Portal</h2>
+
                 </div>
-                <p className="text-sm md:text-base text-gray-600 mb-2 lg:mb-3 leading-normal">
-                  Welcome to your shopping portal! Enter your Staff ID to browse and order from our cooperative food distribution system.
-                </p>
-                <MemberLauncher />
+
+                {/* Member launcher — kept intact, wrapped in a surface card */}
+                <div className="rounded-2xl border border-white/15 bg-surface p-5 shadow-2xl sm:p-6">
+                  <div className="mb-4 flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-subtle text-brand">
+                      <ShoppingBasket className="h-5 w-5" strokeWidth={2} />
+                    </span>
+                    <div className="leading-tight">
+                      <h2 className="text-sm font-bold text-fg">Member sign in</h2>
+                      <p className="text-xs text-muted">Enter your staff ID to continue</p>
+                    </div>
+                  </div>
+                  <MemberLauncher />
+                </div>
               </div>
             </div>
-
-            {/* Branch Reps Card */}
-            <div className="group relative bg-white rounded-lg xl:rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-500 to-green-600"></div>
-              <div className="p-3 lg:p-4 xl:p-5">
-                <div className="flex items-center mb-2 lg:mb-3">
-                  <div className="w-10 h-10 md:w-12 md:h-12 bg-green-100 rounded-xl flex items-center justify-center mr-1 lg:mr-2">
-                    <svg className="w-5 h-5 md:w-6 md:h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                  </div>
-                  <h2 className="text-lg md:text-2xl font-bold text-gray-800">Reps Portal</h2>
-                </div>
-                <p className="text-sm md:text-base text-gray-600 mb-2 lg:mb-3 leading-normal">
-                  Manage pending and delivered orders for your delivery branch. Access order processing and delivery coordination tools.
-                </p>
-                <Link href="/rep/access" className="inline-flex items-center px-4 py-2 md:px-6 md:py-3 bg-gradient-to-r from-green-500 to-green-600 text-white text-sm md:text-base font-semibold rounded-xl hover:from-green-600 hover:to-green-700 transition-all duration-200 shadow-lg hover:shadow-xl">
-                  <svg className="w-4 h-4 md:w-5 md:h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                  </svg>
-                  Access Rep Portal
-                </Link>
-              </div>
-            </div>
-
-            {/* Admin Card */}
-            <div className="group relative bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-purple-600"></div>
-              <div className="p-3 lg:p-4 xl:p-5">
-                <div className="flex items-center mb-2 lg:mb-3">
-                  <div className="w-10 h-10 md:w-12 md:h-12 bg-purple-100 rounded-xl flex items-center justify-center mr-1 lg:mr-2">
-                    <svg className="w-5 h-5 md:w-6 md:h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </div>
-                  <h2 className="text-lg md:text-2xl font-bold text-gray-800">Admin Portal</h2>
-                </div>
-                <p className="text-sm md:text-base text-gray-600 mb-2 lg:mb-3 leading-normal">
-                  Complete system control including inventory management, order approvals, reporting, and data imports.
-                </p>
-                <Link href="/admin/pin" className="inline-flex items-center px-4 py-2 md:px-6 md:py-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white text-sm md:text-base font-semibold rounded-xl hover:from-purple-600 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl">
-                  <svg className="w-4 h-4 md:w-5 md:h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                  Admin Access
-                </Link>
-              </div>
-            </div>
-          </div>
+          </Reveal>
         </div>
-      </div>
+      </section>
 
-      {/* Footer */}
-      <footer className="relative mt-12 border-t border-gray-200/70 bg-gradient-to-r from-blue-50/90 via-white/80 to-green-50/90 backdrop-blur">
-        <div className="max-w-7xl mx-auto px-4 md:px-6 py-4">
-          <div className="flex flex-col md:flex-row items-center justify-between space-y-2 md:space-y-0">
-            <div className="flex items-center space-x-1.5 text-gray-600">
-              <span className="text-xs">Powered by</span>
-              <span className="inline-flex items-center">
+      {/* ============================ TEAM PORTALS ============================ */}
+      <section id="teams" className="scroll-mt-20 border-t border-line bg-subtle/40">
+        <div className="mx-auto max-w-7xl px-4 py-12 lg:px-6 lg:py-16">
+          <Reveal className="mx-auto max-w-2xl text-center">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand">
+              Team portals
+            </span>
+            <h2 className="mt-4 text-h2 font-bold tracking-tight text-fg">
+              For branch reps, vendors &amp; system administrators
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-fg/80">
+              The people who run deliveries, stock the market and keep the Coop running, in
+              three dedicated workspaces.
+            </p>
+          </Reveal>
+
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Reps */}
+            <Reveal>
+              <div className="group h-full rounded-xl border border-line bg-surface p-6 shadow-xs transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-md">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-subtle text-brand-fg transition-transform duration-200 group-hover:scale-105">
+                  <Truck className="h-5.5 w-5.5" strokeWidth={2} />
+                </span>
+                <h3 className="mt-4 text-[13px] font-semibold text-fg sm:text-base">Reps Portal</h3>
+                <p className="mt-1.5 text-sm leading-5 text-fg/80">
+                  Manage pending and delivered orders for your delivery branch. Processing and
+                  delivery coordination in one place.
+                </p>
                 <Link
-                  href="/contact"
-                  className="text-xs font-semibold text-blue-700 hover:text-blue-800 drop-shadow-[0_0_12px_rgba(37,99,235,0.25)]"
+                  href="/rep/access"
+                  className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-medium text-on-accent shadow-xs transition-colors duration-200 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
                 >
-                  MitemsHub
+                  Sign in
+                  <ArrowRight className="h-4 w-4" />
                 </Link>
-                <motion.span
-                  className="ml-1 inline-block h-2 w-2 rounded-full bg-blue-600"
-                  animate={{
-                    opacity: [0.35, 1, 0.35],
-                    scale: [1, 1.9, 1],
-                    boxShadow: [
-                      '0 0 0px rgba(37,99,235,0.0)',
-                      '0 0 14px rgba(37,99,235,0.45)',
-                      '0 0 0px rgba(37,99,235,0.0)',
-                    ],
-                  }}
-                  transition={{ duration: reduceMotion ? 2.2 : 1.4, repeat: Infinity, ease: 'easeInOut' }}
-                />
-              </span>
-            </div>
-            <div className="text-xs text-gray-500">
-              © 2026 CBN Coop Food Distribution
-            </div>
+              </div>
+            </Reveal>
+
+            {/* Vendor */}
+            <Reveal delay={0.08}>
+              <div className="group h-full rounded-xl border border-line bg-surface p-6 shadow-xs transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-md">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-subtle text-brand-fg transition-transform duration-200 group-hover:scale-105">
+                  <Store className="h-5.5 w-5.5" strokeWidth={2} />
+                </span>
+                <h3 className="mt-4 text-[13px] font-semibold text-fg sm:text-base">Vendor Portal</h3>
+                <p className="mt-1.5 text-sm leading-5 text-fg/80">
+                  Manage your exhibition stand: upload products, set prices and mark orders
+                  delivered when you hand the goods over.
+                </p>
+                <Link
+                  href="/vendor"
+                  className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-medium text-on-accent shadow-xs transition-colors duration-200 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+                >
+                  Sign in
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </Reveal>
+
+            {/* Admin */}
+            <Reveal delay={0.16}>
+              <div className="group h-full rounded-xl border border-line bg-surface p-6 shadow-xs transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-md">
+                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-subtle text-brand-fg transition-transform duration-200 group-hover:scale-105">
+                  <ShieldCheck className="h-5.5 w-5.5" strokeWidth={2} />
+                </span>
+                <h3 className="mt-4 text-[13px] font-semibold text-fg sm:text-base">Admin Portal</h3>
+                <p className="mt-1.5 text-sm leading-5 text-fg/80">
+                  Complete system control: inventory, order approvals, reporting, markups and data
+                  imports.
+                </p>
+                <Link
+                  href="/admin/pin"
+                  className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-medium text-on-accent shadow-xs transition-colors duration-200 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+                >
+                  Sign in
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </Reveal>
           </div>
+        </div>
+      </section>
+
+      {/* ============================== FOOTER ============================== */}
+      <footer className="border-t border-line bg-surface">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-6 text-center sm:flex-row sm:text-left lg:px-6">
+          <p className="text-xs text-muted">© 2026 CBN Coop Seasonal Sales. All rights reserved.</p>
+          <p className="text-xs text-muted">
+            Need help?{' '}
+            <span className="font-medium text-fg">
+              customerservice@cbncoopng.com, 09096797982, 08180578550
+            </span>
+          </p>
+          <p className="flex items-center gap-1.5 text-xs text-muted">
+            Powered by
+            <Link
+              href="/contact"
+              className="rounded font-semibold text-brand transition-colors duration-150 hover:text-brand-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+            >
+              MitemsHub
+            </Link>
+          </p>
         </div>
       </footer>
-    </main>
+    </div>
   )
 }

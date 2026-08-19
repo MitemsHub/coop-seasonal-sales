@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cart Enhancements — Sample</title>
+<style>
+  /* ─── Sakani tokens (mirrored from app/globals.css) ─── */
+  :root{
+    --bg-canvas:#fafaf9; --bg-surface:#ffffff; --bg-subtle:#f5f4f2; --bg-muted:#e7e5e1; --bg-inverse:#1f1f1f;
+    --fg-default:#141414; --fg-muted:#57534e; --fg-subtle:#76706a; --fg-on-accent:#ffffff; --fg-on-inverse:#fafaf9;
+    --line-subtle:#e7e5e1; --line-default:#dbdad7; --line-strong:#a8a29b;
+    --brand:#1d6746; --brand-hover:#134e34; --brand-active:#0d3926; --brand-subtle:#e2f5e9; --brand-fg:#0d3926;
+    --accent:#f2c26a; --accent-hover:#e8a53d; --accent-subtle:#fdf3dd; --accent-fg:#141414;
+    --success-bg:#f1fef6; --success-fg:#027a48; --warning-bg:#fffbf0; --warning-fg:#b54708;
+    --danger-bg:#fef3f2; --danger-fg:#b42318; --info-bg:#eff8ff; --info-fg:#175cd3;
+    --shadow-xs:0 1px 2px 0 rgba(16,15,12,.05); --shadow-sm:0 1px 3px 0 rgba(16,15,12,.1),0 1px 2px 0 rgba(16,15,12,.06);
+    --shadow-md:0 4px 8px -2px rgba(16,15,12,.1),0 2px 4px -2px rgba(16,15,12,.06);
+    --shadow-lg:0 12px 16px -4px rgba(16,15,12,.08),0 4px 6px -2px rgba(16,15,12,.03);
+    --shadow-xl:0 20px 24px -4px rgba(16,15,12,.1),0 8px 8px -4px rgba(16,15,12,.03);
+    --ease-sakani:cubic-bezier(.65,0,.35,1); --ease-out:cubic-bezier(.33,1,.68,1);
+    --r-sm:7px; --r-md:9px; --r-lg:14px; --r-xl:18px;
+  }
+  html[data-theme="dark"]{
+    --bg-canvas:#0f0e0c; --bg-surface:#141414; --bg-subtle:#1f1f1f; --bg-muted:#3a3837; --bg-inverse:#fafaf9;
+    --fg-default:#fafaf9; --fg-muted:#a8a29b; --fg-subtle:#9c968f; --fg-on-accent:#141414; --fg-on-inverse:#0f0e0c;
+    --line-subtle:#2a2826; --line-default:#3a3837; --line-strong:#78716a;
+    --brand:#69b48d; --brand-hover:#93cdad; --brand-active:#bce2cc; --brand-subtle:#052315; --brand-fg:#93cdad;
+    --accent:#f2c26a; --accent-hover:#e8a53d; --accent-subtle:#381c06; --accent-fg:#141414;
+    --success-bg:#033524; --success-fg:#6ce9a6; --warning-bg:#4e1d09; --warning-fg:#fec84b;
+    --danger-bg:#55160c; --danger-fg:#fda29b; --info-bg:#102a56; --info-fg:#84caff;
+    --shadow-xs:0 1px 2px 0 rgba(0,0,0,.4); --shadow-sm:0 1px 3px 0 rgba(0,0,0,.5),0 1px 2px 0 rgba(0,0,0,.3);
+    --shadow-md:0 4px 8px -2px rgba(0,0,0,.5),0 2px 4px -2px rgba(0,0,0,.3);
+    --shadow-lg:0 12px 16px -4px rgba(0,0,0,.5),0 4px 6px -2px rgba(0,0,0,.3);
+    --shadow-xl:0 20px 24px -4px rgba(0,0,0,.5),0 8px 8px -4px rgba(0,0,0,.3);
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:'Geist','Inter',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
+    background:var(--bg-canvas); color:var(--fg-default);
+    -webkit-font-smoothing:antialiased; transition:background .3s var(--ease-sakani),color .3s var(--ease-sakani);
+  }
+
+  /* ─── Showcase shell ─── */
+  .bar{
+    position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    padding:12px 20px;background:color-mix(in srgb,var(--bg-canvas) 82%,transparent);
+    backdrop-filter:blur(14px);border-bottom:1px solid var(--line-subtle);
+  }
+  .bar .mark{display:flex;align-items:center;gap:10px;margin-right:auto}
+  .bar .mark .dot{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--brand),var(--brand-hover));display:grid;place-items:center;color:var(--fg-on-accent);font-weight:700;font-size:14px;box-shadow:var(--shadow-sm)}
+  .bar h1{font-size:14px;font-weight:700;letter-spacing:-.01em}
+  .bar p{font-size:11px;color:var(--fg-muted)}
+  .seg{display:inline-flex;align-items:center;gap:2px;background:var(--bg-subtle);border:1px solid var(--line-subtle);border-radius:10px;padding:3px}
+  .seg button{border:0;background:transparent;color:var(--fg-muted);font:inherit;font-size:11px;font-weight:600;padding:5px 10px;border-radius:7px;cursor:pointer;transition:all .2s var(--ease-sakani);white-space:nowrap}
+  .seg button:hover{color:var(--fg-default)}
+  .seg button.active{background:var(--bg-surface);color:var(--fg-default);box-shadow:var(--shadow-xs)}
+  .icon-btn{width:30px;height:30px;border-radius:9px;border:1px solid var(--line-subtle);background:var(--bg-surface);display:grid;place-items:center;cursor:pointer;color:var(--fg-muted);font-size:14px;transition:all .2s var(--ease-sakani)}
+  .icon-btn:hover{color:var(--fg-default);border-color:var(--line-strong)}
+
+  .stage{display:flex;flex-direction:column;align-items:center;padding:28px 16px 80px;gap:18px}
+  .device-frame{width:min(100%,1200px);background:var(--bg-canvas);border:1px solid var(--line-subtle);border-radius:20px;box-shadow:var(--shadow-xl);overflow:hidden;transition:width .4s var(--ease-out)}
+  .device-frame.is-mobile{width:min(100%,400px)}
+  .device-topbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line-subtle);background:var(--bg-surface)}
+  .device-topbar .dots{display:flex;gap:4px}
+  .device-topbar .dots span{width:6px;height:6px;border-radius:50%;background:var(--line-strong)}
+  .device-topbar .url{flex:1;text-align:center;font-size:10px;color:var(--fg-subtle);background:var(--bg-subtle);border-radius:99px;padding:3px 10px;max-width:240px;margin:0 auto}
+
+  .legend{width:min(100%,1200px);display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}
+  .legend .note{background:var(--bg-surface);border:1px solid var(--line-subtle);border-radius:12px;padding:12px 14px;font-size:11px;color:var(--fg-muted);line-height:1.55}
+  .legend .note b{color:var(--fg-default);font-weight:600}
+  .legend .note .tag{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--brand);background:var(--brand-subtle);border-radius:99px;padding:2px 8px;margin-bottom:5px}
+  .legend .note.new{border-color:color-mix(in srgb,var(--brand) 45%,var(--line-subtle));box-shadow:0 0 0 1px color-mix(in srgb,var(--brand) 12%,transparent)}
+  .legend .note.new .tag{background:var(--brand);color:var(--fg-on-accent)}
+
+  .kbd{font-size:10px;color:var(--fg-subtle);text-align:center}
+
+  /* ─── Cart (current arrangement, unchanged) ─── */
+  .cart-canvas{position:relative;min-height:720px;container-type:inline-size;background:
+    radial-gradient(900px 340px at 12% -6%, color-mix(in srgb,var(--brand) 9%,transparent), transparent 60%),
+    radial-gradient(760px 300px at 92% 4%, color-mix(in srgb,var(--accent) 9%,transparent), transparent 60%),
+    var(--bg-canvas)}
+  .pill{display:inline-flex;align-items:center;gap:6px;border-radius:99px;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:3px 9px}
+  .pill.brand{background:var(--brand-subtle);color:var(--brand-fg)}
+  .pill.muted{background:var(--bg-subtle);color:var(--fg-muted)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;cursor:pointer;font:inherit;font-size:12px;font-weight:600;border-radius:10px;padding:9px 14px;transition:all .2s var(--ease-sakani)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btn.primary{background:var(--brand);color:var(--fg-on-accent)}
+  .btn.primary:not(:disabled):hover{background:var(--brand-hover);transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+  .btn.gold{background:var(--accent);color:var(--accent-fg)}
+  .btn.gold:not(:disabled):hover{background:var(--accent-hover);transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+  .btn.secondary{background:var(--bg-surface);color:var(--fg-default);border:1px solid var(--line-default)}
+  .btn.secondary:hover{border-color:var(--line-strong)}
+  .btn.ghost{background:transparent;color:var(--fg-muted)}
+  .btn.ghost:hover{color:var(--fg-default);background:var(--bg-subtle)}
+  .btn.danger{background:var(--danger-bg);color:var(--danger-fg)}
+  .btn.danger:hover{filter:brightness(.97)}
+  .btn.sm{padding:6px 10px;font-size:11px;border-radius:8px}
+  .card{background:var(--bg-surface);border:1px solid var(--line-subtle);border-radius:var(--r-lg);box-shadow:var(--shadow-xs)}
+  .input{width:100%;border:1px solid var(--line-default);border-radius:10px;background:var(--bg-surface);padding:9px 11px;font:inherit;font-size:12px;color:var(--fg-default);outline:none;transition:border .2s,box-shadow .2s}
+  .input:focus{border-color:var(--brand);box-shadow:0 0 0 3px color-mix(in srgb,var(--brand) 18%,transparent)}
+  textarea.input{resize:vertical;min-height:56px}
+  .label{font-size:10px;color:var(--fg-muted);font-weight:500;margin-bottom:4px;display:block}
+  .card-head{display:flex;align-items:center;gap:8px}
+  .card-head .ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:14px;flex:0 0 auto}
+  .card-head h3{font-size:13px;font-weight:700;letter-spacing:-.01em}
+  .card-body{padding:14px}
+  .qty-btn{width:26px;height:26px;border-radius:50%;border:1px solid var(--line-default);background:var(--bg-surface);color:var(--fg-default);cursor:pointer;font-size:14px;line-height:1;display:grid;place-items:center;transition:all .15s var(--ease-sakani)}
+  .qty-btn:hover{border-color:var(--brand);color:var(--brand)}
+  .qty-btn:disabled{opacity:.3;cursor:not-allowed}
+  .tiny-chip{font-size:9.5px;font-weight:600;border-radius:99px;padding:2px 7px;background:var(--bg-subtle);color:var(--fg-muted);white-space:nowrap}
+  .tiny-chip.green{background:var(--success-bg);color:var(--success-fg)}
+  .tiny-chip.gold{background:var(--accent-subtle);color:var(--accent-fg)}
+  .tiny-chip.info{background:var(--info-bg);color:var(--info-fg)}
+  .tiny-chip.warn{background:var(--warning-bg);color:var(--warning-fg)}
+
+  .hero{padding:22px 16px 0;display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .hero-title{font-size:22px;font-weight:700;letter-spacing:-.02em;line-height:1.15;margin-top:8px}
+  .hero-sub{font-size:12px;color:var(--fg-muted);line-height:1.5;margin-top:4px}
+  .hero .right{margin-left:auto;display:flex;align-items:center;gap:8px}
+
+  /* ── ENHANCEMENT 1: saved whisper ── */
+  .saved-whisper{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--fg-subtle);margin-top:6px}
+  .saved-whisper .dot-live{width:6px;height:6px;border-radius:50%;background:var(--success-fg);animation:pulse 2.2s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  .two-col{display:grid;grid-template-columns:1fr;gap:12px;padding:14px 16px 0}
+  .main-row{display:grid;grid-template-columns:1fr;gap:12px;padding:14px 16px 0}
+
+  /* items grid */
+  .item-card{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:14px;border:1px solid var(--line-subtle);background:var(--bg-surface);transition:border .2s,box-shadow .2s}
+  .item-card:hover{border-color:var(--line-strong);box-shadow:var(--shadow-sm)}
+  .item-top{display:flex;gap:10px;align-items:flex-start}
+  .thumb{width:44px;height:44px;border-radius:10px;flex:0 0 auto;display:grid;place-items:center;font-size:20px;background:radial-gradient(80% 80% at 30% 20%,color-mix(in srgb,var(--brand) 22%,transparent),transparent 70%),var(--bg-subtle)}
+  .item-fields{flex:1;min-width:0}
+  .item-meta{font-size:10px;color:var(--fg-subtle);margin-top:2px}
+  .info-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;border-radius:9px;padding:7px 10px;font-size:11px}
+  .info-bar .k{font-size:10px;font-weight:500}
+  .info-bar .v{font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
+  .info-bar.unit{background:var(--info-bg);color:var(--info-fg)}
+  .info-bar.line{background:var(--success-bg);color:var(--success-fg)}
+  .stepper-row{display:flex;align-items:center;justify-content:center;gap:8px}
+  .stepper-box{display:flex;align-items:center;overflow:hidden;border:1px solid var(--line-default);border-radius:9px;background:var(--bg-surface)}
+  .stepper-box button{width:30px;height:30px;border:0;background:var(--bg-subtle);cursor:pointer;font-size:15px;color:var(--fg-default);transition:all .15s var(--ease-sakani)}
+  .stepper-box button.min:hover{background:var(--danger-bg);color:var(--danger-fg)}
+  .stepper-box button.pls:hover{background:var(--success-bg);color:var(--success-fg)}
+  .stepper-box .n{width:38px;text-align:center;font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
+  .item-foot{display:flex;align-items:center;justify-content:space-between;gap:6px}
+
+  /* ENHANCEMENT 4: demand whisper per item */
+  .demand-whisper{font-size:9.5px;font-weight:600;border-radius:99px;padding:2px 7px;background:var(--success-bg);color:var(--success-fg);white-space:nowrap}
+  .demand-whisper.neutral{background:var(--bg-subtle);color:var(--fg-muted)}
+
+  /* ENHANCEMENT 5: delivery note */
+  .note-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .note-chip{border:1px solid var(--line-default);background:var(--bg-surface);color:var(--fg-muted);border-radius:99px;font:inherit;font-size:10px;font-weight:600;padding:5px 10px;cursor:pointer;transition:all .15s var(--ease-sakani)}
+  .note-chip:hover{border-color:var(--brand);color:var(--brand)}
+  .note-chip.active{background:var(--brand-subtle);border-color:color-mix(in srgb,var(--brand) 55%,transparent);color:var(--brand-fg)}
+
+  /* payment segmented */
+  .pay-seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--bg-subtle);border:1px solid var(--line-subtle);border-radius:11px;padding:4px}
+  .pay-seg button{border:0;background:transparent;color:var(--fg-muted);font:inherit;font-size:11.5px;font-weight:600;padding:8px 4px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;transition:all .2s var(--ease-sakani)}
+  .pay-seg button:hover{color:var(--fg-default)}
+  .pay-seg button.active{background:var(--brand);color:var(--fg-on-accent);box-shadow:var(--shadow-xs)}
+  .pay-seg button:disabled{opacity:.4;cursor:not-allowed}
+  .quick-summary{margin-top:10px;border:1px solid var(--line-subtle);background:var(--bg-subtle);border-radius:11px;padding:10px 12px;display:flex;flex-direction:column;gap:5px}
+  .quick-summary .row{display:flex;justify-content:space-between;font-size:11px;color:var(--fg-muted)}
+  .quick-summary .row b{color:var(--fg-default)}
+
+  /* summary */
+  .stat-tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  .stat{border:1px solid var(--line-subtle);background:var(--bg-subtle);border-radius:10px;padding:9px;text-align:center}
+  .stat .v{font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums}
+  .stat .k{font-size:9.5px;font-weight:500;color:var(--fg-muted);margin-top:1px}
+  .stat.warn{background:var(--warning-bg);border-color:var(--line-default)}
+  .stat.warn .v,.stat.warn .k{color:var(--warning-fg)}
+  .stat.brand{background:var(--brand-subtle);border-color:color-mix(in srgb,var(--brand) 25%,transparent)}
+  .stat.brand .v,.stat.brand .k{color:var(--brand-fg)}
+  .loan-box{display:flex;gap:8px;align-items:flex-start;margin-top:10px;border:1px solid var(--line-default);background:var(--warning-bg);border-radius:10px;padding:10px 12px}
+  .loan-box .txt{font-size:10.5px;color:var(--warning-fg);line-height:1.55}
+  .loan-box .txt b{font-weight:700}
+  .over-box{display:flex;gap:8px;align-items:flex-start;margin-top:10px;border:1px solid var(--line-default);background:var(--danger-bg);border-radius:10px;padding:10px 12px;animation:shake .4s var(--ease-sakani)}
+  .over-box .txt{font-size:10.5px;color:var(--danger-fg);font-weight:600;line-height:1.5}
+  @keyframes shake{0%,100%{transform:none}25%{transform:translateX(-2px)}75%{transform:translateX(2px)}}
+
+  /* ENHANCEMENT 6: mobile sticky checkout bar */
+  .m-bar{
+    position:sticky;bottom:12px;z-index:45;margin:14px;padding:10px 12px;border-radius:14px;
+    background:color-mix(in srgb,var(--bg-surface) 90%,transparent);backdrop-filter:blur(12px);
+    border:1px solid var(--line-subtle);box-shadow:var(--shadow-lg);
+    display:flex;align-items:center;gap:10px;
+  }
+  .m-bar .sum{display:flex;flex-direction:column;line-height:1.25}
+  .m-bar .sum .k{font-size:9px;color:var(--fg-subtle);font-weight:500;text-transform:uppercase;letter-spacing:.06em}
+  .m-bar .sum .v{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+  .m-bar .btn{margin-left:auto;flex-shrink:0}
+  .m-bar .count-chip{font-size:9.5px;font-weight:700;border-radius:99px;background:var(--accent);color:var(--accent-fg);padding:2px 7px}
+
+  /* summary card sticks beside items on desktop */
+  @container (min-width: 820px){
+    .two-col{grid-template-columns:1fr 1fr}
+    .main-row{grid-template-columns:2fr 1fr;align-items:start}
+    .summary{position:sticky;top:70px}
+    .m-bar{display:none}
+    .stat-tiles{grid-template-columns:repeat(3,1fr)}
+    .hero{flex-wrap:nowrap}
+  }
+
+  /* ─── Confirm modal (ENHANCEMENT 7) ─── */
+  .modal-overlay{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(10,9,8,.5);backdrop-filter:blur(4px)}
+  .modal-overlay.open{display:flex;animation:fade .25s var(--ease-sakani)}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .modal-card{width:min(100%,440px);background:var(--bg-surface);border:1px solid var(--line-subtle);border-radius:18px;box-shadow:var(--shadow-xl);overflow:hidden;animation:rise .35s var(--ease-out)}
+  @keyframes rise{from{opacity:0;transform:translateY(18px) scale(.98)}to{opacity:1;transform:none}}
+  .modal-head{padding:16px 18px 12px;border-bottom:1px solid var(--line-subtle);display:flex;align-items:center;gap:10px}
+  .modal-head .ic{width:34px;height:34px;border-radius:10px;background:var(--accent-subtle);color:var(--accent-hover);display:grid;place-items:center;font-size:16px}
+  .modal-head h3{font-size:14px;font-weight:700}
+  .modal-head p{font-size:10.5px;color:var(--fg-muted);margin-top:1px}
+  .modal-body{padding:14px 18px;max-height:52vh;overflow:auto}
+  .review-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line-subtle)}
+  .review-item .thumb{width:34px;height:34px;font-size:16px}
+  .review-item .nm{flex:1;min-width:0;font-size:11.5px;font-weight:600}
+  .review-item .nm small{display:block;font-size:9.5px;color:var(--fg-subtle);font-weight:400}
+  .review-item .lt{font-size:11.5px;font-weight:700;font-variant-numeric:tabular-nums}
+  .review-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+  .review-meta .cell{border:1px solid var(--line-subtle);background:var(--bg-subtle);border-radius:9px;padding:8px 10px}
+  .review-meta .k{font-size:9px;color:var(--fg-subtle);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+  .review-meta .v{font-size:11.5px;font-weight:600;margin-top:2px}
+  .review-totals{margin-top:12px;border:1px solid var(--line-subtle);border-radius:11px;padding:10px 12px;display:flex;flex-direction:column;gap:5px;font-size:11px;color:var(--fg-muted)}
+  .review-totals .row{display:flex;justify-content:space-between}
+  .review-totals .row.total{border-top:1px solid var(--line-subtle);margin-top:4px;padding-top:8px;font-size:13px;font-weight:700;color:var(--fg-default)}
+  .review-totals .row.total .amt{color:var(--brand)}
+  .review-note{margin-top:10px;border:1px dashed var(--line-strong);border-radius:9px;padding:8px 11px;font-size:10.5px;color:var(--fg-muted);display:none}
+  .review-note.show{display:block}
+  .review-note b{color:var(--fg-default)}
+  .modal-foot{padding:12px 18px 16px;border-top:1px solid var(--line-subtle);display:flex;gap:8px}
+  .modal-foot .btn{flex:1}
+  .print-hint{text-align:center;font-size:9.5px;color:var(--fg-subtle);margin-top:8px}
+
+  /* ─── Success toast (ENHANCEMENT 8) ─── */
+  .success-toast{
+    position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:85;width:min(92%,420px);
+    background:var(--bg-inverse);color:var(--fg-on-inverse);border-radius:14px;padding:13px 16px;
+    box-shadow:var(--shadow-xl);font-size:12px;line-height:1.5;display:none;align-items:flex-start;gap:10px;
+  }
+  html[data-theme="dark"] .success-toast{background:var(--bg-surface);color:var(--fg-default);border:1px solid var(--line-strong)}
+  .success-toast.show{display:flex;animation:drop .45s var(--ease-out)}
+  .success-toast .tick{width:26px;height:26px;border-radius:50%;background:var(--success-bg);color:var(--success-fg);display:grid;place-items:center;font-size:13px;flex:0 0 auto;margin-top:1px}
+  .success-toast b{display:block;font-size:12.5px}
+  .success-toast .x{margin-left:auto;border:0;background:transparent;color:inherit;opacity:.55;cursor:pointer;font-size:14px;line-height:1;padding:2px}
+  .success-toast .x:hover{opacity:1}
+  @keyframes drop{from{opacity:0;transform:translate(-50%,14px)}to{opacity:1;transform:translate(-50%,0)}}
+
+  /* ─── Print receipt (ENHANCEMENT 9) ─── */
+  #receipt{display:none}
+  @media print{
+    body *{display:none !important}
+    #receipt{display:block !important;color:#000;font-family:ui-sans-serif,system-ui,sans-serif;padding:24px;font-size:12px}
+    #receipt h1{font-size:18px;margin-bottom:2px}
+    #receipt .sub{font-size:11px;color:#555;margin-bottom:14px}
+    #receipt table{width:100%;border-collapse:collapse;margin:12px 0}
+    #receipt th,#receipt td{border-bottom:1px solid #ccc;padding:6px 4px;text-align:left;font-size:11px}
+    #receipt th{text-transform:uppercase;font-size:9px;letter-spacing:.05em;color:#555}
+    #receipt .row{display:flex;justify-content:space-between;font-size:11px;padding:2px 0}
+    #receipt .total{border-top:2px solid #000;margin-top:8px;padding-top:8px;font-weight:700;font-size:14px}
+    #receipt .note{border:1px dashed #999;padding:8px;margin-top:14px;font-size:11px}
+    #receipt .foot{margin-top:18px;font-size:10px;color:#555;border-top:1px solid #ccc;padding-top:8px}
+  }
+
+  .comparison{width:min(100%,1200px);margin-top:8px;display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+  .comparison .col{background:var(--bg-surface);border:1px solid var(--line-subtle);border-radius:12px;padding:14px}
+  .comparison .col h4{font-size:12px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+  .comparison .col ul{list-style:none;font-size:11px;color:var(--fg-muted);line-height:1.7}
+  .comparison .col ul li::before{content:'— ';color:var(--line-strong)}
+  .comparison .col.old h4{color:var(--fg-subtle)}
+  .comparison .col.new h4{color:var(--brand)}
+  .comparison .col.new{border-color:color-mix(in srgb,var(--brand) 40%,var(--line-subtle))}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <div class="mark">
+    <div class="dot">S</div>
+    <div>
+      <h1>Cart Enhancements — Sample</h1>
+      <p>Same arrangement · 9 layers on top · Sakani tokens</p>
+    </div>
+  </div>
+  <div class="seg" id="deviceTabs">
+    <button class="active" data-device="mobile">📱 Mobile</button>
+    <button data-device="desktop">🖥 Desktop</button>
+  </div>
+  <button class="icon-btn" id="themeBtn" title="Toggle theme">🌙</button>
+</div>
+
+<div class="stage">
+
+  <div class="legend">
+    <div class="note new"><span class="tag">New · 1</span><b>Saved whisper</b> — the cart already auto-saves per member; now it says so, with a live pulse.</div>
+    <div class="note new"><span class="tag">New · 2</span><b>Clear cart</b> — one-tap reset instead of removing line by line at cycle end.</div>
+    <div class="note new"><span class="tag">New · 3</span><b>Item thumbnails</b> — the line item's image (or emoji tile) makes the cart scannable at a glance.</div>
+    <div class="note new"><span class="tag">New · 4</span><b>Demand whisper</b> — the shop's demand story follows each item into the cart: "Demand: 212".</div>
+    <div class="note new"><span class="tag">New · 5</span><b>Delivery note</b> — free-text instructions for the branch, with quick-fill chips.</div>
+    <div class="note new"><span class="tag">New · 6</span><b>Mobile sticky checkout bar</b> — the summary card only sticks on desktop; on phones add a pinned total + Submit.</div>
+    <div class="note new"><span class="tag">New · 7</span><b>Confirm-before-submit</b> — a final review sheet (items, branch, payment, totals) before committing.</div>
+    <div class="note new"><span class="tag">New · 8+9</span><b>Success toast + print receipt</b> — order placed feels done; the print slip is what members bring to pickup.</div>
+    <div class="note"><span class="tag">Unchanged</span><b>Arrangement stays</b> — delivery/dept → payment → items → summary, exactly as today. Nothing removed.</div>
+  </div>
+
+  <div class="device-frame is-mobile" id="frame">
+    <div class="device-topbar">
+      <div class="dots"><span></span><span></span><span></span></div>
+      <div class="url">coop.cbn.ng/cart</div>
+    </div>
+
+    <div class="cart-canvas">
+      <!-- Hero (unchanged) + saved whisper -->
+      <div class="hero">
+        <div>
+          <span class="pill brand">🛒 Your Cart</span>
+          <h1 class="hero-title">Review your order</h1>
+          <p class="hero-sub">Confirm items, choose payment, submit for this cycle.</p>
+          <div class="saved-whisper" id="savedWhisper"><span class="dot-live"></span><span id="savedText">Saved just now</span></div>
+        </div>
+        <div class="right">
+          <button class="btn ghost sm" id="shopBtn">← Continue shopping</button>
+        </div>
+      </div>
+
+      <!-- Delivery & Department (unchanged) -->
+      <div class="two-col">
+        <div class="card">
+          <div class="card-body">
+            <div class="card-head">
+              <span class="ic" style="background:var(--brand-subtle)">📍</span>
+              <h3>Delivery &amp; Department</h3>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+              <div><label class="label">Delivery Branch</label><select class="input" id="branchSel"><option>Marina Branch</option><option>Yaba Branch</option><option>Lekki Branch</option></select></div>
+              <div><label class="label">Department</label><select class="input" id="deptSel"><option>All Departments</option><option>Household</option><option>Staff Canteen</option></select></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Payment (unchanged) + interest tile -->
+        <div class="card">
+          <div class="card-body">
+            <div class="card-head">
+              <span class="ic" style="background:var(--accent-subtle)">💳</span>
+              <h3>Payment</h3>
+            </div>
+            <div class="pay-seg" id="paySeg" style="margin-top:12px">
+              <button data-pay="Cash">💵 Cash</button>
+              <button data-pay="Loan" class="active">🏦 Loan</button>
+              <button data-pay="Savings" disabled>🐖 Savings · closed</button>
+            </div>
+            <div class="quick-summary">
+              <div class="row"><span>Items</span><b id="qItems">0</b></div>
+              <div class="row"><span>Total</span><b id="qTotal">₦0</b></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cart Items + summary -->
+      <div class="main-row">
+        <div class="card">
+          <div class="card-body">
+            <div class="card-head">
+              <span class="ic" style="background:var(--brand-subtle)">📦</span>
+              <h3>Cart Items</h3>
+              <span class="tiny-chip" id="itemCount">0 items</span>
+              <span style="flex:1"></span>
+              <button class="btn ghost sm" id="clearBtn" style="display:none">🗑 Clear</button>
+              <button class="btn secondary sm" id="addBtn">＋ Add Item</button>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr;gap:10px;margin-top:12px" id="itemList"></div>
+          </div>
+        </div>
+
+        <!-- Order Summary & Checkout (unchanged) + note + mobile bar -->
+        <div class="summary">
+          <div class="card">
+            <div class="card-body">
+              <div class="card-head">
+                <span class="ic" style="background:var(--accent-subtle)">🧾</span>
+                <h3>Order Summary</h3>
+              </div>
+
+              <div class="stat-tiles" style="margin-top:12px">
+                <div class="stat"><div class="v" id="sItems">0</div><div class="k">Items in Cart</div></div>
+                <div class="stat"><div class="v" id="sTotal">₦0</div><div class="k">Cart Total</div></div>
+                <div class="stat warn" id="interestTile" style="display:none"><div class="v" id="sInterest">₦0</div><div class="k">Interest (12%)</div></div>
+                <div class="stat brand"><div class="v" id="sLimit">₦250,000</div><div class="k">Limit (Loan)</div></div>
+              </div>
+
+              <div class="loan-box" id="loanBox">
+                <span>📌</span>
+                <div class="txt">
+                  <b>Loan Payment Information</b><br>
+                  <span id="loanLine">Total with interest: ₦0 (12% applied).</span><br>
+                  Your loan limit applies to the total including interest.
+                </div>
+              </div>
+
+              <div class="over-box" id="overBox" style="display:none">
+                <span>⚠️</span>
+                <div class="txt">Total exceeds your Loan limit. Reduce quantities or switch payment method.</div>
+              </div>
+
+              <!-- ENHANCEMENT 5: delivery note -->
+              <label class="label" style="margin-top:12px">Delivery Note <span style="font-weight:400;color:var(--fg-subtle)">(optional)</span></label>
+              <textarea class="input" id="noteInput" placeholder="Any instructions for the branch — pickup day, call ahead, leave at the desk…"></textarea>
+              <div class="note-chips" id="noteChips">
+                <button class="note-chip" data-note="Call before pickup">📞 Call before pickup</button>
+                <button class="note-chip" data-note="Weekday pickup only">📅 Weekday pickup only</button>
+                <button class="note-chip" data-note="Leave at the branch desk">🪑 Leave at the branch desk</button>
+              </div>
+
+              <button class="btn gold" id="submitBtn" style="width:100%;margin-top:14px">✅ Review &amp; Submit Order</button>
+            </div>
+          </div>
+
+          <!-- ENHANCEMENT 6: mobile sticky bar -->
+          <div class="m-bar" id="mBar">
+            <div class="sum">
+              <span class="k">Cart total · <span id="mCount">0 items</span></span>
+              <span class="v" id="mTotal">₦0</span>
+            </div>
+            <button class="btn gold" id="mSubmitBtn">Review →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="comparison">
+    <div class="col old">
+      <h4>Before (today)</h4>
+      <ul>
+        <li>Saves silently — members don't know it persisted</li>
+        <li>No way to clear; remove line by line</li>
+        <li>Text-only line items, hard to scan</li>
+        <li>No order instructions for the branch</li>
+        <li>On phones the totals sit below the items — scroll past them to submit</li>
+        <li>One tap submits with no final look</li>
+      </ul>
+    </div>
+    <div class="col new">
+      <h4>After (this sample)</h4>
+      <ul>
+        <li>"Saved just now" pulse builds trust in persistence</li>
+        <li>Clear cart with one tap</li>
+        <li>Thumbnails + demand whispers per line</li>
+        <li>Delivery note with quick-fill chips</li>
+        <li>Pinned total + Review on mobile — submit is always one thumb away</li>
+        <li>Review sheet before committing, then a done toast + print slip</li>
+      </ul>
+    </div>
+    <div class="col new">
+      <h4>Try it</h4>
+      <ul>
+        <li>Adjust the steppers — totals, interest, and remaining-limit react</li>
+        <li>Switch Cash ↔ Loan — the interest tile and limits swap</li>
+        <li>Pump quantities past ₦250k — the over-limit box shakes in and disables submit</li>
+        <li>Tap a note chip — it fills the note; it rides into the review</li>
+        <li>Hit "Review &amp; Submit" — review sheet → confirm → toast → print</li>
+        <li>Toggle 🖥 Desktop — summary sticks beside the items</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="kbd">Every control in the sample is live · toggle theme and device above · no app code touched</div>
+</div>
+
+<!-- Confirm modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal-card">
+    <div class="modal-head">
+      <span class="ic">✅</span>
+      <div>
+        <h3>Review your order</h3>
+        <p>One last look before it goes to the branch</p>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div id="reviewItems"></div>
+      <div class="review-meta">
+        <div class="cell"><div class="k">Delivery branch</div><div class="v" id="rvBranch">Marina</div></div>
+        <div class="cell"><div class="k">Department</div><div class="v" id="rvDept">All Departments</div></div>
+        <div class="cell"><div class="k">Payment</div><div class="v" id="rvPay">Loan</div></div>
+        <div class="cell"><div class="k">Cycle</div><div class="v">12 · Ram season</div></div>
+      </div>
+      <div class="review-totals">
+        <div class="row"><span>Items</span><span id="rvItemCount">0</span></div>
+        <div class="row"><span>Cart total</span><span>₦<span id="rvTotal">0</span></span></div>
+        <div class="row" id="rvInterestRow"><span>Interest (12%)</span><span>₦<span id="rvInterest">0</span></span></div>
+        <div class="row total"><span>Total due</span><span class="amt">₦<span id="rvGrand">0</span></span></div>
+      </div>
+      <div class="review-note" id="rvNoteWrap"><b>📝 Note:</b> <span id="rvNote"></span></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn secondary" id="cancelBtn">Back</button>
+      <button class="btn primary" id="confirmBtn">Confirm Order</button>
+    </div>
+    <div class="print-hint">After confirming, tap <b>Print slip</b> to bring to pickup.</div>
+  </div>
+</div>
+
+<!-- Success toast -->
+<div class="success-toast" id="successToast">
+  <span class="tick">✓</span>
+  <div style="min-width:0">
+    <b>Order submitted!</b>
+    <span>Collect at <span id="okBranch">Marina Branch</span> this Friday · order #<span id="okNumber">CN-2841</span></span>
+  </div>
+  <button class="x" id="toastX">✕</button>
+</div>
+
+<!-- Print receipt -->
+<div id="receipt">
+  <h1>CBN Cooperative Food Distribution</h1>
+  <div class="sub">Order Slip · bring to the branch desk on pickup day</div>
+  <div class="row"><span>Order no.</span><b id="rpNumber">CN-2841</b></div>
+  <div class="row"><span>Member</span><b>MEM001 · Bello, Amina</b></div>
+  <div class="row"><span>Branch</span><b id="rpBranch">Marina Branch</b></div>
+  <div class="row"><span>Department</span><b id="rpDept">All Departments</b></div>
+  <div class="row"><span>Payment</span><b id="rpPay">Loan (12% interest)</b></div>
+  <table>
+    <thead><tr><th>Item</th><th>Qty</th><th style="text-align:right">Total</th></tr></thead>
+    <tbody id="rpRows"></tbody>
+  </table>
+  <div class="row"><span>Cart total</span><span>₦<span id="rpTotal">0</span></span></div>
+  <div class="row" id="rpIntRow"><span>Interest (12%)</span><span>₦<span id="rpInt">0</span></span></div>
+  <div class="row total"><span>Total due</span><span>₦<span id="rpGrand">0</span></span></div>
+  <div class="note" id="rpNoteWrap">📝 <b>Note:</b> <span id="rpNote"></span></div>
+  <div class="foot">Cycle 12 · Ram season · Prices include Marina Branch markup · Questions? Ask at your branch desk.</div>
+</div>
+
+<script>
+  const ITEMS = [
+    { name:'Local Rice (50kg)', unit:'Bag', price:85000, emoji:'🍚', demand:null },
+    { name:'Palm Oil (25L)', unit:'Jerrycan', price:58000, emoji:'🫒', demand:96 },
+    { name:'Brown Beans (25kg)', unit:'Bag', price:48000, emoji:'🫘', demand:212 },
+    { name:'Sugar (25kg)', unit:'Bag', price:54000, emoji:'🍬', demand:null },
+    { name:'Semovita (10kg)', unit:'Bag', price:16000, emoji:'🍞', demand:null },
+    { name:'Tomato Paste (24×400g)', unit:'Carton', price:38000, emoji:'🥫', demand:340 },
+  ];
+  const LIMITS = { Loan:250000, Cash:200000 };
+  const INTEREST_RATE = 0.12;
+  const fmt = n => '₦' + n.toLocaleString();
+  const itemOf = sku => ITEMS.find(i => i.name === sku);
+
+  let state = {
+    items: [
+      { sku:'Local Rice (50kg)', qty:1 },
+      { sku:'Palm Oil (25L)', qty:1 },
+    ],
+    payment:'Loan',
+    branch:'Marina Branch',
+    dept:'All Departments',
+    note:'',
+  };
+
+  const itemList = document.getElementById('itemList');
+  const $ = id => document.getElementById(id);
+
+  function interest(){ return state.payment === 'Loan' ? INTEREST_RATE : 0; }
+  function cartTotal(){
+    return state.items.reduce((s,i) => s + itemOf(i.sku).price * i.qty, 0);
+  }
+  function totalWithInterest(){ return Math.round(cartTotal() * (1 + interest())); }
+  function overLimit(){ return cartTotal() > LIMITS[state.payment]; }
+
+  function renderItems(){
+    if (state.items.length === 0){
+      itemList.innerHTML = `<div style="text-align:center;padding:26px 10px;border:1px dashed var(--line-strong);border-radius:12px">
+        <div style="font-size:26px">🛒</div>
+        <div style="font-size:12px;font-weight:600;margin-top:6px">Your cart is empty</div>
+        <div style="font-size:10.5px;color:var(--fg-muted);margin:3px 0 12px">Add items from the shop to get started.</div>
+        <button class="btn primary" id="emptyShop">Start Shopping →</button>
+      </div>`;
+      document.getElementById('emptyShop').addEventListener('click', () => flash('Cart is empty — head to the shop to add items.'));
+      return;
+    }
+    itemList.innerHTML = state.items.map((it, idx) => {
+      const item = itemOf(it.sku);
+      const demand = item.demand !== null && item.demand !== undefined;
+      const lineTotal = item.price * it.qty;
+      return `
+      <div class="item-card">
+        <div class="item-top">
+          <div class="thumb">${item.emoji}</div>
+          <div class="item-fields">
+            <select class="input" data-sku="${idx}">
+              ${ITEMS.map(o => `<option value="${o.name}" ${o.name===it.sku?'selected':''}>${o.name} — ${fmt(o.price)}</option>`).join('')}
+            </select>
+            <div class="item-meta">${item.unit} · Grains &amp; Oils · <b>Demand: ${demand ? item.demand : 'tracking'}</b></div>
+          </div>
+        </div>
+        <div class="info-bar unit">
+          <span class="k">Unit Price</span>
+          <span class="v">${fmt(item.price)}</span>
+        </div>
+        <div class="stepper-row">
+          <div class="stepper-box">
+            <button class="min" data-dec="${idx}" aria-label="Decrease">−</button>
+            <span class="n">${it.qty}</span>
+            <button class="pls" data-inc="${idx}" aria-label="Increase">+</button>
+          </div>
+        </div>
+        <div class="info-bar line">
+          <span class="k">Line Total</span>
+          <span class="v">${fmt(lineTotal)}</span>
+        </div>
+        <div class="item-foot">
+          <span class="demand-whisper ${demand ? '' : 'neutral'}">${demand ? 'Demand: ' + item.demand : 'No stock data'}</span>
+          <button class="btn danger sm" data-rm="${idx}">🗑 Remove</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderTotals(){
+    const n = state.items.length;
+    const total = cartTotal();
+    const int = Math.round(total * interest());
+    $('itemCount').textContent = n + (n === 1 ? ' item' : ' items');
+    $('qItems').textContent = n;
+    $('qTotal').textContent = fmt(total);
+    $('sItems').textContent = n;
+    $('sTotal').textContent = fmt(total);
+    $('mCount').textContent = n + (n === 1 ? ' item' : ' items');
+    $('mTotal').textContent = fmt(total);
+    $('sLimit').textContent = fmt(LIMITS[state.payment]) + ' (' + state.payment + ')';
+    $('sLimit').parentElement.querySelector('.k').textContent = 'Limit (' + state.payment + ')';
+    const showInt = state.payment === 'Loan';
+    $('interestTile').style.display = showInt ? '' : 'none';
+    $('sInterest').textContent = fmt(int);
+    $('loanBox').style.display = showInt ? '' : 'none';
+    $('loanLine').textContent = 'Total with interest: ' + fmt(totalWithInterest()) + ' (12% applied).';
+    const over = overLimit();
+    $('overBox').style.display = over ? '' : 'none';
+    const canSubmit = n > 0 && !over;
+    $('submitBtn').disabled = !canSubmit;
+    $('mSubmitBtn').disabled = !canSubmit;
+    $('clearBtn').style.display = n > 0 ? '' : 'none';
+    markSaved();
+  }
+
+  function markSaved(){
+    $('savedText').textContent = 'Saved just now';
+    clearTimeout(markSaved._t);
+    markSaved._t = setTimeout(() => { $('savedText').textContent = 'Saved · a moment ago'; }, 4000);
+  }
+
+  /* interactions */
+  itemList.addEventListener('change', e => {
+    const sel = e.target.closest('select[data-sku]');
+    if (!sel) return;
+    state.items[+sel.dataset.sku].sku = sel.value;
+    renderItems(); renderTotals();
+  });
+  itemList.addEventListener('click', e => {
+    const dec = e.target.closest('[data-dec]');
+    const inc = e.target.closest('[data-inc]');
+    const rm = e.target.closest('[data-rm]');
+    if (dec || inc){
+      const idx = dec ? +dec.dataset.dec : +inc.dataset.inc;
+      if (dec) state.items[idx].qty = Math.max(1, state.items[idx].qty - 1);
+      else state.items[idx].qty += 1;
+      renderItems(); renderTotals();
+    }
+    if (rm){
+      state.items.splice(+rm.dataset.rm, 1);
+      renderItems(); renderTotals();
+    }
+  });
+
+  $('addBtn').addEventListener('click', () => {
+    if (state.items.length >= 8) return flash('That\'s a full cart — submit or clear to add more.');
+    state.items.push({ sku:'Semovita (10kg)', qty:1 });
+    renderItems(); renderTotals();
+  });
+
+  $('clearBtn').addEventListener('click', () => {
+    if ($('clearBtn').dataset.confirm){
+      state.items = []; $('clearBtn').dataset.confirm = ''; $('clearBtn').textContent = '🗑 Clear';
+      renderItems(); renderTotals(); return;
+    }
+    $('clearBtn').dataset.confirm = '1';
+    $('clearBtn').textContent = 'Sure? Tap again';
+    setTimeout(() => { $('clearBtn').dataset.confirm = ''; $('clearBtn').textContent = '🗑 Clear'; }, 2600);
+  });
+
+  /* payment */
+  document.querySelectorAll('#paySeg button[data-pay]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#paySeg button[data-pay]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.payment = btn.dataset.pay;
+      renderTotals();
+    });
+  });
+
+  /* branch / dept */
+  $('branchSel').addEventListener('change', e => { state.branch = e.target.value; });
+  $('deptSel').addEventListener('change', e => { state.dept = e.target.value; });
+
+  /* note */
+  $('noteInput').addEventListener('input', e => { state.note = e.target.value; });
+  document.querySelectorAll('.note-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      const val = chip.dataset.note;
+      const cur = $('noteInput').value;
+      if (chip.classList.contains('active')){
+        chip.classList.remove('active');
+        $('noteInput').value = cur.replace(val, '').replace(/\s*;\s*/g, '; ').replace(/^;\s*/, '').trim();
+      } else {
+        chip.classList.add('active');
+        $('noteInput').value = cur ? cur + '; ' + val : val;
+      }
+      state.note = $('noteInput').value;
+    });
+  });
+
+  /* submit → modal */
+  function openModal(){
+    const total = cartTotal();
+    const int = Math.round(total * interest());
+    $('reviewItems').innerHTML = state.items.map(it => {
+      const o = itemOf(it.sku);
+      return `<div class="review-item">
+        <div class="thumb">${o.emoji}</div>
+        <div class="nm">${o.name}<small>${o.unit} · ${it.qty} × ${fmt(o.price)}</small></div>
+        <div class="lt">${fmt(o.price * it.qty)}</div>
+      </div>`;
+    }).join('');
+    $('rvBranch').textContent = state.branch;
+    $('rvDept').textContent = state.dept;
+    $('rvPay').textContent = state.payment + (state.payment === 'Loan' ? ' (12%)' : '');
+    $('rvItemCount').textContent = state.items.length;
+    $('rvTotal').textContent = total.toLocaleString();
+    $('rvInterest').textContent = int.toLocaleString();
+    $('rvInterestRow').style.display = state.payment === 'Loan' ? '' : 'none';
+    $('rvGrand').textContent = totalWithInterest().toLocaleString();
+    const note = state.note.trim();
+    $('rvNoteWrap').classList.toggle('show', !!note);
+    $('rvNote').textContent = note || '';
+    $('modal').classList.add('open');
+  }
+  $('submitBtn').addEventListener('click', openModal);
+  $('mSubmitBtn').addEventListener('click', openModal);
+  $('cancelBtn').addEventListener('click', () => $('modal').classList.remove('open'));
+  $('modal').addEventListener('click', e => { if (e.target === $('modal')) $('modal').classList.remove('open'); });
+
+  /* confirm → success toast + receipt */
+  $('confirmBtn').addEventListener('click', () => {
+    const num = 'CN-' + Math.floor(2800 + Math.random() * 400);
+    $('modal').classList.remove('open');
+    const total = cartTotal();
+    const int = Math.round(total * interest());
+    /* fill receipt */
+    $('rpNumber').textContent = num;
+    $('rpBranch').textContent = state.branch;
+    $('rpDept').textContent = state.dept;
+    $('rpPay').textContent = state.payment + (state.payment === 'Loan' ? ' (12% interest)' : '');
+    $('rpRows').innerHTML = state.items.map(it => {
+      const o = itemOf(it.sku);
+      return `<tr><td>${o.name}</td><td>${it.qty}</td><td style="text-align:right">${fmt(o.price * it.qty)}</td></tr>`;
+    }).join('');
+    $('rpTotal').textContent = total.toLocaleString();
+    $('rpIntRow').style.display = state.payment === 'Loan' ? '' : 'none';
+    $('rpInt').textContent = int.toLocaleString();
+    $('rpGrand').textContent = totalWithInterest().toLocaleString();
+    const note = state.note.trim();
+    $('rpNoteWrap').style.display = note ? '' : 'none';
+    $('rpNote').textContent = note || '';
+    /* toast */
+    $('okBranch').textContent = state.branch;
+    $('okNumber').textContent = num;
+    $('successToast').classList.add('show');
+    setTimeout(() => $('successToast').classList.remove('show'), 7000);
+  });
+  $('toastX').addEventListener('click', () => $('successToast').classList.remove('show'));
+
+  /* print */
+  document.querySelector('.modal-foot').insertAdjacentHTML('beforeend',
+    '<button class="btn secondary" id="printBtn" title="Print order slip">🖨</button>');
+  $('printBtn').addEventListener('click', () => window.print());
+
+  /* theme + device */
+  $('themeBtn').addEventListener('click', () => {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    $('themeBtn').textContent = next === 'dark' ? '☀️' : '🌙';
+  });
+  document.querySelectorAll('#deviceTabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#deviceTabs button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      $('frame').classList.toggle('is-mobile', btn.dataset.device === 'mobile');
+    });
+  });
+
+  function flash(msg){
+    $('successToast').querySelector('b').textContent = 'Heads up';
+    $('successToast').querySelector('span[style]') ?? null;
+    $('successToast').querySelector('div[style] span').textContent = msg;
+    $('successToast').classList.add('show');
+    setTimeout(() => { $('successToast').querySelector('b').textContent = 'Order submitted!'; }, 4000);
+  }
+
+  renderItems();
+  renderTotals();
+</script>
+</body>
+</html>

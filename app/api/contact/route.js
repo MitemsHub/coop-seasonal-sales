@@ -55,7 +55,7 @@ export async function POST(req) {
       },
     })
 
-    const subject = `New enquiry — ${name}`
+    const subject = `New enquiry: ${name}`
     const text = [
       'New contact request from the app:',
       '',

@@ -9,6 +9,40 @@ import {
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+// GET /api/ram/orders?member_id=XXX — the member's ram orders, newest first.
+// Pass &status_only=1 to fetch just id + status (used by the member's
+// status-toast poll so it stays light), mirroring the food/exhibition
+// status-only views.
+export async function GET(req) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const memberId = String(searchParams.get('member_id') || '').trim().toUpperCase()
+    if (!memberId) return NextResponse.json({ ok: false, error: 'member_id is required' }, { status: 400 })
+
+    const statusOnly = searchParams.get('status_only') === '1'
+    const supabase = createClient()
+    const { data: orders, error } = await supabase
+      .from('ram_orders')
+      .select(
+        statusOnly
+          ? 'id, status'
+          : 'id, member_id, status, created_at, payment_option, qty, unit_price, principal_amount, interest_amount, total_amount, ram_delivery_location_id'
+      )
+      .eq('member_id', memberId)
+      .order('created_at', { ascending: false })
+    if (error) {
+      if (isMissingTable(error, 'ram_orders')) {
+        return NextResponse.json({ ok: false, error: 'Ram Sales is not set up yet.' }, { status: 500 })
+      }
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ ok: true, orders: orders || [] })
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: e.message || 'Failed to load orders' }, { status: 500 })
+  }
+}
+
 const CATEGORY_PRICES = {
   Junior: 400000,
   Senior: 500000,

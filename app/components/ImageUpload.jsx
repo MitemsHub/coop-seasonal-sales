@@ -82,14 +82,14 @@ export default function ImageUpload({ onImageUploaded, currentImageUrl = null, i
             <img
               src={previewUrl}
               alt="Item preview"
-              className="w-32 h-32 object-cover rounded-lg border-2 border-gray-200"
+              className="w-32 h-32 object-cover rounded-lg border-2 border-line-subtle"
             />
             <button
               onClick={() => {
                 setPreviewUrl(null)
                 onImageUploaded(null)
               }}
-              className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600"
+              className="absolute -top-2 -right-2 w-6 h-6 bg-danger-fg text-on-accent rounded-full flex items-center justify-center text-xs hover:bg-red-600"
             >
               ×
             </button>
@@ -101,8 +101,8 @@ export default function ImageUpload({ onImageUploaded, currentImageUrl = null, i
       <div
         className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
           dragOver
-            ? 'border-blue-400 bg-blue-50'
-            : 'border-gray-300 hover:border-gray-400'
+            ? 'border-blue-400 bg-info-bg'
+            : 'border-line hover:border-gray-400'
         }`}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
@@ -111,7 +111,7 @@ export default function ImageUpload({ onImageUploaded, currentImageUrl = null, i
         {uploading ? (
           <div className="flex flex-col items-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
-            <p className="text-sm text-gray-600">Uploading...</p>
+            <p className="text-sm text-muted">Uploading...</p>
           </div>
         ) : (
           <div>
@@ -128,9 +128,9 @@ export default function ImageUpload({ onImageUploaded, currentImageUrl = null, i
                 strokeLinejoin="round"
               />
             </svg>
-            <div className="text-sm text-gray-600">
+            <div className="text-sm text-muted">
               <label htmlFor="image-upload" className="cursor-pointer">
-                <span className="text-blue-600 hover:text-blue-500 font-medium">
+                <span className="text-info-fg hover:text-blue-500 font-medium">
                   Click to upload
                 </span>
                 <span> or drag and drop</span>
@@ -144,7 +144,7 @@ export default function ImageUpload({ onImageUploaded, currentImageUrl = null, i
                 disabled={uploading}
               />
             </div>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-subtext mt-1">
               JPG, PNG, WebP up to 5MB
             </p>
           </div>

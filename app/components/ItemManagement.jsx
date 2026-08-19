@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabaseClient'
 import ImageUpload from './ImageUpload'
+import Button from './ui/Button'
 
 export default function ItemManagement() {
   const [items, setItems] = useState([])
@@ -80,7 +81,7 @@ export default function ItemManagement() {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
       </div>
     )
   }
@@ -114,19 +115,20 @@ export default function ItemManagement() {
   return (
     <div className="space-y-6 w-full max-w-full overflow-x-hidden">
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Item Image Management</h2>
+        <h2 className="text-h2 font-semibold text-fg">Item Image Management</h2>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 min-w-0">
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => {
               fetchItems()
               setRefreshKey(prev => prev + 1)
               setMessage({ type: 'success', text: 'Data refreshed' })
             }}
-            className="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700 transition-colors"
           >
             Refresh
-          </button>
-          <div className="text-xs sm:text-sm text-gray-600 whitespace-normal break-words min-w-0">
+          </Button>
+          <div className="text-xs sm:text-sm text-muted whitespace-normal break-words min-w-0">
             {items.length} items total • Page {currentPage} of {totalPages} • Showing {currentItems.length} items
           </div>
         </div>
@@ -135,8 +137,8 @@ export default function ItemManagement() {
       {message && (
         <div className={`p-3 rounded-lg text-sm ${
           message.type === 'success' 
-            ? 'bg-green-50 text-green-700 border border-green-200' 
-            : 'bg-red-50 text-red-700 border border-red-200'
+            ? 'bg-success-bg text-success-fg border border-success-border' 
+            : 'bg-danger-bg text-danger-fg border border-danger-border'
         }`}>
           {message.text}
         </div>
@@ -145,10 +147,10 @@ export default function ItemManagement() {
       {/* Items Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
         {currentItems.map(item => (
-          <div key={item.item_id} className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow overflow-hidden">
+          <div key={item.item_id} className="bg-surface border border-line-subtle rounded-lg p-3 hover:shadow-md transition-shadow overflow-hidden">
             {/* Item Image */}
             <div className="mb-3">
-              <div className="relative w-full h-28 bg-gray-100 rounded-lg overflow-hidden">
+              <div className="relative w-full h-28 bg-muted rounded-lg overflow-hidden">
                 {item.image_url ? (
                   <Image
                     key={refreshKey}
@@ -176,26 +178,28 @@ export default function ItemManagement() {
 
             {/* Item Info */}
             <div className="space-y-2">
-              <h3 className="font-medium text-gray-900 text-sm leading-tight">
+              <h3 className="font-medium text-fg text-sm leading-tight">
                 {item.name}
               </h3>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-subtext">
                 SKU: {item.sku}
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-subtext">
                 {item.unit} • {item.category}
               </div>
               
               {/* Upload Button */}
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
+                className="w-full mt-2"
                 onClick={() => {
                   setSelectedItem(item)
                   setShowImageUpload(true)
                 }}
-                className="w-full mt-2 px-3 py-1.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
               >
                 {item.image_url ? 'Change Image' : 'Add Image'}
-              </button>
+              </Button>
             </div>
           </div>
         ))}
@@ -207,7 +211,7 @@ export default function ItemManagement() {
           <button
             onClick={() => goToPage(currentPage - 1)}
             disabled={currentPage === 1}
-            className="px-3 py-2 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400 text-gray-700 rounded-lg transition-colors text-sm"
+            className="px-3 py-2 bg-muted hover:bg-muted disabled:bg-subtle disabled:text-gray-400 text-muted rounded-lg transition-colors text-sm"
           >
             Previous
           </button>
@@ -215,7 +219,7 @@ export default function ItemManagement() {
           <div className="flex flex-wrap items-center justify-center gap-1">
             {pageItems.map((page, idx) =>
               page === '…' ? (
-                <span key={`ellipsis-${idx}`} className="px-2 py-2 text-sm text-gray-500 select-none">
+                <span key={`ellipsis-${idx}`} className="px-2 py-2 text-sm text-subtext select-none">
                   …
                 </span>
               ) : (
@@ -225,8 +229,8 @@ export default function ItemManagement() {
                   aria-current={currentPage === page ? 'page' : undefined}
                   className={`px-3 py-2 rounded-lg text-sm transition-colors ${
                     currentPage === page
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                      ? 'bg-brand text-on-accent'
+                      : 'bg-muted hover:bg-muted text-muted'
                   }`}
                 >
                   {page}
@@ -238,7 +242,7 @@ export default function ItemManagement() {
           <button
             onClick={() => goToPage(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className="px-3 py-2 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400 text-gray-700 rounded-lg transition-colors text-sm"
+            className="px-3 py-2 bg-muted hover:bg-muted disabled:bg-subtle disabled:text-gray-400 text-muted rounded-lg transition-colors text-sm"
           >
             Next
           </button>
@@ -250,16 +254,16 @@ export default function ItemManagement() {
           <svg className="w-12 h-12 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
           </svg>
-          <p className="text-gray-500">No items found</p>
+          <p className="text-subtext">No items found</p>
         </div>
       )}
 
       {/* Image Upload Modal */}
       {showImageUpload && selectedItem && (
         <div className="fixed inset-0 bg-transparent flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+          <div className="bg-surface rounded-lg p-6 max-w-md w-full">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">
+              <h3 className="text-[15px] font-semibold">
                 Upload Image for {selectedItem.name}
               </h3>
               <button
@@ -267,7 +271,7 @@ export default function ItemManagement() {
                   setShowImageUpload(false)
                   setSelectedItem(null)
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-muted"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -276,7 +280,7 @@ export default function ItemManagement() {
             </div>
             
             <div className="mb-4">
-              <div className="text-sm text-gray-600 mb-2">
+              <div className="text-sm text-muted mb-2">
                 SKU: {selectedItem.sku}
               </div>
             </div>

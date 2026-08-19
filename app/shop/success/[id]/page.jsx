@@ -1,9 +1,16 @@
 // app/shop/success/[id]/page.jsx
+// Order confirmation after a member submits a food order.
+// Includes a print-friendly receipt layout + Print receipt / Download PDF
+// actions, matching the exhibition success page's standard.
 'use client'
 
 import { useEffect, useState, Suspense } from 'react'
+import Link from 'next/link'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '../../../contexts/AuthContext'
+import { CheckCircle2, FileText, Home, Printer, Receipt, ShoppingBasket } from 'lucide-react'
+import Button from '../../../components/ui/Button'
+import Skeleton from '../../../components/ui/Skeleton'
 
 function SuccessContent() {
   const params = useParams()
@@ -67,6 +74,13 @@ function SuccessContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, fallbackMemberId])
 
+  const principalAmount = Number(
+    order?.principal_amount ?? (order?.order_lines || []).reduce((s, l) => s + Number(l.amount || 0), 0)
+  )
+  const interestAmount = order?.payment_option === 'Loan' ? Number(order?.loan_interest_amount || 0) : 0
+  const ratePct = Number(order?.loan_interest_rate_pct ?? 13)
+  const totalWithInterest = order?.payment_option === 'Loan' ? principalAmount + interestAmount : Number(order?.total_amount || 0)
+
   const downloadPDF = async () => {
     if (!order) return
     setDownloading(true)
@@ -75,7 +89,7 @@ function SuccessContent() {
       const doc = new jsPDF()
 
       doc.setFontSize(16)
-      doc.text('CBN Coop Food Distribution - Order Receipt', 10, 12)
+      doc.text('CBN Coop Seasonal Sales - Order Receipt', 10, 12)
       doc.setFontSize(10)
       doc.text(`Order ID: ${order.order_id}`, 10, 20)
       doc.text(`Status: ${order.status}`, 60, 20)
@@ -115,16 +129,10 @@ function SuccessContent() {
       doc.line(120, y, 200, y); y += 6
       doc.setFontSize(12)
       // Payment breakdown for Loan option
-      const principal = Number(order.principal_amount ?? (order.order_lines || []).reduce((s, l) => s + Number(l.amount || 0), 0))
-      const interest = order.payment_option === 'Loan' ? Number(order.loan_interest_amount || 0) : 0
-      const ratePct = Number(order.loan_interest_rate_pct ?? 13)
-      const totalWithInterest = order.payment_option === 'Loan' ? principal + interest : principal
-
-      // Avoid ₦ in PDF footer
       if (order.payment_option === 'Loan') {
-        doc.text(`Principal: ${currencyPDF(principal)}`, 165, y, { align: 'right' })
+        doc.text(`Principal: ${currencyPDF(principalAmount)}`, 165, y, { align: 'right' })
         y += 6
-        doc.text(`Interest (${ratePct}%): ${currencyPDF(interest)}`, 165, y, { align: 'right' })
+        doc.text(`Interest (${ratePct}%): ${currencyPDF(interestAmount)}`, 165, y, { align: 'right' })
         y += 6
         doc.text(`Total (incl. Interest): ${currencyPDF(totalWithInterest)}`, 165, y, { align: 'right' })
       } else {
@@ -140,85 +148,225 @@ function SuccessContent() {
   }
 
   if (error) return <div className="p-6">Error: {error}</div>
-  if (!order) return <div className="p-6">Loading…</div>
+  if (!order) return (
+    <div className="flex min-h-screen items-center justify-center bg-canvas px-4">
+      <div className="w-full max-w-sm">
+        <Skeleton className="mx-auto h-5 w-2/3" />
+        <Skeleton className="mx-auto mt-3 h-5 w-1/2" />
+      </div>
+    </div>
+  )
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <div className="flex items-start justify-between gap-3 mb-4">
-        <div>
-          <h1 className="text-2xl font-semibold mb-1">Order Confirmed</h1>
-          <p className="text-sm text-gray-600">
-            Order #{order.order_id} • {order.status} • {new Date(order.created_at).toLocaleString()}
-          </p>
+    <>
+      {/* Print rules: only the receipt sheet survives on paper. */}
+      <style>{`
+        @media print {
+          .print-hide { display: none !important; }
+          html, body { background: #fff !important; }
+          .receipt-sheet {
+            box-shadow: none !important;
+            border: 1px solid #000 !important;
+            border-radius: 0 !important;
+            padding: 0 !important;
+          }
+          .receipt-sheet, .receipt-sheet * { color: #000 !important; }
+          .receipt-sheet img { display: none !important; }
+          .receipt-table th, .receipt-table td { border-color: #000 !important; }
+        }
+      `}</style>
+
+      <div className="min-h-screen bg-canvas">
+        <div aria-hidden="true" className="print-hide pointer-events-none fixed inset-0 overflow-hidden">
+          <div className="absolute -top-32 -left-24 h-80 w-80 rounded-full bg-brand/10 blur-3xl" />
+          <div className="absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-accent/10 blur-3xl" />
         </div>
-        <div />
-      </div>
 
-      <div className="mb-3 text-sm">
-        <div><b>Member:</b> {order.member_name_snapshot} ({order.member_id})</div>
-        <div><b>Member Branch:</b> {order.member_branch?.name || '-'}</div>
-        <div><b>Delivery:</b> {order.delivery?.name || '-'}</div>
-        <div><b>Rep Phone:</b> {order.delivery?.rep_phone || '-'}</div>
-        <div><b>Department:</b> {order.departments?.name || '-'}</div>
-        <div><b>Payment:</b> {order.payment_option}</div>
-      </div>
+        <div className="relative mx-auto max-w-2xl p-fluid pb-24">
+          {/* Confirmation card — screen only */}
+          <div className="print-hide rounded-2xl border border-line bg-surface p-6 text-center shadow-lg shadow-black/5 sm:p-8">
+            <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-full bg-success-bg text-success-fg ring-8 ring-success-bg/40">
+              <CheckCircle2 className="h-8 w-8" strokeWidth={2} />
+            </div>
 
-      <table className="w-full text-sm border mb-3">
-        <thead className="bg-gray-50">
-          <tr>
-            {/* Removed SKU column for member-facing view */}
-            <th className="p-2 border text-left">Item</th>
-            <th className="p-2 border text-right">Qty</th>
-            <th className="p-2 border text-right">Unit Price</th>
-            <th className="p-2 border text-right">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {(order.order_lines || []).map((l, idx) => (
-            <tr key={idx}>
-              {/* Removed SKU cell */}
-              <td className="p-2 border">{l.items?.name}</td>
-              <td className="p-2 border text-right">{l.qty}</td>
-              <td className="p-2 border text-right">{currency(l.unit_price)}</td>
-              <td className="p-2 border text-right">{currency(l.amount)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {/* Payment breakdown for Loan option */}
-      {order.payment_option === 'Loan' ? (
-        <div className="mb-6">
-          <div className="max-w-md ml-auto bg-blue-50 border border-blue-200 rounded p-3">
-            <div className="flex justify-between text-sm mb-1">
-              <span className="text-gray-700">Principal Amount:</span>
-              <span className="font-medium">{currency(Number(order.principal_amount ?? (order.order_lines || []).reduce((s, l) => s + Number(l.amount || 0), 0)))}</span>
+            <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-brand-subtle px-3 py-1 text-chips font-semibold uppercase tracking-wide text-brand-fg">
+              <ShoppingBasket className="h-3.5 w-3.5" strokeWidth={2.2} />
+              Food Distribution
             </div>
-            <div className="flex justify-between text-sm mb-1">
-              <span className="text-gray-700">Interest ({Number(order.loan_interest_rate_pct ?? 13)}%):</span>
-              <span className="font-medium text-orange-700">{currency(Number(order.loan_interest_amount || 0))}</span>
+            <h1 className="mt-2 font-display text-h1 font-semibold tracking-tight text-fg">Order placed!</h1>
+            <p className="mt-1 text-sm text-muted">
+              Your order is <span className="font-semibold text-warning-fg">Pending</span> — your branch rep will post it, then deliver to your branch.
+            </p>
+
+            <div className="mt-6 space-y-4 text-left">
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-line bg-canvas/60 px-4 py-3">
+                <span className="text-chips font-medium text-muted">Order ID</span>
+                <span className="text-sm font-bold tabular-nums text-fg">{order.order_id}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-line bg-canvas/60 px-4 py-3">
+                <span className="text-chips font-medium text-muted">Payment</span>
+                <span className="text-sm font-bold text-fg">{order.payment_option}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-line bg-canvas/60 px-4 py-3">
+                <span className="text-chips font-medium text-muted">Total</span>
+                <span className="text-sm font-bold tabular-nums text-brand">{currency(order.total_amount)}</span>
+              </div>
+
+              <div className="space-y-2 rounded-xl border border-line bg-canvas/60 p-4">
+                <p className="text-chips font-semibold uppercase tracking-wider text-muted">Your items</p>
+                {(order.order_lines || []).map((l, idx) => (
+                  <div key={idx} className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium text-fg">{l.items?.name}</div>
+                      <div className="text-chips text-muted">
+                        {l.qty} × {currency(l.unit_price)}
+                      </div>
+                    </div>
+                    <div className="text-sm font-bold tabular-nums text-fg">{currency(l.amount)}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="border-t pt-2 mt-2 flex justify-between text-sm font-semibold">
-              <span>Total (incl. Interest):</span>
-              <span>{currency(Number(order.total_amount || 0))}</span>
+
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+              <Button className="flex-1" leftIcon={Receipt} onClick={() => router.push('/orders')}>
+                Track my orders
+              </Button>
+              <Button variant="secondary" className="flex-1" leftIcon={Home} onClick={() => router.push('/my-coop')}>
+                My Coop
+              </Button>
+              <Button variant="ghost" className="flex-1" onClick={() => router.push('/shop')}>
+                Keep browsing
+              </Button>
+            </div>
+          </div>
+
+          {/* Receipt — printable */}
+          <div className="mt-6">
+            <div className="print-hide mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-chips font-semibold uppercase tracking-wider text-muted">Receipt</p>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="secondary" leftIcon={Printer} onClick={() => window.print()}>
+                  Print receipt
+                </Button>
+                <Button size="sm" leftIcon={FileText} onClick={downloadPDF} disabled={downloading}>
+                  {downloading ? 'Preparing…' : 'Download PDF'}
+                </Button>
+              </div>
+            </div>
+
+            <div className="receipt-sheet overflow-hidden rounded-2xl border border-line bg-white text-fg shadow-lg shadow-black/5">
+              {/* Receipt header */}
+              <div className="border-b border-line bg-gradient-to-r from-brand to-brand-active px-5 py-4 sm:px-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 text-white ring-1 ring-white/25">
+                      <ShoppingBasket className="h-5 w-5" strokeWidth={2} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold tracking-wide text-white">CBN COOP</p>
+                      <p className="text-chips text-white/80">Seasonal Sales · Food Distribution</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-chips font-semibold uppercase tracking-wider text-white/80">Receipt</p>
+                    <p className="text-sm font-bold tabular-nums text-white">{order.order_id}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Receipt meta */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 border-b border-line px-5 py-4 text-sm sm:grid-cols-3 sm:px-6">
+                <div>
+                  <p className="text-chips font-medium uppercase tracking-wider text-muted">Date</p>
+                  <p className="font-medium text-fg">{new Date(order.created_at).toLocaleDateString()}</p>
+                </div>
+                <div>
+                  <p className="text-chips font-medium uppercase tracking-wider text-muted">Status</p>
+                  <p className="font-medium text-fg">{order.status}</p>
+                </div>
+                <div className="col-span-2 sm:col-span-1">
+                  <p className="text-chips font-medium uppercase tracking-wider text-muted">Payment</p>
+                  <p className="font-medium text-fg">{order.payment_option}</p>
+                </div>
+                <div className="col-span-2 sm:col-span-3">
+                  <p className="text-chips font-medium uppercase tracking-wider text-muted">Member</p>
+                  <p className="font-medium text-fg">
+                    {order.member_name_snapshot || order.member_id}
+                    <span className="text-muted"> · {order.member_id}</span>
+                    {order.member_branch?.name ? <span className="text-muted"> · {order.member_branch.name}</span> : null}
+                  </p>
+                </div>
+                <div className="col-span-2 sm:col-span-3">
+                  <p className="text-chips font-medium uppercase tracking-wider text-muted">Delivery</p>
+                  <p className="font-medium text-fg">
+                    {order.delivery?.name || '-'}
+                    {order.delivery?.rep_phone ? <span className="text-muted"> · Rep: {order.delivery.rep_phone}</span> : null}
+                  </p>
+                </div>
+                <div className="col-span-2 sm:col-span-3">
+                  <p className="text-chips font-medium uppercase tracking-wider text-muted">Department</p>
+                  <p className="font-medium text-fg">{order.departments?.name || order.department || '-'}</p>
+                </div>
+              </div>
+
+              {/* Receipt lines */}
+              <div className="overflow-x-auto">
+                <table className="receipt-table w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-line bg-subtle/60">
+                      <th className="px-5 py-2 text-left text-chips font-semibold uppercase tracking-wider text-muted sm:px-6">Item</th>
+                      <th className="px-3 py-2 text-right text-chips font-semibold uppercase tracking-wider text-muted">Qty</th>
+                      <th className="px-3 py-2 text-right text-chips font-semibold uppercase tracking-wider text-muted">Unit</th>
+                      <th className="px-5 py-2 text-right text-chips font-semibold uppercase tracking-wider text-muted sm:px-6">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(order.order_lines || []).map((l, idx) => (
+                      <tr key={idx} className="border-b border-line/70 last:border-0">
+                        <td className="px-5 py-2.5 font-medium text-fg sm:px-6">{l.items?.name}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-fg">{l.qty}</td>
+                        <td className="px-3 py-2.5 text-right text-muted">{currency(l.unit_price)}</td>
+                        <td className="px-5 py-2.5 text-right font-semibold tabular-nums text-fg sm:px-6">{currency(l.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Receipt total */}
+              <div className="border-t-2 border-line bg-subtle/40 px-5 py-4 sm:px-6">
+                {order.payment_option === 'Loan' ? (
+                  <div className="space-y-1 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-medium text-muted">Principal</p>
+                      <p className="tabular-nums text-fg">{currency(principalAmount)}</p>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-medium text-muted">Interest ({ratePct}%)</p>
+                      <p className="tabular-nums text-fg">{currency(interestAmount)}</p>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-3 border-t border-line pt-2">
+                      <p className="text-sm font-semibold uppercase tracking-wide text-fg">Total (incl. interest)</p>
+                      <p className="text-lg font-bold tabular-nums text-brand">{currency(totalWithInterest)}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold uppercase tracking-wide text-fg">Total</p>
+                    <p className="text-lg font-bold tabular-nums text-brand">{currency(order.total_amount)}</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="px-5 py-4 text-center sm:px-6">
+                <p className="text-chips text-muted">Thank you for shopping with CBN Coop — every order keeps the Coop strong.</p>
+              </div>
             </div>
           </div>
         </div>
-      ) : (
-        <div className="text-right text-lg font-semibold mb-6">
-          Total: {currency(order.total_amount)}
-        </div>
-      )}
-
-      <div className="flex justify-center">
-        <button
-          onClick={downloadPDF}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
-          disabled={downloading}
-        >
-          {downloading ? 'Preparing…' : 'Download PDF'}
-        </button>
       </div>
-    </div>
+    </>
   )
 }
 

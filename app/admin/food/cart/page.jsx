@@ -66,46 +66,43 @@ function AdminCartPageContent() {
 
   return (
     <ProtectedRoute allowedRoles={['admin']}>
-      <div className="p-6 max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+      <div className="p-4 sm:p-6 lg:p-8">
+        <div className="mb-6 flex flex-col gap-2">
           <div>
-            <h1 className="text-2xl font-semibold mb-2">Admin — Member Carts</h1>
-            <p className="text-gray-600">View and manage member shopping carts</p>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">Select Member</h2>
-            <button
-              onClick={() => router.push('/admin/food/pending')}
-              className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 flex items-center"
-            >
-              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-              Back to Admin
-            </button>
+            <h1 className="text-h2 font-bold tracking-tight text-fg">Member Carts</h1>
+            <p className="text-sm text-muted">View and manage member shopping carts</p>
           </div>
         </div>
 
         {message && (
-          <div className={`mb-4 p-3 rounded-lg ${
-            message.type === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : 
-            'bg-green-50 text-green-700 border border-green-200'
+          <div role="alert" className={`mb-4 rounded-xl border p-4 text-sm ${
+            message.type === 'error' ? 'border-danger-border bg-danger-bg text-danger-fg' : 
+            'border-success-border bg-success-bg text-success-fg'
           }`}>
             {message.text}
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h2 className="text-lg font-semibold mb-4">Select Member</h2>
-          
+        <div className="ui-card p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-[15px] font-semibold text-fg">Select Member</h2>
+            <button
+              onClick={() => router.push('/admin/food/pending')}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back to Admin
+            </button>
+          </div>
+
           <div className="mb-6">
+            <label className="mb-2 block text-sm font-medium text-muted">Member</label>
             <select
               value={selectedMember}
               onChange={(e) => handleMemberSelect(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full rounded-lg border border-line bg-surface px-4 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             >
               <option value="">Choose a member...</option>
               {members.map(member => (
@@ -117,25 +114,25 @@ function AdminCartPageContent() {
           </div>
 
           {loading && (
-            <div className="text-center py-8">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <p className="mt-2 text-gray-600">Loading cart data...</p>
+            <div className="py-8 text-center">
+              <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-line border-t-brand"></div>
+              <p className="mt-3 text-sm text-muted">Loading cart data...</p>
             </div>
           )}
 
           {!selectedMember && !loading && (
-            <div className="text-center py-8 text-gray-500">
-              <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="py-8 text-center text-muted">
+              <svg className="mx-auto mb-4 h-16 w-16 text-subtext" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.1 5H17M9 19.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0zM20.5 19.5a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
               </svg>
-              <p>Select a member to view their cart</p>
+              <p className="text-sm">Select a member to view their cart</p>
             </div>
           )}
         </div>
 
-        <div className="mt-6 bg-blue-50 rounded-lg p-4">
-          <h3 className="font-semibold text-blue-800 mb-2">Admin Cart Management</h3>
-          <ul className="text-sm text-blue-700 space-y-1">
+        <div className="mt-6 rounded-xl border border-info-border bg-info-bg p-4">
+          <h3 className="mb-2 font-semibold text-info-fg">Admin Cart Management</h3>
+          <ul className="space-y-1 text-sm text-info-fg">
             <li>• View any member's current cart items</li>
             <li>• Edit quantities and remove items</li>
             <li>• Process cart submissions on behalf of members</li>

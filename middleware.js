@@ -7,13 +7,18 @@ const rateLimitStore = new Map()
 
 // Security headers configuration
 const isProd = process.env.NODE_ENV === 'production'
+// Allow the browser-side Supabase client to reach a local PostgREST gateway
+// during local testing (e.g. http://127.0.0.1:54321). Production keeps the
+// strict connect-src of 'self' + supabase.co.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const isLocalSupabase = /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/)/.test(supabaseUrl)
 const securityHeaders = {
   'X-Content-Type-Options': 'nosniff',
   'X-XSS-Protection': '1; mode=block',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co;"
+  'Content-Security-Policy': `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co${isLocalSupabase ? ` ${supabaseUrl}` : ''};`
 }
 
 // Rate limiting function
@@ -93,43 +98,32 @@ export async function middleware(request) {
   })
   if (isProd) response.headers.set('X-Frame-Options', 'DENY')
   
-  // Global rate limiting (adjust limits as needed)
-  const globalRateLimit = checkRateLimit(`global:${clientIP}`, 100, 60000) // 100 requests per minute
-  if (!globalRateLimit) {
-    console.warn(`Global rate limit exceeded for IP: ${clientIP}`);
-    return new NextResponse('Too Many Requests', { 
-      status: 429,
-      headers: {
-        'Retry-After': '60',
-          ...securityHeaders,
-          ...(isProd ? { 'X-Frame-Options': 'DENY' } : {})
-      }
-    })
+  // Rate limiting is a production anti-abuse measure. The in-memory store is a
+  // dev stand-in (real deployments use Redis), so local development + smoke
+  // tests run without throttling — otherwise a long test run trips the window.
+  if (isProd) {
+    const globalRateLimit = checkRateLimit(`global:${clientIP}`, 100, 60000) // 100 requests per minute
+    if (!globalRateLimit) {
+      console.warn(`Global rate limit exceeded for IP: ${clientIP}`);
+      return new NextResponse('Too Many Requests', { 
+        status: 429,
+        headers: {
+          'Retry-After': '60',
+            ...securityHeaders,
+            ...(isProd ? { 'X-Frame-Options': 'DENY' } : {})
+        }
+      })
+    }
   }
   
   // API route protection
   if (pathname.startsWith('/api/')) {
     // More strict rate limiting for API routes
-    const apiRateLimit = checkRateLimit(`api:${clientIP}`, 50, 60000) // 50 API requests per minute
-    if (!apiRateLimit) {
-      console.warn(`API rate limit exceeded for IP: ${clientIP}`);
-      return new NextResponse('Too Many API Requests', { 
-        status: 429,
-        headers: {
-          'Retry-After': '60',
-          ...securityHeaders,
-          ...(isProd ? { 'X-Frame-Options': 'DENY' } : {})
-        }
-      })
-    }
-    
-    // Admin API protection
-    if (pathname.startsWith('/api/admin/')) {
-      // Reasonable rate limiting for admin APIs
-      const adminRateLimit = checkRateLimit(`admin:${clientIP}`, 60, 60000) // 60 admin requests per minute
-      if (!adminRateLimit) {
-        console.warn(`Admin API rate limit exceeded for IP: ${clientIP}`);
-        return new NextResponse('Too Many Admin Requests', { 
+    if (isProd) {
+      const apiRateLimit = checkRateLimit(`api:${clientIP}`, 50, 60000) // 50 API requests per minute
+      if (!apiRateLimit) {
+        console.warn(`API rate limit exceeded for IP: ${clientIP}`);
+        return new NextResponse('Too Many API Requests', { 
           status: 429,
           headers: {
             'Retry-After': '60',
@@ -137,6 +131,25 @@ export async function middleware(request) {
             ...(isProd ? { 'X-Frame-Options': 'DENY' } : {})
           }
         })
+      }
+    }
+    
+    // Admin API protection
+    if (pathname.startsWith('/api/admin/')) {
+      // Reasonable rate limiting for admin APIs
+      if (isProd) {
+        const adminRateLimit = checkRateLimit(`admin:${clientIP}`, 60, 60000) // 60 admin requests per minute
+        if (!adminRateLimit) {
+          console.warn(`Admin API rate limit exceeded for IP: ${clientIP}`);
+          return new NextResponse('Too Many Admin Requests', { 
+            status: 429,
+            headers: {
+              'Retry-After': '60',
+              ...securityHeaders,
+              ...(isProd ? { 'X-Frame-Options': 'DENY' } : {})
+            }
+          })
+        }
       }
       
       // Skip session validation for login endpoints
@@ -152,19 +165,51 @@ export async function middleware(request) {
       }
     }
     
+    // Vendor API protection
+    if (pathname.startsWith('/api/vendor/')) {
+      if (isProd) {
+        const vendorRateLimit = checkRateLimit(`vendor:${clientIP}`, 40, 60000) // 40 vendor requests per minute
+        if (!vendorRateLimit) {
+          console.warn(`Vendor API rate limit exceeded for IP: ${clientIP}`);
+          return new NextResponse('Too Many Vendor Requests', {
+            status: 429,
+            headers: {
+              'Retry-After': '60',
+              ...securityHeaders,
+              ...(isProd ? { 'X-Frame-Options': 'DENY' } : {})
+            }
+          })
+        }
+      }
+
+      // Skip session validation for login endpoints
+      if (!pathname.includes('/session')) {
+        const sessionValidation = await validateSession(request, 'vendor')
+        if (!sessionValidation.isValid) {
+          console.warn(`Unauthorized vendor API access from IP: ${clientIP}`);
+          return new NextResponse('Unauthorized', {
+            status: 401,
+            headers: { ...securityHeaders, ...(isProd ? { 'X-Frame-Options': 'DENY' } : {}) }
+          })
+        }
+      }
+    }
+
     // Rep API protection
     if (pathname.startsWith('/api/rep/')) {
-      const repRateLimit = checkRateLimit(`rep:${clientIP}`, 30, 60000) // 30 rep requests per minute
-      if (!repRateLimit) {
-        console.warn(`Rep API rate limit exceeded for IP: ${clientIP}`);
-        return new NextResponse('Too Many Rep Requests', { 
-          status: 429,
-          headers: {
-            'Retry-After': '60',
-            ...securityHeaders,
-            ...(isProd ? { 'X-Frame-Options': 'DENY' } : {})
-          }
-        })
+      if (isProd) {
+        const repRateLimit = checkRateLimit(`rep:${clientIP}`, 30, 60000) // 30 rep requests per minute
+        if (!repRateLimit) {
+          console.warn(`Rep API rate limit exceeded for IP: ${clientIP}`);
+          return new NextResponse('Too Many Rep Requests', { 
+            status: 429,
+            headers: {
+              'Retry-After': '60',
+              ...securityHeaders,
+              ...(isProd ? { 'X-Frame-Options': 'DENY' } : {})
+            }
+          })
+        }
       }
       
       // Skip session validation for login endpoints
@@ -182,7 +227,7 @@ export async function middleware(request) {
   }
   
   // Page route protection
-  if (pathname.startsWith('/admin/')) {
+  if (pathname === '/admin' || pathname.startsWith('/admin/')) {
     // Skip session validation for login page
     if (!pathname.includes('/pin')) {
       const sessionValidation = await validateSession(request, 'admin')
@@ -193,7 +238,18 @@ export async function middleware(request) {
     }
   }
   
-  if (pathname.startsWith('/rep/')) {
+  if (pathname === '/vendor' || pathname.startsWith('/vendor/')) {
+    // Skip session validation for the public login page
+    if (!pathname.includes('/login')) {
+      const sessionValidation = await validateSession(request, 'vendor')
+      if (!sessionValidation.isValid) {
+        const loginUrl = new URL('/vendor/login', request.url)
+        return NextResponse.redirect(loginUrl)
+      }
+    }
+  }
+
+  if (pathname === '/rep' || pathname.startsWith('/rep/')) {
     // Skip session validation for public rep entry pages
     if (!(pathname.includes('/login') || pathname.includes('/access'))) {
       const sessionValidation = await validateSession(request, 'rep')
@@ -204,8 +260,16 @@ export async function middleware(request) {
 
       const claim = sessionValidation.claim
       const mod = claim?.module
-      if (mod === 'ram' && (pathname.startsWith('/rep/pending') || pathname.startsWith('/rep/posted') || pathname.startsWith('/rep/delivered'))) {
+      if (mod === 'ram' && (pathname.startsWith('/rep/pending') || pathname.startsWith('/rep/posted') || pathname.startsWith('/rep/delivered') || pathname.startsWith('/rep/banks'))) {
         const dest = new URL('/rep/ram/approved', request.url)
+        return NextResponse.redirect(dest)
+      }
+      if (mod === 'exhibition' && (pathname.startsWith('/rep/pending') || pathname.startsWith('/rep/posted') || pathname.startsWith('/rep/delivered') || pathname.startsWith('/rep/banks') || pathname.startsWith('/rep/ram/'))) {
+        const dest = new URL('/rep/exhibition/pending', request.url)
+        return NextResponse.redirect(dest)
+      }
+      if ((mod === 'food' || mod === 'ram') && pathname.startsWith('/rep/exhibition')) {
+        const dest = new URL(mod === 'ram' ? '/rep/ram/approved' : '/rep/pending', request.url)
         return NextResponse.redirect(dest)
       }
       if (mod === 'food' && pathname.startsWith('/rep/ram/')) {
@@ -232,7 +296,12 @@ export const config = {
     '/admin/:path*',
     // Match rep routes
     '/rep/:path*',
+    // Match vendor routes (incl. the bare /vendor entry)
+    '/vendor',
+    '/vendor/:path*',
     // Match shop routes (for member protection)
-    '/shop/:path*'
+    '/shop/:path*',
+    // Match member exhibition routes
+    '/exhibition/:path*'
   ]
 }
