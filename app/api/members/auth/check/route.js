@@ -1,14 +1,30 @@
 // app/api/members/auth/check/route.js
 // Check if a member ID exists and whether they have a Supabase Auth account.
 //   POST { memberId } → { exists, hasAuth, email }
+//
+// This endpoint is UNAUTHENTICATED (used during login) so it is protected
+// by rate limiting to prevent account enumeration attacks.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
+import { checkRateLimit, rateLimitResponse } from '@/lib/rateLimit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+function getClientIP(request) {
+  const forwarded = request.headers.get('x-forwarded-for')
+  if (forwarded) return forwarded.split(',')[0].trim()
+  return request.headers.get('x-real-ip') || request.headers.get('x-vercel-forwarded-for') || 'unknown'
+}
+
 export async function POST(request) {
   try {
+    const ip = getClientIP(request)
+
+    // Rate limit: 10 checks per IP per minute (prevents brute-force ID enumeration)
+    const limit = checkRateLimit('member-check', ip, 10, 60 * 1000)
+    if (!limit.allowed) return rateLimitResponse(limit.retryAfterMs)
+
     const { memberId } = await request.json().catch(() => ({}))
     const mid = String(memberId || '').trim().toUpperCase()
 
