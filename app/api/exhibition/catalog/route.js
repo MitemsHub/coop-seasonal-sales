@@ -1,13 +1,16 @@
 // app/api/exhibition/catalog/route.js
 // Member-facing catalog for the Coop Exhibition shop.
 //   GET /api/exhibition/catalog?member_id=XXX
-// Returns the member's branch exhibition: active cycle, vendors, categories
-// and active products. Each product carries:
+// Returns the exhibition catalog: active cycle, vendors, categories and
+// active products.  The exhibition is GLOBALLY visible — any member can
+// browse and shop from any open exhibition.  The cycle's branch is the
+// delivery/pickup location, not a visibility filter.
+// Each product carries:
 //   - final_price  = vendor_price + admin_markup (the catalog price)
 //   - price        = the price THIS member pays (their negotiated price wins)
 //   - negotiated   = true when a per-member price overrides the catalog
-// When the branch has no active cycle, returns { ok: true, open: false } so
-// the shop can show the shared closed-module panel.
+// When no cycle is active, returns { ok: true, open: false } so the shop
+// can show the shared closed-module panel.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 
@@ -29,7 +32,8 @@ export async function GET(req) {
 
     const supabase = createClient()
 
-    // Member → branch (the catalog is per branch)
+    // Member lookup — still needed for negotiated prices and member info,
+    // but no longer used to filter which exhibitions are visible.
     const { data: member, error: mErr } = await supabase
       .from('members')
       .select('member_id, full_name, branch_id, branches:branch_id(code, name)')
@@ -46,35 +50,49 @@ export async function GET(req) {
     }
     if (!member) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
 
-    const branchId = Number(member.branch_id)
-    if (!Number.isFinite(branchId) || branchId <= 0) {
-      return NextResponse.json({ ok: false, error: 'Member has no branch assigned' }, { status: 400 })
-    }
-
-    // Active cycle for the branch; fall back to the latest cycle so a draft/closed
-    // season still resolves (the UI then decides what to show).
+    // ── Find the most recent active cycle across ALL branches ──────
+    // The exhibition is globally visible: any member can browse any open
+    // exhibition.  The cycle's branch is the delivery/pickup location.
     const { data: active } = await supabase
       .from('exhibition_cycles')
-      .select('id, name, code, status, starts_at, ends_at, loan_interest_rate_pct')
-      .eq('branch_id', branchId)
+      .select('id, name, code, status, starts_at, ends_at, loan_interest_rate_pct, branch_id, branches:branch_id(code, name)')
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .maybeSingle()
 
+    // Fallback to the latest cycle (any status) so the UI can still show
+    // draft/closed season info (e.g. "opens on …").
     const { data: latest } = await supabase
       .from('exhibition_cycles')
-      .select('id, name, code, status, starts_at, ends_at, loan_interest_rate_pct')
-      .eq('branch_id', branchId)
+      .select('id, name, code, status, starts_at, ends_at, loan_interest_rate_pct, branch_id, branches:branch_id(code, name)')
       .order('created_at', { ascending: false })
       .maybeSingle()
 
     const cycle = active || latest
     if (!cycle) {
-      return NextResponse.json({ ok: true, open: false, branch: member.branches?.name || '' })
+      return NextResponse.json({ ok: true, open: false, branch: '' })
     }
 
-    const open = cycle.status === 'active'
+    let cycleOpen = cycle.status === 'active'
     const cycleId = Number(cycle.id)
+    const cycleBranchId = Number(cycle.branch_id)
+    const deliveryBranch = cycle.branches?.name || ''
+
+    // Respect the Shopping Control toggle — when the admin closes the
+    // exhibition globally via the Data page, members should see it as closed
+    // even if an active cycle exists.  Defaults to open (toggle unset).
+    if (cycleOpen) {
+      try {
+        const { data: settingRow } = await supabase
+          .from('app_settings')
+          .select('value')
+          .eq('key', 'exhibition_shopping_open')
+          .maybeSingle()
+        if (settingRow?.value === 'false') cycleOpen = false
+      } catch {
+        // Missing table or read failure — default to open
+      }
+    }
 
     const [vendorsRes, categoriesRes, productsRes] = await Promise.all([
       supabase
@@ -93,7 +111,6 @@ export async function GET(req) {
         .from('exhibition_products')
         .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, admin_markup, qty, image_url, status, vendors:vendor_id(name, code), categories:category_id(name)')
         .eq('cycle_id', cycleId)
-        .eq('branch_id', branchId)
         .eq('status', 'active')
         .order('name'),
     ])
@@ -146,8 +163,8 @@ export async function GET(req) {
 
     return NextResponse.json({
       ok: true,
-      open,
-      branch: member.branches?.name || '',
+      open: cycleOpen,
+      branch: deliveryBranch,
       cycle: {
         id: cycleId,
         name: cycle.name || '',

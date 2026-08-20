@@ -481,7 +481,7 @@ function MyCoopContent() {
                 <p className="mt-3 text-sm font-semibold text-fg">Coop Exhibition</p>
                 <p className="mt-0.5 text-chips text-muted">
                   {exhibitionOpen
-                    ? (exhibitionCycle?.name ? `${exhibitionCycle.name}. Shop vendor stands` : 'Seasonal market with vendor stands at your branch')
+                    ? (exhibitionCycle?.name ? `${exhibitionCycle.name}. Shop vendor stands` : 'Seasonal market with vendor stands')
                     : 'Market is closed. Check back when the exhibition opens'}
                 </p>
                 {exhibitionOpen && exhibitionCycle?.ends_at && <CycleCountdown endsAt={exhibitionCycle.ends_at} />}

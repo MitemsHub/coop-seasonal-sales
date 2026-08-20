@@ -58,7 +58,7 @@ export default function DraggableModal({
     <AnimatePresence>
       {open ? (
         <motion.div
-          className={`fixed inset-0 ${overlayClassName} flex items-start justify-center z-50 p-4 overflow-auto`}
+          className={`fixed inset-0 ${overlayClassName} flex items-center justify-center z-50 p-4 overflow-y-auto overscroll-contain sm:items-start`}
           onClick={onClose}
           role="dialog"
           aria-modal="true"
@@ -77,7 +77,7 @@ export default function DraggableModal({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.985 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
-            className={`bg-surface rounded-xl border border-line shadow-xl outline-none ${widthClass}`}
+            className={`bg-surface rounded-xl border border-line shadow-xl outline-none max-h-[90vh] overflow-y-auto overscroll-contain ${widthClass}`}
           >
             <div className="p-6">
               <div

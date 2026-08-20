@@ -97,15 +97,15 @@ function ModuleClosedBody({ module, onViewOrders, onBack, rep = false, vendor = 
       <p className="mt-1.5 max-w-xs text-sm text-muted">{copy.description}</p>
       {!!hint && <div className="mt-2">{hint}</div>}
 
-      <div className="mt-5 flex w-full flex-col gap-2 sm:flex-row">
+      <div className="mt-5 flex w-full flex-col gap-2.5 sm:flex-row">
         <Button
-          className="flex-1 min-w-0"
+          className="flex-1 min-w-0 h-11 sm:h-9 text-[15px] sm:text-sm"
           rightIcon={ArrowRight}
           onClick={onViewOrders}
         >
           <span className="min-w-0 truncate">{rep ? 'View pending orders' : 'View my orders'}</span>
         </Button>
-        <Button variant="secondary" className="flex-1 min-w-0" leftIcon={Home} onClick={onBack}>
+        <Button variant="secondary" className="flex-1 min-w-0 h-11 sm:h-9 text-[15px] sm:text-sm" leftIcon={Home} onClick={onBack}>
           <span className="min-w-0 truncate">{rep ? 'Back to Reps Portal' : 'Back to dashboard'}</span>
         </Button>
       </div>

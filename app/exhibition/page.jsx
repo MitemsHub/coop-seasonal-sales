@@ -87,8 +87,8 @@ function ExhibitionShopContent() {
               </h1>
               <p className="mt-1 max-w-xl text-sm text-muted">
                 {catalog?.branch
-                  ? `Seasonal market at your ${catalog.branch}. Browse vendor stands, shop quality goods, pick up in person.`
-                  : 'Browse vendor stands and shop quality goods at your branch exhibition.'}
+                  ? `Seasonal market at ${catalog.branch}. Browse vendor stands, shop quality goods, pick up in person.`
+                  : 'Browse vendor stands and shop quality goods.'}
               </p>
             </div>
 

@@ -110,7 +110,6 @@ export async function POST(request) {
         .from('exhibition_cycles')
         .update({ status: 'closed' })
         .eq('branch_id', branchId)
-        .neq('status', 'active')
     }
 
     const { data, error } = await supabase
@@ -150,7 +149,7 @@ export async function PATCH(request) {
 
     const makeActive = body.status === 'active' || body.activate === true
     if (makeActive) {
-      await supabase.from('exhibition_cycles').update({ status: 'closed' }).eq('branch_id', cycle.branch_id).neq('id', id).neq('status', 'active')
+      await supabase.from('exhibition_cycles').update({ status: 'closed' }).eq('branch_id', cycle.branch_id).neq('id', id)
       const { error: upErr } = await supabase.from('exhibition_cycles').update({ status: 'active' }).eq('id', id)
       if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 })
       return NextResponse.json({ ok: true, cycle: { id, status: 'active' } })
@@ -250,7 +249,6 @@ export async function PUT(request) {
           .update({ status: 'closed' })
           .eq('branch_id', updates.branch_id)
           .neq('id', idRes.value)
-          .neq('status', 'active')
       }
     }
 
