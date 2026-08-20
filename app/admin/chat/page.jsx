@@ -392,6 +392,9 @@ export default function AdminChatPage() {
                       })}
                     </span>
                   </div>
+                  {conv.sender_name && (
+                    <p className="text-[10px] text-muted/70 mt-0.5">{conv.sender_id}</p>
+                  )}
                   <div className="flex items-center justify-between mt-0.5">
                     <p className="text-xs text-muted truncate flex-1">{conv.last_message}</p>
                     {conv.has_unread && (
@@ -443,9 +446,16 @@ export default function AdminChatPage() {
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </button>
-                <span className="text-sm font-medium text-fg">
-                  {conversations.find((c) => c.sender_id === selectedId)?.sender_name || selectedId}
-                </span>
+                <div className="min-w-0">
+                  <span className="text-sm font-medium text-fg">
+                    {conversations.find((c) => c.sender_id === selectedId)?.sender_name || selectedId}
+                  </span>
+                  {conversations.find((c) => c.sender_id === selectedId)?.sender_name && (
+                    <span className="ml-1.5 text-xs text-muted">
+                      ({selectedId})
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Messages */}
