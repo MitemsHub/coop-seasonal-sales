@@ -16,10 +16,11 @@ export const dynamic = 'force-dynamic'
 
 const TOKEN_TTL = 60 * 60 * 8 // 8 hours
 
-// Auth client using the anon key
-const authSupabase = createClient(
+// Service-role client — bypasses RLS and session requirements.
+// Safe here because the member already verified their identity via OTP.
+const authAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
 export async function POST(request) {
@@ -42,21 +43,23 @@ export async function POST(request) {
       )
     }
 
-    // Create a Supabase client authenticated as this user (using the access token)
-    const userClient = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {
-        global: {
-          headers: { Authorization: `Bearer ${token}` },
-        },
-      }
-    )
+    // Look up the Supabase Auth user by the access token to get the user ID.
+    // Then use the service-role client to set the password (no session needed).
+    const { data: { user: authUser }, error: tokenErr } = await authAdmin.auth.getUser(token)
 
-    // Set the password using the user's session
-    const { data: userData, error: pwError } = await userClient.auth.updateUser({
-      password: pw,
-    })
+    if (tokenErr || !authUser?.id) {
+      console.error('Token lookup error:', tokenErr)
+      return NextResponse.json(
+        { error: 'Invalid or expired verification. Please go back and request a new code.' },
+        { status: 401 }
+      )
+    }
+
+    // Set the password using the service-role client
+    const { data: userData, error: pwError } = await authAdmin.auth.admin.updateUserById(
+      authUser.id,
+      { password: pw }
+    )
 
     if (pwError) {
       console.error('Set password error:', pwError)

@@ -254,7 +254,7 @@ function PasswordSetup({ password, setPassword, confirmPassword, setConfirmPassw
   return (
     <form className="space-y-3 md:space-y-4" onSubmit={onSubmit}>
       <div>
-        <label className="block text-xs font-medium text-muted mb-1.5">Create a password</label>
+        <label className="block text-xs font-medium text-muted mb-1.5">Password</label>
         <input
           id="new-password"
           type="password"
@@ -264,7 +264,7 @@ function PasswordSetup({ password, setPassword, confirmPassword, setConfirmPassw
           className={`w-full py-2 pl-3 pr-3 md:py-3 md:pl-4 border-2 rounded-xl focus:ring-2 focus:ring-brand/20 transition-all duration-200 outline-none text-[13px] md:text-base text-fg placeholder:text-subtext disabled:bg-subtle disabled:cursor-not-allowed ${
             !password ? 'border-line-subtle focus:border-brand' : pwValid ? 'border-success focus:border-success' : 'border-danger focus:border-danger'
           }`}
-          placeholder="At least 6 characters"
+          placeholder="Min. 6 characters"
           autoFocus
         />
         {password && !pwValid && (
@@ -758,7 +758,7 @@ export default function MemberAuth() {
     [STEP.ENTER_ID]: { title: 'Member sign in', sub: 'Enter your staff ID to continue' },
     [STEP.ENTER_EMAIL]: { title: 'Confirm your email', sub: 'We\u2019ll send a verification code to the email on file' },
     [STEP.ENTER_OTP]: { title: 'Enter verification code', sub: 'Enter the 6-digit code sent to your email' },
-    [STEP.SET_PASSWORD]: { title: 'Create your password', sub: "Choose a password you'll use to sign in next time" },
+    [STEP.SET_PASSWORD]: { title: 'Set your password', sub: 'This will be your password for future sign-ins' },
     [STEP.ENTER_PASSWORD]: { title: 'Welcome back', sub: 'Enter your password to sign in' },
     [STEP.FORGOT_PASSWORD]: { title: 'Reset password', sub: "We'll help you get back into your account" },
   }
