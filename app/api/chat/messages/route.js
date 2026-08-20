@@ -26,7 +26,7 @@ export async function GET(request) {
       return NextResponse.json({ ok: true, count: count || 0 })
     }
 
-    // All conversations — distinct member list with last message
+    // All conversations — distinct member list with last message + unread status
     if (all) {
       const { data, error } = await supabase
         .from('chat_messages')
@@ -45,7 +45,24 @@ export async function GET(request) {
             sender_name: msg.sender_name,
             last_message: msg.message,
             last_at: msg.created_at,
+            has_unread: false,
           })
+        }
+      }
+
+      // Check which members have unread messages
+      const memberIds = Array.from(members.keys())
+      if (memberIds.length > 0) {
+        const { data: unreadRows } = await supabase
+          .from('chat_messages')
+          .select('sender_id')
+          .eq('sender_type', 'member')
+          .is('read_at', null)
+          .in('sender_id', memberIds)
+
+        for (const row of unreadRows || []) {
+          const conv = members.get(row.sender_id)
+          if (conv) conv.has_unread = true
         }
       }
 
