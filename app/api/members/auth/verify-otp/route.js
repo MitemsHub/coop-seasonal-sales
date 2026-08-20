@@ -6,6 +6,7 @@
 // call the set-password endpoint in the next step.
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createDbClient } from '@/lib/supabaseServer'
 import { checkRateLimit, rateLimitResponse } from '@/lib/rateLimit'
 
 export const runtime = 'nodejs'
@@ -18,16 +19,12 @@ const authSupabase = createClient(
 
 export async function POST(request) {
   try {
-    const { memberId, email, token } = await request.json().catch(() => ({}))
+    const { memberId, token } = await request.json().catch(() => ({}))
     const mid = String(memberId || '').trim().toUpperCase()
-    const addr = String(email || '').trim().toLowerCase()
     const code = String(token || '').trim()
 
     if (!mid) {
       return NextResponse.json({ error: 'Member ID is required' }, { status: 400 })
-    }
-    if (!addr) {
-      return NextResponse.json({ error: 'Email is required' }, { status: 400 })
     }
     if (!code || code.length < 4 || code.length > 8) {
       return NextResponse.json({ error: 'Please enter the OTP code sent to your email' }, { status: 400 })
@@ -36,6 +33,19 @@ export async function POST(request) {
     // Rate limit: 5 OTP verify attempts per member per 15 minutes
     const verifyLimit = checkRateLimit('verify-otp', mid, 5, 15 * 60 * 1000)
     if (!verifyLimit.allowed) return rateLimitResponse(verifyLimit.retryAfterMs)
+
+    // Look up the member's real email server-side (never trust the client)
+    const db = createDbClient()
+    const { data: member, error: mErr } = await db
+      .from('members')
+      .select('member_id, email')
+      .eq('member_id', mid)
+      .maybeSingle()
+
+    if (mErr || !member || !member.email) {
+      return NextResponse.json({ error: 'Member not found or no email on file' }, { status: 404 })
+    }
+    const addr = member.email.toLowerCase()
 
     // Verify the OTP with Supabase Auth
     const { data, error: verifyError } = await authSupabase.auth.verifyOtp({

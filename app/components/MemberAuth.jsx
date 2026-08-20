@@ -196,7 +196,7 @@ function OtpInput({ otp, setOtp, error, isLoading, onSubmit, onBack }) {
           placeholder="000000"
           maxLength={6}
         />
-        <p className="mt-1.5 text-caption text-muted">Enter the 6-digit code sent to your email</p>
+
       </div>
 
       {error && (
@@ -645,7 +645,6 @@ export default function MemberAuth() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           memberId: memberId.trim().toUpperCase(),
-          email: rawEmail || maskedEmail,
           token: otp.trim(),
         }),
       })
@@ -758,7 +757,7 @@ export default function MemberAuth() {
   const titles = {
     [STEP.ENTER_ID]: { title: 'Member sign in', sub: 'Enter your staff ID to continue' },
     [STEP.ENTER_EMAIL]: { title: 'Confirm your email', sub: 'We\u2019ll send a verification code to the email on file' },
-    [STEP.ENTER_OTP]: { title: 'Enter verification code', sub: 'Check your email for the 6-digit code' },
+    [STEP.ENTER_OTP]: { title: 'Enter verification code', sub: 'Enter the 6-digit code sent to your email' },
     [STEP.SET_PASSWORD]: { title: 'Create your password', sub: "Choose a password you'll use to sign in next time" },
     [STEP.ENTER_PASSWORD]: { title: 'Welcome back', sub: 'Enter your password to sign in' },
     [STEP.FORGOT_PASSWORD]: { title: 'Reset password', sub: "We'll help you get back into your account" },
