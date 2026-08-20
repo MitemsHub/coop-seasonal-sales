@@ -67,7 +67,7 @@ export async function GET(request) {
     if (error) throw error
     return NextResponse.json({ ok: true, messages: data || [] })
   } catch (err) {
-    console.error('Chat messages error:', err)
-    return NextResponse.json({ ok: false, error: 'Internal server error' }, { status: 500 })
+    console.error('[chat-messages] Error:', err?.message || err)
+    return NextResponse.json({ ok: false, error: err?.message || 'Internal server error' }, { status: 500 })
   }
 }
