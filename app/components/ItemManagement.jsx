@@ -211,7 +211,7 @@ export default function ItemManagement() {
           <button
             onClick={() => goToPage(currentPage - 1)}
             disabled={currentPage === 1}
-            className="px-3 py-2 bg-muted hover:bg-muted disabled:bg-subtle disabled:text-gray-400 text-muted rounded-lg transition-colors text-sm"
+            className="px-3 py-2 bg-subtle hover:bg-muted border border-line-subtle text-fg disabled:bg-subtle disabled:border-transparent disabled:text-subtext rounded-lg transition-colors text-sm font-medium"
           >
             Previous
           </button>
@@ -230,7 +230,7 @@ export default function ItemManagement() {
                   className={`px-3 py-2 rounded-lg text-sm transition-colors ${
                     currentPage === page
                       ? 'bg-brand text-on-accent'
-                      : 'bg-muted hover:bg-muted text-muted'
+                      : 'bg-subtle hover:bg-muted border border-line-subtle text-fg'
                   }`}
                 >
                   {page}
@@ -242,7 +242,7 @@ export default function ItemManagement() {
           <button
             onClick={() => goToPage(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className="px-3 py-2 bg-muted hover:bg-muted disabled:bg-subtle disabled:text-gray-400 text-muted rounded-lg transition-colors text-sm"
+            className="px-3 py-2 bg-subtle hover:bg-muted border border-line-subtle text-fg disabled:bg-subtle disabled:border-transparent disabled:text-subtext rounded-lg transition-colors text-sm font-medium"
           >
             Next
           </button>
