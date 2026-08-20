@@ -239,17 +239,16 @@ export async function PUT(request) {
 
     if (!Object.keys(updates).length) return NextResponse.json({ ok: false, error: 'Nothing to update' }, { status: 400 })
 
-    // If the branch changes and the season stays active, keep one active cycle
-    // per branch — close any other active season in the new branch first.
-    if (updates.branch_id && updates.branch_id !== Number(current.branch_id)) {
-      const finalStatus = updates.status || current.status
-      if (finalStatus === 'active') {
-        await supabase
-          .from('exhibition_cycles')
-          .update({ status: 'closed' })
-          .eq('branch_id', updates.branch_id)
-          .neq('id', idRes.value)
-      }
+    // When activating a cycle, close any other active cycle in the same
+    // branch — only one active season per branch at a time.
+    const finalStatus = updates.status || current.status
+    if (finalStatus === 'active') {
+      const targetBranch = updates.branch_id || current.branch_id
+      await supabase
+        .from('exhibition_cycles')
+        .update({ status: 'closed' })
+        .eq('branch_id', targetBranch)
+        .neq('id', idRes.value)
     }
 
     const { data, error } = await supabase

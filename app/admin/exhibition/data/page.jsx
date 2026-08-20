@@ -3,14 +3,14 @@
 // app/admin/exhibition/data/page.jsx
 // Coop Exhibition operations "Data" page — the exhibition equivalent of the
 // food data-management page. Contains:
-//   • Shopping Control — a real Open/Closed toggle with Save, mirroring the
-//     Food and Ram modules. The exhibition also follows its seasons: opening a
-//     cycle opens that branch's market, closing it closes it.
 //   • Cycles — create / activate / close / edit seasons (merged from the
 //     standalone Cycles page, so operations live in one place).
 //   • Exhibition Loan Limits (Selected Cycle) — eligible vs non-eligible
 //     (grace) loan caps per member category, mirroring the Food module. The
 //     loan interest and vendor deduction rates live in the cycle settings.
+//
+// Exhibition availability is determined solely by cycle status: opening a
+// cycle (status='active') opens that branch's market; closing it closes it.
 import { useCallback, useEffect, useState } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
@@ -20,87 +20,6 @@ import Label from '../../../components/ui/Label'
 import Select from '../../../components/ui/Select'
 import Skeleton from '../../../components/ui/Skeleton'
 import { ExhibitionCyclesContent } from '../cycles/page'
-
-/* ─── Shopping Control ─────────────────────────────────────────── */
-
-function ShoppingControlSection() {
-  const [open, setOpen] = useState(true)
-  const [loading, setLoading] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState(null)
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    setMsg(null)
-    try {
-      const res = await fetch('/api/admin/system/exhibition-shopping', { cache: 'no-store' })
-      const json = await res.json()
-      if (!json?.ok) throw new Error(json?.error || 'Failed to load status')
-      setOpen(!!json.open)
-    } catch (e) {
-      setMsg({ type: 'error', text: e.message })
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    load()
-  }, [load])
-
-  const save = async () => {
-    if (saving) return
-    setSaving(true)
-    setMsg(null)
-    try {
-      const res = await fetch('/api/admin/system/exhibition-shopping', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ open }),
-      })
-      const json = await res.json()
-      if (!json?.ok) throw new Error(json?.error || 'Failed to save')
-      setMsg({ type: 'success', text: 'Shopping status saved' })
-    } catch (e) {
-      setMsg({ type: 'error', text: e.message })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <Card>
-      <Card.Header>
-        <Card.Title>🛍️ Shopping Control</Card.Title>
-        <Card.Description>
-          Toggle whether members can shop the Coop Exhibition. The market also follows its
-          seasons — opening a cycle opens that branch, closing it closes it.
-        </Card.Description>
-      </Card.Header>
-      <Card.Body>
-        <div className="flex flex-wrap items-center gap-3">
-          <label
-            className={`flex items-center gap-2 cursor-pointer select-none ${loading ? 'opacity-60 pointer-events-none' : ''}`}
-            onClick={() => setOpen((v) => !v)}
-          >
-            <div className={`w-12 h-6 rounded-full px-1 flex items-center transition-colors duration-200 ${open ? 'bg-success-fg justify-end' : 'bg-muted justify-start'}`}>
-              <div className="w-4 h-4 bg-surface rounded-full shadow" />
-            </div>
-            <span className={`text-sm font-medium ${open ? 'text-success-fg' : 'text-muted'}`}>
-              {open ? 'Open' : 'Closed'}
-            </span>
-          </label>
-          <Button onClick={save} loading={saving} disabled={loading || saving}>
-            {saving ? 'Saving…' : 'Save'}
-          </Button>
-          {msg && (
-            <span className={`text-sm ${msg.type === 'error' ? 'text-danger-fg' : 'text-success-fg'}`}>{msg.text}</span>
-          )}
-        </div>
-      </Card.Body>
-    </Card>
-  )
-}
 
 /* ─── Exhibition Loan Limits (Selected Cycle) ──────────────────── */
 
@@ -347,16 +266,13 @@ function ExhibitionDataContent() {
     <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-h2 font-bold tracking-tight text-fg">Exhibition Operations · Data</h1>
-          <p className="text-sm text-muted">
-            Shopping control, seasons and loan settings for the Coop Exhibition.
-          </p>
+          <h1 className="text-h2 font-bold tracking-tight text-fg">Exhibition Operations · Data</h1>            <p className="text-sm text-muted">
+              Seasons and loan settings for the Coop Exhibition.
+            </p>
         </div>
       </div>
 
       <div className="space-y-6">
-        <ShoppingControlSection />
-
         {/* Cycles — merged from the standalone Cycles page */}
         <div className="rounded-2xl border border-line bg-surface">
           <ExhibitionCyclesContent />

@@ -188,18 +188,6 @@ export async function POST(req) {
     }
     if (!cycle) return NextResponse.json({ ok: false, error: 'The Coop Exhibition is closed right now.' }, { status: 400 })
 
-    // Master shopping toggle (admin Shopping Control) — unset defaults to open
-    // so exhibition availability still follows the active seasons.
-    const { data: settingRow } = await supabase
-      .from('app_settings')
-      .select('value')
-      .eq('key', 'exhibition_shopping_open')
-      .maybeSingle()
-      .catch(() => ({ data: null }))
-    if (settingRow?.value === 'false') {
-      return NextResponse.json({ ok: false, error: 'The Coop Exhibition is closed right now.' }, { status: 400 })
-    }
-
     const cycleId = Number(cycle.id)
     const loanInterestRatePct = Math.max(0, Number(cycle.loan_interest_rate_pct ?? 13))
     const loanInterestRate = loanInterestRatePct / 100

@@ -75,6 +75,7 @@ export function ExhibitionCyclesContent() {
       branch_id: c.branch_id || '',
       name: c.name || '',
       code: c.code || '',
+      status: c.status || 'draft',
       starts_at: c.starts_at ? String(c.starts_at).slice(0, 10) : '',
       ends_at: c.ends_at ? String(c.ends_at).slice(0, 10) : '',
       vendor_deduction_rate_pct: c.vendor_deduction_rate_pct,
@@ -124,6 +125,7 @@ export function ExhibitionCyclesContent() {
           branch_id: Number(form.branch_id),
           name: form.name,
           code: form.code,
+          status: form.status,
           starts_at: form.starts_at ? `${form.starts_at}T00:00:00` : null,
           ends_at: form.ends_at ? `${form.ends_at}T23:59:59` : null,
           vendor_deduction_rate_pct: Number(form.vendor_deduction_rate_pct),
@@ -312,15 +314,14 @@ export function ExhibitionCyclesContent() {
                 <Input id="exh-cycle-code" value={form.code || ''} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder="e.g. EXH-2026" />
               </div>
             </div>
-            {modal === 'create' && (
-              <div>
-                <Label htmlFor="exh-cycle-status">Status</Label>
-                <Select id="exh-cycle-status" value={form.status || 'draft'} onChange={(e) => setForm({ ...form, status: e.target.value })} className="w-full">
-                  <option value="draft">Draft (preparing)</option>
-                  <option value="active">Active (open now)</option>
-                </Select>
-              </div>
-            )}
+            <div>
+              <Label htmlFor="exh-cycle-status">Status</Label>
+              <Select id="exh-cycle-status" value={form.status || 'draft'} onChange={(e) => setForm({ ...form, status: e.target.value })} className="w-full">
+                <option value="draft">Draft (preparing)</option>
+                <option value="active">Active (open now)</option>
+                <option value="closed">Closed</option>
+              </Select>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="exh-cycle-start">Starts</Label>

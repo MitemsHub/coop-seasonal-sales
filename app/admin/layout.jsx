@@ -184,6 +184,7 @@ export default function AdminLayout({ children }) {
   const [foodLive, setFoodLive] = useState(null)
   const [ramLive, setRamLive] = useState(null)
   const [exhLive, setExhLive] = useState(null)
+  const [exhActiveCount, setExhActiveCount] = useState(0)
 
   // Hydrate the sidebar preferences after mount (not in the useState
   // initializer) so the server and the first client render agree — reading
@@ -235,15 +236,27 @@ export default function AdminLayout({ children }) {
           return null
         }
       }
-      const [food, ram, exh] = await Promise.all([
+      const [food, ram] = await Promise.all([
         foodRes.status === 'fulfilled' ? read(foodRes) : null,
         ramRes.status === 'fulfilled' ? read(ramRes) : null,
-        exhRes.status === 'fulfilled' ? read(exhRes) : null,
       ])
+      // Exhibition response carries both open and activeCount.
+      let exh = null
+      let exhCount = 0
+      if (exhRes.status === 'fulfilled') {
+        try {
+          const ej = await exhRes.value.json()
+          exh = ej?.ok ? !!ej.open : null
+          exhCount = Number(ej?.activeCount || 0)
+        } catch {
+          exh = null
+        }
+      }
       if (cancelled) return
       setFoodLive(food)
       setRamLive(ram)
       setExhLive(exh)
+      setExhActiveCount(exhCount)
     })
     return () => {
       cancelled = true
@@ -493,7 +506,7 @@ export default function AdminLayout({ children }) {
               label="Coop Exhibition"
               collapsed={isCollapsed}
               onNavigate={() => setSidebarVisible(true)}
-              status={exhLive == null ? undefined : exhLive ? 'Active' : 'Closed'}
+              status={exhLive == null ? undefined : exhLive ? `${exhActiveCount} active cycle${exhActiveCount === 1 ? '' : 's'}` : 'Closed'}
               statusTone={exhLive ? 'success' : 'muted'}
             />
             {!isCollapsed && exhOpen && (

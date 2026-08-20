@@ -78,22 +78,6 @@ export async function GET(req) {
     const cycleBranchId = Number(cycle.branch_id)
     const deliveryBranch = cycle.branches?.name || ''
 
-    // Respect the Shopping Control toggle — when the admin closes the
-    // exhibition globally via the Data page, members should see it as closed
-    // even if an active cycle exists.  Defaults to open (toggle unset).
-    if (cycleOpen) {
-      try {
-        const { data: settingRow } = await supabase
-          .from('app_settings')
-          .select('value')
-          .eq('key', 'exhibition_shopping_open')
-          .maybeSingle()
-        if (settingRow?.value === 'false') cycleOpen = false
-      } catch {
-        // Missing table or read failure — default to open
-      }
-    }
-
     const [vendorsRes, categoriesRes, productsRes] = await Promise.all([
       supabase
         .from('exhibition_vendors')
