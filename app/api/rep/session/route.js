@@ -141,11 +141,11 @@ export async function POST(req) {
 
     // Food + Exhibition both authenticate with the branch passcode and carry
     // a branch_id claim (exhibition is branch-scoped like Food).
-    const { data: br, error } = await supabase.from('branches').select('id, code, name').eq('code', code).single()
+    const { data: br, error } = await supabase.from('branches').select('id, code, name, rep_phone').eq('code', code).single()
     if (error || !br) return NextResponse.json({ ok:false, error:'Invalid passcode' }, { status:401 })
 
     const token = await sign({ role: 'rep', module: portalModule, branch_id: br.id, branch_code: br.code }, 60 * 60 * 8) // 8h
-    const res = NextResponse.json({ ok:true, module: portalModule, branch: br })
+    const res = NextResponse.json({ ok:true, module: portalModule, branch: br, rep_phone: br.rep_phone || '' })
     res.cookies.set('rep_token', token, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 60*60*8 })
     return res
   } catch (e) {

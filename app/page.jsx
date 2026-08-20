@@ -336,11 +336,21 @@ function PhotoHero() {
 /*  Landing page                                                      */
 /* ---------------------------------------------------------------- */
 export default function LandingPage() {
+  const [liveStats, setLiveStats] = useState(null)
+
+  useEffect(() => {
+    fetch('/api/public/stats', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((json) => { if (json.ok) setLiveStats(json.stats) })
+      .catch(() => {})
+  }, [])
+
+  const fmt = (n) => n >= 1000 ? `${(n / 1000).toFixed(n % 1000 === 0 ? 0 : 1)}k+` : `${n.toLocaleString()}+`
   const stats = [
-    { value: '2,400+', label: 'Verified members', icon: Users },
-    { value: '37', label: 'Branches nationwide', icon: MapPin },
-    { value: '18,000+', label: 'Orders delivered', icon: Truck },
-    { value: '4.8★', label: 'Average member rating', icon: Star },
+    { value: liveStats ? fmt(liveStats.members) : '—', label: 'Verified members', icon: Users },
+    { value: liveStats ? String(liveStats.branches) : '—', label: 'Branches nationwide', icon: MapPin },
+    { value: liveStats ? fmt(liveStats.delivered) : '—', label: 'Orders delivered', icon: Truck },
+    { value: liveStats ? `${liveStats.rating}★` : '—', label: 'Average member rating', icon: Star },
   ]
 
   const services = [
@@ -434,16 +444,32 @@ export default function LandingPage() {
       a: 'Order at checkout and pay on delivery. Qualifying members can also take a small-interest food loan against an order. The rate for the current cycle is shown before you confirm.',
     },
     {
+      q: 'What payment options are available?',
+      a: 'You can pay with Savings, Loan, or Cash. Savings draws from your coop balance (up to 50% of your total savings). Loan lets you buy now and repay later with a small interest rate set per cycle. Cash orders are confirmed on delivery — just send your payment receipt to the cooperative.',
+    },
+    {
       q: 'How does Ram distribution work?',
       a: 'Ram season runs on its own cycle through a separate member portal. Members order early, pay on delivery, and pick up through vendor-backed logistics.',
+    },
+    {
+      q: 'What is the Coop Exhibition?',
+      a: 'The Exhibition is a seasonal market where approved vendors set up stands at your branch. Members browse vendor hubs, compare products, and shop directly — all through the same member portal. Prices are negotiated per vendor.',
     },
     {
       q: 'Can I change or cancel an order?',
       a: 'Yes, while your order is still pending, contact your branch rep to adjust quantities or cancel. Once it is posted for delivery, changes are limited.',
     },
     {
+      q: 'How do I track my order?',
+      a: 'Go to My Orders in the portal to see every order you have placed. Each order shows its current status — Pending, Posted, or Delivered — so you always know where things stand.',
+    },
+    {
+      q: 'How do my savings and loan limits work?',
+      a: 'Your savings and loan limits are calculated by the cooperative based on your account history. Your available limits are shown at the top of the shop before you start ordering. If your limit is reached, you can switch to Cash payment.',
+    },
+    {
       q: 'How do I reach support?',
-      a: 'Email customerservice@cbncoopng.com or call 09096797982 / 08180578550. Your branch rep is the fastest route for order issues.',
+      a: 'Use the live chat button in the bottom-right corner of any page for instant help. You can also email customerservice@cbncoopng.com or call 09096797982 / 08180578550. Your branch rep is the fastest route for order issues.',
     },
   ]
 

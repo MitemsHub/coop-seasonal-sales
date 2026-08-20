@@ -10,6 +10,7 @@ import { ThemeProvider } from './contexts/ThemeContext'
 import ToastProvider from './components/ui/Toast'
 import { Geist, Geist_Mono } from 'next/font/google'
 import PageTransition from './components/PageTransition'
+import ChatWidget from './components/ChatWidget'
 
 const geist = Geist({
   subsets: ['latin'],
@@ -61,6 +62,7 @@ if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches))d
               <main className="w-full">
                 <PageTransition>{children}</PageTransition>
               </main>
+              <ChatWidget />
             </ToastProvider>
           </ThemeProvider>
         </AuthProvider>

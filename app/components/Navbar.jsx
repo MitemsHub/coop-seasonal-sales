@@ -242,7 +242,7 @@ export default function Navbar() {
             ) : isFoodMemberNav ? (
               <>
                 <span className="font-bold text-[15px] sm:text-base lg:text-lg text-brand dark:text-fg leading-tight">
-                  Coop Food Distribution
+                  Coop Seasonal Sales
                 </span>
                 <span className="text-xs sm:text-sm text-muted -mt-1">Member Shopping Portal</span>
               </>

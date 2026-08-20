@@ -18,6 +18,7 @@ import {
   Plus,
   Search,
   ShoppingCart,
+  Tag,
   User,
   Wallet,
 } from 'lucide-react'
@@ -121,6 +122,7 @@ function ShopPageContent() {
   const [itemsBusy, setItemsBusy] = useState(false)
   const [ordersCount, setOrdersCount] = useState(null)
   const [shoppingOpen, setShoppingOpen] = useState(true)
+  const [selectedCategory, setSelectedCategory] = useState(null)
 
   // Safe JSON helper
   const safeJson = async (res, label) => {
@@ -839,8 +841,23 @@ function ShopPageContent() {
     })
   }, [setQtySafe, inputTimeouts])
 
+// Unique categories derived from loaded items
+const uniqueCategories = useMemo(() => {
+  const cats = new Set()
+  for (const it of items) {
+    if (it.category) cats.add(it.category)
+  }
+  return Array.from(cats).sort()
+}, [items])
+
+// Items filtered by the selected category
+const filteredItems = useMemo(() => {
+  if (!selectedCategory) return items
+  return items.filter((it) => it.category === selectedCategory)
+}, [items, selectedCategory])
+
 const itemCards = useMemo(() => (
-  items.map((it) => {
+  filteredItems.map((it) => {
     const currentQty = qty[it.sku] || 0
     const isLoading = loadingItems.has(it.sku)
     const canDecrease = currentQty > 0 && !isLoading
@@ -903,7 +920,7 @@ const itemCards = useMemo(() => (
       </div>
     )
   })
-), [items, qty, loadingItems, setQtySafe])
+), [filteredItems, qty, loadingItems, setQtySafe])
 
   const submitOrder = async () => {
     setSubmitting(true)
@@ -1358,9 +1375,48 @@ const itemCards = useMemo(() => (
                   </div>
                 </div>
                 {deliveryBranchCode && !itemsBusy && items.length > 0 && (
-                  <Badge tone="brand" variant="subtle">{items.length} item{items.length === 1 ? '' : 's'}</Badge>
+                  <Badge tone="brand" variant="subtle">
+                    {selectedCategory ? `${filteredItems.length} of ${items.length}` : items.length} item{items.length === 1 ? '' : 's'}
+                  </Badge>
                 )}
               </div>
+
+              {/* Category filter chips */}
+              {deliveryBranchCode && !itemsBusy && uniqueCategories.length > 1 && (
+                <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                  <span className="mr-1 inline-flex items-center gap-1 text-chips font-medium uppercase tracking-wider text-muted">
+                    <Tag className="h-3 w-3" strokeWidth={2.2} />
+                    Categories
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategory(null)}
+                    className={[
+                      'rounded-full border px-3 py-1.5 text-chips font-medium transition-colors duration-150',
+                      selectedCategory === null
+                        ? 'border-brand bg-brand text-on-accent'
+                        : 'border-line bg-surface text-muted hover:border-line-strong hover:text-fg',
+                    ].join(' ')}
+                  >
+                    All
+                  </button>
+                  {uniqueCategories.map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
+                      className={[
+                        'rounded-full border px-3 py-1.5 text-chips font-medium transition-colors duration-150',
+                        selectedCategory === cat
+                          ? 'border-brand bg-brand text-on-accent'
+                          : 'border-line bg-surface text-muted hover:border-line-strong hover:text-fg',
+                      ].join(' ')}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {!deliveryBranchCode ? (
                 <EmptyState
@@ -1388,6 +1444,12 @@ const itemCards = useMemo(() => (
                   icon={Package}
                   title="No items available"
                   description="No items are configured for this branch yet. Please check back later."
+                />
+              ) : filteredItems.length === 0 ? (
+                <EmptyState
+                  icon={Tag}
+                  title="No items in this category"
+                  description="Try selecting a different category or clear the filter."
                 />
               ) : (
                 <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7">

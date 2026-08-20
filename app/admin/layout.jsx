@@ -24,6 +24,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  MessageCircle,
   Package,
   PanelLeftClose,
   PanelLeftOpen,
@@ -501,6 +502,10 @@ export default function AdminLayout({ children }) {
           <div className="pt-2">
             <NavLink href="/admin/members" label="Members Settings" icon={Users} active={activeKey === 'members'} collapsed={isCollapsed} onNavigate={navOnClick} />
             <NavLink href="/admin/members/auth-onboarding" label="Auth Onboarding" icon={UserCheck} active={activeKey === 'members_auth'} collapsed={isCollapsed} onNavigate={navOnClick} />
+          </div>
+
+          <div className="pt-2">
+            <NavLink href="/admin/chat" label="Live Chat" icon={MessageCircle} active={activeKey === 'chat'} collapsed={isCollapsed} onNavigate={navOnClick} />
           </div>
         </nav>
 

@@ -56,6 +56,14 @@ function RepDeliveredContent() {
     })()
   }, [user])
 
+  // Pre-select department from login prefs (set at login time)
+  useEffect(() => {
+    if (user?.type === 'rep' && user?.department && !dept) {
+      setDept(user.department)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user])
+
   const resetPagination = () => {
     setCursorStack([null])
     setPageIndex(0)

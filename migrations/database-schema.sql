@@ -1,4 +1,4 @@
--- Coop Food Distribution Database Schema
+-- Coop Seasonal Sales Database Schema
 -- This file contains the required database tables and columns for the application
 
 -- Create branches table

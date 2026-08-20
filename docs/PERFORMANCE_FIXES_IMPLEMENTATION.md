@@ -1,7 +1,7 @@
 # Performance Fixes Implementation Guide
 
 ## Overview
-This document outlines the performance optimizations implemented to resolve slow POST operations and "Bulk post failed" errors in the Coop Food Distribution system.
+This document outlines the performance optimizations implemented to resolve slow POST operations and "Bulk post failed" errors in the Coop Seasonal Sales system.
 
 ## Issues Resolved
 

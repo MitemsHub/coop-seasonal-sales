@@ -1,4 +1,4 @@
-# Security Audit Report - Coop Food Distribution System
+# Security Audit Report - Coop Seasonal Sales System
 
 ## Executive Summary
 This report identifies critical security vulnerabilities and potential issues found during a comprehensive codebase audit. The system has several high-priority security concerns that require immediate attention.

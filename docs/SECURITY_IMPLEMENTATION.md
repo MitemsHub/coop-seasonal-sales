@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the comprehensive security measures implemented in the Coop Food Distribution System to address the vulnerabilities identified in the security audit.
+This document outlines the comprehensive security measures implemented in the Coop Seasonal Sales System to address the vulnerabilities identified in the security audit.
 
 ## 🔒 Implemented Security Measures
 

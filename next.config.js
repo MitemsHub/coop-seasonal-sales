@@ -1,5 +1,5 @@
 // next.config.js
-// Comprehensive security configuration for the Coop Food Distribution System
+// Comprehensive security configuration for the Coop Seasonal Sales System
 
 /** @type {import('next').NextConfig} */
 const { PHASE_DEVELOPMENT_SERVER } = require('next/constants')

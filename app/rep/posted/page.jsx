@@ -26,7 +26,7 @@ const Spinner = ({ className = 'h-4 w-4 text-on-accent' }) => (
 function RepPostedPageContent() {
   const [orders, setOrders] = useState([])
   const [departments, setDepartments] = useState([])
-  const [dept, setDept] = useState('') // '' = All
+  const [dept, setDept] = useState('') // '' = All — initialized from user.department below
   const [searchInput, setSearchInput] = useState('')
   const [search, setSearch] = useState('')
   const [msg, setMsg] = useState(null)
@@ -80,6 +80,14 @@ function RepPostedPageContent() {
         if (j?.ok) setDepartments(j.departments || [])
       } catch {}
     })()
+  }, [user])
+
+  // Pre-select department from login prefs (set at login time)
+  useEffect(() => {
+    if (user?.type === 'rep' && user?.department && !dept) {
+      setDept(user.department)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
 
   // Branch summary strip — today's pending queue + this cycle's posted figures.

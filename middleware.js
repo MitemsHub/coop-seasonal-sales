@@ -1,5 +1,5 @@
 // middleware.js
-// Comprehensive security middleware for the Coop Food Distribution System
+// Comprehensive security middleware for the Coop Seasonal Sales System
 import { NextResponse } from 'next/server'
 
 // Rate limiting store (in production, use Redis or similar)
