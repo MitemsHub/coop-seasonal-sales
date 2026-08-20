@@ -3,7 +3,7 @@
 // app/admin/layout.jsx
 // Sakani admin shell — sidebar (icons + active accent pill, collapsible rail) + topbar.
 import Link from 'next/link'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '../contexts/AuthContext'
 import ThemeToggle from '../components/ui/ThemeToggle'
@@ -42,7 +42,7 @@ export const dynamic = 'force-dynamic'
 
 /* ─── Nav building blocks ─────────────────────────────────────── */
 
-function NavLink({ href, label, icon: Icon, active, collapsed, onNavigate }) {
+function NavLink({ href, label, icon: Icon, active, collapsed, onNavigate, badge }) {
   return (
     <Link
       href={href}
@@ -59,7 +59,14 @@ function NavLink({ href, label, icon: Icon, active, collapsed, onNavigate }) {
       {active && !collapsed && (
         <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-full bg-brand" aria-hidden="true" />
       )}
-      <Icon className={['h-4 w-4 shrink-0', active ? 'text-fg' : 'text-subtext'].join(' ')} strokeWidth={2} />
+      <span className="relative">
+        <Icon className={['h-4 w-4 shrink-0', active ? 'text-fg' : 'text-subtext'].join(' ')} strokeWidth={2} />
+        {badge > 0 && (
+          <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[9px] font-bold text-white">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        )}
+      </span>
       {!collapsed && <span className="truncate">{label}</span>}
     </Link>
   )
@@ -242,6 +249,22 @@ export default function AdminLayout({ children }) {
       cancelled = true
     }
   }, [])
+
+  // ── Live chat unread count ──
+  const [chatUnread, setChatUnread] = useState(0)
+  const fetchChatUnread = useCallback(async () => {
+    try {
+      const res = await fetch('/api/chat/messages?unread=true', { cache: 'no-store' })
+      const json = await res.json()
+      if (json.ok) setChatUnread(json.count || 0)
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    fetchChatUnread()
+    const t = setInterval(fetchChatUnread, 10000) // poll every 10s
+    return () => clearInterval(t)
+  }, [fetchChatUnread])
 
   const hamburgerRef = useRef(null)
   const sidebarRef = useRef(null)
@@ -505,7 +528,7 @@ export default function AdminLayout({ children }) {
           </div>
 
           <div className="pt-2">
-            <NavLink href="/admin/chat" label="Live Chat" icon={MessageCircle} active={activeKey === 'chat'} collapsed={isCollapsed} onNavigate={navOnClick} />
+            <NavLink href="/admin/chat" label="Live Chat" icon={MessageCircle} active={activeKey === 'chat'} collapsed={isCollapsed} onNavigate={navOnClick} badge={chatUnread} />
           </div>
         </nav>
 
