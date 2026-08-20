@@ -16,7 +16,6 @@ export default function ChatWidget() {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
-  const [unread, setUnread] = useState(0)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [bottomOffset, setBottomOffset] = useState(24) // default bottom-6
@@ -89,7 +88,6 @@ export default function ChatWidget() {
         if (adminCount > prevAdminCount.current && open) {
           playNotificationSound()
         }
-        setUnread(adminCount)
         prevAdminCount.current = adminCount
       }
     } catch {}
@@ -114,7 +112,6 @@ export default function ChatWidget() {
   useEffect(() => {
     if (open) {
       audioRef.current = null // allow sound again
-      setUnread(0)
       prevAdminCount.current = 0
     }
   }, [open])
@@ -264,11 +261,6 @@ export default function ChatWidget() {
             aria-label="Open live chat"
           >
             <MessageCircle className="h-6 w-6" />
-            {unread > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-danger text-[10px] font-bold text-white animate-pulse">
-                {unread > 9 ? '9+' : unread}
-              </span>
-            )}
           </motion.button>
         )}
       </AnimatePresence>
