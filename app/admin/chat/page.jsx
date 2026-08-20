@@ -18,6 +18,7 @@ export default function AdminChatPage() {
   const [loadingConvs, setLoadingConvs] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [totalUnread, setTotalUnread] = useState(0)
+  const [debugInfo, setDebugInfo] = useState(null)
   const scrollRef = useRef(null)
   const fileInputRef = useRef(null)
   const prevTotalUnread = useRef(0)
@@ -55,8 +56,15 @@ export default function AdminChatPage() {
     try {
       const res = await fetch('/api/chat/messages?all=true')
       const json = await res.json()
-      if (json.ok) setConversations(json.conversations || [])
-    } catch {} finally {
+      if (json.ok) {
+        setConversations(json.conversations || [])
+        setDebugInfo(null)
+      } else {
+        setDebugInfo(json.error || 'Failed to load conversations')
+      }
+    } catch (e) {
+      setDebugInfo(e.message || 'Network error')
+    } finally {
       setLoadingConvs(false)
     }
   }, [])
@@ -272,8 +280,14 @@ export default function AdminChatPage() {
         >
           {loadingConvs ? (
             <p className="p-4 text-sm text-muted">Loading…</p>
-          ) : conversations.length === 0 ? (
-            <p className="p-4 text-sm text-muted">No conversations yet.</p>
+        ) : debugInfo ? (
+          <div className="p-4">
+            <p className="text-sm font-medium text-danger">Error loading conversations:</p>
+            <p className="mt-1 text-xs text-danger/80 break-all">{debugInfo}</p>
+            <p className="mt-2 text-xs text-muted">Visit <a href="/api/chat/test" target="_blank" className="underline">/api/chat/test</a> for diagnostics</p>
+          </div>
+        ) : conversations.length === 0 ? (
+          <p className="p-4 text-sm text-muted">No conversations yet.</p>
           ) : (
             conversations.map((conv) => (
               <button

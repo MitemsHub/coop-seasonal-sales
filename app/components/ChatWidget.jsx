@@ -18,6 +18,7 @@ export default function ChatWidget() {
   const [sending, setSending] = useState(false)
   const [unread, setUnread] = useState(0)
   const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
   const [bottomOffset, setBottomOffset] = useState(24) // default bottom-6
   const scrollRef = useRef(null)
   const pollRef = useRef(null)
@@ -134,6 +135,7 @@ export default function ChatWidget() {
       const json = await res.json()
 
       if (json.ok) {
+        setUploadError('')
         // Send the attachment as a message
         const sendRes = await fetch('/api/chat/send', {
           method: 'POST',
@@ -152,8 +154,14 @@ export default function ChatWidget() {
         if (sendJson.ok && sendJson.message) {
           setMessages((prev) => [...prev, sendJson.message])
         }
+      } else {
+        setUploadError(json.error || 'Upload failed')
+        setTimeout(() => setUploadError(''), 5000)
       }
-    } catch {} finally {
+    } catch (e) {
+      setUploadError(e.message || 'Upload failed')
+      setTimeout(() => setUploadError(''), 5000)
+    } finally {
       setUploading(false)
     }
   }
@@ -349,6 +357,13 @@ export default function ChatWidget() {
                     </div>
                   ))}
                 </div>
+
+                {/* Upload error */}
+                {uploadError && (
+                  <div className="mx-3 mt-2 rounded-lg border border-danger-border bg-danger-bg px-3 py-2 text-xs text-danger-fg">
+                    {uploadError}
+                  </div>
+                )}
 
                 {/* Input */}
                 <div className="border-t border-line-subtle px-3 py-2.5">
