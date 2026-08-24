@@ -580,12 +580,12 @@ function DataManagementPageContent() {
             <p className="text-xs text-muted mb-3">
               Recomputes order line prices and order totals using the latest branch prices and markups.
             </p>
-            <div className="flex flex-col sm:flex-row gap-2">
+            <div className="flex flex-col gap-2">
               <input
                 value={confirmRepriceOrders}
                 onChange={(e) => setConfirmRepriceOrders(e.target.value)}
                 placeholder='Type "REPRICE ORDERS"'
-                className="flex-1 px-3 py-2 text-sm border border-line rounded-lg bg-surface"
+                className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
                 disabled={loading || !!processingAction}
               />
               <Button onClick={repriceFoodOrders} loading={processingAction === 'repriceOrders'} disabled={loading || !!processingAction}>
