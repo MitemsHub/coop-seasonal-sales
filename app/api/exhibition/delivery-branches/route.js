@@ -22,7 +22,7 @@ export async function GET() {
     const supabase = createClient()
     const { data, error } = await supabase
       .from('exhibition_cycles')
-      .select('id, name, status, branches:branch_id(code, name)')
+      .select('id, name, status, starts_at, ends_at, branches:branch_id(code, name)')
       .eq('status', 'active')
       .order('created_at', { ascending: false })
     if (error) {
@@ -33,10 +33,14 @@ export async function GET() {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     }
 
-    // One entry per branch (a branch has at most one active cycle).
+    // One entry per branch — only include branches whose cycle date window
+    // is still open (auto-close expired cycles).
+    const now = Date.now()
     const seen = new Set()
     const branches = []
     for (const c of data || []) {
+      if (c.starts_at && new Date(c.starts_at).getTime() > now) continue
+      if (c.ends_at && new Date(c.ends_at).getTime() <= now) continue
       const b = c.branches
       if (!b?.code || seen.has(b.code)) continue
       seen.add(b.code)

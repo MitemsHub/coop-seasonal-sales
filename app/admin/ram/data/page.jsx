@@ -27,9 +27,6 @@ function RamDataContent() {
   const [refreshing, setRefreshing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState(null)
-  const [shoppingOpen, setShoppingOpen] = useState(true)
-  const [shoppingLoading, setShoppingLoading] = useState(false)
-  const [shoppingMsg, setShoppingMsg] = useState('')
   const safeJson = useMemo(() => safeJsonFactory(), [])
 
   const [cycles, setCycles] = useState([])
@@ -145,48 +142,6 @@ function RamDataContent() {
   useEffect(() => {
     setPage(1)
   }, [query])
-
-  useEffect(() => {
-    let cancelled = false
-    const load = async () => {
-      try {
-        setShoppingLoading(true)
-        setShoppingMsg('')
-        const res = await fetch('/api/admin/system/ram-shopping', { cache: 'no-store', credentials: 'same-origin' })
-        const json = await res.json()
-        if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to load status')
-        if (!cancelled) setShoppingOpen(!!json.open)
-      } catch (e) {
-        if (!cancelled) setShoppingMsg(`Error: ${e?.message || 'Failed to load status'}`)
-      } finally {
-        if (!cancelled) setShoppingLoading(false)
-      }
-    }
-    load()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const saveShoppingStatus = async () => {
-    try {
-      setShoppingLoading(true)
-      setShoppingMsg('')
-      const res = await fetch('/api/admin/system/ram-shopping', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify({ open: shoppingOpen }),
-      })
-      const json = await res.json()
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to save')
-      setShoppingMsg('Ram shopping status saved successfully')
-    } catch (e) {
-      setShoppingMsg(`Error: ${e?.message || 'Failed to save'}`)
-    } finally {
-      setShoppingLoading(false)
-    }
-  }
 
   const createCycle = async (e) => {
     e.preventDefault()
@@ -1093,37 +1048,6 @@ function RamDataContent() {
           </tbody>
           </table>
         </div>
-      </div>
-
-      <div className="mt-4 rounded-xl border border-line bg-subtle p-4">
-        <div className="text-sm font-semibold text-fg">Ram Shopping Control</div>
-        <div className="mt-1 text-sm text-muted">Toggle whether members can start Ram shopping from the portal.</div>
-        <div className="mt-3 flex items-center gap-3">
-          <label className="flex items-center gap-2 cursor-pointer select-none" onClick={() => setShoppingOpen(!shoppingOpen)}>
-            <div className={`h-6 w-12 rounded-full px-1 flex items-center ${shoppingOpen ? 'justify-end bg-success' : 'justify-start bg-muted'}`}>
-              <div className="h-4 w-4 rounded-full bg-surface shadow" />
-            </div>
-            <span className={`text-sm font-medium ${shoppingOpen ? 'text-success-fg' : 'text-muted'}`}>{shoppingOpen ? 'Open' : 'Closed'}</span>
-          </label>
-          <input type="checkbox" checked={shoppingOpen} onChange={(e) => setShoppingOpen(e.target.checked)} className="hidden" />
-          <button
-            type="button"
-            onClick={saveShoppingStatus}
-            disabled={shoppingLoading}
-            className={`inline-flex items-center rounded-lg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani ${shoppingLoading ? 'cursor-not-allowed bg-muted' : 'bg-brand hover:bg-brand-hover'}`}
-          >
-            {shoppingLoading ? 'Saving…' : 'Save'}
-          </button>
-        </div>
-        {shoppingMsg && (
-          <div
-            className={`mt-2 p-2 rounded text-sm ${
-              shoppingMsg.startsWith('Error') ? 'border-danger-border bg-danger-bg text-danger-fg' : 'border-success-border bg-success-bg text-success-fg'
-            }`}
-          >
-            {shoppingMsg}
-          </div>
-        )}
       </div>
 
       <DraggableModal

@@ -6,9 +6,9 @@
 // full catalog page and vendor hub share the exact same buying logic.
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Store } from 'lucide-react'
+import { ArrowLeft, MapPin, Store } from 'lucide-react'
 import ProtectedRoute from '../components/ProtectedRoute'
 import ExhibitionCycleHint from '../components/ExhibitionCycleHint'
 import ContinueShoppingBanner from '../components/ContinueShoppingBanner'
@@ -16,10 +16,38 @@ import ExhibitionHubs from '../components/ExhibitionHubs'
 import ExhibitionCatalog from '../components/ExhibitionCatalog'
 import useExhibitionCatalog from '../hooks/useExhibitionCatalog'
 import ModuleClosedPanel from '../components/ModuleClosedPanel'
+import { useAuth } from '../contexts/AuthContext'
+
+const STORAGE_KEY = 'exhibitionDeliveryBranch'
 
 function ExhibitionShopContent() {
   const router = useRouter()
-  const { catalog, error, loading } = useExhibitionCatalog()
+  const { user } = useAuth()
+  const memberId = String(user?.id || '').trim().toUpperCase()
+
+  // Delivery location selection — persisted in localStorage so the cart page
+  // and re-visits stay in sync.
+  const [selectedBranch, setSelectedBranch] = useState(() => {
+    try { return localStorage.getItem(`${STORAGE_KEY}_${memberId}`) || '' } catch { return '' }
+  })
+  const { catalog, error, loading } = useExhibitionCatalog(selectedBranch)
+
+  // Available delivery locations from the catalog response.
+  const availableBranches = useMemo(() => catalog?.availableBranches || [], [catalog])
+
+  // Auto-select when only one branch is available.
+  useEffect(() => {
+    if (availableBranches.length === 1 && !selectedBranch) {
+      setSelectedBranch(availableBranches[0].code)
+    }
+  }, [availableBranches, selectedBranch])
+
+  const handleBranchChange = (code) => {
+    setSelectedBranch(code)
+    try { localStorage.setItem(`${STORAGE_KEY}_${memberId}`, code) } catch {}
+    // Also persist for the cart page.
+    try { localStorage.setItem(`exhibitionDeliveryBranch_${memberId}`, code) } catch {}
+  }
 
   const products = useMemo(() => catalog?.products || [], [catalog])
   const vendors = useMemo(() => catalog?.vendors || [], [catalog])
@@ -35,6 +63,11 @@ function ExhibitionShopContent() {
     for (const p of products) map[p.vendor_id] = (map[p.vendor_id] || 0) + 1
     return map
   }, [products])
+
+  // ── Delivery location gate ──────────────────────────────────────
+  // When multiple exhibitions are open and none is selected yet, show only
+  // the location picker.  Nothing else loads until the member picks one.
+  const needBranchPicker = !loading && catalog?.open && availableBranches.length > 1 && !selectedBranch
 
   // ── Closed state (only when the API explicitly says the market is closed) ──
   if (!loading && catalog && !catalog.open) {
@@ -61,6 +94,7 @@ function ExhibitionShopContent() {
     )
   }
 
+  // ── Main shop view ─────────────────────────────────────────────
   return (
     <ProtectedRoute allowedRoles={['member']}>
       <div className="min-h-screen bg-canvas">
@@ -92,7 +126,22 @@ function ExhibitionShopContent() {
               </p>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
+              {/* Delivery location dropdown — always shown so members can switch */}
+              {availableBranches.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-3.5 w-3.5 shrink-0 text-muted" strokeWidth={2} />
+                  <select
+                    value={selectedBranch}
+                    onChange={(e) => handleBranchChange(e.target.value)}
+                    className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-medium text-fg focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  >
+                    {availableBranches.map((b) => (
+                      <option key={b.code} value={b.code}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <span className="hidden items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-chips font-medium text-muted sm:inline-flex">
                 <span className="h-1.5 w-1.5 rounded-full bg-success-fg" />
                 {catalog?.open ? 'Market open' : 'Market closed'}
@@ -100,18 +149,63 @@ function ExhibitionShopContent() {
             </div>
           </div>
 
-          {/* Shared shopping surface — search, filters, hub slideshow slot,
-              product grid and sticky cart bar. */}
-          <ExhibitionCatalog
-            catalog={catalog}
-            loading={loading}
-            error={error}
-            beforeGrid={
-              !loading && vendorsWithProducts.length > 0 ? (
-                <ExhibitionHubs vendors={vendorsWithProducts} vendorCounts={vendorCounts} />
-              ) : null
-            }
-          />
+          {/* ── Branch picker gate: nothing else loads until they pick ── */}
+          {needBranchPicker ? (
+            <div className="mx-auto max-w-lg">
+              <div className="rounded-2xl border border-line bg-surface p-6 shadow-sm sm:p-8">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent-subtle text-accent">
+                    <MapPin className="h-5 w-5" strokeWidth={2} />
+                  </span>
+                  <div>
+                    <h2 className="text-base font-semibold text-fg">Select your delivery location</h2>
+                    <p className="mt-0.5 text-xs text-muted">Choose where you will pick up your order to see available products.</p>
+                  </div>
+                </div>
+
+                <div className="mt-5 space-y-2">
+                  {availableBranches.map((b) => (
+                    <button
+                      key={b.code}
+                      type="button"
+                      onClick={() => handleBranchChange(b.code)}
+                      className="flex w-full items-center gap-3 rounded-xl border border-line bg-surface p-4 text-left transition-all duration-150 hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md"
+                    >
+                      <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
+                        <MapPin className="h-5 w-5" strokeWidth={2} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-semibold text-fg">{b.name}</div>
+                        {b.cycleName && <div className="mt-0.5 text-xs text-muted">{b.cycleName}</div>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => router.push('/my-coop')}
+                  className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-muted transition-colors hover:text-fg"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  Back to My Coop
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Shared shopping surface — search, filters, hub slideshow slot,
+               product grid and sticky cart bar. */
+            <ExhibitionCatalog
+              catalog={catalog}
+              loading={loading}
+              error={error}
+              beforeGrid={
+                !loading && vendorsWithProducts.length > 0 ? (
+                  <ExhibitionHubs vendors={vendorsWithProducts} vendorCounts={vendorCounts} />
+                ) : null
+              }
+            />
+          )}
         </div>
       </div>
     </ProtectedRoute>

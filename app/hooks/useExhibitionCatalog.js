@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
-export default function useExhibitionCatalog() {
+export default function useExhibitionCatalog(branchCode) {
   const { user } = useAuth()
   const memberId = String(user?.id || '').trim().toUpperCase()
   const [catalog, setCatalog] = useState(null)
@@ -21,7 +21,9 @@ export default function useExhibitionCatalog() {
       setLoading(true)
       setError('')
       try {
-        const res = await fetch(`/api/exhibition/catalog?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' })
+        const qs = new URLSearchParams({ member_id: memberId })
+        if (branchCode) qs.set('branch_code', branchCode)
+        const res = await fetch(`/api/exhibition/catalog?${qs.toString()}`, { cache: 'no-store' })
         const json = await res.json().catch(() => null)
         if (cancelled) return
         if (!json?.ok) {
@@ -37,7 +39,7 @@ export default function useExhibitionCatalog() {
       }
     })()
     return () => { cancelled = true }
-  }, [memberId])
+  }, [memberId, branchCode])
 
   return { catalog, error, loading, memberId }
 }

@@ -477,11 +477,6 @@ function DataManagementPageContent() {
     setProcessingAction(null)
   }
 
-  // Shopping toggle state
-  const [shoppingOpen, setShoppingOpen] = useState(true)
-  const [shoppingLoading, setShoppingLoading] = useState(false)
-  const [shoppingMsg, setShoppingMsg] = useState('')
-
   // Items / Prices import state (moved from the food Import page — the Data
   // page now hosts the items upload, right above Item Image Management).
   const [pricesFile, setPricesFile] = useState(null)
@@ -537,72 +532,6 @@ function DataManagementPageContent() {
     URL.revokeObjectURL(url)
   }
 
-  // Load current shopping status
-  const loadShoppingStatus = async () => {
-    try {
-      setShoppingLoading(true)
-      setShoppingMsg('')
-      const res = await fetch('/api/admin/system/shopping', { cache: 'no-store', credentials: 'same-origin' })
-      if (res.status === 401) {
-        setShoppingMsg('Error: Unauthorized. Please log in via Admin PIN.')
-        return
-      }
-      const json = await res.json()
-      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load status')
-      setShoppingOpen(!!json.open)
-    } catch (e) {
-      setShoppingMsg(`Error: ${e.message}`)
-    } finally {
-      setShoppingLoading(false)
-    }
-  }
-
-  // Save shopping status
-  const saveShoppingStatus = async () => {
-    try {
-      setShoppingLoading(true)
-      setShoppingMsg('')
-      const res = await fetch('/api/admin/system/shopping', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify({ open: shoppingOpen })
-      })
-      if (res.status === 401) {
-        setShoppingMsg('Error: Unauthorized. Please log in via Admin PIN.')
-        return
-      }
-      const json = await res.json()
-      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to save')
-      setShoppingMsg('Shopping status saved successfully')
-    } catch (e) {
-      setShoppingMsg(`Error: ${e.message}`)
-    } finally {
-      setShoppingLoading(false)
-    }
-  }
-
-  // Initial load (moved to useEffect)
-  useEffect(() => {
-    let cancelled = false
-    const run = async () => {
-      try {
-        setShoppingLoading(true)
-        setShoppingMsg('')
-        const res = await fetch('/api/admin/system/shopping', { cache: 'no-store', credentials: 'same-origin' })
-        const json = await res.json()
-        if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load status')
-        if (!cancelled) setShoppingOpen(!!json.open)
-      } catch (e) {
-        if (!cancelled) setShoppingMsg(`Error: ${e.message}`)
-      } finally {
-        if (!cancelled) setShoppingLoading(false)
-      }
-    }
-    run()
-    return () => { cancelled = true }
-  }, [])
-
   // Demand tracking mode — when on, the items upload needs no initial stock column.
   useEffect(() => {
     let cancelled = false
@@ -645,7 +574,7 @@ function DataManagementPageContent() {
       <div className="grid gap-2 lg:gap-3 xl:gap-4">
         <DatabaseMigration />
 
-        <div className="grid gap-2 lg:grid-cols-2 lg:gap-3 xl:gap-4">
+        <div className="grid gap-2 lg:grid-cols-3 lg:gap-3 xl:gap-4">
         <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
           <h2 className="text-sm font-semibold text-fg mb-1">💱 Food Price Repricer</h2>
             <p className="text-xs text-muted mb-3">
@@ -665,39 +594,8 @@ function DataManagementPageContent() {
             </div>
           </div>
 
-        {/* Shopping Control */}
-        <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
-          <h2 className="text-sm font-semibold text-fg mb-1">🛍️ Shopping Control</h2>
-          <p className="text-xs text-muted mb-3">
-            Toggle whether members can start shopping from the portal.
-          </p>
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 cursor-pointer select-none" onClick={() => setShoppingOpen(!shoppingOpen)}>
-              <div className={`w-12 h-6 rounded-full px-1 flex items-center ${shoppingOpen ? 'bg-success-fg justify-end' : 'bg-muted justify-start'}`}>
-                <div className="w-4 h-4 bg-surface rounded-full shadow" />
-              </div>
-              <span className={`text-sm font-medium ${shoppingOpen ? 'text-success-fg' : 'text-muted'}`}>
-                {shoppingOpen ? 'Open' : 'Closed'}
-              </span>
-            </label>
-            <input
-              type="checkbox"
-              checked={shoppingOpen}
-              onChange={(e) => setShoppingOpen(e.target.checked)}
-              className="hidden"
-            />
-            <Button onClick={saveShoppingStatus} loading={shoppingLoading} disabled={shoppingLoading}>
-              {shoppingLoading ? 'Saving…' : 'Save'}
-            </Button>
-          </div>
-          {shoppingMsg && (
-            <div className={`mt-2 p-2 rounded text-sm ${shoppingMsg.startsWith('Error') ? 'bg-danger-bg text-danger-fg border border-danger-border' : 'bg-success-bg text-success-fg border border-success-border'}`}>{shoppingMsg}</div>
-          )}
-        </div>
-        </div>
-
         {/* Items / Prices Import — moved here from the food Import page */}
-        <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
+        <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4 lg:col-span-2">
           <h2 className="text-sm font-semibold text-fg mb-1">📥 Items / Prices Import</h2>
           <p className="text-xs text-muted mb-3">
             {loadingMode ? <span className="inline-block h-3 w-64 animate-pulse rounded bg-muted" /> : 'Expected columns: sku, item_name, unit, category, branch_code, price'}
@@ -729,6 +627,7 @@ function DataManagementPageContent() {
           {pricesLog && (
             <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-subtle p-3 text-xs text-fg overflow-x-auto">{pricesLog}</pre>
           )}
+        </div>
         </div>
 
         {/* Item Image Management */}

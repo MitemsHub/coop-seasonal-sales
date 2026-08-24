@@ -48,17 +48,18 @@ export async function GET(req) {
       }
       return NextResponse.json({ ok: false, error: mErr.message }, { status: 500 })
     }
-    if (!member) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
+    if (!member) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })    // Optional branch_code filter — when the member picks a delivery
+    // location from the dropdown, the catalog scopes to that branch's cycle.
+    const branchCodeFilter = String(searchParams.get('branch_code') || '').trim().toUpperCase()
 
-    // ── Find the most recent active cycle across ALL branches ──────
-    // The exhibition is globally visible: any member can browse any open
-    // exhibition.  The cycle's branch is the delivery/pickup location.
-    const { data: active } = await supabase
+    // ── Find all LIVE cycles across ALL branches ─────────────────
+    // A cycle is "live" when status = 'active' AND its date window is open
+    // (auto-closes when ends_at passes, even without admin action).
+    const { data: allActive } = await supabase
       .from('exhibition_cycles')
       .select('id, name, code, status, starts_at, ends_at, loan_interest_rate_pct, branch_id, branches:branch_id(code, name)')
       .eq('status', 'active')
       .order('created_at', { ascending: false })
-      .maybeSingle()
 
     // Fallback to the latest cycle (any status) so the UI can still show
     // draft/closed season info (e.g. "opens on …").
@@ -68,12 +69,35 @@ export async function GET(req) {
       .order('created_at', { ascending: false })
       .maybeSingle()
 
+    // Filter active cycles by date window (auto-close expired, skip not-yet-started).
+    const now = Date.now()
+    const liveActive = (allActive || []).filter((c) => {
+      if (c.starts_at && new Date(c.starts_at).getTime() > now) return false
+      if (c.ends_at && new Date(c.ends_at).getTime() <= now) return false
+      return true
+    })
+
+    // Build the available delivery locations list from live cycles.
+    const seenBranches = new Map()
+    for (const c of liveActive) {
+      const code = c.branches?.code
+      if (code && !seenBranches.has(code)) {
+        seenBranches.set(code, { code, name: c.branches?.name || code, cycleName: c.name || '' })
+      }
+    }
+    const availableBranches = Array.from(seenBranches.values())
+
+    // Pick the active cycle — scoped to the selected branch if provided.
+    const active = branchCodeFilter
+      ? liveActive.find((c) => c.branches?.code === branchCodeFilter) || null
+      : liveActive[0] || null
+
     const cycle = active || latest
     if (!cycle) {
-      return NextResponse.json({ ok: true, open: false, branch: '' })
+      return NextResponse.json({ ok: true, open: false, branch: '', availableBranches: [] })
     }
 
-    let cycleOpen = cycle.status === 'active'
+    let cycleOpen = !!active
     const cycleId = Number(cycle.id)
     const cycleBranchId = Number(cycle.branch_id)
     const deliveryBranch = cycle.branches?.name || ''
@@ -167,6 +191,7 @@ export async function GET(req) {
       })),
       categories: (categoriesRes.data || []).map((c) => ({ id: Number(c.id), name: c.name || '' })),
       products: catalogProducts,
+      availableBranches,
     })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Failed to load exhibition' }, { status: 500 })

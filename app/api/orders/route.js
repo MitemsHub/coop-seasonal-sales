@@ -29,11 +29,20 @@ export async function POST(req) {
 
     const { data: activeCycle, error: cycleErr } = await supabase
       .from('cycles')
-      .select('id')
+      .select('id, starts_at, ends_at')
       .eq('is_active', true)
       .maybeSingle()
     if (cycleErr) return NextResponse.json({ ok: false, error: cycleErr.message }, { status: 500 })
     if (!activeCycle?.id) return NextResponse.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
+
+    // Reject orders outside the cycle date window
+    const now = Date.now()
+    if (activeCycle.starts_at && new Date(activeCycle.starts_at).getTime() > now) {
+      return NextResponse.json({ ok: false, error: 'This cycle has not started yet. Orders open on ' + new Date(activeCycle.starts_at).toLocaleDateString() }, { status: 400 })
+    }
+    if (activeCycle.ends_at && new Date(activeCycle.ends_at).getTime() <= now) {
+      return NextResponse.json({ ok: false, error: 'This cycle has ended. Please wait for the next cycle to open.' }, { status: 400 })
+    }
 
     const [ordersHasCycle, pricesHasCycle, markupsHasCycle] = await Promise.all([
       hasColumn('orders', 'cycle_id'),
@@ -92,6 +101,19 @@ export async function POST(req) {
     // Exposure totals from existing orders (these totals already include interest for Loan orders)
     const loanExposureWithInterest = sumAmt(loanRows);
     const savingsExposure = sumAmt(savRows);
+
+    // Cumulative loan amount in THIS cycle for this member (for cycle cap enforcement).
+    let cycleLoanTotal = 0
+    if (ordersHasCycle && activeCycle?.id) {
+      const { data: cycleLoanRows } = await supabase
+        .from('orders')
+        .select('total_amount')
+        .eq('member_id', memberId)
+        .eq('payment_option', 'Loan')
+        .eq('cycle_id', activeCycle.id)
+        .in('status', statuses)
+      cycleLoanTotal = sumAmt(cycleLoanRows)
+    }
 
     const memberLoans = Number(member.loans || 0);       // core loans
     const memberSavings = Number(member.savings || 0);
@@ -217,13 +239,14 @@ export async function POST(req) {
       if (total > savingsEligible)   return NextResponse.json({ ok:false, error:`Total ₦${total.toLocaleString()} exceeds Savings available ₦${savingsEligible.toLocaleString()}` }, { status:400 })
     } else if (paymentOption === 'Loan') {
       const capAmount = includeInterestInCap ? totalWithInterest : total
-      if (eligibleLoanMaxCap > 0 && capAmount > eligibleLoanMaxCap) {
+      const cumulativeCapAmount = cycleLoanTotal + capAmount
+      if (eligibleLoanMaxCap > 0 && cumulativeCapAmount > eligibleLoanMaxCap) {
         return NextResponse.json(
           {
             ok: false,
             error: includeInterestInCap
-              ? `Eligible max for this cycle is ₦${eligibleLoanMaxCap.toLocaleString()}. Your total (incl. ${loanRatePct}% interest) is ₦${totalWithInterest.toLocaleString()}.`
-              : `Eligible max for this cycle is ₦${eligibleLoanMaxCap.toLocaleString()}. Your principal total is ₦${total.toLocaleString()} (interest is excluded from the cap).`,
+              ? `Eligible max for this cycle is ₦${eligibleLoanMaxCap.toLocaleString()}. You already have ₦${cycleLoanTotal.toLocaleString()} in this cycle; adding ₦${totalWithInterest.toLocaleString()} (incl. ${loanRatePct}% interest) would exceed it.`
+              : `Eligible max for this cycle is ₦${eligibleLoanMaxCap.toLocaleString()}. You already have ₦${cycleLoanTotal.toLocaleString()} in this cycle; adding ₦${total.toLocaleString()} would exceed it (interest is excluded from the cap).`,
           },
           { status: 400 }
         )
@@ -242,13 +265,13 @@ export async function POST(req) {
             { status: 400 }
           )
         }
-        if (capAmount > graceLoanMaxCap) {
+        if (cumulativeCapAmount > graceLoanMaxCap) {
           return NextResponse.json(
             {
               ok: false,
               error: includeInterestInCap
-                ? `You are currently not eligible for Loan. Grace max for this cycle is ₦${graceLoanMaxCap.toLocaleString()} but your total (incl. ${loanRatePct}% interest) is ₦${totalWithInterest.toLocaleString()}.`
-                : `You are currently not eligible for Loan. Grace max for this cycle is ₦${graceLoanMaxCap.toLocaleString()} but your principal total is ₦${total.toLocaleString()} (interest is excluded from the cap).`,
+                ? `You are currently not eligible for Loan. Grace max for this cycle is ₦${graceLoanMaxCap.toLocaleString()} but you already have ₦${cycleLoanTotal.toLocaleString()} and adding ₦${totalWithInterest.toLocaleString()} (incl. ${loanRatePct}% interest) would exceed it.`
+                : `You are currently not eligible for Loan. Grace max for this cycle is ₦${graceLoanMaxCap.toLocaleString()} but you already have ₦${cycleLoanTotal.toLocaleString()} and adding ₦${total.toLocaleString()} would exceed it (interest is excluded from the cap).`,
             },
             { status: 400 }
           )
@@ -278,6 +301,24 @@ export async function POST(req) {
       return NextResponse.json({ ok:false, error:'Invalid payment option' }, { status:400 })
     }
 
+    // Duplicate guard — same member, payment, and total within 30 seconds
+    const createdSince = new Date(Date.now() - 30_000).toISOString()
+    let dupeQ = supabase
+      .from('orders')
+      .select('order_id')
+      .eq('member_id', memberId)
+      .eq('payment_option', paymentOption)
+      .eq('status', 'Pending')
+      .eq('total_amount', paymentOption === 'Loan' ? totalWithInterest : total)
+      .gte('created_at', createdSince)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    if (ordersHasCycle && activeCycle?.id) dupeQ = dupeQ.eq('cycle_id', activeCycle.id)
+    const { data: dupeRows } = await dupeQ
+    if ((dupeRows || []).length > 0) {
+      return NextResponse.json({ ok: true, order_id: dupeRows[0].order_id, duplicate: true })
+    }
+
     // Insert order (home + delivery branches)
     const orderInsert = {
       member_id: member.member_id,
@@ -291,9 +332,7 @@ export async function POST(req) {
       status: 'Pending'
     }
     if (ordersHasCycle) orderInsert.cycle_id = activeCycle.id
-    const capAmountForGraceFlag = includeInterestInCap ? totalWithInterest : total
-    const eligibilityCapAmountForGraceFlag = includeInterestInCap ? totalWithInterest : total
-    if (ordersHasFoodGraceFlag && paymentOption === 'Loan' && eligibilityCapAmountForGraceFlag > loanEligible && graceLoanMaxCap > 0 && capAmountForGraceFlag <= graceLoanMaxCap) {
+    if (ordersHasFoodGraceFlag && paymentOption === 'Loan' && (includeInterestInCap ? totalWithInterest : total) > loanEligible && graceLoanMaxCap > 0 && cumulativeCapAmount <= graceLoanMaxCap) {
       orderInsert.food_loan_grace_used = true
     }
 

@@ -246,6 +246,13 @@ function MyCoopContent() {
   )
   const cycleTotal = cycleOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0)
 
+  // A cycle is "open" only when:
+  // 1. The admin toggle (shoppingOpen / ramOpen) is ON, AND
+  // 2. A cycle record exists with is_active = true, AND
+  // 3. The cycle's end date hasn't passed
+  const isFoodOpen = !!(shoppingOpen && foodCycle && (!foodCycle.ends_at || new Date(foodCycle.ends_at) > new Date()))
+  const isRamOpen = !!(ramOpen && ramCycle && (!ramCycle.ends_at || new Date(ramCycle.ends_at) > new Date()))
+
   const outstanding = elig ? Number(elig.outstandingLoansTotal || 0) : null
   const recentOrders = orders.filter((o) => o.status !== 'Cancelled').slice(0, 4)
 
@@ -386,7 +393,7 @@ function MyCoopContent() {
                     ? (foodCycle?.name ? `${foodCycle.name}. Shop this cycle` : 'Seasonal food cycles at branch prices')
                     : 'Shop is closed. Check back when the next cycle opens'}
                 </p>
-                {shoppingOpen && foodCycle?.ends_at && <CycleCountdown endsAt={foodCycle.ends_at} noun="Cycle" />}
+                {shoppingOpen && isFoodOpen && foodCycle?.ends_at && <CycleCountdown endsAt={foodCycle.ends_at} noun="Cycle" />}
                 <span
                   className={[
                     'mt-3 flex w-fit items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors duration-200',
@@ -601,15 +608,15 @@ function MyCoopContent() {
                     </span>
                     <span className={[
                       'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-chips font-semibold',
-                      foodCycle ? 'bg-success-bg text-success-fg' : 'bg-warning-bg text-warning-fg',
+                      isFoodOpen ? 'bg-success-bg text-success-fg' : 'bg-warning-bg text-warning-fg',
                     ].join(' ')}>
-                      <span className={['h-1.5 w-1.5 rounded-full', foodCycle ? 'bg-success-fg' : 'bg-warning'].join(' ')} />
-                      {foodCycle ? 'Open' : 'Closed'}
+                      <span className={['h-1.5 w-1.5 rounded-full', isFoodOpen ? 'bg-success-fg' : 'bg-warning'].join(' ')} />
+                      {isFoodOpen ? 'Open' : 'Closed'}
                     </span>
                   </div>
                   <p className="mt-1.5 text-sm font-semibold text-fg">{foodCycle?.name || 'No active cycle'}</p>
                   <p className="mt-0.5 text-chips text-muted">
-                    {foodCycle
+                    {isFoodOpen
                       ? `${cycleOrders.length} order${cycleOrders.length === 1 ? '' : 's'} · ${naira(cycleTotal)} this cycle`
                       : 'Waiting for the next food cycle to open'}
                   </p>
@@ -623,15 +630,15 @@ function MyCoopContent() {
                     </span>
                     <span className={[
                       'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-chips font-semibold',
-                      ramCycle ? 'bg-success-bg text-success-fg' : 'bg-warning-bg text-warning-fg',
+                      isRamOpen ? 'bg-success-bg text-success-fg' : 'bg-warning-bg text-warning-fg',
                     ].join(' ')}>
-                      <span className={['h-1.5 w-1.5 rounded-full', ramCycle ? 'bg-success-fg' : 'bg-warning'].join(' ')} />
-                      {ramCycle ? 'Open' : 'Closed'}
+                      <span className={['h-1.5 w-1.5 rounded-full', isRamOpen ? 'bg-success-fg' : 'bg-warning'].join(' ')} />
+                      {isRamOpen ? 'Open' : 'Closed'}
                     </span>
                   </div>
                   <p className="mt-1.5 text-sm font-semibold text-fg">{ramCycle?.name || 'No active cycle'}</p>
                   <p className="mt-0.5 text-chips text-muted">
-                    {ramCycle
+                    {isRamOpen
                       ? `${ramStats?.cycleCount || 0} order${(ramStats?.cycleCount || 0) === 1 ? '' : 's'} · ${naira(ramStats?.cycleTotal || 0)} this cycle`
                       : 'Waiting for the next Ram season to open'}
                   </p>

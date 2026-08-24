@@ -13,7 +13,7 @@ export async function GET() {
     const supabase = createClient()
     const { data, error } = await supabase
       .from('exhibition_vendors')
-      .select('id, cycle_id, branch_id, name, code, status, branches:branch_id(name), cycles:cycle_id(name, status)')
+      .select('id, cycle_id, branch_id, name, code, status, branches:branch_id(name), cycles:cycle_id(name, status, starts_at, ends_at)')
       .eq('status', 'active')
       .order('name')
 
@@ -27,8 +27,16 @@ export async function GET() {
       return NextResponse.json({ ok: false, error: error.message || 'Failed to load vendor stands' }, { status: 500 })
     }
 
+    // Only show vendors whose cycle is active AND within its date window.
+    const now = Date.now()
     const vendors = (data || [])
-      .filter((v) => v.cycles?.status === 'active')
+      .filter((v) => {
+        if (v.cycles?.status !== 'active') return false
+        const c = v.cycles
+        if (c?.starts_at && new Date(c.starts_at).getTime() > now) return false
+        if (c?.ends_at && new Date(c.ends_at).getTime() <= now) return false
+        return true
+      })
       .map((v) => ({
         id: Number(v.id),
         name: v.name || '',

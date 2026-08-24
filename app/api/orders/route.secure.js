@@ -132,12 +132,21 @@ export async function POST(req) {
 
       const { data: activeCycle, error: cycleErr } = await supabase
         .from('cycles')
-        .select('id')
+        .select('id, starts_at, ends_at')
         .eq('is_active', true)
         .maybeSingle()
         .abortSignal(AbortSignal.timeout(5000))
       if (cycleErr) return errorResponse(cycleErr.message, 500, 'DATABASE_ERROR')
       if (!activeCycle?.id) return errorResponse('No active cycle found', 400, 'NO_ACTIVE_CYCLE')
+
+      // Reject orders outside the cycle date window
+      const now = Date.now()
+      if (activeCycle.starts_at && new Date(activeCycle.starts_at).getTime() > now) {
+        return errorResponse('This cycle has not started yet. Orders open on ' + new Date(activeCycle.starts_at).toLocaleDateString(), 400, 'CYCLE_NOT_STARTED')
+      }
+      if (activeCycle.ends_at && new Date(activeCycle.ends_at).getTime() <= now) {
+        return errorResponse('This cycle has ended. Please wait for the next cycle to open.', 400, 'CYCLE_ENDED')
+      }
 
       const [ordersHasCycle, pricesHasCycle] = await Promise.all([
         hasColumn('orders', 'cycle_id'),

@@ -462,6 +462,25 @@ export async function POST(req) {
     }
 
     const eligibility = await calculateEligibilityForRam(supabase, memberId, member, unitPrice)
+
+    // Reject orders outside the ram cycle date window
+    if (eligibility.activeRamCycleId != null) {
+      const { data: cycleDates } = await supabase
+        .from('ram_cycles')
+        .select('starts_at, ends_at')
+        .eq('id', eligibility.activeRamCycleId)
+        .maybeSingle()
+      if (cycleDates) {
+        const now = Date.now()
+        if (cycleDates.starts_at && new Date(cycleDates.starts_at).getTime() > now) {
+          return NextResponse.json({ ok: false, error: 'Ram sales have not started yet. Orders open on ' + new Date(cycleDates.starts_at).toLocaleDateString() }, { status: 400 })
+        }
+        if (cycleDates.ends_at && new Date(cycleDates.ends_at).getTime() <= now) {
+          return NextResponse.json({ ok: false, error: 'Ram sales cycle has ended. Please wait for the next season.' }, { status: 400 })
+        }
+      }
+    }
+
     const maxAllowed =
       paymentOption === 'Savings' ? eligibility.maxRamsAllowedForSavings : eligibility.maxRamsAllowedForLoan
 

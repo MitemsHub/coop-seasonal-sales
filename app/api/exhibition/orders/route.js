@@ -154,15 +154,23 @@ export async function POST(req) {
       .maybeSingle()
     if (!deliveryBranch) return NextResponse.json({ ok: false, error: 'Delivery branch not found' }, { status: 404 })
 
-    // Delivery is only offered at branches with an OPEN exhibition cycle — the
+    // Delivery is only offered at branches with a LIVE exhibition cycle — the
     // cart only lists those, so this guards the API directly too.
+    // A cycle is live when status = 'active' AND its date window is open.
     const { data: openDeliv } = await supabase
       .from('exhibition_cycles')
-      .select('id')
+      .select('id, starts_at, ends_at')
       .eq('branch_id', deliveryBranch.id)
       .eq('status', 'active')
       .limit(1)
-    if (!openDeliv || openDeliv.length === 0) {
+    const delivCycle = (openDeliv || [])[0]
+    const delivLive = delivCycle && (() => {
+      const now = Date.now()
+      if (delivCycle.starts_at && new Date(delivCycle.starts_at).getTime() > now) return false
+      if (delivCycle.ends_at && new Date(delivCycle.ends_at).getTime() <= now) return false
+      return true
+    })()
+    if (!delivLive) {
       return NextResponse.json(
         { ok: false, error: 'Delivery is only available at branches with an open exhibition.' },
         { status: 400 }
@@ -172,7 +180,7 @@ export async function POST(req) {
     // Active cycle for the member's branch
     const { data: cycle, error: cycErr } = await supabase
       .from('exhibition_cycles')
-      .select('id, name, status, loan_interest_rate_pct, exh_loan_eligible_amount_cap_pensioner, exh_loan_eligible_amount_cap_retiree, exh_loan_eligible_amount_cap_active, exh_loan_grace_amount_cap_pensioner, exh_loan_grace_amount_cap_retiree, exh_loan_grace_amount_cap_active, exh_loan_cap_include_interest')
+      .select('id, name, status, starts_at, ends_at, loan_interest_rate_pct, exh_loan_eligible_amount_cap_pensioner, exh_loan_eligible_amount_cap_retiree, exh_loan_eligible_amount_cap_active, exh_loan_grace_amount_cap_pensioner, exh_loan_grace_amount_cap_retiree, exh_loan_grace_amount_cap_active, exh_loan_cap_include_interest')
       .eq('branch_id', branchId)
       .eq('status', 'active')
       .order('created_at', { ascending: false })
@@ -187,6 +195,15 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: cycErr.message }, { status: 500 })
     }
     if (!cycle) return NextResponse.json({ ok: false, error: 'The Coop Exhibition is closed right now.' }, { status: 400 })
+
+    // Reject orders outside the cycle date window (auto-close).
+    const cycleNow = Date.now()
+    if (cycle.starts_at && new Date(cycle.starts_at).getTime() > cycleNow) {
+      return NextResponse.json({ ok: false, error: 'Exhibition has not started yet. Orders open on ' + new Date(cycle.starts_at).toLocaleDateString() }, { status: 400 })
+    }
+    if (cycle.ends_at && new Date(cycle.ends_at).getTime() <= cycleNow) {
+      return NextResponse.json({ ok: false, error: 'This exhibition cycle has ended. Please shop from another open exhibition.' }, { status: 400 })
+    }
 
     const cycleId = Number(cycle.id)
     const loanInterestRatePct = Math.max(0, Number(cycle.loan_interest_rate_pct ?? 13))
@@ -263,6 +280,19 @@ export async function POST(req) {
     const savingsExposure = sumAmt(foodSavExp.data) + sumAmt(exhSavExp.data)
     const loanExposure = sumAmt(foodLoanExp.data) + sumAmt(exhLoanExp.data)
 
+    // Cumulative loan amount in THIS cycle for this member (for cycle cap enforcement).
+    let cycleLoanTotal = 0
+    if (cycleId) {
+      const { data: cycleLoanRows } = await supabase
+        .from('exhibition_orders')
+        .select('total_amount')
+        .eq('member_id', memberId)
+        .eq('payment_option', 'Loan')
+        .eq('cycle_id', cycleId)
+        .in('status', EXHIBITION_STATUSES)
+      cycleLoanTotal = sumAmt(cycleLoanRows)
+    }
+
     const savings = Number(member.savings || 0)
     const loans = Number(member.loans || 0)
     const globalLimit = Number(member.global_limit || 0)
@@ -290,6 +320,7 @@ export async function POST(req) {
     const graceLoanMaxCap = Math.max(0, Math.trunc(Number(cycle[`exh_loan_grace_amount_cap_${capGroup}`] || 0)))
     const includeInterestInCap = cycle.exh_loan_cap_include_interest !== false
     const capAmount = includeInterestInCap ? totalAmount : totalPrincipal
+    const cumulativeCapAmount = cycleLoanTotal + capAmount
     let useGrace = false
 
     // Enforce limits
@@ -301,18 +332,18 @@ export async function POST(req) {
     }
     if (paymentOption === 'Loan') {
       if (loanEligible <= 0) return NextResponse.json({ ok: false, error: 'Loan option is not available for this member.' }, { status: 400 })
-      if (eligibleLoanMaxCap > 0 && capAmount > eligibleLoanMaxCap) {
+      if (eligibleLoanMaxCap > 0 && cumulativeCapAmount > eligibleLoanMaxCap) {
         return NextResponse.json(
           {
             ok: false,
             error: includeInterestInCap
-              ? `Eligible max for this cycle is ₦${eligibleLoanMaxCap.toLocaleString()}. Your total (incl. ${loanInterestRatePct}% interest) is ₦${totalAmount.toLocaleString()}.`
-              : `Eligible max for this cycle is ₦${eligibleLoanMaxCap.toLocaleString()}. Your principal total is ₦${totalPrincipal.toLocaleString()} (interest is excluded from the cap).`,
+              ? `Eligible max for this cycle is ₦${eligibleLoanMaxCap.toLocaleString()}. You already have ₦${cycleLoanTotal.toLocaleString()} in this cycle; adding ₦${totalAmount.toLocaleString()} (incl. ${loanInterestRatePct}% interest) would exceed it.`
+              : `Eligible max for this cycle is ₦${eligibleLoanMaxCap.toLocaleString()}. You already have ₦${cycleLoanTotal.toLocaleString()} in this cycle; adding ₦${totalPrincipal.toLocaleString()} would exceed it (interest is excluded from the cap).`,
           },
           { status: 400 }
         )
       }
-      if (capAmount > loanEligible) {
+      if (cumulativeCapAmount > loanEligible) {
         if (graceLoanMaxCap <= 0) {
           return NextResponse.json(
             {
@@ -324,13 +355,13 @@ export async function POST(req) {
             { status: 400 }
           )
         }
-        if (capAmount > graceLoanMaxCap) {
+        if (cumulativeCapAmount > graceLoanMaxCap) {
           return NextResponse.json(
             {
               ok: false,
               error: includeInterestInCap
-                ? `You are currently not eligible for Loan. Grace max for this cycle is ₦${graceLoanMaxCap.toLocaleString()} but your total (incl. ${loanInterestRatePct}% interest) is ₦${totalAmount.toLocaleString()}.`
-                : `You are currently not eligible for Loan. Grace max for this cycle is ₦${graceLoanMaxCap.toLocaleString()} but your principal total is ₦${totalPrincipal.toLocaleString()} (interest is excluded from the cap).`,
+                ? `You are currently not eligible for Loan. Grace max for this cycle is ₦${graceLoanMaxCap.toLocaleString()} but you already have ₦${cycleLoanTotal.toLocaleString()} and adding ₦${totalAmount.toLocaleString()} (incl. ${loanInterestRatePct}% interest) would exceed it.`
+                : `You are currently not eligible for Loan. Grace max for this cycle is ₦${graceLoanMaxCap.toLocaleString()} but you already have ₦${cycleLoanTotal.toLocaleString()} and adding ₦${totalPrincipal.toLocaleString()} would exceed it (interest is excluded from the cap).`,
             },
             { status: 400 }
           )

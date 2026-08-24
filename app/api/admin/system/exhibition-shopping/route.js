@@ -13,7 +13,7 @@ export async function GET() {
     const supabase = createClient()
     const { data, error } = await supabase
       .from('exhibition_cycles')
-      .select('id')
+      .select('id, starts_at, ends_at')
       .eq('status', 'active')
       .limit(100)
     if (error) {
@@ -23,8 +23,14 @@ export async function GET() {
       }
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     }
-    const activeCount = (data || []).length
-    return NextResponse.json({ ok: true, open: activeCount > 0, activeCount })
+    // Only count cycles whose date window is currently open (auto-close).
+    const now = Date.now()
+    const liveCount = (data || []).filter((c) => {
+      if (c.starts_at && new Date(c.starts_at).getTime() > now) return false
+      if (c.ends_at && new Date(c.ends_at).getTime() <= now) return false
+      return true
+    }).length
+    return NextResponse.json({ ok: true, open: liveCount > 0, activeCount: liveCount })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e?.message || 'Failed to read exhibition status' }, { status: 500 })
   }
