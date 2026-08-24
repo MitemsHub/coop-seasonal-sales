@@ -49,7 +49,7 @@ function isCycleOpen(cycle) {
   if (!cycle) return false
   const now = Date.now()
   const started = !cycle.starts_at || new Date(cycle.starts_at).getTime() <= now
-  const notEnded = !cycle.ends_at || new Date(cycle.ends_at).getTime() > now
+  const notEnded = cycle.ends_at && new Date(cycle.ends_at).getTime() > now
   return started && notEnded
 }
 
