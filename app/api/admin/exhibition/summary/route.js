@@ -39,14 +39,26 @@ export async function GET(request) {
     const orders = ordersRes.error ? [] : ordersRes.data || []
     const payments = payRes.error ? [] : payRes.data || []
 
+    // Support optional cycle_id param — when provided, scope to that cycle
+    // instead of all active cycles. This lets the admin dashboard show
+    // historical data for any past cycle.
+    const { searchParams } = new URL(request.url)
+    const requestedCycleId = searchParams.get('cycle_id')
+      ? Number(searchParams.get('cycle_id'))
+      : null
+
     const activeCycles = cycles.filter((c) => c.status === 'active')
     // The most recently created active season — drives the "closes on"
     // timeline shown next to the dashboard's Exhibition switcher pill.
     const activeCycle = [...activeCycles].sort(
       (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
     )[0] || null
-    const activeCycleIds = new Set(activeCycles.map((c) => Number(c.id)))
-    const activeOrders = orders.filter((o) => activeCycleIds.has(Number(o.cycle_id)))
+
+    // If a specific cycle was requested, scope to it; otherwise use all active cycles
+    const targetCycleIds = requestedCycleId
+      ? new Set([requestedCycleId])
+      : new Set(activeCycles.map((c) => Number(c.id)))
+    const activeOrders = orders.filter((o) => targetCycleIds.has(Number(o.cycle_id)))
 
     // Order figures report the ACTIVE period (the current season across the
     // live branches), mirroring the rep-side active-cycle scoping. The
@@ -68,15 +80,15 @@ export async function GET(request) {
     }
     amounts.total = amount
 
-    // Per-vendor order value (active cycle, non-cancelled) for the top/bottom
+    // Per-vendor order value (selected cycle, non-cancelled) for the top/bottom
     // vendor performance charts — mirroring the food dashboard's branch charts.
     let vendorsByValue = []
-    if (activeCycleIds.size) {
+    if (targetCycleIds.size) {
       const [linesRes, vendorsRes] = await Promise.all([
         supabase
           .from('exhibition_order_lines')
           .select('vendor_id, amount, orders:order_id(cycle_id, status)')
-          .in('orders.cycle_id', Array.from(activeCycleIds))
+          .in('orders.cycle_id', Array.from(targetCycleIds))
           .neq('orders.status', 'Cancelled'),
         supabase.from('exhibition_vendors').select('id, name'),
       ])
@@ -84,7 +96,7 @@ export async function GET(request) {
       const acc = new Map()
       for (const l of linesRes?.data || []) {
         const cid = Number(l.orders?.cycle_id)
-        if (!activeCycleIds.has(cid)) continue
+        if (!targetCycleIds.has(cid)) continue
         const vid = Number(l.vendor_id)
         acc.set(vid, (acc.get(vid) || 0) + Number(l.amount || 0))
       }

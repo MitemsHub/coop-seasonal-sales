@@ -29,6 +29,7 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import { Table, THead, TBody, TR, TH, TD } from '../components/ui/Table'
 import Skeleton from '../components/ui/Skeleton'
+import CycleSelector from '../components/ui/CycleSelector'
 import { BarChart, LineChart, ChartEmpty } from '../components/ui/Charts'
 
 const naira = (v) =>
@@ -676,59 +677,136 @@ export default function AdminDashboard() {
   const [error, setError] = useState('')
   const [module, setModule] = useModuleState(MODULES)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError('')
-    const [cyclesRes, summaryRes, ramRes, ordersRes, foodShopRes, ramShopRes, exhRes] = await Promise.allSettled([
-      fetch('/api/admin/cycles', { cache: 'no-store' }),
-      fetch('/api/admin/reports/summary', { cache: 'no-store' }),
-      fetch('/api/admin/ram/summary', { cache: 'no-store' }),
-      fetch('/api/admin/food/orders/list?status=Pending&limit=100', { cache: 'no-store' }),
-      fetch('/api/admin/system/shopping', { cache: 'no-store' }),
-      fetch('/api/admin/system/ram-shopping', { cache: 'no-store' }),
-      fetch('/api/admin/exhibition/summary', { cache: 'no-store' }),
-    ])
+  // Cycle lists for each module (fetched once on mount)
+  const [foodCycles, setFoodCycles] = useState([])
+  const [ramCycles, setRamCycles] = useState([])
+  const [exhibitionCycles, setExhibitionCycles] = useState([])
 
-    const json = async (r) => {
-      try {
-        const j = await r.value.json()
-        return j?.ok ? j : null
-      } catch {
-        return null
-      }
+  // Currently selected cycle per module
+  const [foodCycleId, setFoodCycleId] = useState(null)
+  const [ramCycleId, setRamCycleId] = useState(null)
+  const [exhibitionCycleId, setExhibitionCycleId] = useState(null)
+
+  // Whether initial cycle lists have loaded (to avoid flicker)
+  const [cycleListsLoaded, setCycleListsLoaded] = useState(false)
+
+  const json = useCallback(async (r) => {
+    try {
+      const j = await r.value.json()
+      return j?.ok ? j : null
+    } catch {
+      return null
     }
-
-    const [cycles, summary, ram, orders, foodShop, ramShop, exhibition] = await Promise.all([
-      cyclesRes.status === 'fulfilled' ? json(cyclesRes) : null,
-      summaryRes.status === 'fulfilled' ? json(summaryRes) : null,
-      ramRes.status === 'fulfilled' ? json(ramRes) : null,
-      ordersRes.status === 'fulfilled' ? json(ordersRes) : null,
-      foodShopRes.status === 'fulfilled' ? json(foodShopRes) : null,
-      ramShopRes.status === 'fulfilled' ? json(ramShopRes) : null,
-      exhRes.status === 'fulfilled' ? json(exhRes) : null,
-    ])
-
-    const failed = [cycles, summary, ram, orders, foodShop, ramShop, exhibition].filter((v) => v == null).length
-    if (failed === 7) {
-      setError(
-        "Couldn't reach the database. Showing zeros. Check the Supabase connection and try again."
-      )
-    } else if (failed > 0) {
-      setError("Some data sources couldn't be reached. Figures below may be incomplete.")
-    }
-
-    setData({ cycles, summary, ram, orders, foodShop, ramShop, exhibition })
-    setLoading(false)
   }, [])
 
+  // Phase 1: Fetch cycle lists + shop status on mount
   useEffect(() => {
-    load()
-  }, [load])
+    let cancelled = false
+    async function loadCycleLists() {
+      const [foodCyclesRes, ramCyclesRes, exhCyclesRes, foodShopRes, ramShopRes] = await Promise.allSettled([
+        fetch('/api/admin/cycles', { cache: 'no-store' }),
+        fetch('/api/admin/ram/cycles', { cache: 'no-store' }),
+        fetch('/api/admin/exhibition/cycles', { cache: 'no-store' }),
+        fetch('/api/admin/system/shopping', { cache: 'no-store' }),
+        fetch('/api/admin/system/ram-shopping', { cache: 'no-store' }),
+      ])
+
+      const [foodCyclesData, ramCyclesData, exhCyclesData, foodShop, ramShop] = await Promise.all([
+        foodCyclesRes.status === 'fulfilled' ? json(foodCyclesRes) : null,
+        ramCyclesRes.status === 'fulfilled' ? json(ramCyclesRes) : null,
+        exhCyclesRes.status === 'fulfilled' ? json(exhCyclesRes) : null,
+        foodShopRes.status === 'fulfilled' ? json(foodShopRes) : null,
+        ramShopRes.status === 'fulfilled' ? json(ramShopRes) : null,
+      ])
+
+      if (cancelled) return
+
+      const fCycles = foodCyclesData?.cycles || []
+      const rCycles = ramCyclesData?.cycles || []
+      const eCycles = exhCyclesData?.cycles || []
+
+      setFoodCycles(fCycles)
+      setRamCycles(rCycles)
+      setExhibitionCycles(eCycles)
+
+      // Auto-select the active cycle, or the most recent one if none is active
+      setFoodCycleId(foodCyclesData?.active_cycle_id || fCycles[0]?.id || null)
+      setRamCycleId(ramCyclesData?.active_cycle_id || rCycles[0]?.id || null)
+
+      // Exhibition: pick the most recent active cycle, or the most recent overall
+      const activeExh = eCycles.find((c) => c.status === 'active')
+      setExhibitionCycleId(activeExh?.id || eCycles[0]?.id || null)
+
+      // Store shop status in data
+      setData((prev) => ({ ...prev, foodShop, ramShop }))
+      setCycleListsLoaded(true)
+    }
+    loadCycleLists()
+    return () => { cancelled = true }
+  }, [json])
+
+  // Phase 2: Fetch data for the active module when cycle selection changes
+  const loadModuleData = useCallback(async () => {
+    if (!cycleListsLoaded) return
+    setLoading(true)
+    setError('')
+
+    try {
+      let summary = null, orders = null, ram = null, exhibition = null
+
+      if (module === 'food') {
+        const cycleParam = foodCycleId ? `?cycle_id=${foodCycleId}` : ''
+        const [summarySettled, ordersSettled] = await Promise.allSettled([
+          fetch(`/api/admin/reports/summary${cycleParam}`, { cache: 'no-store' }),
+          fetch(`/api/admin/food/orders/list?status=Pending&limit=100${foodCycleId ? `&cycle_id=${foodCycleId}` : ''}`, { cache: 'no-store' }),
+        ])
+        summary = summarySettled.status === 'fulfilled' ? await json(summarySettled) : null
+        orders = ordersSettled.status === 'fulfilled' ? await json(ordersSettled) : null
+      } else if (module === 'ram') {
+        const cycleParam = ramCycleId ? `?ram_cycle_id=${ramCycleId}` : ''
+        const [ramSettled] = await Promise.allSettled([
+          fetch(`/api/admin/ram/summary${cycleParam}`, { cache: 'no-store' }),
+        ])
+        ram = ramSettled.status === 'fulfilled' ? await json(ramSettled) : null
+      } else {
+        const cycleParam = exhibitionCycleId ? `?cycle_id=${exhibitionCycleId}` : ''
+        const [exhSettled] = await Promise.allSettled([
+          fetch(`/api/admin/exhibition/summary${cycleParam}`, { cache: 'no-store' }),
+        ])
+        exhibition = exhSettled.status === 'fulfilled' ? await json(exhSettled) : null
+      }
+
+      setData((prev) => ({
+        ...(prev || {}),
+        summary: module === 'food' ? summary : (prev?.summary || null),
+        orders: module === 'food' ? orders : (prev?.orders || null),
+        ram: module === 'ram' ? ram : (prev?.ram || null),
+        exhibition: module === 'exhibition' ? exhibition : (prev?.exhibition || null),
+      }))
+    } catch {
+      setError('Failed to load dashboard data. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }, [module, cycleListsLoaded, foodCycleId, ramCycleId, exhibitionCycleId, json])
+
+  useEffect(() => {
+    loadModuleData()
+  }, [loadModuleData])
+
+  const refresh = useCallback(() => {
+    loadModuleData()
+  }, [loadModuleData])
+
+  // Current cycle lists and selection for the active module
+  const activeCycles = module === 'food' ? foodCycles : module === 'ram' ? ramCycles : exhibitionCycles
+  const activeCycleId = module === 'food' ? foodCycleId : module === 'ram' ? ramCycleId : exhibitionCycleId
+  const setActiveCycleId = module === 'food' ? setFoodCycleId : module === 'ram' ? setRamCycleId : setExhibitionCycleId
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
       {/* Header — module selector, live status and refresh on one scrollable row */}
-      <div className="mb-6 flex items-center gap-3 overflow-x-auto">
+      <div className="mb-4 flex items-center gap-3 overflow-x-auto">
         <ModuleSwitcher module={module} onChange={setModule} />
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {module === 'food' && data?.foodShop && (
@@ -746,11 +824,23 @@ export default function AdminDashboard() {
               {Number(data.exhibition.summary?.active_cycles) > 0 ? 'Exhibition open' : 'Exhibition closed'}
             </Badge>
           )}
-          <Button variant="ghost" size="sm" leftIcon={RefreshCw} onClick={load} disabled={loading}>
+          <Button variant="ghost" size="sm" leftIcon={RefreshCw} onClick={refresh} disabled={loading}>
             Refresh
           </Button>
         </div>
       </div>
+
+      {/* Cycle selector — sits under the module tabs */}
+      {activeCycles.length > 0 && (
+        <div className="mb-6">
+          <CycleSelector
+            cycles={activeCycles}
+            value={activeCycleId}
+            onChange={setActiveCycleId}
+            label={module === 'food' ? 'Food Cycle' : module === 'ram' ? 'Ram Cycle' : 'Exhibition Cycle'}
+          />
+        </div>
+      )}
 
       {error && (
         <div className="mb-6 rounded-xl border border-danger-border bg-danger-bg p-4 text-sm text-danger-fg">
