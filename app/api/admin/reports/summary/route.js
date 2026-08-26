@@ -31,7 +31,17 @@ export async function GET(request) {
     const ordersHasCycle = await hasColumn(supabase, 'orders', 'cycle_id')
     const cycleId = await resolveCycleId(supabase, searchParams, ordersHasCycle)
     if (ordersHasCycle && !cycleId) {
-      return NextResponse.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
+      // No active cycle — return zeros instead of an error so the dashboard
+      // doesn't show the "data sources couldn't be reached" warning.
+      return NextResponse.json({
+        ok: true,
+        totals: { totalPosted: 0, totalPending: 0, totalDelivered: 0, totalAll: 0 },
+        amounts: { totalAll: 0, loans: 0, loansPrincipal: 0, loansInterest: 0, loansTotal: 0, savings: 0, cash: 0 },
+        byBranch: [],
+        byBranchDept: [],
+        byDeliveryMember: [],
+        byCategory: []
+      })
     }
 
     const canFilterViews = ordersHasCycle && cycleId

@@ -214,7 +214,9 @@ export async function GET(req) {
     const ordersHasCancelledReason = await hasColumn(supabase, 'orders', 'cancelled_reason').catch(() => false)
     const cycleId = await resolveCycleId(supabase, searchParams, ordersHasCycle)
     if (ordersHasCycle && !cycleId) {
-      return NextResponse.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
+      // No active cycle — return an empty list instead of an error so the
+      // admin dashboard doesn't show the "data sources couldn't be reached" warning.
+      return NextResponse.json({ ok: true, orders: [], next_cursor: null, meta: { delivered_this_cycle: 0 } })
     }
 
     let deliveryBranchId = null
