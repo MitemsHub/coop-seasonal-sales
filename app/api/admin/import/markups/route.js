@@ -1,6 +1,7 @@
 // app/api/admin/import/markups/route.js
 import { NextResponse } from 'next/server'
 import { createClient } from '../../../../../lib/supabaseServer'
+import { transactionalQuery } from '../../../../../lib/directDb'
 import * as XLSX from 'xlsx/xlsx.mjs'
 
 export const runtime = 'nodejs'
@@ -98,6 +99,44 @@ export async function POST(req) {
       const { error: upErr } = await supabase
         .from('branch_item_markups')
         .upsert(part, { onConflict: markupsHasCycle ? 'branch_id,item_id,cycle_id' : 'branch_id,item_id' })
+      if (upErr && String(upErr.message || '').toLowerCase().includes('no unique or exclusion constraint matching the on conflict specification')) {
+        // Fallback: upsert without ON CONFLICT isn't possible via Supabase,
+        // so do manual select/update/insert under an advisory lock.
+        // Lock key 7102 = arbitrary stable constant for branch_item_markups import.
+        await transactionalQuery(7102, async (q) => {
+          for (const row of part) {
+            if (markupsHasCycle) {
+              const { rows } = await q(
+                'SELECT id FROM branch_item_markups WHERE branch_id = $1 AND item_id = $2 AND cycle_id = $3 LIMIT 1',
+                [row.branch_id, row.item_id, row.cycle_id]
+              )
+              if (rows.length) {
+                await q('UPDATE branch_item_markups SET amount = $1, active = $2 WHERE id = $3', [row.amount, row.active, rows[0].id])
+              } else {
+                await q(
+                  'INSERT INTO branch_item_markups (branch_id, item_id, cycle_id, amount, active) VALUES ($1, $2, $3, $4, $5)',
+                  [row.branch_id, row.item_id, row.cycle_id, row.amount, row.active]
+                )
+              }
+            } else {
+              const { rows } = await q(
+                'SELECT id FROM branch_item_markups WHERE branch_id = $1 AND item_id = $2 LIMIT 1',
+                [row.branch_id, row.item_id]
+              )
+              if (rows.length) {
+                await q('UPDATE branch_item_markups SET amount = $1, active = $2 WHERE id = $3', [row.amount, row.active, rows[0].id])
+              } else {
+                await q(
+                  'INSERT INTO branch_item_markups (branch_id, item_id, amount, active) VALUES ($1, $2, $3, $4)',
+                  [row.branch_id, row.item_id, row.amount, row.active]
+                )
+              }
+            }
+          }
+        })
+        affected += part.length
+        continue
+      }
       if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 })
       affected += part.length
     }
