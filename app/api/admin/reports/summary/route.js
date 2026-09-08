@@ -20,7 +20,7 @@ async function resolveCycleId(supabase, searchParams, ordersHasCycle) {
     return parsed
   }
   const { data, error } = await supabase.from('cycles').select('id').eq('is_active', true).maybeSingle()
-  if (error) throw new Error(error.message)
+  if (error) throw new Error('Failed to resolve active cycle')
   return data?.id ?? null
 }
 

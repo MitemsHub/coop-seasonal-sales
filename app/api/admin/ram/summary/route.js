@@ -106,7 +106,7 @@ export async function GET(req) {
       .select('id,delivery_location,name,is_active')
       .order('delivery_location', { ascending: true })
 
-    if (locErr) return NextResponse.json({ ok: false, error: locErr.message }, { status: 500 })
+    if (locErr) return NextResponse.json({ ok: false, error: 'Failed to load delivery locations' }, { status: 500 })
 
     const locationsById = new Map((allLocations || []).map((l) => [Number(l.id), l]))
     const locationIds = new Set()
@@ -124,7 +124,7 @@ export async function GET(req) {
       if (ordersHasCycle && cycleId != null) q = q.eq('ram_cycle_id', cycleId)
 
       const { data: chunk, error } = await q
-      if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+      if (error) return NextResponse.json({ ok: false, error: 'Failed to load ram orders' }, { status: 500 })
 
       const rows = chunk || []
       for (const row of rows) {
@@ -173,6 +173,6 @@ export async function GET(req) {
       },
     })
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e.message || 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ ok: false, error: 'Failed to load ram summary' }, { status: 500 })
   }
 }
