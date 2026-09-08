@@ -1,11 +1,14 @@
 import { createClient } from '../../../../../lib/supabaseServer'
 import { validateSession } from '../../../../../lib/validation'
+import { csrfGuard } from '../../../../../lib/csrf'
 import { queryDirect } from '../../../../../lib/directDb'
  
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
  
 export async function POST(request) {
+  const csrfResponse = csrfGuard(request)
+  if (csrfResponse) return csrfResponse
   try {
     const session = await validateSession(request, 'admin')
     if (!session.valid) {

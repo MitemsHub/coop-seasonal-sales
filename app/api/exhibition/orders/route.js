@@ -15,6 +15,7 @@
 //     vendor (the co-op pays vendors after the exhibition).
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
+import { csrfGuard } from '@/lib/csrf'
 import { validateMemberId, validateNumber, validatePaymentOption } from '@/lib/validation'
 
 export const runtime = 'nodejs'
@@ -83,6 +84,8 @@ export async function GET(req) {
 }
 
 export async function POST(req) {
+  const csrfResponse = csrfGuard(req)
+  if (csrfResponse) return csrfResponse
   try {
     const body = await req.json().catch(() => ({}))
 

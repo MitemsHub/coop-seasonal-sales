@@ -2,8 +2,11 @@
 import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '../../../../../lib/supabaseServer'
 import { validateSession } from '../../../../../lib/validation'
+import { csrfGuard } from '../../../../../lib/csrf'
 
 export async function POST(request) {
+  const csrfResponse = csrfGuard(request)
+  if (csrfResponse) return csrfResponse
   try {
     const { orderId, reason } = await request.json()
     

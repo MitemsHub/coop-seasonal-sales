@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
+import { csrfGuard } from '@/lib/csrf'
 import {
   validateMemberId,
   validateNumber,
@@ -376,6 +377,8 @@ async function calculateEligibilityForRam(supabase, memberId, memberSnapshot, un
 }
 
 export async function POST(req) {
+  const csrfResponse = csrfGuard(req)
+  if (csrfResponse) return csrfResponse
   try {
     const body = await req.json().catch(() => ({}))
 
