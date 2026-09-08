@@ -200,21 +200,8 @@ function SuccessContent() {
               Your order is <span className="font-semibold text-warning-fg">Pending</span> — your branch rep will post it, then deliver to your branch.
             </p>
 
-            <div className="mt-6 space-y-4 text-left">
-              <div className="flex items-center justify-between gap-2 rounded-xl border border-line bg-canvas/60 px-4 py-3">
-                <span className="text-chips font-medium text-muted">Order ID</span>
-                <span className="text-sm font-bold tabular-nums text-fg">{order.order_id}</span>
-              </div>
-              <div className="flex items-center justify-between gap-2 rounded-xl border border-line bg-canvas/60 px-4 py-3">
-                <span className="text-chips font-medium text-muted">Payment</span>
-                <span className="text-sm font-bold text-fg">{order.payment_option}</span>
-              </div>
-              <div className="flex items-center justify-between gap-2 rounded-xl border border-line bg-canvas/60 px-4 py-3">
-                <span className="text-chips font-medium text-muted">Total</span>
-                <span className="text-sm font-bold tabular-nums text-brand">{currency(order.total_amount)}</span>
-              </div>
-
-
+            <div className="mt-4">
+              <p className="text-sm text-muted">Order <span className="font-semibold text-fg">#{order.order_id}</span> has been placed successfully.</p>
             </div>
 
             <div className="mt-6 flex flex-col gap-2 sm:flex-row">
