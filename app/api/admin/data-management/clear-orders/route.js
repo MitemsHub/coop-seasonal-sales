@@ -80,7 +80,8 @@ export async function POST(request) {
 
     let ordersDeleteQuery = supabase.from('orders').delete().select('order_id')
     if (ordersHasCycle && cycleId) ordersDeleteQuery = ordersDeleteQuery.eq('cycle_id', cycleId)
-    const { data, error: ordersError } = await ordersDeleteQuery    if (ordersError) {
+    const { data, error: ordersError } = await ordersDeleteQuery
+    if (ordersError) {
       console.error('Error deleting orders:', ordersError)
       return Response.json({ ok: false, error: 'Failed to delete orders' }, { status: 500 })
     }
