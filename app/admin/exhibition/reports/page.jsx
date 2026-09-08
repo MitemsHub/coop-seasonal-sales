@@ -128,7 +128,7 @@ export default function ExhibitionReportsPage() {
   const [appFrom, setAppFrom] = useState('')
   const [appTo, setAppTo] = useState('')
   const [appBusy, setAppBusy] = useState(false)
-
+  const [reportBusy, setReportBusy] = useState(false)
 
 
   // Delivery Pack filters
@@ -176,20 +176,127 @@ export default function ExhibitionReportsPage() {
   const paymentRows = useMemo(() => byPayment.map((p) => ({ key: p.key, orders: p.orders, amount: p.amount })), [byPayment])
 
   // ─── Export helpers ───
-  const exportAll = () => {
-    const rows = []
-    if (s) {
-      rows.push({ section: 'Summary', metric: 'Vendors', value: s.vendors })
-      rows.push({ section: 'Summary', metric: 'Products', value: s.products })
-      rows.push({ section: 'Summary', metric: 'Orders', value: s.orders })
-      rows.push({ section: 'Summary', metric: 'Loan Principal', value: s.loanPrincipal || 0 })
-      rows.push({ section: 'Summary', metric: 'Loan Interest', value: s.loanInterest || 0 })
-      rows.push({ section: 'Summary', metric: 'Loan Total', value: s.loanTotal || 0 })
-      rows.push({ section: 'Summary', metric: 'Savings', value: s.amounts?.savings || 0 })
-      rows.push({ section: 'Summary', metric: 'Cash', value: s.amounts?.cash || 0 })
-      rows.push({ section: 'Summary', metric: 'Total Amount', value: s.amount || 0 })
+  const exportAllPdf = async () => {
+    if (!s) return
+    setReportBusy(true)
+    try {
+      const { jsPDF } = await import('jspdf')
+      const { default: autoTable } = await import('jspdf-autotable')
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+      const sanitize = (val) => String(val ?? '').replace(/\u20A6|₦/g, 'NGN ').replace(/[\u2013\u2014]/g, '-')
+      const pageWidth = doc.internal.pageSize.getWidth()
+      const marginX = 12
+
+      doc.setFontSize(14)
+      doc.text('Exhibition · Report', 12, 12)
+      doc.setFontSize(9)
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 12, 18)
+
+      // Summary metrics table
+      const metricColW = { metric: 52, value: 36 }
+      const metricTableW = metricColW.metric + metricColW.value
+      autoTable(doc, {
+        head: [['Metric', 'Value']],
+        body: [
+          ['Vendors', String(s.vendors ?? 0)],
+          ['Products', String(s.products ?? 0)],
+          ['Orders', String(s.orders ?? 0)],
+          ['Loan Principal', money(s.loanPrincipal || 0)],
+          ['Loan Interest', money(s.loanInterest || 0)],
+          ['Loan Total', money(s.loanTotal || 0)],
+          ['Savings', money(s.amounts?.savings || 0)],
+          ['Cash', money(s.amounts?.cash || 0)],
+          ['Total Amount', money(s.amount || 0)],
+        ].map((r) => r.map(sanitize)),
+        startY: 22,
+        rowPageBreak: 'avoid',
+        tableWidth: metricTableW,
+        styles: { fontSize: 9, cellPadding: 2, valign: 'middle' },
+        headStyles: { fillColor: [75, 85, 99] },
+        alternateRowStyles: { fillColor: [249, 250, 251] },
+        columnStyles: {
+          0: { cellWidth: metricColW.metric },
+          1: { cellWidth: metricColW.value },
+        },
+        didParseCell: (data) => {
+          if (data.section !== 'head' && data.section !== 'body') return
+          if (data.column.index === 0) data.cell.styles.halign = 'left'
+          if (data.column.index === 1) data.cell.styles.halign = 'right'
+        },
+        margin: { left: marginX, right: Math.max(marginX, pageWidth - metricTableW - marginX) },
+      })
+
+      // Breakdown tables
+      const addBreakdownSection = (title, rows, columns) => {
+        let startY = (doc.lastAutoTable?.finalY || 22) + 10
+        if (startY > 180) {
+          doc.addPage()
+          startY = 22
+        }
+        doc.setFontSize(12)
+        doc.text(title, 12, startY - 2)
+        const body = (rows || []).map((r) => columns.map((c) => sanitize(c.fmt ? c.fmt(r[c.key]) : String(r[c.key] ?? ''))))
+        const head = [columns.map((c) => c.label)]
+        const colWidths = columns.map((c) => c.width || 40)
+        const totalW = colWidths.reduce((a, b) => a + b, 0)
+        autoTable(doc, {
+          head,
+          body,
+          startY,
+          rowPageBreak: 'avoid',
+          tableWidth: totalW,
+          styles: { fontSize: 9, cellPadding: 2, valign: 'middle' },
+          headStyles: { fillColor: [75, 85, 99] },
+          alternateRowStyles: { fillColor: [249, 250, 251] },
+          columnStyles: columns.reduce((acc, c, i) => {
+            acc[i] = { cellWidth: c.width || 40 }
+            return acc
+          }, {}),
+          didParseCell: (data) => {
+            if (data.section !== 'head' && data.section !== 'body') return
+            data.cell.styles.halign = data.column.index === 0 ? 'left' : 'right'
+          },
+          margin: { left: marginX, right: Math.max(marginX, pageWidth - totalW - marginX) },
+        })
+      }
+
+      addBreakdownSection('By Status', statusRows, [
+        { key: 'key', label: 'Status', width: 50 },
+        { key: 'orders', label: 'Orders', width: 30 },
+      ])
+
+      addBreakdownSection('By Payment', paymentRows, [
+        { key: 'key', label: 'Type', width: 50 },
+        { key: 'orders', label: 'Orders', width: 30 },
+        { key: 'amount', label: 'Amount', width: 52, fmt: money },
+      ])
+
+      addBreakdownSection('By Category', byCategory, [
+        { key: 'key', label: 'Category', width: 50 },
+        { key: 'orders', label: 'Orders', width: 30 },
+        { key: 'amount', label: 'Amount', width: 52, fmt: money },
+      ])
+
+      addBreakdownSection('By Delivery Location', byLocation, [
+        { key: 'key', label: 'Location', width: 60 },
+        { key: 'orders', label: 'Orders', width: 30 },
+        { key: 'amount', label: 'Amount', width: 52, fmt: money },
+      ])
+
+      // Vendor performance
+      if (vendorsByValue.length > 0) {
+        addBreakdownSection('By Vendor', vendorsByValue, [
+          { key: 'vendor_name', label: 'Vendor', width: 80 },
+          { key: 'value', label: 'Order Value', width: 52, fmt: money },
+        ])
+      }
+
+      doc.save(`exhibition_report_${new Date().toISOString().split('T')[0]}.pdf`)
+    } catch (e) {
+      setErr(e?.message || 'Download failed')
+    } finally {
+      setReportBusy(false)
     }
-    downloadCsv(`exhibition-report-${fileStamp()}.csv`, rows)
   }
 
   const exportVendorCsv = () => downloadCsv(`exhibition-vendors-${fileStamp()}.csv`, vendorsByValue.map((v) => ({ vendor: v.vendor_name, value: v.value })))
@@ -288,7 +395,18 @@ export default function ExhibitionReportsPage() {
               {cycles.map((c) => <option key={c.id} value={c.id}>{c.name || `Cycle ${c.id}`} ({c.code})</option>)}
             </select>
             <Button onClick={load} disabled={loading} leftIcon={RefreshCw}>{loading ? 'Loading…' : 'Refresh'}</Button>
-            <Button variant="accent" onClick={exportAll} disabled={!s}><FileBarChart2 className="h-4 w-4 mr-1" /> Export</Button>
+            <Button variant="accent" onClick={exportAllPdf} disabled={!s || reportBusy}>
+              {reportBusy ? (
+                <span className="inline-flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  Preparing…
+                </span>
+              ) : (
+                <>
+                  <FileBarChart2 className="h-4 w-4 mr-1" /> Download Report
+                </>
+              )}
+            </Button>
           </div>
         </div>
 
@@ -303,10 +421,7 @@ export default function ExhibitionReportsPage() {
               <div className="ui-card p-4">
                 <div className="text-xs text-muted">Vendors</div>
                 <div className="text-[13px] font-semibold sm:text-lg mt-1">{s.vendors}</div>
-              </div>
-              <div className="ui-card p-4">
-                <div className="text-xs text-muted">Products</div>
-                <div className="text-[13px] font-semibold sm:text-lg mt-1">{s.products}</div>
+                <div className="text-[10px] text-muted mt-0.5">Products: {s.products || 0}</div>
               </div>
               <div className="ui-card p-4">
                 <div className="text-xs text-muted">Pending</div>
