@@ -185,46 +185,8 @@ function SuccessContent() {
                 <Skeleton className="h-5 w-1/2 mx-auto" />
               </div>
             ) : (
-              <div className="mt-6 space-y-4 text-left">
-                <div className="flex items-center justify-between gap-2 rounded-xl border border-line bg-canvas/60 px-4 py-3">
-                  <span className="text-chips font-medium text-muted">Order ID</span>
-                  <span className="text-sm font-bold tabular-nums text-fg">{order.order_id}</span>
-                </div>
-                <div className="flex items-center justify-between gap-2 rounded-xl border border-line bg-canvas/60 px-4 py-3">
-                  <span className="text-chips font-medium text-muted">Payment</span>
-                  <span className="text-sm font-bold text-fg">{order.payment_option}</span>
-                </div>
-                <div className="flex items-center justify-between gap-2 rounded-xl border border-line bg-canvas/60 px-4 py-3">
-                  <span className="text-chips font-medium text-muted">Total</span>
-                  <span className="text-sm font-bold tabular-nums text-brand">{naira(order.total_amount)}</span>
-                </div>
-
-                <div className="space-y-2 rounded-xl border border-line bg-canvas/60 p-4">
-                  <p className="text-chips font-semibold uppercase tracking-wider text-muted">Your items</p>
-                  {(order.lines || []).map((l) => (
-                    <div key={l.id} className="flex items-center gap-3">
-                      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-subtle">
-                        <Image
-                          src={l.image_url || '/images/items/placeholder.svg'}
-                          alt={l.product_name}
-                          fill
-                          sizes="40px"
-                          className="object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src = '/images/items/placeholder.svg'
-                          }}
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-fg">{l.product_name}</div>
-                        <div className="text-chips text-muted">
-                          {l.qty} × {naira(l.final_price)}
-                        </div>
-                      </div>
-                      <div className="text-sm font-bold tabular-nums text-fg">{naira(l.amount)}</div>
-                    </div>
-                  ))}
-                </div>
+              <div className="mt-4">
+                <p className="text-sm text-muted">Order <span className="font-semibold text-fg">#{order.order_id}</span> has been placed successfully.</p>
               </div>
             )}
 
