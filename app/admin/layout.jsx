@@ -469,7 +469,7 @@ export default function AdminLayout({ children }) {
               <div className="mt-1 space-y-0.5">
                 <SubGroupToggle open={foodOrdersOpen} onToggle={() => toggleFoodSub('orders')} label="Food Orders" />
                 {foodOrdersOpen && (
-                  <div className="mt-0.5 space-y-0.5">
+                  <div className="mt-0.5 space-y-0.5 pl-4">
                     <NavLink href="/admin/food/pending" label="Pending" icon={Clock} active={activeKey === 'food_pending'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/food/posted" label="Posted" icon={Send} active={activeKey === 'food_posted'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/food/delivered" label="Delivered" icon={Truck} active={activeKey === 'food_delivered'} collapsed={false} onNavigate={navOnClick} />
@@ -478,7 +478,7 @@ export default function AdminLayout({ children }) {
                 )}
                 <SubGroupToggle open={foodOpsOpen} onToggle={() => toggleFoodSub('ops')} label="Food Operations" />
                 {foodOpsOpen && (
-                  <div className="mt-0.5 space-y-0.5">
+                  <div className="mt-0.5 space-y-0.5 pl-4">
                     <NavLink href="/admin/food/banks" label="Banks" icon={Landmark} active={activeKey === 'food_banks'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/food/inventory" label="Inventory" icon={Boxes} active={activeKey === 'food_inventory'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/food/markups" label="Markups" icon={Percent} active={activeKey === 'food_markups'} collapsed={false} onNavigate={navOnClick} />
@@ -505,7 +505,7 @@ export default function AdminLayout({ children }) {
               <div className="mt-1 space-y-0.5">
                 <SubGroupToggle open={ramOrdersOpen} onToggle={() => toggleRamSub('orders')} label="Ram Orders" />
                 {ramOrdersOpen && (
-                  <div className="mt-0.5 space-y-0.5">
+                  <div className="mt-0.5 space-y-0.5 pl-4">
                     <NavLink href="/admin/ram/pending" label="Pending" icon={Clock} active={activeKey === 'ram_pending'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/ram/approved" label="Approved" icon={CheckCircle2} active={activeKey === 'ram_approved'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/ram/delivered" label="Delivered" icon={Truck} active={activeKey === 'ram_delivered'} collapsed={false} onNavigate={navOnClick} />
@@ -514,7 +514,7 @@ export default function AdminLayout({ children }) {
                 )}
                 <SubGroupToggle open={ramOpsOpen} onToggle={() => toggleRamSub('ops')} label="Ram Operations" />
                 {ramOpsOpen && (
-                  <div className="mt-0.5 space-y-0.5">
+                  <div className="mt-0.5 space-y-0.5 pl-4">
                     <NavLink href="/admin/ram/banks" label="Banks" icon={Landmark} active={activeKey === 'ram_banks'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/ram/reports" label="Report" icon={BarChart3} active={activeKey === 'ram_reports'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/ram/audit" label="Audit Log" icon={History} active={activeKey === 'ram_audit'} collapsed={false} onNavigate={navOnClick} />
@@ -539,7 +539,7 @@ export default function AdminLayout({ children }) {
               <div className="mt-1 space-y-0.5">
                 <SubGroupToggle open={exhOrdersOpen} onToggle={() => toggleExhSub('orders')} label="Exhibition Orders" />
                 {exhOrdersOpen && (
-                  <div className="mt-0.5 space-y-0.5">
+                  <div className="mt-0.5 space-y-0.5 pl-4">
                     <NavLink href="/admin/exhibition/pending" label="Pending" icon={Clock} active={activeKey === 'exh_pending'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/approved" label="Approved" icon={CheckCircle2} active={activeKey === 'exh_approved'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/delivered" label="Delivered" icon={Truck} active={activeKey === 'exh_delivered'} collapsed={false} onNavigate={navOnClick} />
@@ -548,7 +548,7 @@ export default function AdminLayout({ children }) {
                 )}
                 <SubGroupToggle open={exhOpsOpen} onToggle={() => toggleExhSub('ops')} label="Exhibition Operations" />
                 {exhOpsOpen && (
-                  <div className="mt-0.5 space-y-0.5">
+                  <div className="mt-0.5 space-y-0.5 pl-4">
                     <NavLink href="/admin/exhibition/vendors" label="Vendors" icon={Store} active={activeKey === 'exh_vendors'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/products" label="Products" icon={Package} active={activeKey === 'exh_products'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/markups" label="Markups" icon={Percent} active={activeKey === 'exh_markups'} collapsed={false} onNavigate={navOnClick} />

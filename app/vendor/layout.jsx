@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BadgePercent, ChevronDown, ClipboardCheck, Landmark, LayoutDashboard, LogOut, Menu, Package, PanelLeftClose, PanelLeftOpen, ShoppingBag, Store, X } from 'lucide-react'
+import { BadgePercent, BarChart3, ChevronDown, ClipboardCheck, Landmark, LayoutDashboard, LogOut, Menu, Package, PanelLeftClose, PanelLeftOpen, ShoppingBag, Store, X } from 'lucide-react'
 import Breadcrumbs from '../components/ui/Breadcrumbs'
 import ModuleClosedPanel from '../components/ModuleClosedPanel'
 import { getTrail } from '@/lib/breadcrumbs'
@@ -15,6 +15,7 @@ const NAV = [
   { href: '/vendor/markups', label: 'Prices & Markups', icon: BadgePercent },
   { href: '/vendor/orders', label: 'Orders', icon: ShoppingBag },
   { href: '/vendor/banks', label: 'Banks', icon: Landmark },
+  { href: '/vendor/reports', label: 'Report', icon: BarChart3 },
 ]
 
 export default function VendorLayout({ children }) {

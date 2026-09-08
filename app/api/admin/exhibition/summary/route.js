@@ -63,22 +63,41 @@ export async function GET(request) {
     // Order figures report the ACTIVE period (the current season across the
     // live branches), mirroring the rep-side active-cycle scoping. The
     // per-cycle comparison below keeps the historical view for payouts.
+    // Per-cycle loan interest rate (for computing principal vs interest split)
+    const cycleRateMap = new Map(cycles.map((c) => [Number(c.id), Math.max(0, Number(c.loan_interest_rate_pct ?? 13)) / 100]))
+    const activeCycleRate = activeCycle ? (cycleRateMap.get(Number(activeCycle.id)) || 0.13) : 0.13
+
     const byStatus = { Pending: 0, Approved: 0, Delivered: 0, Cancelled: 0 }
+    const byPayment = { Loan: { orders: 0, amount: 0 }, Savings: { orders: 0, amount: 0 }, Cash: { orders: 0, amount: 0 } }
+    const byCategory = new Map()
+    const byLocation = new Map()
     let amount = 0
-    // Payment-split amounts for the dashboard's value cards (active cycle,
-    // non-cancelled orders) — loan / savings / cash, mirroring the food module.
-    const amounts = { total: 0, loans: 0, savings: 0, cash: 0 }
+    let loanPrincipal = 0
+    let loanInterest = 0
+    let savingsAmount = 0
+    let cashAmount = 0
     for (const o of activeOrders) {
       if (byStatus[o.status] !== undefined) byStatus[o.status]++
       if (o.status === 'Cancelled') continue
       const total = Number(o.total_amount || 0)
       amount += total
-      const key = String(o.payment_option || '')
-      if (key === 'Loan') amounts.loans += total
-      else if (key === 'Savings') amounts.savings += total
-      else if (key === 'Cash') amounts.cash += total
+      const payKey = String(o.payment_option || '')
+      if (byPayment[payKey]) { byPayment[payKey].orders++; byPayment[payKey].amount += total }
+      // Loan principal/interest split (computed from cycle rate)
+      if (payKey === 'Loan') {
+        const rate = cycleRateMap.get(Number(o.cycle_id)) || activeCycleRate
+        const denom = 1 + rate
+        const principal = denom > 0 ? Math.round(total / denom) : total
+        const interest = total - principal
+        loanPrincipal += principal
+        loanInterest += interest
+      } else if (payKey === 'Savings') {
+        savingsAmount += total
+      } else if (payKey === 'Cash') {
+        cashAmount += total
+      }
     }
-    amounts.total = amount
+    const amounts = { total: amount, loans: loanPrincipal + loanInterest, savings: savingsAmount, cash: cashAmount }
 
     // Per-vendor order value (selected cycle, non-cancelled) for the top/bottom
     // vendor performance charts — mirroring the food dashboard's branch charts.
@@ -184,6 +203,44 @@ export async function GET(request) {
       }
     })
 
+    // By category (from order lines → products)
+    if (targetCycleIds.size) {
+      const { data: catLines } = await supabase
+        .from('exhibition_order_lines')
+        .select('amount, category, orders:order_id(cycle_id, status)')
+        .in('orders.cycle_id', Array.from(targetCycleIds))
+        .neq('orders.status', 'Cancelled')
+      for (const l of catLines || []) {
+        if (!targetCycleIds.has(Number(l.orders?.cycle_id))) continue
+        const cat = String(l.category || 'Uncategorised')
+        if (!byCategory.has(cat)) byCategory.set(cat, { key: cat, orders: 0, amount: 0 })
+        const agg = byCategory.get(cat)
+        agg.orders += 1
+        agg.amount += Number(l.amount || 0)
+      }
+    }
+    const byCategoryArr = Array.from(byCategory.values()).sort((a, b) => b.amount - a.amount)
+
+    // By delivery branch (from orders)
+    const branchNameMap = new Map()
+    if (targetCycleIds.size) {
+      const { data: branchOrders } = await supabase
+        .from('exhibition_orders')
+        .select('branch_id, total_amount, status, branches:branch_id(name)')
+        .in('cycle_id', Array.from(targetCycleIds))
+        .neq('status', 'Cancelled')
+      for (const o of branchOrders || []) {
+        const bId = Number(o.branch_id)
+        if (!branchNameMap.has(bId)) branchNameMap.set(bId, o.branches?.name || `Branch ${bId}`)
+        const bName = branchNameMap.get(bId)
+        if (!byLocation.has(bName)) byLocation.set(bName, { key: bName, orders: 0, amount: 0 })
+        const agg = byLocation.get(bName)
+        agg.orders += 1
+        agg.amount += Number(o.total_amount || 0)
+      }
+    }
+    const byLocationArr = Array.from(byLocation.values()).sort((a, b) => b.amount - a.amount)
+
     return NextResponse.json({
       ok: true,
       summary: {
@@ -196,6 +253,7 @@ export async function GET(request) {
               code: activeCycle.code || '',
               starts_at: activeCycle.starts_at || null,
               ends_at: activeCycle.ends_at || null,
+              loan_interest_rate_pct: activeCycle.loan_interest_rate_pct ?? 13,
             }
           : null,
         branches: new Set(cycles.map((c) => c.branch_id)).size,
@@ -204,7 +262,13 @@ export async function GET(request) {
         active_products: products.filter((p) => p.status === 'active').length,
         orders: activeOrders.length,
         byStatus,
+        byPayment: Object.entries(byPayment).filter(([, v]) => v.orders > 0).map(([key, v]) => ({ key, ...v })),
+        byCategory: byCategoryArr,
+        byLocation: byLocationArr,
         amount,
+        loanPrincipal,
+        loanInterest,
+        loanTotal: loanPrincipal + loanInterest,
         amounts,
         vendors_by_value: vendorsByValue,
         active_orders: activeOrders.length,

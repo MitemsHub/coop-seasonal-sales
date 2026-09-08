@@ -44,13 +44,16 @@ export async function GET(req) {
     if (action && ACTIONS.includes(action)) countQ = countQ.eq('action', action)
     const { count } = await countQ
 
+    const { error: colErr } = await supabase.from('audit_log').select('created_at').limit(1)
+    const hasCreatedAt = !colErr
+    const auditCols = hasCreatedAt ? 'id, actor, action, order_id, detail, created_at' : 'id, actor, action, order_id, detail'
     let query = supabase
       .from('audit_log')
-      .select('id, actor, action, order_id, detail, created_at')
+      .select(auditCols)
       .eq('module', 'ram')
       .in('order_id', orderIds)
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1)
+    if (hasCreatedAt) query = query.order('created_at', { ascending: false })
+    query = query.range(offset, offset + limit - 1)
     if (action && ACTIONS.includes(action)) query = query.eq('action', action)
     const { data, error } = await query
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })

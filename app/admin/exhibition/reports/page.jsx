@@ -1,13 +1,13 @@
 'use client'
 
 // app/admin/exhibition/reports/page.jsx
-// Exhibition admin reports — summary cards, vendor performance, cycle payouts,
-// and export (CSV + PDF). Mirrors the food/ram reports pattern.
+// Exhibition admin reports — summary cards, breakdown tables, vendor performance,
+// cycle payouts, and export (CSV). Mirrors the RAM reports pattern.
 import { useEffect, useMemo, useState } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
-import ExportButton from '../../../components/ui/ExportButton'
+import Button from '../../../components/ui/Button'
 import Skeleton from '../../../components/ui/Skeleton'
-import { FileBarChart2 } from 'lucide-react'
+import { FileBarChart2, RefreshCw } from 'lucide-react'
 
 function safeJson(res, label) {
   const ct = res.headers.get('content-type') || ''
@@ -15,8 +15,7 @@ function safeJson(res, label) {
   return res.text().then((t) => { throw new Error(`Non-JSON from ${label}: ${t.slice(0, 200)}`) })
 }
 
-const fmt = (n) => `₦${Number(n || 0).toLocaleString()}`
-const pct = (n) => `${Number(n || 0).toFixed(1)}%`
+const money = (n) => `₦${Number(n || 0).toLocaleString()}`
 
 function fileStamp() {
   const d = new Date()
@@ -32,6 +31,39 @@ function downloadCsv(filename, rows) {
   const a = document.createElement('a')
   a.href = url; a.download = filename; a.click()
   URL.revokeObjectURL(url)
+}
+
+function SummaryTable({ title, rows, columns }) {
+  const cols = columns || [{ key: 'key', label: 'Key', align: 'left' }, { key: 'orders', label: 'Orders', align: 'right' }, { key: 'amount', label: 'Amount', align: 'right', fmt: money }]
+  return (
+    <div className="rounded-xl border border-line bg-surface overflow-hidden">
+      <div className="border-b border-line bg-subtle/60 px-4 py-3 text-sm font-semibold text-fg">{title}</div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-line bg-subtle/30">
+              {cols.map((c) => (
+                <th key={c.key} className={`px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted ${c.align === 'right' ? 'text-right' : 'text-left'}`}>{c.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {(!rows || rows.length === 0) ? (
+              <tr><td colSpan={cols.length} className="px-4 py-6 text-center text-sm text-muted">No data</td></tr>
+            ) : rows.map((r, i) => (
+              <tr key={r.key || i} className="border-b border-line/50 last:border-0 hover:bg-subtle/30">
+                {cols.map((c) => (
+                  <td key={c.key} className={`px-4 py-2.5 ${c.align === 'right' ? 'text-right tabular-nums' : ''} ${c.key === 'key' ? 'font-medium text-fg' : 'text-muted'}`}>
+                    {c.fmt ? c.fmt(r[c.key]) : (r[c.key] ?? '—')}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
 }
 
 export default function ExhibitionReportsPage() {
@@ -66,7 +98,9 @@ export default function ExhibitionReportsPage() {
 
   const s = data
   const byStatus = s?.byStatus || {}
-  const amounts = s?.amounts || {}
+  const byPayment = s?.byPayment || []
+  const byCategory = s?.byCategory || []
+  const byLocation = s?.byLocation || []
   const vendorsByValue = s?.vendors_by_value || []
   const cyclePayouts = s?.cycle_payouts || []
   const recentOrders = s?.recent_orders || []
@@ -74,50 +108,53 @@ export default function ExhibitionReportsPage() {
   const statusRows = useMemo(() => {
     if (!s) return []
     return Object.entries(byStatus).map(([status, count]) => ({
-      status,
-      orders: count,
-      pct: s.orders ? ((count / s.orders) * 100).toFixed(1) + '%' : '0%',
+      key: status, orders: count, amount: 0,
     }))
   }, [s, byStatus])
 
-  const paymentRows = useMemo(() => {
-    if (!amounts.total) return []
-    return [
-      { type: 'Loan', amount: amounts.loans, pct: amounts.total ? ((amounts.loans / amounts.total) * 100).toFixed(1) + '%' : '0%' },
-      { type: 'Savings', amount: amounts.savings, pct: amounts.total ? ((amounts.savings / amounts.total) * 100).toFixed(1) + '%' : '0%' },
-      { type: 'Cash', amount: amounts.cash, pct: amounts.total ? ((amounts.cash / amounts.total) * 100).toFixed(1) + '%' : '0%' },
-    ].filter((r) => r.amount > 0)
-  }, [amounts])
+  const paymentRows = useMemo(() => byPayment.map((p) => ({
+    key: p.key, orders: p.orders, amount: p.amount,
+  })), [byPayment])
+
+  const exportAll = () => {
+    const rows = []
+    if (s) {
+      rows.push({ section: 'Summary', metric: 'Vendors', value: s.vendors })
+      rows.push({ section: 'Summary', metric: 'Products', value: s.products })
+      rows.push({ section: 'Summary', metric: 'Orders', value: s.orders })
+      rows.push({ section: 'Summary', metric: 'Loan Principal', value: s.loanPrincipal || 0 })
+      rows.push({ section: 'Summary', metric: 'Loan Interest', value: s.loanInterest || 0 })
+      rows.push({ section: 'Summary', metric: 'Loan Total', value: s.loanTotal || 0 })
+      rows.push({ section: 'Summary', metric: 'Savings', value: s.amounts?.savings || 0 })
+      rows.push({ section: 'Summary', metric: 'Cash', value: s.amounts?.cash || 0 })
+      rows.push({ section: 'Summary', metric: 'Total Amount', value: s.amount || 0 })
+    }
+    downloadCsv(`exhibition-report-${fileStamp()}.csv`, rows)
+  }
 
   const exportVendorCsv = () => downloadCsv(`exhibition-vendors-${fileStamp()}.csv`, vendorsByValue.map((v) => ({
     vendor: v.vendor_name, value: v.value,
+  })))
+
+  const exportCategoryCsv = () => downloadCsv(`exhibition-categories-${fileStamp()}.csv`, byCategory.map((c) => ({
+    category: c.key, orders: c.orders, amount: c.amount,
+  })))
+
+  const exportLocationCsv = () => downloadCsv(`exhibition-locations-${fileStamp()}.csv`, byLocation.map((l) => ({
+    location: l.key, orders: l.orders, amount: l.amount,
   })))
 
   const exportPayoutCsv = () => downloadCsv(`exhibition-payouts-${fileStamp()}.csv`, cyclePayouts.map((p) => ({
     cycle: p.name, code: p.code, status: p.status, gross: p.gross, deduction: p.deduction, net: p.net, paid: p.paid, balance: p.balance,
   })))
 
-  const exportOrdersCsv = () => downloadCsv(`exhibition-orders-${fileStamp()}.csv`, recentOrders.map((o) => ({
-    id: o.order_id, status: o.status, member: o.member_name_snapshot, member_id: o.member_id,
-    payment: o.payment_option, total: o.total_amount, date: o.created_at,
-  })))
-
-  if (err) return (
-    <ProtectedRoute allowedRoles={['admin']}>
-      <div className="p-6 text-center text-danger-fg">{err}</div>
-    </ProtectedRoute>
-  )
-
   return (
     <ProtectedRoute allowedRoles={['admin']}>
-      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+      <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto">
         {/* Header */}
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-h2 font-bold tracking-tight text-fg">Exhibition Report</h1>
-            <p className="mt-0.5 text-sm text-muted">Summary of cycles, orders, vendors, and payouts.</p>
-          </div>
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <h1 className="text-h2 font-bold tracking-tight text-fg">Exhibition · Report</h1>
+          <div className="flex gap-2">
             <select
               value={cycleId}
               onChange={(e) => setCycleId(e.target.value)}
@@ -128,84 +165,72 @@ export default function ExhibitionReportsPage() {
                 <option key={c.id} value={c.id}>{c.name || `Cycle ${c.id}`} ({c.code})</option>
               ))}
             </select>
+            <Button onClick={load} disabled={loading} leftIcon={RefreshCw}>
+              {loading ? 'Loading…' : 'Refresh'}
+            </Button>
+            <Button variant="accent" onClick={exportAll} disabled={!s}>
+              <FileBarChart2 className="h-4 w-4 mr-1" /> Export
+            </Button>
           </div>
         </div>
 
+        {err && <div className="mb-4 rounded-xl border border-danger-border bg-danger-bg px-4 py-3 text-sm text-danger-fg">{err}</div>}
+
         {loading ? (
-          <div className="space-y-4">
-            {[0, 1, 2].map((i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
-          </div>
+          <div className="space-y-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}</div>
         ) : !s ? null : (
           <>
-            {/* Summary Cards */}
-            <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {/* ─── Summary Cards ─── */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 mb-4">
               {[
-                { label: 'Cycles', value: s.cycles, sub: `${s.active_cycles} active` },
                 { label: 'Vendors', value: s.vendors },
-                { label: 'Products', value: s.products, sub: `${s.active_products} active` },
-                { label: 'Orders', value: s.orders },
-                { label: 'Gross Value', value: fmt(s.amount) },
-                { label: 'Paid to Vendors', value: fmt(s.paid_to_vendors) },
+                { label: 'Products', value: s.products },
+                { label: 'Pending', value: byStatus.Pending || 0 },
+                { label: 'Approved', value: byStatus.Approved || 0 },
+                { label: 'Delivered', value: byStatus.Delivered || 0 },
+                { label: 'Loan Principal', value: money(s.loanPrincipal || 0) },
+                { label: 'Loan Interest', value: money(s.loanInterest || 0) },
+                { label: 'Loan Total', value: money(s.loanTotal || 0) },
+                { label: 'Savings', value: money(s.amounts?.savings || 0) },
+                { label: 'Cash', value: money(s.amounts?.cash || 0) },
+                { label: 'Total Amount', value: money(s.amount || 0) },
+                { label: 'Paid to Vendors', value: money(s.paid_to_vendors || 0) },
               ].map((c) => (
-                <div key={c.label} className="rounded-xl border border-line bg-surface p-4">
-                  <p className="text-chips font-medium text-muted">{c.label}</p>
-                  <p className="mt-1 text-lg font-bold tabular-nums text-fg">{c.value}</p>
-                  {c.sub && <p className="text-chips text-muted">{c.sub}</p>}
+                <div key={c.label} className="ui-card p-4">
+                  <div className="text-xs text-muted">{c.label}</div>
+                  <div className="text-[13px] font-semibold sm:text-lg mt-1">{c.value}</div>
                 </div>
               ))}
-            </section>
+            </div>
 
-            {/* Status + Payment breakdown */}
-            <section className="mb-6 grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl border border-line bg-surface p-4">
-                <h3 className="mb-3 text-sm font-semibold text-fg">By Status</h3>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-line text-left text-chips text-muted">
-                      <th className="pb-2">Status</th><th className="pb-2 text-right">Orders</th><th className="pb-2 text-right">%</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {statusRows.map((r) => (
-                      <tr key={r.status} className="border-b border-line/50 last:border-0">
-                        <td className="py-2 font-medium text-fg">{r.status}</td>
-                        <td className="py-2 text-right tabular-nums">{r.orders}</td>
-                        <td className="py-2 text-right text-muted">{r.pct}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            {/* ─── Breakdown Tables ─── */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+              <SummaryTable title="By Status" rows={statusRows} columns={[
+                { key: 'key', label: 'Status', align: 'left' },
+                { key: 'orders', label: 'Orders', align: 'right' },
+              ]} />
+              <SummaryTable title="By Payment" rows={paymentRows} columns={[
+                { key: 'key', label: 'Type', align: 'left' },
+                { key: 'orders', label: 'Orders', align: 'right' },
+                { key: 'amount', label: 'Amount', align: 'right', fmt: money },
+              ]} />
+              <SummaryTable title="By Category" rows={byCategory} columns={[
+                { key: 'key', label: 'Category', align: 'left' },
+                { key: 'orders', label: 'Orders', align: 'right' },
+                { key: 'amount', label: 'Amount', align: 'right', fmt: money },
+              ]} />
+              <SummaryTable title="By Delivery Location" rows={byLocation} columns={[
+                { key: 'key', label: 'Location', align: 'left' },
+                { key: 'orders', label: 'Orders', align: 'right' },
+                { key: 'amount', label: 'Amount', align: 'right', fmt: money },
+              ]} />
+            </div>
 
-              <div className="rounded-xl border border-line bg-surface p-4">
-                <h3 className="mb-3 text-sm font-semibold text-fg">By Payment Type</h3>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-line text-left text-chips text-muted">
-                      <th className="pb-2">Type</th><th className="pb-2 text-right">Amount</th><th className="pb-2 text-right">%</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paymentRows.map((r) => (
-                      <tr key={r.type} className="border-b border-line/50 last:border-0">
-                        <td className="py-2 font-medium text-fg">{r.type}</td>
-                        <td className="py-2 text-right tabular-nums">{fmt(r.amount)}</td>
-                        <td className="py-2 text-right text-muted">{r.pct}</td>
-                      </tr>
-                    ))}
-                    {paymentRows.length === 0 && (
-                      <tr><td colSpan={3} className="py-4 text-center text-muted">No payment data</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            {/* Vendor Performance */}
-            <section className="mb-6 rounded-xl border border-line bg-surface">
-              <div className="flex items-center justify-between border-b border-line px-4 py-3">
-                <h3 className="text-sm font-semibold text-fg">Vendor Performance</h3>
-                <ExportButton onClick={exportVendorCsv} label="Export CSV" />
+            {/* ─── Vendor Performance ─── */}
+            <div className="rounded-xl border border-line bg-surface overflow-hidden mb-6">
+              <div className="flex items-center justify-between border-b border-line bg-subtle/60 px-4 py-3">
+                <h3 className="text-sm font-semibold text-fg">By Vendor</h3>
+                <Button size="sm" variant="secondary" onClick={exportVendorCsv}>Export CSV</Button>
               </div>
               {vendorsByValue.length === 0 ? (
                 <p className="px-4 py-6 text-center text-sm text-muted">No vendor data</p>
@@ -213,7 +238,7 @@ export default function ExhibitionReportsPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-line bg-subtle/60 text-left text-chips text-muted">
+                      <tr className="border-b border-line bg-subtle/30 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                         <th className="px-4 py-2">#</th>
                         <th className="px-4 py-2">Vendor</th>
                         <th className="px-4 py-2 text-right">Order Value</th>
@@ -221,28 +246,25 @@ export default function ExhibitionReportsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {vendorsByValue.map((v, i) => {
-                        const share = s.amount ? ((v.value / s.amount) * 100).toFixed(1) + '%' : '0%'
-                        return (
-                          <tr key={v.vendor_id} className="border-b border-line/50 last:border-0">
-                            <td className="px-4 py-2 text-muted">{i + 1}</td>
-                            <td className="px-4 py-2 font-medium text-fg">{v.vendor_name}</td>
-                            <td className="px-4 py-2 text-right tabular-nums">{fmt(v.value)}</td>
-                            <td className="px-4 py-2 text-right text-muted">{share}</td>
-                          </tr>
-                        )
-                      })}
+                      {vendorsByValue.map((v, i) => (
+                        <tr key={v.vendor_id} className="border-b border-line/50 last:border-0 hover:bg-subtle/30">
+                          <td className="px-4 py-2.5 text-muted">{i + 1}</td>
+                          <td className="px-4 py-2.5 font-medium text-fg">{v.vendor_name}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums">{money(v.value)}</td>
+                          <td className="px-4 py-2.5 text-right text-muted">{s.amount ? ((v.value / s.amount) * 100).toFixed(1) + '%' : '0%'}</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
               )}
-            </section>
+            </div>
 
-            {/* Cycle Payouts */}
-            <section className="mb-6 rounded-xl border border-line bg-surface">
-              <div className="flex items-center justify-between border-b border-line px-4 py-3">
-                <h3 className="text-sm font-semibold text-fg">Cycle Payouts</h3>
-                <ExportButton onClick={exportPayoutCsv} label="Export CSV" />
+            {/* ─── Cycle Payouts ─── */}
+            <div className="rounded-xl border border-line bg-surface overflow-hidden mb-6">
+              <div className="flex items-center justify-between border-b border-line bg-subtle/60 px-4 py-3">
+                <h3 className="text-sm font-semibold text-fg">Applications Pack by Payment to Vendors</h3>
+                <Button size="sm" variant="secondary" onClick={exportPayoutCsv}>Export CSV</Button>
               </div>
               {cyclePayouts.length === 0 ? (
                 <p className="px-4 py-6 text-center text-sm text-muted">No payout data</p>
@@ -250,7 +272,7 @@ export default function ExhibitionReportsPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-line bg-subtle/60 text-left text-chips text-muted">
+                      <tr className="border-b border-line bg-subtle/30 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                         <th className="px-4 py-2">Cycle</th>
                         <th className="px-4 py-2">Status</th>
                         <th className="px-4 py-2 text-right">Gross</th>
@@ -262,31 +284,28 @@ export default function ExhibitionReportsPage() {
                     </thead>
                     <tbody>
                       {cyclePayouts.map((p) => (
-                        <tr key={p.cycle_id} className="border-b border-line/50 last:border-0">
-                          <td className="px-4 py-2 font-medium text-fg">{p.name || `#${p.cycle_id}`}</td>
-                          <td className="px-4 py-2">
-                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${p.status === 'active' ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'}`}>
-                              {p.status}
-                            </span>
+                        <tr key={p.cycle_id} className="border-b border-line/50 last:border-0 hover:bg-subtle/30">
+                          <td className="px-4 py-2.5 font-medium text-fg">{p.name || `#${p.cycle_id}`}</td>
+                          <td className="px-4 py-2.5">
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${p.status === 'active' ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'}`}>{p.status}</span>
                           </td>
-                          <td className="px-4 py-2 text-right tabular-nums">{fmt(p.gross)}</td>
-                          <td className="px-4 py-2 text-right tabular-nums text-muted">{fmt(p.deduction)}</td>
-                          <td className="px-4 py-2 text-right tabular-nums font-medium">{fmt(p.net)}</td>
-                          <td className="px-4 py-2 text-right tabular-nums text-success-fg">{fmt(p.paid)}</td>
-                          <td className={`px-4 py-2 text-right tabular-nums font-medium ${p.balance > 0 ? 'text-warning-fg' : 'text-muted'}`}>{fmt(p.balance)}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums">{money(p.gross)}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-muted">{money(p.deduction)}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums font-medium">{money(p.net)}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums text-success-fg">{money(p.paid)}</td>
+                          <td className={`px-4 py-2.5 text-right tabular-nums font-medium ${p.balance > 0 ? 'text-warning-fg' : 'text-muted'}`}>{money(p.balance)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               )}
-            </section>
+            </div>
 
-            {/* Recent Orders */}
-            <section className="rounded-xl border border-line bg-surface">
-              <div className="flex items-center justify-between border-b border-line px-4 py-3">
+            {/* ─── Recent Orders ─── */}
+            <div className="rounded-xl border border-line bg-surface overflow-hidden">
+              <div className="border-b border-line bg-subtle/60 px-4 py-3">
                 <h3 className="text-sm font-semibold text-fg">Recent Orders</h3>
-                <ExportButton onClick={exportOrdersCsv} label="Export CSV" />
               </div>
               {recentOrders.length === 0 ? (
                 <p className="px-4 py-6 text-center text-sm text-muted">No recent orders</p>
@@ -294,7 +313,7 @@ export default function ExhibitionReportsPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-line bg-subtle/60 text-left text-chips text-muted">
+                      <tr className="border-b border-line bg-subtle/30 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                         <th className="px-4 py-2">Order</th>
                         <th className="px-4 py-2">Member</th>
                         <th className="px-4 py-2">Status</th>
@@ -305,13 +324,13 @@ export default function ExhibitionReportsPage() {
                     </thead>
                     <tbody>
                       {recentOrders.map((o) => (
-                        <tr key={o.id} className="border-b border-line/50 last:border-0">
-                          <td className="px-4 py-2 font-medium text-fg">#{o.order_id}</td>
-                          <td className="px-4 py-2">
+                        <tr key={o.id} className="border-b border-line/50 last:border-0 hover:bg-subtle/30">
+                          <td className="px-4 py-2.5 font-medium text-fg">#{o.order_id}</td>
+                          <td className="px-4 py-2.5">
                             <div className="text-fg">{o.member_name_snapshot || '—'}</div>
-                            <div className="text-chips text-muted">{o.member_id}</div>
+                            <div className="text-xs text-muted">{o.member_id}</div>
                           </td>
-                          <td className="px-4 py-2">
+                          <td className="px-4 py-2.5">
                             <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                               o.status === 'Delivered' ? 'bg-success-bg text-success-fg'
                                 : o.status === 'Cancelled' ? 'bg-danger-bg text-danger-fg'
@@ -319,16 +338,16 @@ export default function ExhibitionReportsPage() {
                                 : 'bg-warning-bg text-warning-fg'
                             }`}>{o.status}</span>
                           </td>
-                          <td className="px-4 py-2 text-muted">{o.payment_option || '—'}</td>
-                          <td className="px-4 py-2 text-right tabular-nums font-medium">{fmt(o.total_amount)}</td>
-                          <td className="px-4 py-2 text-right text-muted">{new Date(o.created_at).toLocaleDateString()}</td>
+                          <td className="px-4 py-2.5 text-muted">{o.payment_option || '—'}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums font-medium">{money(o.total_amount)}</td>
+                          <td className="px-4 py-2.5 text-right text-muted">{new Date(o.created_at).toLocaleDateString()}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               )}
-            </section>
+            </div>
           </>
         )}
       </div>
