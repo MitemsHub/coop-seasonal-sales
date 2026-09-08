@@ -85,7 +85,7 @@ function AdminOrdersPageContent() {
   const downloadReceipt = async (orderId, memberId) => {
     try {
       // Redirect to the existing success page for PDF download
-      window.open(`/shop/success/${orderId}?mid=${memberId}`, '_blank')
+      window.open(`/shop/success/${orderId}?mid=${memberId}&receipt=1`, '_blank')
     } catch (error) {
       console.error('Error downloading receipt:', error)
       setMessage({ type: 'error', text: 'Failed to download receipt' })

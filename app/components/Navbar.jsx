@@ -751,7 +751,7 @@ export default function Navbar() {
                             <span
                               className={[
                                 'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none',
-                                c.count > 0 ? 'bg-accent text-accent-fg' : 'bg-subtle text-muted',
+                                c.count > 0 ? 'bg-brand text-on-accent' : 'bg-subtle text-muted',
                               ].join(' ')}
                             >
                               {Number(c.count).toLocaleString()}

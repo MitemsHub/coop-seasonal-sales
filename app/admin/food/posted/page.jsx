@@ -358,7 +358,7 @@ function PostedAdminPageContent() {
   }
 
   const downloadReceipt = (orderId, memberId) => {
-    window.open(`/shop/success/${orderId}?mid=${memberId}`, '_blank', 'noopener,noreferrer')
+    window.open(`/shop/success/${orderId}?mid=${memberId}&receipt=1`, '_blank', 'noopener,noreferrer')
   }
 
   return (

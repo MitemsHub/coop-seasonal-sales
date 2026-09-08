@@ -50,7 +50,7 @@ export default function CartDropdown({ food = 0, ram = 0, exhibition = 0 }) {
         aria-label={`Cart, ${total} item${total === 1 ? '' : 's'} across all shops`}
         className={[
           'inline-flex items-center gap-1 rounded-full px-2 py-1 text-sm font-medium transition-all duration-200 lg:px-3 lg:py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
-          open ? 'bg-accent text-accent-fg shadow-md' : 'text-fg hover:bg-subtle',
+          open ? 'bg-brand text-on-accent shadow-md' : 'text-fg hover:bg-subtle',
         ].join(' ')}
       >
         <ShoppingCart className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
@@ -94,7 +94,7 @@ export default function CartDropdown({ food = 0, ram = 0, exhibition = 0 }) {
                 <span
                   className={[
                     'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none',
-                    it.count > 0 ? 'bg-accent text-accent-fg' : 'bg-subtle text-muted',
+                    it.count > 0 ? 'bg-brand text-on-accent' : 'bg-subtle text-muted',
                   ].join(' ')}
                 >
                   {Number(it.count).toLocaleString()}

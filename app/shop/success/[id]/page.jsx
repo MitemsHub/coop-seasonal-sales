@@ -18,6 +18,7 @@ function SuccessContent() {
   const searchParams = useSearchParams()
   const id = Array.isArray(params?.id) ? params.id[0] : params?.id
   const mid = (searchParams?.get('mid') || '').trim().toUpperCase()
+  const receiptOnly = searchParams?.get('receipt') === '1'
   const { user } = useAuth()
   const fallbackMemberId = mid || (user?.id || '')
 
@@ -183,7 +184,8 @@ function SuccessContent() {
         </div>
 
         <div className="relative mx-auto max-w-2xl p-fluid pb-24">
-          {/* Confirmation card — screen only */}
+          {/* Confirmation card — screen only (hidden when receipt-only mode) */}
+          {!receiptOnly && (
           <div className="print-hide rounded-2xl border border-line bg-surface p-6 text-center shadow-lg shadow-black/5 sm:p-8">
             <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-full bg-success-bg text-success-fg ring-8 ring-success-bg/40">
               <CheckCircle2 className="h-8 w-8" strokeWidth={2} />
@@ -227,6 +229,7 @@ function SuccessContent() {
               </Button>
             </div>
           </div>
+          )}
 
           {/* Receipt — printable */}
           <div className="mt-6">
