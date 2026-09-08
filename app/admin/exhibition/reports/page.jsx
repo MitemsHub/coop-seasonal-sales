@@ -173,7 +173,6 @@ export default function ExhibitionReportsPage() {
   const byLocation = s?.byLocation || []
   const vendorsByValue = s?.vendors_by_value || []
   const cyclePayouts = s?.cycle_payouts || []
-  const recentOrders = s?.recent_orders || []
   const vendors = useMemo(() => {
     const seen = new Map()
     for (const v of vendorsByValue) seen.set(v.vendor_id, v.vendor_name)
