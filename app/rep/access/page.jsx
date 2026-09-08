@@ -49,9 +49,9 @@ export default function RepAccessPage() {
   const [closedModule, setClosedModule] = useState(null)
 
   const openModule = (module) => {
-    // Opened modules go straight to login; closed modules open the panel first.
-    if (availability[module]) router.push(MODULE_DEST[module])
-    else setClosedModule(module)
+    // Always go to login — reps need to manage existing orders even when
+    // the module is closed. The "Closed" badge is informational only.
+    router.push(MODULE_DEST[module])
   }
 
   useEffect(() => {
