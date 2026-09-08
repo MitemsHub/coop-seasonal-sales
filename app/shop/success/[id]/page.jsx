@@ -205,7 +205,7 @@ function SuccessContent() {
                 ? 'Your order has been delivered to your branch. Thank you!'
                 : isCancelled
                   ? 'Your order has been cancelled.'
-                  : 'Your branch rep will post it, then deliver to your branch.'
+                  : 'Your order will be posted once confirmed, thank you.'
               return (
                 <>
                   <h1 className="mt-2 font-display text-h1 font-semibold tracking-tight text-fg">{heading}</h1>
