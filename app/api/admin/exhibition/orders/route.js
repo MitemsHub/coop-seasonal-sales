@@ -18,8 +18,11 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url)
     const status = String(searchParams.get('status') || '')
     const cycleId = Math.trunc(Number(searchParams.get('cycle_id') || 0))
+    const branchId = Math.trunc(Number(searchParams.get('branch_id') || 0))
     const payment = String(searchParams.get('payment') || '')
     const q = String(searchParams.get('q') || '').trim()
+    const from = String(searchParams.get('from') || '')
+    const to = String(searchParams.get('to') || '')
     const limit = Math.min(500, Math.max(1, Math.trunc(Number(searchParams.get('limit') || 100))))
     const offset = Math.max(0, Math.trunc(Number(searchParams.get('offset') || 0)))
 
@@ -29,8 +32,11 @@ export async function GET(request) {
     let countQ = supabase.from('exhibition_orders').select('id', { count: 'exact', head: true })
     if (status && STATUSES.includes(status)) countQ = countQ.eq('status', status)
     if (cycleId > 0) countQ = countQ.eq('cycle_id', cycleId)
+    if (branchId > 0) countQ = countQ.eq('branch_id', branchId)
     if (payment) countQ = countQ.eq('payment_option', payment)
     if (q) countQ = countQ.or(`order_id.ilike.%${q}%,member_id.ilike.%${q}%,member_name_snapshot.ilike.%${q}%`)
+    if (from) countQ = countQ.gte('created_at', from)
+    if (to) countQ = countQ.lte('created_at', to + 'T23:59:59')
     const { count } = await countQ
 
     let query = supabase
@@ -41,8 +47,11 @@ export async function GET(request) {
 
     if (status && STATUSES.includes(status)) query = query.eq('status', status)
     if (cycleId > 0) query = query.eq('cycle_id', cycleId)
+    if (branchId > 0) query = query.eq('branch_id', branchId)
     if (payment) query = query.eq('payment_option', payment)
     if (q) query = query.or(`order_id.ilike.%${q}%,member_id.ilike.%${q}%,member_name_snapshot.ilike.%${q}%`)
+    if (from) query = query.gte('created_at', from)
+    if (to) query = query.lte('created_at', to + 'T23:59:59')
 
     const { data, error } = await query
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
