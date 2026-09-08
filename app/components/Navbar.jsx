@@ -288,7 +288,7 @@ export default function Navbar() {
                     <Link
                       href={isRamRoute ? '/orders?tab=ram' : '/orders'}
                       className={`inline-flex items-center px-2 lg:px-3 py-1 lg:py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
-                        isActive('/orders')? 'bg-accent text-accent-fg shadow-md' 
+                        isActive('/orders')? 'bg-brand text-on-accent shadow-md' 
                           : 'text-fg hover:bg-subtle'
                       }`}
                     >
@@ -709,7 +709,7 @@ export default function Navbar() {
                         href={isRamRoute ? '/orders?tab=ram' : '/orders'}
                         onClick={closeMobileMenu}
                         className={`block px-3 py-2 rounded-md text-base font-medium transition-all duration-200 ${
-                          isActive('/orders')? 'bg-accent text-accent-fg' 
+                          isActive('/orders')? 'bg-brand text-on-accent' 
                             : 'text-fg hover:bg-subtle'
                         }`}
                       >

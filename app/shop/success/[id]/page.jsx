@@ -212,20 +212,7 @@ function SuccessContent() {
                 <span className="text-sm font-bold tabular-nums text-brand">{currency(order.total_amount)}</span>
               </div>
 
-              <div className="space-y-2 rounded-xl border border-line bg-canvas/60 p-4">
-                <p className="text-chips font-semibold uppercase tracking-wider text-muted">Your items</p>
-                {(order.order_lines || []).map((l, idx) => (
-                  <div key={idx} className="flex items-center justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-fg">{l.items?.name}</div>
-                      <div className="text-chips text-muted">
-                        {l.qty} × {currency(l.unit_price)}
-                      </div>
-                    </div>
-                    <div className="text-sm font-bold tabular-nums text-fg">{currency(l.amount)}</div>
-                  </div>
-                ))}
-              </div>
+
             </div>
 
             <div className="mt-6 flex flex-col gap-2 sm:flex-row">

@@ -342,7 +342,7 @@ function OrdersPageContent() {
                   className={[
                     'inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all duration-200 ease-sakani sm:text-sm',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
-                    activeTab === 'ram' ? 'bg-accent text-accent-fg shadow-xs' : 'text-muted hover:text-fg',
+                    activeTab === 'ram' ? 'bg-brand text-on-accent shadow-xs' : 'text-muted hover:text-fg',
                   ].join(' ')}
                 >
                   <Receipt className="h-3.5 w-3.5" strokeWidth={2.2} />
@@ -356,7 +356,7 @@ function OrdersPageContent() {
                   className={[
                     'inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all duration-200 ease-sakani sm:text-sm',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
-                    activeTab === 'exhibition' ? 'bg-accent text-accent-fg shadow-xs' : 'text-muted hover:text-fg',
+                    activeTab === 'exhibition' ? 'bg-brand text-on-accent shadow-xs' : 'text-muted hover:text-fg',
                   ].join(' ')}
                 >
                   <Store className="h-3.5 w-3.5" strokeWidth={2.2} />
