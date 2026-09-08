@@ -515,7 +515,7 @@ function OrdersPageContent() {
                           leftIcon={Download}
                           onClick={() => setReceiptOrder({ module: 'exhibition', order })}
                         >
-                          Receipt
+                          Invoice
                         </Button>
                       </div>
                     </div>
@@ -568,7 +568,7 @@ function OrdersPageContent() {
                           leftIcon={Download}
                           onClick={() => setReceiptOrder({ module: 'ram', order })}
                         >
-                          Receipt
+                          Invoice
                         </Button>
                       </div>
                     </div>
@@ -623,7 +623,7 @@ function OrdersPageContent() {
                           leftIcon={Download}
                           onClick={() => setReceiptOrder({ module: 'food', order })}
                         >
-                          Receipt
+                          Invoice
                         </Button>
                       </div>
                     </div>

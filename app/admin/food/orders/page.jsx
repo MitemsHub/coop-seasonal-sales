@@ -87,8 +87,8 @@ function AdminOrdersPageContent() {
       // Redirect to the existing success page for PDF download
       window.open(`/shop/success/${orderId}?mid=${memberId}&receipt=1`, '_blank')
     } catch (error) {
-      console.error('Error downloading receipt:', error)
-      setMessage({ type: 'error', text: 'Failed to download receipt' })
+      console.error('Error downloading invoice:', error)
+      setMessage({ type: 'error', text: 'Failed to download invoice' })
     }
   }
 
@@ -226,7 +226,7 @@ function AdminOrdersPageContent() {
                             onClick={() => downloadReceipt(order.order_id, order.member_id)}
                             className="rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover"
                           >
-                            Receipt
+                            Invoice
                           </button>
                         )}
                         <button

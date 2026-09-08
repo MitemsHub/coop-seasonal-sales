@@ -648,7 +648,7 @@ function PostedAdminPageContent() {
                         <option value="sheet">Print sheet</option>
                         <option value="deliver">Deliver</option>
                         <option value="rollback">Rollback</option>
-                        <option value="receipt">Receipt</option>
+                        <option value="receipt">Invoice</option>
                       </select>
                     </td>
                   </tr>

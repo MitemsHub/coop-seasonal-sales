@@ -201,7 +201,7 @@ function RamApprovedContent() {
       doc.rect(marginX, headerY, pageWidth - marginX * 2, headerH, 'F')
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(14)
-      doc.text('CBN Coop · Ram Sales Receipt', marginX + 6, headerY + 12)
+      doc.text('CBN Coop · Ram Sales Invoice', marginX + 6, headerY + 12)
 
       doc.setTextColor(0, 0, 0)
       doc.setFontSize(9)
@@ -286,9 +286,9 @@ function RamApprovedContent() {
       if (typeof doc.autoPrint === 'function') doc.autoPrint()
       const blobUrl = doc.output('bloburl')
       const w = window.open(blobUrl, '_blank', 'noopener,noreferrer')
-      if (!w) doc.save(`RamReceipt_${orderId}.pdf`)
+      if (!w) doc.save(`RamInvoice_${orderId}.pdf`)
     } catch (e) {
-      setMsg({ type: 'error', text: e?.message || 'Failed to generate receipt' })
+      setMsg({ type: 'error', text: e?.message || 'Failed to generate invoice' })
     } finally {
       setReceiptBusyId(null)
     }
@@ -891,7 +891,7 @@ function RamApprovedContent() {
                           </option>
                           <option value="deliver">Deliver</option>
                           <option value="rollback">Rollback</option>
-                          <option value="receipt">Receipt</option>
+                          <option value="receipt">Invoice</option>
                           <option value="activity">Activity</option>
                         </select>
                       </div>

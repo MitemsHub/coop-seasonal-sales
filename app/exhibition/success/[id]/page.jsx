@@ -76,7 +76,7 @@ function SuccessContent() {
       const doc = new jsPDF()
 
       doc.setFontSize(16)
-      doc.text('CBN Coop Seasonal Sales - Exhibition Receipt', 10, 12)
+      doc.text('CBN Coop Seasonal Sales - Exhibition Invoice', 10, 12)
       doc.setFontSize(10)
       doc.text(`Order ID: ${order.order_id}`, 10, 20)
       doc.text(`Status: ${order.status}`, 120, 20)
@@ -111,7 +111,7 @@ function SuccessContent() {
       doc.line(120, y, 200, y); y += 6
       doc.setFontSize(12)
       doc.text(`Total: ${currencyPDF(order.total_amount)}`, 165, y, { align: 'right' })
-      doc.save(`Exhibition_Receipt_${order.order_id}.pdf`)
+      doc.save(`Exhibition_Invoice_${order.order_id}.pdf`)
     } catch (e) {
       alert(`PDF error: ${e.message}`)
     } finally {
@@ -241,14 +241,14 @@ function SuccessContent() {
             </div>
           </div>
 
-          {/* Receipt — printable */}
+          {/* Invoice — printable */}
           {order && (
             <div className="mt-6">
               <div className="print-hide mb-3 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-chips font-semibold uppercase tracking-wider text-muted">Receipt</p>
+                <p className="text-chips font-semibold uppercase tracking-wider text-muted">Invoice</p>
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="secondary" leftIcon={Printer} onClick={() => window.print()}>
-                    Print receipt
+                    Print invoice
                   </Button>
                   <Button size="sm" leftIcon={FileText} onClick={downloadPDF} disabled={downloading}>
                     {downloading ? 'Preparing…' : 'Download PDF'}
@@ -270,7 +270,7 @@ function SuccessContent() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-chips font-semibold uppercase tracking-wider text-white/80">Receipt</p>
+                      <p className="text-chips font-semibold uppercase tracking-wider text-white/80">Invoice</p>
                       <p className="text-sm font-bold tabular-nums text-white">{order.order_id}</p>
                     </div>
                   </div>

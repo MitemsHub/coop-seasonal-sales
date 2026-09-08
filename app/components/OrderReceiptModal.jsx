@@ -60,7 +60,7 @@ export default function OrderReceiptModal({
         doc.rect(marginX, headerY, pageWidth - marginX * 2, headerH, 'F')
         doc.setTextColor(255, 255, 255)
         doc.setFontSize(14)
-        doc.text('CBN Coop · Ram Sales Receipt', marginX + 6, headerY + 12)
+        doc.text('CBN Coop · Ram Sales Invoice', marginX + 6, headerY + 12)
 
         doc.setTextColor(0, 0, 0)
         doc.setFontSize(9)
@@ -131,7 +131,7 @@ export default function OrderReceiptModal({
       const doc = new jsPDF()
       if (module === 'exhibition') {
         doc.setFontSize(16)
-        doc.text('CBN Coop Seasonal Sales - Exhibition Receipt', 10, 12)
+        doc.text('CBN Coop Seasonal Sales - Exhibition Invoice', 10, 12)
         doc.setFontSize(10)
         doc.text(`Order ID: ${order.order_id}`, 10, 20)
         doc.text(`Status: ${order.status}`, 120, 20)
@@ -166,7 +166,7 @@ export default function OrderReceiptModal({
         doc.line(120, y, 200, y); y += 6
         doc.setFontSize(12)
         doc.text(`Total: ${currencyPDF(order.total_amount)}`, 165, y, { align: 'right' })
-        doc.save(`Exhibition_Receipt_${order.order_id}.pdf`)
+        doc.save(`Exhibition_Invoice_${order.order_id}.pdf`)
         return
       }
 
@@ -179,7 +179,7 @@ export default function OrderReceiptModal({
       const totalWithInterest = order?.payment_option === 'Loan' ? principal + interest : Number(order?.total_amount || 0)
 
       doc.setFontSize(16)
-      doc.text('CBN Coop Seasonal Sales - Order Receipt', 10, 12)
+      doc.text('CBN Coop Seasonal Sales - Order Invoice', 10, 12)
       doc.setFontSize(10)
       doc.text(`Order ID: ${order.order_id}`, 10, 20)
       doc.text(`Status: ${order.status}`, 60, 20)
@@ -250,7 +250,7 @@ export default function OrderReceiptModal({
             ref={panelRef}
             role="dialog"
             aria-modal="true"
-            aria-label={`Order ${module} receipt`}
+            aria-label={`Order ${module} invoice`}
             tabIndex={-1}
             className="oRM-panel relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl outline-none"
             initial={{ opacity: 0, y: 16, scale: 0.98 }}
@@ -266,7 +266,7 @@ export default function OrderReceiptModal({
                   <ModuleIcon className="h-4 w-4" strokeWidth={2} />
                 </span>
                 <div>
-                  <h2 className="text-base font-semibold text-fg">Order receipt</h2>
+                  <h2 className="text-base font-semibold text-fg">Order invoice</h2>
                   <p className="text-xs text-muted">
                     {meta.title}
                     {order?.order_id || order?.id ? ` · ${order.order_id || order.id}` : ''}
@@ -275,7 +275,7 @@ export default function OrderReceiptModal({
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Button size="sm" variant="secondary" leftIcon={Printer} onClick={() => window.print()}>
-                  Print receipt
+                  Print invoice
                 </Button>
                 <Button size="sm" leftIcon={FileText} onClick={downloadPDF} disabled={downloading}>
                   {downloading ? 'Preparing…' : 'Download PDF'}
@@ -294,7 +294,7 @@ export default function OrderReceiptModal({
             {/* Scrollable receipt area */}
             <div className="oRM-body min-h-0 flex-1 overflow-y-auto bg-canvas/50 p-4 sm:p-5">
               {!order ? (
-                <p className="py-10 text-center text-sm text-muted">No receipt data for this order.</p>
+                <p className="py-10 text-center text-sm text-muted">No invoice data for this order.</p>
               ) : (
                 <div className="receipt-sheet overflow-hidden rounded-2xl border border-line bg-white text-fg shadow-lg shadow-black/5">
                   {/* Receipt header */}
@@ -310,7 +310,7 @@ export default function OrderReceiptModal({
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-chips font-semibold uppercase tracking-wider text-white/80">Receipt</p>
+                        <p className="text-chips font-semibold uppercase tracking-wider text-white/80">Invoice</p>
                         <p className="text-sm font-bold tabular-nums text-white">{order.order_id || `#${order.id}`}</p>
                       </div>
                     </div>

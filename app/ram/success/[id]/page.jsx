@@ -122,7 +122,7 @@ function RamSuccessContent() {
       doc.rect(marginX, headerY, pageWidth - marginX * 2, headerH, 'F')
       doc.setTextColor(255, 255, 255)
       doc.setFontSize(14)
-      doc.text('CBN Coop · Ram Sales Receipt', marginX + 6, headerY + 12)
+      doc.text('CBN Coop · Ram Sales Invoice', marginX + 6, headerY + 12)
 
       doc.setTextColor(0, 0, 0)
       doc.setFontSize(9)
@@ -357,13 +357,13 @@ function RamSuccessContent() {
             </div>
           </div>
 
-          {/* Receipt — printable */}
+          {/* Invoice — printable */}
           <div className="mt-6 pb-6">
             <div className="print-hide mb-3 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-chips font-semibold uppercase tracking-wider text-muted">Receipt</p>
+              <p className="text-chips font-semibold uppercase tracking-wider text-muted">Invoice</p>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="secondary" leftIcon={Printer} onClick={() => window.print()}>
-                  Print receipt
+                  Print invoice
                 </Button>
                 <Button size="sm" leftIcon={FileText} onClick={downloadPDF} disabled={downloading}>
                   {downloading ? 'Preparing…' : 'Download PDF'}
@@ -385,7 +385,7 @@ function RamSuccessContent() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-chips font-semibold uppercase tracking-wider text-white/80">Receipt</p>
+                    <p className="text-chips font-semibold uppercase tracking-wider text-white/80">Invoice</p>
                     <p className="text-sm font-bold tabular-nums text-white">#{order.id}</p>
                   </div>
                 </div>
