@@ -208,6 +208,31 @@ export default function AdminLayout({ children }) {
     } catch {}
   }, [])
 
+  // Sync sidebar open-module + sub-group with the current URL on every
+  // navigation so the correct dropdown stays expanded when the user clicks
+  // a nav link (e.g. Exhibition Operations → Markups).
+  useEffect(() => {
+    if (pathname.startsWith('/admin/food')) {
+      setOpenModule('food')
+      const isOps = ['/admin/food/banks', '/admin/food/inventory', '/admin/food/markups',
+        '/admin/food/reports', '/admin/food/audit', '/admin/food/data-management',
+        '/admin/food/cart', '/admin/food/import'].some((p) => pathname.startsWith(p))
+      setFoodSub(isOps ? 'ops' : 'orders')
+    } else if (pathname.startsWith('/admin/ram')) {
+      setOpenModule('ram')
+      const isOps = ['/admin/ram/banks', '/admin/ram/reports', '/admin/ram/audit',
+        '/admin/ram/data'].some((p) => pathname.startsWith(p))
+      setRamSub(isOps ? 'ops' : 'orders')
+    } else if (pathname.startsWith('/admin/exhibition')) {
+      setOpenModule('exhibition')
+      const isOps = ['/admin/exhibition/vendors', '/admin/exhibition/products',
+        '/admin/exhibition/markups', '/admin/exhibition/banks', '/admin/exhibition/cycles',
+        '/admin/exhibition/payouts', '/admin/exhibition/data', '/admin/exhibition/audit',
+        '/admin/exhibition/reports'].some((p) => pathname.startsWith(p))
+      setExhSub(isOps ? 'ops' : 'orders')
+    }
+  }, [pathname])
+
   // Persist the sub-group per module so a reload restores the exact section.
   useEffect(() => {
     try {
@@ -332,6 +357,7 @@ export default function AdminLayout({ children }) {
     if (pathname.startsWith('/admin/exhibition/payouts')) return 'exh_payouts'
     if (pathname.startsWith('/admin/exhibition/banks')) return 'exh_banks'
     if (pathname.startsWith('/admin/exhibition/data')) return 'exh_data'
+    if (pathname.startsWith('/admin/exhibition/reports')) return 'exh_reports'
     if (pathname.startsWith('/admin/exhibition/audit')) return 'exh_audit'
     return ''
   }, [pathname])
@@ -528,6 +554,7 @@ export default function AdminLayout({ children }) {
                     <NavLink href="/admin/exhibition/markups" label="Markups" icon={Percent} active={activeKey === 'exh_markups'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/banks" label="Banks" icon={Landmark} active={activeKey === 'exh_banks'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/data" label="Data" icon={Database} active={activeKey === 'exh_data'} collapsed={false} onNavigate={navOnClick} />
+                    <NavLink href="/admin/exhibition/reports" label="Report" icon={BarChart3} active={activeKey === 'exh_reports'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/audit" label="Audit Log" icon={History} active={activeKey === 'exh_audit'} collapsed={false} onNavigate={navOnClick} />
                   </div>
                 )}
