@@ -116,6 +116,11 @@ export default function ExhibitionReportsPage() {
   // Pagination for By Location
   const [locPage, setLocPage] = useState(1)
 
+  // Vendor table search + pagination
+  const [vendorSearch, setVendorSearch] = useState('')
+  const [vendorPage, setVendorPage] = useState(1)
+  const vendorPageSize = 8
+
   // Applications by Branch filters
   const [appBranchId, setAppBranchId] = useState('')
   const [appStatus, setAppStatus] = useState('')
@@ -124,13 +129,7 @@ export default function ExhibitionReportsPage() {
   const [appTo, setAppTo] = useState('')
   const [appBusy, setAppBusy] = useState(false)
 
-  // Applications Pack by Payment to Vendor filters
-  const [packVendorId, setPackVendorId] = useState('')
-  const [packStatus, setPackStatus] = useState('')
-  const [packPayment, setPackPayment] = useState('')
-  const [packFrom, setPackFrom] = useState('')
-  const [packTo, setPackTo] = useState('')
-  const [packBusy, setPackBusy] = useState(false)
+
 
   // Delivery Pack filters
   const [dpBranchId, setDpBranchId] = useState('')
@@ -173,12 +172,6 @@ export default function ExhibitionReportsPage() {
   const byLocation = s?.byLocation || []
   const vendorsByValue = s?.vendors_by_value || []
   const cyclePayouts = s?.cycle_payouts || []
-  const vendors = useMemo(() => {
-    const seen = new Map()
-    for (const v of vendorsByValue) seen.set(v.vendor_id, v.vendor_name)
-    return Array.from(seen.entries()).map(([id, name]) => ({ id, name }))
-  }, [vendorsByValue])
-
   const statusRows = useMemo(() => Object.entries(byStatus).map(([key, orders]) => ({ key, orders, amount: 0 })), [byStatus])
   const paymentRows = useMemo(() => byPayment.map((p) => ({ key: p.key, orders: p.orders, amount: p.amount })), [byPayment])
 
@@ -202,7 +195,15 @@ export default function ExhibitionReportsPage() {
   const exportVendorCsv = () => downloadCsv(`exhibition-vendors-${fileStamp()}.csv`, vendorsByValue.map((v) => ({ vendor: v.vendor_name, value: v.value })))
   const exportCategoryCsv = () => downloadCsv(`exhibition-categories-${fileStamp()}.csv`, byCategory.map((c) => ({ category: c.key, orders: c.orders, amount: c.amount })))
   const exportLocationCsv = () => downloadCsv(`exhibition-locations-${fileStamp()}.csv`, byLocation.map((l) => ({ location: l.key, orders: l.orders, amount: l.amount })))
-  const exportPayoutCsv = () => downloadCsv(`exhibition-payouts-${fileStamp()}.csv`, cyclePayouts.map((p) => ({ cycle: p.name, code: p.code, status: p.status, gross: p.gross, deduction: p.deduction, net: p.net, paid: p.paid, balance: p.balance })))
+  const filteredVendors = useMemo(() => {
+    const term = vendorSearch.trim().toLowerCase()
+    let list = vendorsByValue
+    if (term) list = list.filter((v) => (v.vendor_name || '').toLowerCase().includes(term))
+    return list
+  }, [vendorsByValue, vendorSearch])
+  const vendorPageCount = Math.max(1, Math.ceil(filteredVendors.length / vendorPageSize))
+  const safeVendorPage = Math.min(Math.max(1, vendorPage), vendorPageCount)
+  const pagedVendors = filteredVendors.slice((safeVendorPage - 1) * vendorPageSize, safeVendorPage * vendorPageSize)
 
   // ─── PDF builder helper ───
   const buildPdf = (title, rows, headers) => async () => {
@@ -257,36 +258,7 @@ export default function ExhibitionReportsPage() {
     finally { setAppBusy(false) }
   }
 
-  // ─── Applications Pack by Payment to Vendor export ───
-  const exportPack = async (format) => {
-    setPackBusy(true)
-    try {
-      const qs = new URLSearchParams()
-      if (packStatus) qs.set('status', packStatus)
-      if (packPayment) qs.set('payment', packPayment)
-      if (packFrom) qs.set('from', packFrom)
-      if (packTo) qs.set('to', packTo)
-      qs.set('limit', '5000')
-      const res = await fetch(`/api/admin/exhibition/orders?${qs}`, { cache: 'no-store' })
-      const json = await safeJsonMemo(res, 'orders')
-      if (!json.ok) throw new Error(json.error)
-      const orders = json.orders || []
-      const rows = []
-      for (const o of orders) {
-        for (const l of o.lines || []) {
-          if (packVendorId && String(l.vendor_id) !== String(packVendorId)) continue
-          rows.push({ order: o.order_id, status: o.status, payment: o.payment_option, member: o.member_name_snapshot || o.member_id, branch: o.branches?.name || '', vendor: l.vendor_name || '', product: l.product_name || '', qty: l.qty, amount: l.amount })
-        }
-      }
-      const headers = ['order', 'status', 'payment', 'member', 'branch', 'vendor', 'product', 'qty', 'amount']
-      if (format === 'pdf') {
-        await buildPdf('Exhibition · Pack by Payment to Vendors', rows, headers)()
-      } else {
-        downloadCsv(`exhibition-pack-vendor-${fileStamp()}.csv`, rows)
-      }
-    } catch (e) { alert(e.message || 'Export failed') }
-    finally { setPackBusy(false) }
-  }
+
 
   // ─── Delivery Pack download ───
   const downloadDeliveryPack = async () => {
@@ -327,26 +299,44 @@ export default function ExhibitionReportsPage() {
         ) : !s ? null : (
           <>
             {/* ─── Summary Cards ─── */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 mb-4">
-              {[
-                { label: 'Vendors', value: s.vendors },
-                { label: 'Products', value: s.products },
-                { label: 'Pending', value: byStatus.Pending || 0 },
-                { label: 'Approved', value: byStatus.Approved || 0 },
-                { label: 'Delivered', value: byStatus.Delivered || 0 },
-                { label: 'Loan Principal', value: money(s.loanPrincipal || 0) },
-                { label: 'Loan Interest', value: money(s.loanInterest || 0) },
-                { label: 'Loan Total', value: money(s.loanTotal || 0) },
-                { label: 'Savings', value: money(s.amounts?.savings || 0) },
-                { label: 'Cash', value: money(s.amounts?.cash || 0) },
-                { label: 'Total Amount', value: money(s.amount || 0) },
-                { label: 'Paid to Vendors', value: money(s.paid_to_vendors || 0) },
-              ].map((c) => (
-                <div key={c.label} className="ui-card p-4">
-                  <div className="text-xs text-muted">{c.label}</div>
-                  <div className="text-[13px] font-semibold sm:text-lg mt-1">{c.value}</div>
-                </div>
-              ))}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 mb-4">
+              <div className="ui-card p-4">
+                <div className="text-xs text-muted">Vendors</div>
+                <div className="text-[13px] font-semibold sm:text-lg mt-1">{s.vendors}</div>
+              </div>
+              <div className="ui-card p-4">
+                <div className="text-xs text-muted">Products</div>
+                <div className="text-[13px] font-semibold sm:text-lg mt-1">{s.products}</div>
+              </div>
+              <div className="ui-card p-4">
+                <div className="text-xs text-muted">Pending</div>
+                <div className="text-[13px] font-semibold sm:text-lg mt-1">{byStatus.Pending || 0}</div>
+              </div>
+              <div className="ui-card p-4">
+                <div className="text-xs text-muted">Approved</div>
+                <div className="text-[13px] font-semibold sm:text-lg mt-1">{byStatus.Approved || 0}</div>
+              </div>
+              <div className="ui-card p-4">
+                <div className="text-xs text-muted">Delivered</div>
+                <div className="text-[13px] font-semibold sm:text-lg mt-1">{byStatus.Delivered || 0}</div>
+              </div>
+              <div className="ui-card p-4">
+                <div className="text-xs text-muted">Loan Principal</div>
+                <div className="text-[13px] font-semibold sm:text-lg mt-1">{money(s.loanPrincipal || 0)}</div>
+                <div className="text-[10px] text-muted mt-0.5">Interest: {money(s.loanInterest || 0)} · Total: {money(s.loanTotal || 0)}</div>
+              </div>
+              <div className="ui-card p-4">
+                <div className="text-xs text-muted">Savings</div>
+                <div className="text-[13px] font-semibold sm:text-lg mt-1">{money(s.amounts?.savings || 0)}</div>
+              </div>
+              <div className="ui-card p-4">
+                <div className="text-xs text-muted">Cash</div>
+                <div className="text-[13px] font-semibold sm:text-lg mt-1">{money(s.amounts?.cash || 0)}</div>
+              </div>
+              <div className="ui-card p-4">
+                <div className="text-xs text-muted">Total Amount</div>
+                <div className="text-[13px] font-semibold sm:text-lg mt-1">{money(s.amount || 0)}</div>
+              </div>
             </div>
 
             {/* ─── Breakdown Tables ─── */}
@@ -361,52 +351,40 @@ export default function ExhibitionReportsPage() {
             <div className="rounded-xl border border-line bg-surface overflow-hidden mb-6">
               <div className="flex items-center justify-between border-b border-line bg-subtle/60 px-4 py-3">
                 <h3 className="text-sm font-semibold text-fg">By Vendor</h3>
-                <Button size="sm" variant="secondary" onClick={exportVendorCsv}>Export CSV</Button>
-              </div>
-              {vendorsByValue.length === 0 ? <p className="px-4 py-6 text-center text-sm text-muted">No vendor data</p> : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead><tr className="border-b border-line bg-subtle/30 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                      <th className="px-4 py-2">#</th><th className="px-4 py-2">Vendor</th><th className="px-4 py-2 text-right">Order Value</th><th className="px-4 py-2 text-right">Share</th>
-                    </tr></thead>
-                    <tbody>{vendorsByValue.map((v, i) => (
-                      <tr key={v.vendor_id} className="border-b border-line/50 last:border-0 hover:bg-subtle/30">
-                        <td className="px-4 py-2.5 text-muted">{i + 1}</td>
-                        <td className="px-4 py-2.5 font-medium text-fg">{v.vendor_name}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums">{money(v.value)}</td>
-                        <td className="px-4 py-2.5 text-right text-muted">{s.amount ? ((v.value / s.amount) * 100).toFixed(1) + '%' : '0%'}</td>
-                      </tr>
-                    ))}</tbody>
-                  </table>
+                <div className="flex items-center gap-2">
+                  <input type="text" placeholder="Search vendor…" value={vendorSearch} onChange={(e) => { setVendorSearch(e.target.value); setVendorPage(1) }}
+                    className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-fg w-40 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand/30" />
+                  <Button size="sm" variant="secondary" onClick={exportVendorCsv}>Export CSV</Button>
                 </div>
-              )}
-            </div>
-
-            {/* ─── Cycle Payouts ─── */}
-            <div className="rounded-xl border border-line bg-surface overflow-hidden mb-6">
-              <div className="flex items-center justify-between border-b border-line bg-subtle/60 px-4 py-3">
-                <h3 className="text-sm font-semibold text-fg">Applications Pack by Payment to Vendors</h3>
-                <Button size="sm" variant="secondary" onClick={exportPayoutCsv}>Export CSV</Button>
               </div>
-              {cyclePayouts.length === 0 ? <p className="px-4 py-6 text-center text-sm text-muted">No payout data</p> : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead><tr className="border-b border-line bg-subtle/30 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                      <th className="px-4 py-2">Cycle</th><th className="px-4 py-2">Status</th><th className="px-4 py-2 text-right">Gross</th><th className="px-4 py-2 text-right">Deduction</th><th className="px-4 py-2 text-right">Net</th><th className="px-4 py-2 text-right">Paid</th><th className="px-4 py-2 text-right">Balance</th>
-                    </tr></thead>
-                    <tbody>{cyclePayouts.map((p) => (
-                      <tr key={p.cycle_id} className="border-b border-line/50 last:border-0 hover:bg-subtle/30">
-                        <td className="px-4 py-2.5 font-medium text-fg">{p.name || `#${p.cycle_id}`}</td>
-                        <td className="px-4 py-2.5"><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${p.status === 'active' ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'}`}>{p.status}</span></td>
-                        <td className="px-4 py-2.5 text-right tabular-nums">{money(p.gross)}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-muted">{money(p.deduction)}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums font-medium">{money(p.net)}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-success-fg">{money(p.paid)}</td>
-                        <td className={`px-4 py-2.5 text-right tabular-nums font-medium ${p.balance > 0 ? 'text-warning-fg' : 'text-muted'}`}>{money(p.balance)}</td>
-                      </tr>
-                    ))}</tbody>
-                  </table>
-                </div>
+              {filteredVendors.length === 0 ? <p className="px-4 py-6 text-center text-sm text-muted">No vendor data</p> : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead><tr className="border-b border-line bg-subtle/30 text-left font-semibold uppercase tracking-wide text-muted">
+                        <th className="px-3 py-1.5">#</th><th className="px-3 py-1.5">Vendor</th><th className="px-3 py-1.5 text-right">Order Value</th><th className="px-3 py-1.5 text-right">Share</th>
+                      </tr></thead>
+                      <tbody>{pagedVendors.map((v, i) => (
+                        <tr key={v.vendor_id} className="border-b border-line/50 last:border-0 hover:bg-subtle/30">
+                          <td className="px-3 py-1.5 text-muted">{(safeVendorPage - 1) * vendorPageSize + i + 1}</td>
+                          <td className="px-3 py-1.5 font-medium text-fg">{v.vendor_name}</td>
+                          <td className="px-3 py-1.5 text-right tabular-nums">{money(v.value)}</td>
+                          <td className="px-3 py-1.5 text-right text-muted">{s.amount ? ((v.value / s.amount) * 100).toFixed(1) + '%' : '0%'}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                  {vendorPageCount > 1 && (
+                    <div className="flex items-center justify-between border-t border-line px-3 py-2 text-xs text-muted">
+                      <span>{filteredVendors.length} vendors</span>
+                      <div className="flex items-center gap-2">
+                        <button type="button" className="px-2 py-1 rounded border border-line bg-surface hover:bg-subtle disabled:opacity-50" onClick={() => setVendorPage((p) => Math.max(1, p - 1))} disabled={safeVendorPage <= 1}>Prev</button>
+                        <span>{safeVendorPage} / {vendorPageCount}</span>
+                        <button type="button" className="px-2 py-1 rounded border border-line bg-surface hover:bg-subtle disabled:opacity-50" onClick={() => setVendorPage((p) => Math.min(vendorPageCount, p + 1))} disabled={safeVendorPage >= vendorPageCount}>Next</button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
@@ -443,44 +421,6 @@ export default function ExhibitionReportsPage() {
                   </Button>
                   <Button variant="danger" size="sm" onClick={() => exportApps('pdf')} disabled={appBusy}>
                     <FileText className="h-4 w-4 mr-1" /> {appBusy ? 'Preparing…' : 'PDF'}
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            {/* ─── Applications Pack by Payment to Vendors (RAM-style export section) ─── */}
-            <div className="rounded-xl border border-line bg-surface overflow-hidden mb-6">
-              <div className="border-b border-line bg-subtle px-4 py-3">
-                <div className="text-sm font-semibold text-fg">Applications Pack by Payment to Vendors</div>
-              </div>
-              <div className="p-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
-                  <select className={selectCls} value={packVendorId} onChange={(e) => setPackVendorId(e.target.value)}>
-                    <option value="">All vendors</option>
-                    {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-                  </select>
-                  <select className={selectCls} value={packStatus} onChange={(e) => setPackStatus(e.target.value)}>
-                    <option value="">All statuses</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Approved">Approved</option>
-                    <option value="Delivered">Delivered</option>
-                    <option value="Cancelled">Cancelled</option>
-                  </select>
-                  <select className={selectCls} value={packPayment} onChange={(e) => setPackPayment(e.target.value)}>
-                    <option value="">All payments</option>
-                    <option value="Cash">Cash</option>
-                    <option value="Loan">Loan</option>
-                    <option value="Savings">Savings</option>
-                  </select>
-                  <input type="date" className={selectCls} value={packFrom} onChange={(e) => setPackFrom(e.target.value)} />
-                  <input type="date" className={selectCls} value={packTo} onChange={(e) => setPackTo(e.target.value)} />
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <Button variant="accent" size="sm" onClick={() => exportPack('csv')} disabled={packBusy}>
-                    <FileSpreadsheet className="h-4 w-4 mr-1" /> {packBusy ? 'Preparing…' : 'Excel'}
-                  </Button>
-                  <Button variant="danger" size="sm" onClick={() => exportPack('pdf')} disabled={packBusy}>
-                    <FileText className="h-4 w-4 mr-1" /> {packBusy ? 'Preparing…' : 'PDF'}
                   </Button>
                 </div>
               </div>
