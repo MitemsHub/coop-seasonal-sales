@@ -31,6 +31,7 @@ export async function GET(request) {
     // Count first (same filters)
     let countQ = supabase.from('exhibition_orders').select('id', { count: 'exact', head: true })
     if (status && STATUSES.includes(status)) countQ = countQ.eq('status', status)
+    else countQ = countQ.neq('status', 'Cancelled')
     if (cycleId > 0) countQ = countQ.eq('cycle_id', cycleId)
     if (branchId > 0) countQ = countQ.eq('branch_id', branchId)
     if (payment) countQ = countQ.eq('payment_option', payment)
@@ -46,6 +47,7 @@ export async function GET(request) {
       .range(offset, offset + limit - 1)
 
     if (status && STATUSES.includes(status)) query = query.eq('status', status)
+    else query = query.neq('status', 'Cancelled')
     if (cycleId > 0) query = query.eq('cycle_id', cycleId)
     if (branchId > 0) query = query.eq('branch_id', branchId)
     if (payment) query = query.eq('payment_option', payment)

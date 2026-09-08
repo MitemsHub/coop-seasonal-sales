@@ -35,6 +35,7 @@ export async function GET(req) {
     if (scope === 'pending') statusFilter = ['Approved']
     else if (scope === 'done' || scope === 'all') statusFilter = ['Approved', 'Delivered']
     else if (status && STATUS_FILTERS.includes(status)) statusFilter = [status]
+    else statusFilter = STATUS_FILTERS.filter((s) => s !== 'Cancelled')
 
     // This vendor's participation per order: how many lines and how many
     // delivered — drives the pending/done scopes. (Per-vendor line counts stay

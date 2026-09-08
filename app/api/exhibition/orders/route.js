@@ -17,6 +17,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { csrfGuard } from '@/lib/csrf'
 import { validateMemberId, validateNumber, validatePaymentOption } from '@/lib/validation'
+import { getCrossModuleExposure } from '@/lib/crossModuleExposure'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -265,23 +266,24 @@ export async function POST(req) {
     const totalAmount = paymentOption === 'Loan' ? totalPrincipal + loanInterest : totalPrincipal
 
     // ── Eligibility ──────────────────────────────────────────────────────
-    // Base limits mirror /api/members/eligibility (shared with the Food module)
-    // minus this member's open exhibition exposure (Pending/Approved orders).
-    const FOOD_STATUSES = ['Pending', 'Posted', 'Delivered']
-    const [foodSavExp, foodLoanExp] = await Promise.all([
-      supabase.from('orders').select('total_amount').eq('member_id', memberId).eq('payment_option', 'Savings').in('status', FOOD_STATUSES),
-      supabase.from('orders').select('total_amount').eq('member_id', memberId).eq('payment_option', 'Loan').in('status', FOOD_STATUSES),
-    ])
-    const [exhSavExp, exhLoanExp] = await Promise.all([
-      supabase.from('exhibition_orders').select('total_amount').eq('member_id', memberId).eq('payment_option', 'Savings').in('status', EXHIBITION_STATUSES),
-      supabase.from('exhibition_orders').select('total_amount').eq('member_id', memberId).eq('payment_option', 'Loan').in('status', EXHIBITION_STATUSES),
-    ])
-    if (exhSavExp.error && !isMissingTable(exhSavExp.error, 'exhibition')) return NextResponse.json({ ok: false, error: exhSavExp.error.message }, { status: 500 })
-    if (exhLoanExp.error && !isMissingTable(exhLoanExp.error, 'exhibition')) return NextResponse.json({ ok: false, error: exhLoanExp.error.message }, { status: 500 })
+    // Atomic exposure check: locks the member row to prevent concurrent
+    // requests from both passing the exposure check.
+    const capAmount = includeInterestInCap ? totalAmount : totalPrincipal
+    const { data: exposureResult, error: exposureErr } = await supabase.rpc('check_exhibition_exposure_atomic', {
+      p_member_id: memberId,
+      p_payment_option: paymentOption,
+      p_total_amount: capAmount,
+      p_cycle_id: cycleId || null,
+    })
+    if (exposureErr) return NextResponse.json({ ok: false, error: exposureErr.message }, { status: 500 })
+    if (!exposureResult?.ok) return NextResponse.json({ ok: false, error: exposureResult?.error }, { status: 400 })
+
+    const loanExposure = Number(exposureResult.loanExposure || 0)
+    const savingsExposure = Number(exposureResult.savingsExposure || 0)
+    const savingsEligible = Number(exposureResult.savingsEligible || 0)
+    const loanEligible = Number(exposureResult.loanEligible || 0)
 
     const sumAmt = (rows) => (rows || []).reduce((s, r) => s + Number(r?.total_amount || 0), 0)
-    const savingsExposure = sumAmt(foodSavExp.data) + sumAmt(exhSavExp.data)
-    const loanExposure = sumAmt(foodLoanExp.data) + sumAmt(exhLoanExp.data)
 
     // Cumulative loan amount in THIS cycle for this member (for cycle cap enforcement).
     let cycleLoanTotal = 0
@@ -300,18 +302,6 @@ export async function POST(req) {
     const loans = Number(member.loans || 0)
     const globalLimit = Number(member.global_limit || 0)
     const outstandingLoansTotal = loans + loanExposure
-
-    const savingsBase = 0.5 * savings
-    const savingsEligible = outstandingLoansTotal > 0 ? 0 : Math.max(0, savingsBase - savingsExposure)
-
-    const ADDITIONAL_FACILITY = 300000
-    const LOAN_CAP = 1000000
-    const rawLoanLimit = savings * 5
-    const effectiveLimit = Math.min(rawLoanLimit, globalLimit)
-    const baseEligible = Math.max(0, effectiveLimit - outstandingLoansTotal)
-    const capRemaining = Math.max(0, LOAN_CAP - loanExposure)
-    const facilityRemaining = Math.max(0, ADDITIONAL_FACILITY - loanExposure)
-    const loanEligible = Math.min(baseEligible + facilityRemaining, capRemaining)
 
     // Per-cycle eligible/grace caps by member category (mirrors the Food module's
     // food_loan_* policy). The eligible cap is the hard ceiling for the cycle;

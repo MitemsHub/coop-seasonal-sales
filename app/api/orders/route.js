@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { csrfGuard } from '@/lib/csrf'
+import { getCrossModuleExposure } from '@/lib/crossModuleExposure'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -79,31 +80,11 @@ export async function POST(req) {
       .eq('name', departmentName).single()
     if (dErr || !deptRow) return NextResponse.json({ ok: false, error: 'Department not found' }, { status: 400 })
 
-    // Exposure (Pending + Posted + Delivered)
     const statuses = ['Pending','Posted','Delivered'];
     const sumAmt = (rows) => (rows || []).reduce((s, r) => s + Number(r.total_amount || 0), 0);
 
-// Loans
-    const { data: loanRows, error: le } = await supabase
-      .from('orders')
-      .select('total_amount')
-      .eq('member_id', memberId)
-      .eq('payment_option', 'Loan')
-      .in('status', statuses);
-    if (le) return NextResponse.json({ ok:false, error: le.message }, { status:500 });
-
-// Savings
-    const { data: savRows, error: se } = await supabase
-      .from('orders')
-      .select('total_amount')
-      .eq('member_id', memberId)
-      .eq('payment_option', 'Savings')
-      .in('status', statuses);
-    if (se) return NextResponse.json({ ok:false, error: se.message }, { status:500 });
-
-    // Exposure totals from existing orders (these totals already include interest for Loan orders)
-    const loanExposureWithInterest = sumAmt(loanRows);
-    const savingsExposure = sumAmt(savRows);
+    // Cross-module exposure: Food + Exhibition orders in the current year
+    const { loanExposureWithInterest, savingsExposure } = await getCrossModuleExposure(supabase, memberId)
 
     // Cumulative loan amount in THIS cycle for this member (for cycle cap enforcement).
     let cycleLoanTotal = 0
@@ -322,35 +303,35 @@ export async function POST(req) {
       return NextResponse.json({ ok: true, order_id: dupeRows[0].order_id, duplicate: true })
     }
 
-    // Insert order (home + delivery branches)
-    const orderInsert = {
-      member_id: member.member_id,
-      member_name_snapshot: member.full_name,
-      member_category_snapshot: member.category,
-      branch_id: member.branch_id,
-      delivery_branch_id: deliveryBranch.id,
-      department_id: deptRow.id,
-      payment_option: paymentOption,
-      total_amount: paymentOption === 'Loan' ? totalWithInterest : total,
-      status: 'Pending'
-    }
-    if (ordersHasCycle) orderInsert.cycle_id = activeCycle.id
-    if (ordersHasFoodGraceFlag && paymentOption === 'Loan' && (includeInterestInCap ? totalWithInterest : total) > loanEligible && graceLoanMaxCap > 0 && cumulativeCapAmount <= graceLoanMaxCap) {
-      orderInsert.food_loan_grace_used = true
-    }
+    // Atomic order creation: locks the member row, re-checks exposure,
+    // and inserts the order + lines in a single transaction to prevent
+    // race conditions where concurrent requests both pass the exposure check.
+    const finalTotal = paymentOption === 'Loan' ? totalWithInterest : total
+    const useGrace = ordersHasFoodGraceFlag && paymentOption === 'Loan' && (includeInterestInCap ? totalWithInterest : total) > loanEligible && graceLoanMaxCap > 0 && cumulativeCapAmount <= graceLoanMaxCap
 
-    const { data: order, error: oErr } = await supabase
-      .from('orders')
-      .insert(orderInsert)
-      .select('order_id')
-      .single()
-    if (oErr || !order) return NextResponse.json({ ok:false, error:oErr?.message || 'Insert failed' }, { status:500 })
+    const { data: rpcResult, error: rpcErr } = await supabase.rpc('create_food_order_atomic', {
+      p_member_id: member.member_id,
+      p_member_name: member.full_name,
+      p_member_category: member.category || '',
+      p_branch_id: member.branch_id,
+      p_delivery_branch_id: deliveryBranch.id,
+      p_department_id: deptRow.id,
+      p_payment_option: paymentOption,
+      p_total_amount: finalTotal,
+      p_cycle_id: ordersHasCycle ? activeCycle.id : null,
+      p_lines: JSON.stringify(pricedLines.map(pl => ({
+        item_id: pl.item_id,
+        branch_item_price_id: pl.branch_item_price_id,
+        unit_price: pl.unit_price,
+        qty: pl.qty,
+        amount: pl.amount,
+      }))),
+      p_grace_used: useGrace,
+    })
+    if (rpcErr) return NextResponse.json({ ok:false, error: rpcErr.message }, { status:500 })
+    if (!rpcResult?.ok) return NextResponse.json({ ok:false, error: rpcResult?.error || 'Order creation failed' }, { status:400 })
 
-    const rows = pricedLines.map(pl => ({ order_id: order.order_id, ...pl }))
-    const { error: lErr } = await supabase.from('order_lines').insert(rows)
-    if (lErr) return NextResponse.json({ ok:false, error:lErr.message }, { status:500 })
-
-    return NextResponse.json({ ok:true, order_id: order.order_id, total: paymentOption === 'Loan' ? totalWithInterest : total, paymentOption, eligibility: { savingsEligible, loanEligible }, interest: loanInterest })
+    return NextResponse.json({ ok:true, order_id: rpcResult.order_id, total: finalTotal, paymentOption, eligibility: rpcResult.eligibility, interest: loanInterest })
   } catch (e) {
     return NextResponse.json({ ok:false, error:e.message || 'Unknown error' }, { status:500 })
   }

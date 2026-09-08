@@ -1,6 +1,7 @@
 // app/api/members/eligibility/route.js
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { getCrossModuleExposure } from '@/lib/crossModuleExposure'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -49,53 +50,8 @@ export async function GET(req) {
       return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
     }
 
-    // 2) Exposure = sum of order totals for Pending + Posted + Delivered
-    const statuses = ['Pending', 'Posted', 'Delivered']
-
-    const sumAmt = (rows) => (rows || []).reduce((s, r) => s + Number(r?.total_amount || 0), 0)
-    const sumLineAmt = (rows) => (rows || []).reduce((s, r) => s + Number(r?.amount || 0), 0)
-
-    const savExp = await supabase
-      .from('orders')
-      .select('total_amount')
-      .eq('member_id', memberId)
-      .eq('payment_option', 'Savings')
-      .in('status', statuses)
-    if (savExp.error) return NextResponse.json({ ok: false, error: savExp.error.message }, { status: 500 })
-    const savingsExposure = sumAmt(savExp.data)
-
-    let loanExposure = 0
-    if (includeInterestInCap) {
-      const loanExp = await supabase
-        .from('orders')
-        .select('total_amount')
-        .eq('member_id', memberId)
-        .eq('payment_option', 'Loan')
-        .in('status', statuses)
-      if (loanExp.error) return NextResponse.json({ ok: false, error: loanExp.error.message }, { status: 500 })
-      loanExposure = sumAmt(loanExp.data)
-    } else {
-      const loanLines = await supabase
-        .from('order_lines')
-        .select('amount, orders!inner(member_id,payment_option,status)')
-        .eq('orders.member_id', memberId)
-        .eq('orders.payment_option', 'Loan')
-        .in('orders.status', statuses)
-
-      if (!loanLines.error) {
-        loanExposure = sumLineAmt(loanLines.data)
-      } else {
-        const loanOrders = await supabase
-          .from('orders')
-          .select('total_amount')
-          .eq('member_id', memberId)
-          .eq('payment_option', 'Loan')
-          .in('status', statuses)
-        if (loanOrders.error) return NextResponse.json({ ok: false, error: loanOrders.error.message }, { status: 500 })
-        const denom = 1 + Math.max(0, Number(interestRate) || 0)
-        loanExposure = (loanOrders.data || []).reduce((s, r) => s + Math.round(Number(r?.total_amount || 0) / denom), 0)
-      }
-    }
+    // 2) Cross-module exposure: Food + Exhibition + RAM orders in the current year
+    const { loanExposure, savingsExposure } = await getCrossModuleExposure(supabase, memberId)
 
     // 3) Compute limits (exposure-aware)
     const savings = Number(m.savings || 0)

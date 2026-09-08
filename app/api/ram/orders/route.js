@@ -6,6 +6,7 @@ import {
   validateNumber,
   validatePaymentOption,
 } from '@/lib/validation'
+import { getCrossModuleExposure } from '@/lib/crossModuleExposure'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -192,32 +193,19 @@ function computeMaxAffordableQty({ unitPrice, maxCap, eligibleAmount, includeInt
 }
 
 async function calculateEligibilityForRam(supabase, memberId, memberSnapshot, unitPrice) {
-  const ramStatuses = ['Pending', 'Approved']
-  const [ramLoanExp, ramSavExp] = await Promise.all([
-    supabase
-      .from('ram_orders')
-      .select('principal_amount')
-      .eq('member_id', memberId)
-      .eq('payment_option', 'Loan')
-      .in('status', ramStatuses),
-    supabase
-      .from('ram_orders')
-      .select('principal_amount')
-      .eq('member_id', memberId)
-      .eq('payment_option', 'Savings')
-      .in('status', ramStatuses),
-  ])
+  // Atomic exposure check: locks the member row to prevent concurrent
+  // requests from both passing the exposure check.
+  const principalEstimate = unitPrice // preliminary estimate for the atomic check
+  const { data: exposureResult, error: exposureErr } = await supabase.rpc('check_ram_exposure_atomic', {
+    p_member_id: memberId,
+    p_payment_option: 'Loan', // check against loan first; savings checked separately
+    p_principal_amount: principalEstimate,
+  })
+  if (exposureErr) throw new Error(exposureErr.message)
+  if (!exposureResult?.ok) throw new Error(exposureResult?.error)
 
-  const ramOrdersTableMissing =
-    isMissingTable(ramLoanExp.error, 'ram_orders') || isMissingTable(ramSavExp.error, 'ram_orders')
-
-  if (!ramOrdersTableMissing) {
-    if (ramLoanExp.error) throw new Error(ramLoanExp.error.message)
-    if (ramSavExp.error) throw new Error(ramSavExp.error.message)
-  }
-
-  const loanExposure = ramOrdersTableMissing ? 0 : sumField(ramLoanExp.data, 'principal_amount')
-  const savingsExposure = ramOrdersTableMissing ? 0 : sumField(ramSavExp.data, 'principal_amount')
+  const loanExposure = Number(exposureResult.loanExposure || 0)
+  const savingsExposure = Number(exposureResult.savingsExposure || 0)
 
   const savings = Number(memberSnapshot.savings || 0)
   const loans = Number(memberSnapshot.loans || 0)
