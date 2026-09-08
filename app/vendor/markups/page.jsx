@@ -9,6 +9,7 @@ import Label from '../../components/ui/Label'
 import Badge from '../../components/ui/Badge'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 
 const fmtNaira = (n) => `NGN ${Number(n || 0).toLocaleString()}`
 
@@ -109,8 +110,10 @@ export default function VendorMarkupsPage() {
     }
   }
 
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmTarget, setConfirmTarget] = useState(null)
+
   const removePrice = async (p) => {
-    if (!window.confirm(`Remove the negotiated price for ${p.member_id}?`)) return
     const res = await fetch('/api/vendor/exhibition/member-prices', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -119,6 +122,12 @@ export default function VendorMarkupsPage() {
     const json = await res.json()
     if (json.ok) setPrices((prev) => (prev || []).filter((x) => x.id !== p.id))
     else setMsg(json.error || 'Failed to remove price')
+  }
+
+  const handleConfirmRemove = () => {
+    if (confirmTarget) removePrice(confirmTarget)
+    setConfirmOpen(false)
+    setConfirmTarget(null)
   }
 
   const adminAdjusted = Number(selectedProduct?.admin_markup || 0) !== 0
@@ -268,7 +277,7 @@ export default function VendorMarkupsPage() {
                         {Number(p.price) < Number(selectedProduct.final_price) ? 'below listed' : Number(p.price) > Number(selectedProduct.final_price) ? 'above listed' : 'at listed'}
                       </p>
                     </div>
-                    <Button variant="ghost" size="sm" leftIcon={Trash2} onClick={() => removePrice(p)} aria-label={`Remove price for ${p.member_id}`} />
+                    <Button variant="ghost" size="sm" leftIcon={Trash2} onClick={() => { setConfirmTarget(p); setConfirmOpen(true) }} aria-label={`Remove price for ${p.member_id}`} />
                   </div>
                 ))}
               </div>
@@ -276,6 +285,15 @@ export default function VendorMarkupsPage() {
           </div>
         </>
       )}
+      <ConfirmDialog
+        open={confirmOpen}
+        onClose={() => { setConfirmOpen(false); setConfirmTarget(null) }}
+        onConfirm={handleConfirmRemove}
+        title="Remove negotiated price?"
+        message={`Remove the negotiated price for ${confirmTarget?.member_id}?`}
+        confirmLabel="Remove"
+        variant="danger"
+      />
     </div>
   )
 }

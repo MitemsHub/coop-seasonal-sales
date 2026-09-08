@@ -14,6 +14,7 @@ import Input from '../../components/ui/Input'
 import Label from '../../components/ui/Label'
 import Skeleton from '../../components/ui/Skeleton'
 import Badge from '../../components/ui/Badge'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 
 function maskAccountNumber(s) {
   const v = String(s || '').replace(/\D/g, '')
@@ -143,8 +144,10 @@ export default function VendorBanksPage() {
     }
   }
 
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmTarget, setConfirmTarget] = useState(null)
+
   const deleteInvoice = async (inv) => {
-    if (!window.confirm(`Delete invoice${inv.invoice_ref ? ` ${inv.invoice_ref}` : ''}? This can't be undone.`)) return
     setDeletingId(inv.id)
     setInvoicesMsg('')
     try {
@@ -157,6 +160,12 @@ export default function VendorBanksPage() {
     } finally {
       setDeletingId(null)
     }
+  }
+
+  const handleConfirmDelete = () => {
+    if (confirmTarget) deleteInvoice(confirmTarget)
+    setConfirmOpen(false)
+    setConfirmTarget(null)
   }
 
   return (
@@ -286,7 +295,7 @@ export default function VendorBanksPage() {
                     variant="ghost"
                     size="sm"
                     leftIcon={Trash2}
-                    onClick={() => deleteInvoice(inv)}
+                    onClick={() => { setConfirmTarget(inv); setConfirmOpen(true) }}
                     loading={deletingId === inv.id}
                     className="text-danger-fg hover:bg-danger-bg"
                   >
@@ -380,6 +389,16 @@ export default function VendorBanksPage() {
           </div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onClose={() => { setConfirmOpen(false); setConfirmTarget(null) }}
+        onConfirm={handleConfirmDelete}
+        title="Delete invoice?"
+        message={`Delete invoice${confirmTarget?.invoice_ref ? ` ${confirmTarget.invoice_ref}` : ''}? This can't be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </div>
   )
 }

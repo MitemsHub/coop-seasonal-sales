@@ -11,6 +11,7 @@ import Badge from '../../components/ui/Badge'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
 import ImageResizeUpload from '../../components/ImageResizeUpload'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 
 const fmtNaira = (n) => `NGN ${Number(n || 0).toLocaleString()}`
 
@@ -114,8 +115,10 @@ export default function VendorProductsPage() {
     }
   }
 
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmAction, setConfirmAction] = useState(null) // { type: 'archive'|'delete', product: p }
+
   const archive = async (p) => {
-    if (!window.confirm(`Archive "${p.name}"? It stays on past orders but stops appearing in the shop.`)) return
     const res = await fetch(`/api/vendor/exhibition/products/${p.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -127,11 +130,18 @@ export default function VendorProductsPage() {
   }
 
   const remove = async (p) => {
-    if (!window.confirm(`Delete "${p.name}"? This cannot be undone.`)) return
     const res = await fetch(`/api/vendor/exhibition/products/${p.id}`, { method: 'DELETE' })
     const json = await res.json()
     if (json.ok) load()
     else setMsg(json.error || 'Failed to delete')
+  }
+
+  const handleConfirm = () => {
+    if (!confirmAction) return
+    if (confirmAction.type === 'archive') archive(confirmAction.product)
+    else if (confirmAction.type === 'delete') remove(confirmAction.product)
+    setConfirmOpen(false)
+    setConfirmAction(null)
   }
 
   const filtered = useMemo(() => {
@@ -245,9 +255,9 @@ export default function VendorProductsPage() {
                   <div className="flex gap-1.5">
                     <Button variant="ghost" size="sm" leftIcon={Pencil} onClick={() => openEdit(p)} aria-label={`Edit ${p.name}`} />
                     {p.status === 'archived' ? (
-                      <Button variant="ghost" size="sm" leftIcon={Trash2} onClick={() => remove(p)} aria-label={`Delete ${p.name}`} />
+                      <Button variant="ghost" size="sm" leftIcon={Trash2} onClick={() => { setConfirmAction({ type: 'delete', product: p }); setConfirmOpen(true) }} aria-label={`Delete ${p.name}`} />
                     ) : (
-                      <Button variant="ghost" size="sm" onClick={() => archive(p)} aria-label={`Archive ${p.name}`}>
+                      <Button variant="ghost" size="sm" onClick={() => { setConfirmAction({ type: 'archive', product: p }); setConfirmOpen(true) }} aria-label={`Archive ${p.name}`}>
                         Archive
                       </Button>
                     )}
@@ -367,6 +377,18 @@ export default function VendorProductsPage() {
           </div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onClose={() => { setConfirmOpen(false); setConfirmAction(null) }}
+        onConfirm={handleConfirm}
+        title={confirmAction?.type === 'archive' ? 'Archive product?' : 'Delete product?'}
+        message={confirmAction?.type === 'archive'
+          ? `Archive "${confirmAction?.product?.name}"? It stays on past orders but stops appearing in the shop.`
+          : `Delete "${confirmAction?.product?.name}"? This cannot be undone.`}
+        confirmLabel={confirmAction?.type === 'archive' ? 'Archive' : 'Delete'}
+        variant={confirmAction?.type === 'archive' ? 'secondary' : 'danger'}
+      />
     </div>
   )
 }

@@ -17,6 +17,7 @@ import Label from '../../../components/ui/Label'
 import Select from '../../../components/ui/Select'
 import DraggableModal from '../../../components/DraggableModal'
 import Skeleton from '../../../components/ui/Skeleton'
+import ConfirmDialog from '../../../components/ui/ConfirmDialog'
 
 const naira = (v) =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(
@@ -179,8 +180,10 @@ export default function ExhibitionProductsPage() {
     }
   }
 
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmTarget, setConfirmTarget] = useState(null)
+
   const removeProduct = async (p) => {
-    if (!window.confirm(`Delete "${p.name}"? This cannot be undone.`)) return
     setBusy(true)
     setMsg(null)
     try {
@@ -193,6 +196,12 @@ export default function ExhibitionProductsPage() {
     } finally {
       setBusy(false)
     }
+  }
+
+  const handleConfirmDelete = () => {
+    if (confirmTarget) removeProduct(confirmTarget)
+    setConfirmOpen(false)
+    setConfirmTarget(null)
   }
 
   const cycleVendors = useMemo(() => {
@@ -337,7 +346,7 @@ export default function ExhibitionProductsPage() {
                             Restore
                           </Button>
                         )}
-                        <Button size="sm" variant="danger" leftIcon={Trash2} onClick={() => removeProduct(p)} disabled={busy}>
+                        <Button size="sm" variant="danger" leftIcon={Trash2} onClick={() => { setConfirmTarget(p); setConfirmOpen(true) }} disabled={busy}>
                           Delete
                         </Button>
                       </div>
@@ -425,6 +434,16 @@ export default function ExhibitionProductsPage() {
             </div>
           </div>
         </DraggableModal>
+
+        <ConfirmDialog
+          open={confirmOpen}
+          onClose={() => { setConfirmOpen(false); setConfirmTarget(null) }}
+          onConfirm={handleConfirmDelete}
+          title="Delete product?"
+          message={`Delete "${confirmTarget?.name}"? This cannot be undone.`}
+          confirmLabel="Delete"
+          variant="danger"
+        />
       </div>
     </ProtectedRoute>
   )

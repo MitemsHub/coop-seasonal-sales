@@ -1,7 +1,7 @@
 // app/api/admin/import/prices/route.js
 import { NextResponse } from 'next/server'
 import { createClient } from '../../../../../lib/supabaseServer'
-import { queryDirect } from '../../../../../lib/directDb'
+import { queryDirect, transactionalQuery } from '../../../../../lib/directDb'
 import * as XLSX from 'xlsx/xlsx.mjs'
 
 export const runtime = 'nodejs'
@@ -171,29 +171,41 @@ export async function POST(req) {
         count = retry.count
       }
       // Fallback: if upsert failed because ON CONFLICT target is missing, do manual select/update/insert
+      // inside a transaction + advisory lock to prevent TOCTOU race conditions.
+      // Lock key 7101 = arbitrary stable constant for branch_item_prices import.
       if (pErr && String(pErr.message || '').toLowerCase().includes('no unique or exclusion constraint matching the on conflict specification')) {
         console.warn('Upsert fallback to manual update/insert due to missing unique index')
-        for (const priceData of part) {
-          const { data: existing } = await supabase
-            .from('branch_item_prices')
-            .select('id')
-            .eq('branch_id', priceData.branch_id)
-            .eq('item_id', priceData.item_id)
-            .single()
-          if (existing) {
-            const { error: uErr } = await supabase
-              .from('branch_item_prices')
-              .update({ price: priceData.price })
-              .eq('branch_id', priceData.branch_id)
-              .eq('item_id', priceData.item_id)
-            if (uErr) return NextResponse.json({ ok: false, error: uErr.message }, { status: 500 })
-          } else {
-            const { error: iErr2 } = await supabase
-              .from('branch_item_prices')
-              .insert(priceData)
-            if (iErr2) return NextResponse.json({ ok: false, error: iErr2.message }, { status: 500 })
+        await transactionalQuery(7101, async (q) => {
+          for (const priceData of part) {
+            if (pricesHasCycle) {
+              const { rows } = await q(
+                'SELECT id FROM branch_item_prices WHERE branch_id = $1 AND item_id = $2 AND cycle_id = $3 LIMIT 1',
+                [priceData.branch_id, priceData.item_id, priceData.cycle_id]
+              )
+              if (rows.length) {
+                await q('UPDATE branch_item_prices SET price = $1 WHERE id = $2', [priceData.price, rows[0].id])
+              } else {
+                await q(
+                  'INSERT INTO branch_item_prices (branch_id, item_id, cycle_id, price) VALUES ($1, $2, $3, $4)',
+                  [priceData.branch_id, priceData.item_id, priceData.cycle_id, priceData.price]
+                )
+              }
+            } else {
+              const { rows } = await q(
+                'SELECT id FROM branch_item_prices WHERE branch_id = $1 AND item_id = $2 LIMIT 1',
+                [priceData.branch_id, priceData.item_id]
+              )
+              if (rows.length) {
+                await q('UPDATE branch_item_prices SET price = $1 WHERE id = $2', [priceData.price, rows[0].id])
+              } else {
+                await q(
+                  'INSERT INTO branch_item_prices (branch_id, item_id, price) VALUES ($1, $2, $3)',
+                  [priceData.branch_id, priceData.item_id, priceData.price]
+                )
+              }
+            }
           }
-        }
+        })
         pricesAffected += part.length
         continue
       }

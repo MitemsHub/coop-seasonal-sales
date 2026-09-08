@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { validateSession } from '@/lib/validation'
 import { createClient } from '@/lib/supabaseServer'
+import { queryDirect } from '@/lib/directDb'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -54,31 +55,6 @@ async function resolveRamCycleId({ supabase, cycleParam, ordersHasCycle }) {
   return { cycleId: latest?.id || null, activeCycleId: null }
 }
 
-function addAgg(map, key, row) {
-  if (!map.has(key)) {
-    map.set(key, { key, orders: 0, qty: 0, amount: 0, loan_interest: 0 })
-  }
-  const agg = map.get(key)
-  agg.orders += 1
-  agg.qty += Number(row.qty || 0)
-  agg.amount += Number(row.total_amount || 0)
-  agg.loan_interest += Number(row.loan_interest ?? row.interest_amount ?? 0)
-}
-
-function addLocationAgg(map, key, row) {
-  if (!map.has(key)) {
-    map.set(key, { key, orders: 0, pending_orders: 0, approved_orders: 0, qty: 0, amount: 0, loan_interest: 0 })
-  }
-  const agg = map.get(key)
-  const status = String(row.status || '')
-  agg.orders += 1
-  if (status === 'Pending') agg.pending_orders += 1
-  if (status === 'Approved') agg.approved_orders += 1
-  agg.qty += Number(row.qty || 0)
-  agg.amount += Number(row.total_amount || 0)
-  agg.loan_interest += Number(row.loan_interest ?? row.interest_amount ?? 0)
-}
-
 export async function GET(req) {
   try {
     const session = await validateSession(req, 'admin')
@@ -90,17 +66,7 @@ export async function GET(req) {
     const ordersHasCycle = await hasColumn(supabase, 'ram_orders', 'ram_cycle_id')
     const { cycleId, activeCycleId } = await resolveRamCycleId({ supabase, cycleParam, ordersHasCycle })
 
-    const byStatus = new Map()
-    const byPayment = new Map()
-    const byCategory = new Map()
-    const byGrade = new Map()
-    const byLocation = new Map()
-
-    let totalOrders = 0
-    let totalQty = 0
-    let totalAmount = 0
-    let totalLoanInterest = 0
-
+    // Fetch delivery locations (small reference table) via Supabase
     const { data: allLocations, error: locErr } = await supabase
       .from('ram_delivery_locations')
       .select('id,delivery_location,name,is_active')
@@ -108,59 +74,136 @@ export async function GET(req) {
 
     if (locErr) return NextResponse.json({ ok: false, error: 'Failed to load delivery locations' }, { status: 500 })
 
+    // Check if interest_amount column exists (older schemas may not have it)
+    const hasInterest = await hasColumn(supabase, 'ram_orders', 'interest_amount')
+
+    // --- SQL aggregation via CTEs ------------------------------------------------
+    // All heavy-lifting (GROUP BY) is done in Postgres so we don't need to
+    // stream every row into JS memory.  Each CTE produces rows that the
+    // route handler maps into the JSON response shape.
+    const cycleFilter = ordersHasCycle && cycleId != null
+    const params = cycleFilter ? [cycleId] : []
+    const cycleWhere = cycleFilter
+      ? "WHERE ro.ram_cycle_id = $1 AND ro.status != 'Cancelled'"
+      : "WHERE ro.status != 'Cancelled'"
+    const interestExpr = hasInterest ? 'ro.interest_amount' : '0'
+
+    const sql = `
+      WITH filtered_orders AS (
+        SELECT
+          ro.status,
+          ro.payment_option,
+          COALESCE(ro.member_category, 'Unknown')  AS member_category,
+          COALESCE(ro.member_grade,  'Unknown')    AS member_grade,
+          ro.ram_delivery_location_id,
+          COALESCE(ro.qty, 0)           AS qty,
+          COALESCE(ro.total_amount, 0)  AS total_amount,
+          COALESCE(${interestExpr}, 0)  AS loan_interest
+        FROM ram_orders ro
+        ${cycleWhere}
+      ),
+      totals AS (
+        SELECT
+          COUNT(*)            AS orders,
+          SUM(qty)            AS qty,
+          SUM(total_amount)   AS amount,
+          SUM(loan_interest)  AS loan_interest
+        FROM filtered_orders
+      ),
+      by_status AS (
+        SELECT status AS key, COUNT(*) AS orders, SUM(qty) AS qty,
+               SUM(total_amount) AS amount, SUM(loan_interest) AS loan_interest
+        FROM filtered_orders GROUP BY status
+      ),
+      by_payment AS (
+        SELECT payment_option AS key, COUNT(*) AS orders, SUM(qty) AS qty,
+               SUM(total_amount) AS amount, SUM(loan_interest) AS loan_interest
+        FROM filtered_orders GROUP BY payment_option
+      ),
+      by_category AS (
+        SELECT member_category AS key, COUNT(*) AS orders, SUM(qty) AS qty,
+               SUM(total_amount) AS amount, SUM(loan_interest) AS loan_interest
+        FROM filtered_orders GROUP BY member_category
+      ),
+      by_grade AS (
+        SELECT member_grade AS key, COUNT(*) AS orders, SUM(qty) AS qty,
+               SUM(total_amount) AS amount, SUM(loan_interest) AS loan_interest
+        FROM filtered_orders GROUP BY member_grade
+      ),
+      by_location AS (
+        SELECT
+          COALESCE(ram_delivery_location_id::text, 'Unknown') AS key,
+          COUNT(*)                                            AS orders,
+          COUNT(*) FILTER (WHERE status = 'Pending')          AS pending_orders,
+          COUNT(*) FILTER (WHERE status = 'Approved')         AS approved_orders,
+          SUM(qty)            AS qty,
+          SUM(total_amount)   AS amount,
+          SUM(loan_interest)  AS loan_interest
+        FROM filtered_orders GROUP BY ram_delivery_location_id
+      )
+      SELECT
+        (SELECT row_to_json(t)              FROM totals t)           AS totals,
+        (SELECT json_agg(row_to_json(x) ORDER BY x.orders DESC) FROM by_status x)   AS by_status,
+        (SELECT json_agg(row_to_json(x) ORDER BY x.orders DESC) FROM by_payment x)  AS by_payment,
+        (SELECT json_agg(row_to_json(x) ORDER BY x.orders DESC) FROM by_category x) AS by_category,
+        (SELECT json_agg(row_to_json(x) ORDER BY x.orders DESC) FROM by_grade x)    AS by_grade,
+        (SELECT json_agg(row_to_json(x) ORDER BY x.orders DESC) FROM by_location x) AS by_location
+    `
+
+    const { rows: [aggRow] } = await queryDirect(sql, params)
+
+    const totals   = aggRow?.totals   || { orders: 0, qty: 0, amount: 0, loan_interest: 0 }
+    const byStatus   = aggRow?.by_status   || []
+    const byPayment  = aggRow?.by_payment  || []
+    const byCategory = aggRow?.by_category || []
+    const byGrade    = aggRow?.by_grade    || []
+    const byLocation = aggRow?.by_location || []
+
+    // Resolve location keys to human-readable names using the reference table
     const locationsById = new Map((allLocations || []).map((l) => [Number(l.id), l]))
     const locationIds = new Set()
 
-    const pageSize = 1000
-    let offset = 0
-
-    while (true) {
-      let q = supabase
-        .from('ram_orders')
-        .select('id,status,payment_option,member_category,member_grade,qty,total_amount,interest_amount,ram_delivery_location_id,created_at,ram_cycle_id')
-        .order('created_at', { ascending: false })
-        .range(offset, offset + pageSize - 1)
-        .neq('status', 'Cancelled')
-      if (ordersHasCycle && cycleId != null) q = q.eq('ram_cycle_id', cycleId)
-
-      const { data: chunk, error } = await q
-      if (error) return NextResponse.json({ ok: false, error: 'Failed to load ram orders' }, { status: 500 })
-
-      const rows = chunk || []
-      for (const row of rows) {
-        totalOrders += 1
-        totalQty += Number(row.qty || 0)
-        totalAmount += Number(row.total_amount || 0)
-        totalLoanInterest += Number(row.loan_interest ?? row.interest_amount ?? 0)
-
-        addAgg(byStatus, String(row.status || 'Unknown'), row)
-        addAgg(byPayment, String(row.payment_option || 'Unknown'), row)
-        addAgg(byCategory, String(row.member_category || 'Unknown'), row)
-        addAgg(byGrade, String(row.member_grade || 'Unknown'), row)
-
-        const locId = Number(row.ram_delivery_location_id)
-        if (Number.isFinite(locId) && locId > 0) locationIds.add(locId)
-        const loc = locationsById.get(locId)
-        const locKey = loc?.delivery_location || 'Unknown'
-        addLocationAgg(byLocation, String(locKey), row)
+    const resolvedByLocation = byLocation.map((row) => {
+      const locId = Number(row.key)
+      const loc = locationsById.get(locId)
+      if (Number.isFinite(locId) && locId > 0) locationIds.add(locId)
+      return {
+        key: loc?.delivery_location || row.key || 'Unknown',
+        orders: Number(row.orders || 0),
+        pending_orders: Number(row.pending_orders || 0),
+        approved_orders: Number(row.approved_orders || 0),
+        qty: Number(row.qty || 0),
+        amount: Number(row.amount || 0),
+        loan_interest: Number(row.loan_interest || 0),
       }
+    })
 
-      if (rows.length < pageSize) break
-      offset += pageSize
-    }
+    resolvedByLocation.sort((a, b) => a.key.localeCompare(b.key))
+
+    // Normalise numeric fields (pg returns COUNT/SUM as strings in json_agg)
+    const normalize = (arr) => arr.map((r) => ({
+      key: r.key,
+      orders: Number(r.orders || 0),
+      qty: Number(r.qty || 0),
+      amount: Number(r.amount || 0),
+      loan_interest: Number(r.loan_interest || 0),
+    }))
 
     const usedLocations = (allLocations || []).filter((l) => locationIds.has(Number(l.id)))
 
-    const toSorted = (m) => Array.from(m.values()).sort((a, b) => b.orders - a.orders)
-
     return NextResponse.json({
       ok: true,
-      totals: { orders: totalOrders, qty: totalQty, amount: totalAmount, loan_interest: totalLoanInterest },
-      byStatus: toSorted(byStatus),
-      byPayment: toSorted(byPayment),
-      byCategory: toSorted(byCategory),
-      byGrade: toSorted(byGrade),
-      byLocation: toSorted(byLocation),
+      totals: {
+        orders: Number(totals.orders || 0),
+        qty: Number(totals.qty || 0),
+        amount: Number(totals.amount || 0),
+        loan_interest: Number(totals.loan_interest || 0),
+      },
+      byStatus: normalize(byStatus),
+      byPayment: normalize(byPayment),
+      byCategory: normalize(byCategory),
+      byGrade: normalize(byGrade),
+      byLocation: resolvedByLocation,
       meta: {
         active_ram_cycle_id: activeCycleId,
         used_ram_cycle_id: ordersHasCycle ? cycleId : null,

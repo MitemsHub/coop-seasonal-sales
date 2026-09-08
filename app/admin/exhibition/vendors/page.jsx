@@ -15,6 +15,7 @@ import Label from '../../../components/ui/Label'
 import Select from '../../../components/ui/Select'
 import DraggableModal from '../../../components/DraggableModal'
 import Skeleton from '../../../components/ui/Skeleton'
+import ConfirmDialog from '../../../components/ui/ConfirmDialog'
 
 function fmtDate(iso) {
   if (!iso) return '—'
@@ -154,8 +155,10 @@ export default function ExhibitionVendorsPage() {
     }
   }
 
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmTarget, setConfirmTarget] = useState(null)
+
   const removeVendor = async (v) => {
-    if (!window.confirm(`Delete vendor "${v.name}"? This cannot be undone.`)) return
     setBusy(true)
     setMsg(null)
     try {
@@ -168,6 +171,12 @@ export default function ExhibitionVendorsPage() {
     } finally {
       setBusy(false)
     }
+  }
+
+  const handleConfirmDelete = () => {
+    if (confirmTarget) removeVendor(confirmTarget)
+    setConfirmOpen(false)
+    setConfirmTarget(null)
   }
 
   return (
@@ -265,7 +274,7 @@ export default function ExhibitionVendorsPage() {
                         <Button size="sm" variant={v.status === 'active' ? 'warning' : 'success'} onClick={() => toggleStatus(v)} disabled={busy}>
                           {v.status === 'active' ? 'Suspend' : 'Activate'}
                         </Button>
-                        <Button size="sm" variant="danger" leftIcon={Trash2} onClick={() => removeVendor(v)} disabled={busy}>
+                        <Button size="sm" variant="danger" leftIcon={Trash2} onClick={() => { setConfirmTarget(v); setConfirmOpen(true) }} disabled={busy}>
                           Delete
                         </Button>
                       </div>
@@ -331,6 +340,16 @@ export default function ExhibitionVendorsPage() {
             </div>
           </div>
         </DraggableModal>
+
+        <ConfirmDialog
+          open={confirmOpen}
+          onClose={() => { setConfirmOpen(false); setConfirmTarget(null) }}
+          onConfirm={handleConfirmDelete}
+          title="Delete vendor?"
+          message={`Delete vendor "${confirmTarget?.name}"? This cannot be undone.`}
+          confirmLabel="Delete"
+          variant="danger"
+        />
       </div>
     </ProtectedRoute>
   )
