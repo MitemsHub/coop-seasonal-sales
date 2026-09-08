@@ -195,14 +195,29 @@ function SuccessContent() {
               <ShoppingBasket className="h-3.5 w-3.5" strokeWidth={2.2} />
               Food Distribution
             </div>
-            <h1 className="mt-2 font-display text-h1 font-semibold tracking-tight text-fg">Order placed!</h1>
-            <p className="mt-1 text-sm text-muted">
-              Your order is <span className="font-semibold text-warning-fg">Pending</span> — your branch rep will post it, then deliver to your branch.
-            </p>
-
-            <div className="mt-4">
-              <p className="text-sm text-muted">Order <span className="font-semibold text-fg">#{order.order_id}</span> has been placed successfully.</p>
-            </div>
+            {(() => {
+              const s = order.status || 'Pending'
+              const isDelivered = s === 'Delivered'
+              const isCancelled = s === 'Cancelled'
+              const statusColor = isDelivered ? 'text-success-fg' : isCancelled ? 'text-danger-fg' : 'text-warning-fg'
+              const heading = isDelivered ? 'Order delivered!' : isCancelled ? 'Order cancelled' : 'Order placed!'
+              const desc = isDelivered
+                ? 'Your order has been delivered to your branch. Thank you!'
+                : isCancelled
+                  ? 'Your order has been cancelled.'
+                  : 'Your branch rep will post it, then deliver to your branch.'
+              return (
+                <>
+                  <h1 className="mt-2 font-display text-h1 font-semibold tracking-tight text-fg">{heading}</h1>
+                  <p className="mt-1 text-sm text-muted">
+                    Your order is <span className={`font-semibold ${statusColor}`}>{s}</span> — {desc}
+                  </p>
+                  <div className="mt-4">
+                    <p className="text-sm text-muted">Order <span className="font-semibold text-fg">#{order.order_id}</span> has been placed successfully.</p>
+                  </div>
+                </>
+              )
+            })()}
 
             <div className="mt-6 flex flex-col gap-2 sm:flex-row">
               <Button className="flex-1" leftIcon={Receipt} onClick={() => router.push('/orders')}>

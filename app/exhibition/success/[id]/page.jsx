@@ -174,10 +174,26 @@ function SuccessContent() {
               <Store className="h-3.5 w-3.5" strokeWidth={2.2} />
               Coop Exhibition
             </div>
-            <h1 className="mt-2 font-display text-h1 font-semibold tracking-tight text-fg">Order placed!</h1>
-            <p className="mt-1 text-sm text-muted">
-              Your order is <span className="font-semibold text-warning-fg">Pending</span> — the branch rep will approve it, then the vendor delivers your goods at the market.
-            </p>
+            {(() => {
+              const s = order?.status || 'Pending'
+              const isDelivered = s === 'Delivered'
+              const isCancelled = s === 'Cancelled'
+              const statusColor = isDelivered ? 'text-success-fg' : isCancelled ? 'text-danger-fg' : 'text-warning-fg'
+              const heading = isDelivered ? 'Order delivered!' : isCancelled ? 'Order cancelled' : 'Order placed!'
+              const desc = isDelivered
+                ? 'Your order has been delivered. Thank you!'
+                : isCancelled
+                  ? 'Your order has been cancelled.'
+                  : 'The branch rep will approve it, then the vendor delivers your goods at the market.'
+              return (
+                <>
+                  <h1 className="mt-2 font-display text-h1 font-semibold tracking-tight text-fg">{heading}</h1>
+                  <p className="mt-1 text-sm text-muted">
+                    Your order is <span className={`font-semibold ${statusColor}`}>{s}</span> — {desc}
+                  </p>
+                </>
+              )
+            })()}
 
             {!order ? (
               <div className="mt-6 space-y-2">
