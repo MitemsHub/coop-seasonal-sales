@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import DraggableModal from '../../../components/DraggableModal'
 import ExportButton from '../../../components/ui/ExportButton'
-import PrintOrderSheet from '../../../components/PrintOrderSheet'
+
 import { createManifestDoc, addManifestTable, sanitizePdfText } from '../../../lib/pdfExport'
 import { announceRepFoodStats } from '../../../lib/repFoodStatsSync'
 import { CheckSquare, ChevronLeft, ChevronRight, Inbox, RefreshCw, RotateCcw, Truck, Zap } from 'lucide-react'
@@ -28,7 +28,7 @@ function PostedAdminPageContent() {
   const [showModal, setShowModal] = useState(null)
   const [modalInput, setModalInput] = useState('')
   const [viewing, setViewing] = useState(null)
-  const [sheetOrder, setSheetOrder] = useState(null) // order row for the print sheet
+
 
   const safeJson = async (res, label) => {
     const ct = res.headers.get('content-type') || ''
@@ -637,7 +637,6 @@ function PostedAdminPageContent() {
                           if (v === 'deliver') deliverOne(o.order_id)
                           if (v === 'rollback') rollbackOne(o.order_id)
                           if (v === 'receipt') downloadReceipt(o.order_id, o.member_id)
-                          if (v === 'sheet') setSheetOrder(o)
                         }}
                         disabled={deliveringOrder === o.order_id || loading}
                       >
@@ -645,7 +644,6 @@ function PostedAdminPageContent() {
                           Actions
                         </option>
                         <option value="view">View items</option>
-                        <option value="sheet">Print sheet</option>
                         <option value="deliver">Deliver</option>
                         <option value="rollback">Rollback</option>
                         <option value="receipt">Invoice</option>
@@ -735,13 +733,7 @@ function PostedAdminPageContent() {
         />
       </DraggableModal>
 
-      {/* Print-optimized order sheet — hand this to the packer/delivery team */}
-      <PrintOrderSheet
-        open={!!sheetOrder}
-        onClose={() => setSheetOrder(null)}
-        module="food"
-        order={sheetOrder}
-      />
+
     </div>
   )
 }

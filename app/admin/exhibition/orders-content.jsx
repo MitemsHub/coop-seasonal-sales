@@ -10,7 +10,7 @@ import { CheckCircle2, ChevronLeft, ChevronRight, History, Inbox, Package, Packa
 import Badge from '../../components/ui/Badge'
 import ExportButton from '../../components/ui/ExportButton'
 import DraggableModal from '../../components/DraggableModal'
-import PrintOrderSheet from '../../components/PrintOrderSheet'
+
 import { createManifestDoc, addManifestTable, sanitizePdfText } from '../../lib/pdfExport'
 
 const naira = (v) =>
@@ -65,7 +65,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
   const [auditEvents, setAuditEvents] = useState([])
   const [auditLoading, setAuditLoading] = useState(false)
   const [auditError, setAuditError] = useState('')
-  const [sheetOrder, setSheetOrder] = useState(null) // order row for the print sheet
+
   const fetchCtl = useRef(null)
   // Whether the default active-cycle scope has been applied (once on mount)
   // and the last cycle the admin picked — so an explicit "All cycles" or
@@ -873,7 +873,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                             if (v === 'cancel') setModal({ type: 'cancel', ids: [o.id] })
                             if (v === 'restore') setModal({ type: 'restore', ids: [o.id] })
                             if (v === 'activity') openAudit(o)
-                            if (v === 'sheet') setSheetOrder(o)
                           }}
                         >
                           <option value="" disabled>Actions</option>
@@ -882,7 +881,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                           {canCancel && <option value="cancel">Cancel</option>}
                           {canRestore && <option value="restore">Restore</option>}
                           <option value="activity">Activity</option>
-                          <option value="sheet">Print sheet</option>
                         </select>
                       </td>
                     </motion.tr>
@@ -1019,13 +1017,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
         </div>
       </DraggableModal>
 
-      {/* Print-optimized order sheet — hand this to the vendor at the market */}
-      <PrintOrderSheet
-        open={!!sheetOrder}
-        onClose={() => setSheetOrder(null)}
-        module="exhibition"
-        order={sheetOrder}
-      />
+
     </div>
   )
 }

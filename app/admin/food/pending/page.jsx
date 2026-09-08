@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useRef } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import DraggableModal from '../../../components/DraggableModal'
 import ExportButton from '../../../components/ui/ExportButton'
-import PrintOrderSheet from '../../../components/PrintOrderSheet'
+
 import { createManifestDoc, addManifestTable, sanitizePdfText } from '../../../lib/pdfExport'
 import { announceRepFoodStats } from '../../../lib/repFoodStatsSync'
 import { CheckSquare, ChevronLeft, ChevronRight, Inbox, RefreshCw, RotateCcw, Send, Truck, XCircle, Zap } from 'lucide-react'
@@ -33,7 +33,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
   const [cancellingOrder, setCancellingOrder] = useState(false)
   const [restoringOrders, setRestoringOrders] = useState(false)
   const [viewing, setViewing] = useState(null)
-  const [sheetOrder, setSheetOrder] = useState(null) // order row for the print sheet
+
   const fetchCtl = useRef(null)
   // Draggable modal now handled by reusable component
 
@@ -860,7 +860,6 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
                           if (v === 'post') doPost(o.order_id)
                           if (v === 'cancel') doCancel(o.order_id)
                           if (v === 'restore') doRestore(o.order_id)
-                          if (v === 'sheet') setSheetOrder(o)
                         }}
                         disabled={loading}
                       >
@@ -868,7 +867,6 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
                           Actions
                         </option>
                         <option value="view">View items</option>
-                        <option value="sheet">Print sheet</option>
                         {status === 'Pending' ? (
                           <>
                             <option value="edit">Edit</option>
@@ -1094,13 +1092,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
         </div>
       </DraggableModal>
 
-      {/* Print-optimized order sheet — hand this to the packer/delivery team */}
-      <PrintOrderSheet
-        open={!!sheetOrder}
-        onClose={() => setSheetOrder(null)}
-        module="food"
-        order={sheetOrder}
-      />
+
     </div>
   )
 }
