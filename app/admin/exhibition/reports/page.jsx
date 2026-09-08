@@ -6,6 +6,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
+import ExportButton from '../../../components/ui/ExportButton'
 import Skeleton from '../../../components/ui/Skeleton'
 import { FileBarChart2, FileSpreadsheet, FileText, RefreshCw } from 'lucide-react'
 
@@ -130,6 +131,16 @@ export default function ExhibitionReportsPage() {
   const [appBusy, setAppBusy] = useState(false)
   const [reportBusy, setReportBusy] = useState(false)
 
+  // Applications Pack by Payment to Vendors filters
+  const [packVendorId, setPackVendorId] = useState('')
+  const [packStatus, setPackStatus] = useState('')
+  const [packPayment, setPackPayment] = useState('')
+  const [packFrom, setPackFrom] = useState('')
+  const [packTo, setPackTo] = useState('')
+  const [packExcelBusy, setPackExcelBusy] = useState(false)
+  const [packPdfBusy, setPackPdfBusy] = useState(false)
+  const packBusy = packExcelBusy || packPdfBusy
+  const [packProgress, setPackProgress] = useState({ current: 0, total: 0 })
 
   // Delivery Pack filters
   const [dpBranchId, setDpBranchId] = useState('')
@@ -296,6 +307,325 @@ export default function ExhibitionReportsPage() {
       setErr(e?.message || 'Download failed')
     } finally {
       setReportBusy(false)
+    }
+  }
+
+  // ─── Exhibition orders fetcher (paginated) ───
+  const fetchExhibitionOrders = async (opts) => {
+    const pageSize = 500
+    let offset = 0
+    const all = []
+    while (true) {
+      const qs = new URLSearchParams({ limit: String(pageSize), offset: String(offset) })
+      if (opts?.status) qs.set('status', opts.status)
+      if (opts?.payment) qs.set('payment', opts.payment)
+      if (opts?.branch_id) qs.set('branch_id', String(opts.branch_id))
+      if (opts?.from) qs.set('from', opts.from)
+      if (opts?.to) qs.set('to', opts.to)
+      if (cycleId) qs.set('cycle_id', cycleId)
+      const res = await fetch(`/api/admin/exhibition/orders?${qs.toString()}`, { cache: 'no-store' })
+      const json = await safeJsonMemo(res, '/api/admin/exhibition/orders')
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to load orders')
+      const chunk = json.orders || []
+      all.push(...chunk)
+      if (chunk.length < pageSize) break
+      offset += pageSize
+      if (offset > 10000) break
+    }
+    return all
+  }
+
+  // ─── Vendor bank details fetcher ───
+  const fetchVendorBanks = async () => {
+    const qs = cycleId ? `?cycle_id=${cycleId}` : ''
+    const res = await fetch(`/api/admin/exhibition/vendor-banks/vendors${qs}`, { cache: 'no-store' })
+    const ct = res.headers.get('content-type') || ''
+    if (!res.ok && res.status === 404) return new Map()
+    if (!ct.includes('application/json')) {
+      if (res.status === 404) return new Map()
+      const text = await res.text()
+      throw new Error(`Non-JSON from vendor-banks (${res.status}): ${text.slice(0, 300)}`)
+    }
+    const json = await res.json()
+    if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to load bank details')
+    const map = new Map()
+    for (const v of json.vendors || []) {
+      if (v?.id == null) continue
+      map.set(String(v.id), v)
+    }
+    return map
+  }
+
+  // ─── Applications Pack by Payment to Vendors — Excel ───
+  const exportVendorPackExcel = async () => {
+    setPackExcelBusy(true)
+    setErr(null)
+    try {
+      const [orders, bankMap] = await Promise.all([
+        fetchExhibitionOrders({
+          status: packStatus,
+          payment: packPayment,
+          branch_id: appBranchId || undefined,
+          from: packFrom,
+          to: packTo,
+        }),
+        fetchVendorBanks(),
+      ])
+
+      // Group lines by vendor_id
+      const vendorLines = new Map()
+      for (const o of orders || []) {
+        for (const l of o.lines || []) {
+          const vid = String(l.vendor_id || '')
+          if (!vid) continue
+          const arr = vendorLines.get(vid) || []
+          arr.push({
+            order_id: o.order_id || o.id,
+            created_at: o.created_at,
+            status: o.status,
+            payment: o.payment_option,
+            member_id: o.member_id,
+            member_name: o.member_name_snapshot || '',
+            branch: o.branch_name || '',
+            product_name: l.product_name || '',
+            sku: l.sku || '',
+            unit: l.unit || '',
+            qty: Number(l.qty || 0),
+            vendor_price: Number(l.vendor_price || 0),
+            final_price: Number(l.final_price || 0),
+            amount: Number(l.amount || 0),
+            delivered: l.delivered,
+          })
+          vendorLines.set(vid, arr)
+        }
+      }
+
+      const ExcelJSMod = await import('exceljs')
+      const ExcelJS = ExcelJSMod?.default ?? ExcelJSMod
+      const wb = new ExcelJS.Workbook()
+      const safeName = (name) => String(name || 'Sheet').replace(/[\\/?*\[\]]/g, ' ').slice(0, 31) || 'Sheet'
+
+      const vendorIds = packVendorId ? [packVendorId] : [...vendorLines.keys()]
+      const totalVendors = vendorIds.length
+      setPackProgress({ current: 0, total: totalVendors })
+
+      let i = 0
+      for (const vid of vendorIds) {
+        i += 1
+        setPackProgress({ current: i, total: totalVendors })
+        const lines = vendorLines.get(vid) || []
+        if (!lines.length && packVendorId) {
+          // Still create a sheet for the selected vendor even if no lines
+          const vInfo = bankMap.get(vid)
+          const ws = wb.addWorksheet(safeName(vInfo?.name || `Vendor ${vid}`))
+          ws.addRow(['Exhibition · Payment to Vendors'])
+          ws.addRow([`Vendor: ${vInfo?.name || vid}`])
+          ws.addRow([`Filters: Status ${packStatus || 'All'} | Payment ${packPayment || 'All'} | From ${packFrom || 'Any'} | To ${packTo || 'Any'}`])
+          ws.addRow([])
+          ws.addRow(['Bank Details'])
+          ws.addRow(['Bank Name', vInfo?.bank?.bank_name || ''])
+          ws.addRow(['Account Name', vInfo?.bank?.account_name || ''])
+          ws.addRow(['Account Number', vInfo?.bank?.account_number || ''])
+          continue
+        }
+        if (!lines.length) continue
+
+        const vInfo = bankMap.get(vid)
+        const vendorName = vInfo?.name || lines[0]?.member_name || `Vendor ${vid}`
+        const ws = wb.addWorksheet(safeName(vendorName))
+        ws.addRow(['Exhibition · Payment to Vendors'])
+        ws.addRow([`Vendor: ${vendorName}`])
+        ws.addRow([`Filters: Status ${packStatus || 'All'} | Payment ${packPayment || 'All'} | From ${packFrom || 'Any'} | To ${packTo || 'Any'}`])
+        ws.addRow([])
+        ws.addRow(['Bank Details'])
+        ws.addRow(['Bank Name', vInfo?.bank?.bank_name || ''])
+        ws.addRow(['Account Name', vInfo?.bank?.account_name || ''])
+        ws.addRow(['Account Number', vInfo?.bank?.account_number || ''])
+        ws.addRow([])
+
+        const headers = ['Order', 'Date', 'Status', 'Payment', 'Member ID', 'Member Name', 'Branch', 'Product', 'SKU', 'Unit', 'Qty', 'Unit Price', 'Amount']
+        ws.addRow(headers)
+        for (const l of lines) {
+          ws.addRow([
+            l.order_id,
+            l.created_at ? new Date(l.created_at).toLocaleString() : '',
+            l.status,
+            l.payment,
+            l.member_id,
+            l.member_name,
+            l.branch,
+            l.product_name,
+            l.sku,
+            l.unit,
+            l.qty,
+            l.vendor_price,
+            l.amount,
+          ])
+        }
+        ws.addRow([])
+        const totalQty = lines.reduce((a, l) => a + l.qty, 0)
+        const totalAmt = lines.reduce((a, l) => a + l.amount, 0)
+        ws.addRow(['TOTAL', '', '', '', '', '', '', '', '', '', totalQty, '', totalAmt])
+      }
+
+      const buffer = await wb.xlsx.writeBuffer()
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `exhibition_payment_to_vendors_${fileStamp()}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setErr(e?.message || 'Download failed')
+    } finally {
+      setPackExcelBusy(false)
+      setPackProgress({ current: 0, total: 0 })
+    }
+  }
+
+  // ─── Applications Pack by Payment to Vendors — PDF ───
+  const exportVendorPackPdf = async () => {
+    setPackPdfBusy(true)
+    setErr(null)
+    try {
+      const [orders, bankMap] = await Promise.all([
+        fetchExhibitionOrders({
+          status: packStatus,
+          payment: packPayment,
+          branch_id: appBranchId || undefined,
+          from: packFrom,
+          to: packTo,
+        }),
+        fetchVendorBanks(),
+      ])
+
+      const { jsPDF } = await import('jspdf')
+      const { default: autoTable } = await import('jspdf-autotable')
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+      const sanitize = (val) => String(val ?? '').replace(/\u20A6|₦/g, 'NGN ').replace(/[\u2013\u2014]/g, '-')
+
+      doc.setFontSize(14)
+      doc.text('Exhibition · Payment to Vendors', 12, 12)
+      doc.setFontSize(9)
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 12, 18)
+      doc.text(
+        `Filters: Status ${sanitize(packStatus || 'All')}  |  Payment ${sanitize(packPayment || 'All')}  |  From ${sanitize(packFrom || 'Any')}  |  To ${sanitize(packTo || 'Any')}`,
+        12, 24
+      )
+
+      // Group lines by vendor_id
+      const vendorLines = new Map()
+      for (const o of orders || []) {
+        for (const l of o.lines || []) {
+          const vid = String(l.vendor_id || '')
+          if (!vid) continue
+          const arr = vendorLines.get(vid) || []
+          arr.push({
+            order_id: o.order_id || o.id,
+            created_at: o.created_at,
+            status: o.status,
+            payment: o.payment_option,
+            member_id: o.member_id,
+            member_name: o.member_name_snapshot || '',
+            branch: o.branch_name || '',
+            product_name: l.product_name || '',
+            sku: l.sku || '',
+            unit: l.unit || '',
+            qty: Number(l.qty || 0),
+            vendor_price: Number(l.vendor_price || 0),
+            final_price: Number(l.final_price || 0),
+            amount: Number(l.amount || 0),
+          })
+          vendorLines.set(vid, arr)
+        }
+      }
+
+      const vendorIds = packVendorId ? [packVendorId] : [...vendorLines.keys()]
+      const totalVendors = vendorIds.length
+      setPackProgress({ current: 0, total: totalVendors })
+
+      let i = 0
+      for (const vid of vendorIds) {
+        i += 1
+        setPackProgress({ current: i, total: totalVendors })
+        const lines = vendorLines.get(vid) || []
+        if (!lines.length) continue
+
+        const vInfo = bankMap.get(vid)
+        const vendorName = sanitize(vInfo?.name || lines[0]?.member_name || `Vendor ${vid}`)
+
+        let y = (doc.lastAutoTable?.finalY || 0) ? (doc.lastAutoTable.finalY + 8) : 32
+        if (y > 160) {
+          doc.addPage()
+          y = 32
+        }
+        doc.setFontSize(11)
+        doc.text(`Vendor: ${vendorName}`, 12, y)
+
+        autoTable(doc, {
+          head: [['Bank Detail', 'Value']],
+          body: [
+            ['Bank Name', vInfo?.bank?.bank_name || ''],
+            ['Account Name', vInfo?.bank?.account_name || ''],
+            ['Account Number', vInfo?.bank?.account_number || ''],
+          ].map((r) => r.map(sanitize)),
+          startY: y + 4,
+          rowPageBreak: 'avoid',
+          styles: { fontSize: 8 },
+          headStyles: { fillColor: [75, 85, 99] },
+          alternateRowStyles: { fillColor: [249, 250, 251] },
+          margin: { left: 12, right: 12 },
+        })
+
+        const head = [['Order', 'Date', 'Status', 'Payment', 'Member', 'Branch', 'Product', 'SKU', 'Qty', 'Unit Price', 'Amount']]
+        const body = lines.map((l) => [
+          String(l.order_id ?? ''),
+          l.created_at ? new Date(l.created_at).toLocaleString() : '',
+          sanitize(l.status || ''),
+          sanitize(l.payment || ''),
+          sanitize(l.member_name || l.member_id || ''),
+          sanitize(l.branch || ''),
+          sanitize(l.product_name || ''),
+          sanitize(l.sku || ''),
+          String(l.qty),
+          `NGN ${l.vendor_price.toLocaleString()}`,
+          `NGN ${l.amount.toLocaleString()}`,
+        ])
+
+        const totals = lines.reduce((acc, l) => {
+          acc.qty += l.qty
+          acc.amount += l.amount
+          return acc
+        }, { qty: 0, amount: 0 })
+        body.push(['TOTAL', '', '', '', '', '', '', '', String(totals.qty), '', `NGN ${totals.amount.toLocaleString()}`])
+        const totalsRowIndex = body.length - 1
+
+        autoTable(doc, {
+          head,
+          body,
+          startY: (doc.lastAutoTable?.finalY || y + 4) + 6,
+          rowPageBreak: 'avoid',
+          styles: { fontSize: 7 },
+          headStyles: { fillColor: [75, 85, 99] },
+          alternateRowStyles: { fillColor: [249, 250, 251] },
+          columnStyles: { 8: { halign: 'right' }, 9: { halign: 'right' }, 10: { halign: 'right' } },
+          didParseCell: (data) => {
+            if (data.section === 'body' && data.row.index === totalsRowIndex) {
+              data.cell.styles.fontStyle = 'bold'
+              data.cell.styles.fillColor = [243, 244, 246]
+            }
+          },
+          margin: { left: 12, right: 12 },
+        })
+      }
+
+      doc.save(`exhibition_payment_to_vendors_${fileStamp()}.pdf`)
+    } catch (e) {
+      setErr(e?.message || 'Download failed')
+    } finally {
+      setPackPdfBusy(false)
+      setPackProgress({ current: 0, total: 0 })
     }
   }
 
@@ -537,6 +867,42 @@ export default function ExhibitionReportsPage() {
                   <Button variant="danger" size="sm" onClick={() => exportApps('pdf')} disabled={appBusy}>
                     <FileText className="h-4 w-4 mr-1" /> {appBusy ? 'Preparing…' : 'PDF'}
                   </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* ─── Applications Pack by Payment to Vendors ─── */}
+            <div className="rounded-xl border border-line bg-surface overflow-hidden mb-6">
+              <div className="border-b border-line bg-subtle px-4 py-3">
+                <div className="text-sm font-semibold text-fg">Applications Pack by Payment to Vendors</div>
+              </div>
+              <div className="p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+                  <select className={selectCls} value={packVendorId} onChange={(e) => setPackVendorId(e.target.value)}>
+                    <option value="">All vendors</option>
+                    {vendorsByValue.map((v) => (
+                      <option key={v.vendor_id || v.vendor_name} value={String(v.vendor_id || '')}>{v.vendor_name}</option>
+                    ))}
+                  </select>
+                  <select className={selectCls} value={packStatus} onChange={(e) => setPackStatus(e.target.value)}>
+                    <option value="">All statuses</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Delivered">Delivered</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                  <select className={selectCls} value={packPayment} onChange={(e) => setPackPayment(e.target.value)}>
+                    <option value="">All payments</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Loan">Loan</option>
+                    <option value="Savings">Savings</option>
+                  </select>
+                  <input type="date" className={selectCls} value={packFrom} onChange={(e) => setPackFrom(e.target.value)} />
+                  <input type="date" className={selectCls} value={packTo} onChange={(e) => setPackTo(e.target.value)} />
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <ExportButton format="excel" onClick={exportVendorPackExcel} disabled={packBusy} busy={packExcelBusy} busyText="Preparing…" />
+                  <ExportButton format="pdf" onClick={exportVendorPackPdf} disabled={packBusy} busy={packPdfBusy} busyText="Preparing…" />
                 </div>
               </div>
             </div>
