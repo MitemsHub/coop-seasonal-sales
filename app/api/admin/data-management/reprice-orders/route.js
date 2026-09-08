@@ -37,7 +37,7 @@ export async function POST(request) {
         .select('id')
         .eq('is_active', true)
         .maybeSingle()
-      if (activeErr) return Response.json({ ok: false, error: activeErr.message }, { status: 500 })
+      if (activeErr) return Response.json({ ok: false, error: 'Failed to fetch active cycle' }, { status: 500 })
       if (!active?.id) return Response.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
       cycleId = active.id
     }
@@ -118,6 +118,6 @@ export async function POST(request) {
     })
   } catch (error) {
     console.error('Error in reprice-orders:', error)
-    return Response.json({ ok: false, error: error.message }, { status: 500 })
+    return Response.json({ ok: false, error: 'An unexpected error occurred' }, { status: 500 })
   }
 }

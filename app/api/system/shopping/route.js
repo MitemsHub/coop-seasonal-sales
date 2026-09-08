@@ -81,3 +81,10 @@ export async function GET() {
     return Response.json({ ok: false, error: 'Failed to read shopping status' }, { status: 500 })
   }
 }
+
+export async function POST() {
+  return Response.json(
+    { ok: false, error: 'Shopping status is derived from cycle dates, not toggles' },
+    { status: 405 }
+  )
+}

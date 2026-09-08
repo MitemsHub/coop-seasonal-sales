@@ -34,7 +34,7 @@ export async function POST(request) {
           .maybeSingle()
         if (cycleErr) {
           console.error('Error fetching active cycle:', cycleErr)
-          return Response.json({ ok: false, error: cycleErr.message }, { status: 500 })
+          return Response.json({ ok: false, error: 'Failed to fetch active cycle' }, { status: 500 })
         }
         if (!activeCycle?.id) {
           return Response.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
@@ -50,7 +50,7 @@ export async function POST(request) {
 
     if (fetchError) {
       console.error('Error fetching branch items:', fetchError)
-      return Response.json({ ok: false, error: fetchError.message }, { status: 500 })
+      return Response.json({ ok: false, error: 'Failed to fetch inventory items' }, { status: 500 })
     }
 
     if (!branchItems || branchItems.length === 0) {
@@ -68,7 +68,7 @@ export async function POST(request) {
 
     if (movementsError) {
       console.error('Error clearing inventory movements:', movementsError)
-      return Response.json({ ok: false, error: movementsError.message }, { status: 500 })
+      return Response.json({ ok: false, error: 'Failed to clear inventory movements' }, { status: 500 })
     }
 
     return Response.json({ 
@@ -78,6 +78,6 @@ export async function POST(request) {
     })
   } catch (error) {
     console.error('Error in reset-inventory:', error)
-    return Response.json({ ok: false, error: error.message }, { status: 500 })
+    return Response.json({ ok: false, error: 'An unexpected error occurred' }, { status: 500 })
   }
 }

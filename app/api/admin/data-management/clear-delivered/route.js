@@ -24,6 +24,7 @@ export async function POST(request) {
     if (cycleId != null && !Number.isFinite(cycleId)) {
       return Response.json({ ok: false, error: 'Invalid cycle_id' }, { status: 400 })
     }
+    // Require cycle_id — never allow deleting ALL delivered orders without specifying a cycle
     if (!cycleId && ordersHasCycle) {
       const { data: active, error: activeErr } = await supabase
         .from('cycles')
@@ -31,8 +32,11 @@ export async function POST(request) {
         .eq('is_active', true)
         .maybeSingle()
       if (activeErr) return Response.json({ ok: false, error: activeErr.message }, { status: 500 })
-      if (!active?.id) return Response.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
+      if (!active?.id) return Response.json({ ok: false, error: 'No active cycle found. Pass cycle_id to clear a specific cycle.' }, { status: 400 })
       cycleId = active.id
+    }
+    if (!cycleId) {
+      return Response.json({ ok: false, error: 'cycle_id is required to prevent accidental data loss' }, { status: 400 })
     }
 
     // First, get all delivered order IDs
@@ -45,7 +49,7 @@ export async function POST(request) {
 
     if (fetchError) {
       console.error('Error fetching delivered orders:', fetchError)
-      return Response.json({ ok: false, error: fetchError.message }, { status: 500 })
+      return Response.json({ ok: false, error: 'Failed to fetch delivered orders' }, { status: 500 })
     }
 
     if (!deliveredOrders || deliveredOrders.length === 0) {
@@ -68,7 +72,7 @@ export async function POST(request) {
 
       if (movementsError) {
         console.error('Error deleting inventory movements:', movementsError)
-        return Response.json({ ok: false, error: movementsError.message }, { status: 500 })
+        return Response.json({ ok: false, error: 'Failed to delete inventory movements' }, { status: 500 })
       }
     }
 
@@ -80,7 +84,7 @@ export async function POST(request) {
 
     if (linesError) {
       console.error('Error deleting order lines:', linesError)
-      return Response.json({ ok: false, error: linesError.message }, { status: 500 })
+      return Response.json({ ok: false, error: 'Failed to delete order lines' }, { status: 500 })
     }
 
     // Delete delivered orders
@@ -93,7 +97,7 @@ export async function POST(request) {
 
     if (ordersError) {
       console.error('Error deleting delivered orders:', ordersError)
-      return Response.json({ ok: false, error: ordersError.message }, { status: 500 })
+      return Response.json({ ok: false, error: 'Failed to delete delivered orders' }, { status: 500 })
     }
 
     return Response.json({ 
@@ -103,6 +107,6 @@ export async function POST(request) {
     })
   } catch (error) {
     console.error('Error in clear-delivered:', error)
-    return Response.json({ ok: false, error: error.message }, { status: 500 })
+    return Response.json({ ok: false, error: 'An unexpected error occurred' }, { status: 500 })
   }
 }

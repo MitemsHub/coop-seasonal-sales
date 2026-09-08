@@ -75,3 +75,9 @@ export async function GET() {
   }
 }
 
+export async function POST() {
+  return Response.json(
+    { ok: false, error: 'Shopping status is derived from cycle dates, not toggles' },
+    { status: 405 }
+  )
+}

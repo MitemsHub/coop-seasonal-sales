@@ -69,6 +69,13 @@ export async function GET(request) {
       throw error
     }
   } catch (error) {
-    return NextResponse.json({ ok: false, error: error?.message || 'Failed to read status' }, { status: 500 })
+    return NextResponse.json({ ok: false, error: 'Failed to read shopping status' }, { status: 500 })
   }
+}
+
+export async function POST() {
+  return NextResponse.json(
+    { ok: false, error: 'Shopping status is now derived from cycle dates. Use the cycle management page to set starts_at and ends_at.' },
+    { status: 405 }
+  )
 }
