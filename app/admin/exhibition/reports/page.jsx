@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
 import Skeleton from '../../../components/ui/Skeleton'
-import { FileBarChart2, FileSpreadsheet, RefreshCw } from 'lucide-react'
+import { FileBarChart2, FileSpreadsheet, FileText, RefreshCw } from 'lucide-react'
 
 function safeJson(res, label) {
   const ct = res.headers.get('content-type') || ''
@@ -204,6 +204,28 @@ export default function ExhibitionReportsPage() {
   const exportLocationCsv = () => downloadCsv(`exhibition-locations-${fileStamp()}.csv`, byLocation.map((l) => ({ location: l.key, orders: l.orders, amount: l.amount })))
   const exportPayoutCsv = () => downloadCsv(`exhibition-payouts-${fileStamp()}.csv`, cyclePayouts.map((p) => ({ cycle: p.name, code: p.code, status: p.status, gross: p.gross, deduction: p.deduction, net: p.net, paid: p.paid, balance: p.balance })))
 
+  // ─── PDF builder helper ───
+  const buildPdf = (title, rows, headers) => async () => {
+    const { jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+    const sanitize = (s) => String(s ?? '').replace(/\u20A6|₦/g, 'NGN ').replace(/[\u2013\u2014]/g, '-')
+    doc.setFontSize(14)
+    doc.text(title, 12, 12)
+    doc.setFontSize(9)
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 12, 18)
+    autoTable(doc, {
+      head: [headers],
+      body: rows.map((r) => headers.map((h) => sanitize(String(r[h] ?? '')))),
+      startY: 22,
+      styles: { fontSize: 7 },
+      headStyles: { fillColor: [75, 85, 99] },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      margin: { left: 12, right: 12 },
+    })
+    doc.save(`${title.replace(/[^a-zA-Z0-9]/g, '_')}_${fileStamp()}.pdf`)
+  }
+
   // ─── Applications by Branch export ───
   const exportApps = async (format) => {
     setAppBusy(true)
@@ -225,16 +247,17 @@ export default function ExhibitionReportsPage() {
           rows.push({ order: o.order_id, status: o.status, payment: o.payment_option, member: o.member_name_snapshot || o.member_id, branch: o.branches?.name || '', vendor: l.vendor_name || '', product: l.product_name || '', qty: l.qty, amount: l.amount })
         }
       }
-      if (format === 'csv') {
-        downloadCsv(`exhibition-apps-branch-${fileStamp()}.csv`, rows)
+      const headers = ['order', 'status', 'payment', 'member', 'branch', 'vendor', 'product', 'qty', 'amount']
+      if (format === 'pdf') {
+        await buildPdf('Exhibition · Applications by Branch', rows, headers)()
       } else {
-        downloadCsv(`exhibition-apps-branch-${fileStamp()}.csv`, rows) // CSV fallback for now
+        downloadCsv(`exhibition-apps-branch-${fileStamp()}.csv`, rows)
       }
     } catch (e) { alert(e.message || 'Export failed') }
     finally { setAppBusy(false) }
   }
 
-  // ─── Applications Pack by Vendor export ───
+  // ─── Applications Pack by Payment to Vendor export ───
   const exportPack = async (format) => {
     setPackBusy(true)
     try {
@@ -255,7 +278,12 @@ export default function ExhibitionReportsPage() {
           rows.push({ order: o.order_id, status: o.status, payment: o.payment_option, member: o.member_name_snapshot || o.member_id, branch: o.branches?.name || '', vendor: l.vendor_name || '', product: l.product_name || '', qty: l.qty, amount: l.amount })
         }
       }
-      downloadCsv(`exhibition-pack-vendor-${fileStamp()}.csv`, rows)
+      const headers = ['order', 'status', 'payment', 'member', 'branch', 'vendor', 'product', 'qty', 'amount']
+      if (format === 'pdf') {
+        await buildPdf('Exhibition · Pack by Payment to Vendors', rows, headers)()
+      } else {
+        downloadCsv(`exhibition-pack-vendor-${fileStamp()}.csv`, rows)
+      }
     } catch (e) { alert(e.message || 'Export failed') }
     finally { setPackBusy(false) }
   }
@@ -413,6 +441,9 @@ export default function ExhibitionReportsPage() {
                   <Button variant="accent" size="sm" onClick={() => exportApps('csv')} disabled={appBusy}>
                     <FileSpreadsheet className="h-4 w-4 mr-1" /> {appBusy ? 'Preparing…' : 'Excel'}
                   </Button>
+                  <Button variant="danger" size="sm" onClick={() => exportApps('pdf')} disabled={appBusy}>
+                    <FileText className="h-4 w-4 mr-1" /> {appBusy ? 'Preparing…' : 'PDF'}
+                  </Button>
                 </div>
               </div>
             </div>
@@ -447,6 +478,9 @@ export default function ExhibitionReportsPage() {
                 <div className="mt-3 flex gap-2">
                   <Button variant="accent" size="sm" onClick={() => exportPack('csv')} disabled={packBusy}>
                     <FileSpreadsheet className="h-4 w-4 mr-1" /> {packBusy ? 'Preparing…' : 'Excel'}
+                  </Button>
+                  <Button variant="danger" size="sm" onClick={() => exportPack('pdf')} disabled={packBusy}>
+                    <FileText className="h-4 w-4 mr-1" /> {packBusy ? 'Preparing…' : 'PDF'}
                   </Button>
                 </div>
               </div>
