@@ -268,6 +268,7 @@ export async function POST(req) {
     // ── Eligibility ──────────────────────────────────────────────────────
     // Atomic exposure check: locks the member row to prevent concurrent
     // requests from both passing the exposure check.
+    const includeInterestInCap = cycle.exh_loan_cap_include_interest !== false
     const capAmount = includeInterestInCap ? totalAmount : totalPrincipal
     const { data: exposureResult, error: exposureErr } = await supabase.rpc('check_exhibition_exposure_atomic', {
       p_member_id: memberId,
@@ -311,8 +312,6 @@ export async function POST(req) {
     const capGroup = memberCategory.includes('pension') ? 'pensioner' : memberCategory.includes('retire') ? 'retiree' : 'active'
     const eligibleLoanMaxCap = Math.max(0, Math.trunc(Number(cycle[`exh_loan_eligible_amount_cap_${capGroup}`] || 0)))
     const graceLoanMaxCap = Math.max(0, Math.trunc(Number(cycle[`exh_loan_grace_amount_cap_${capGroup}`] || 0)))
-    const includeInterestInCap = cycle.exh_loan_cap_include_interest !== false
-    const capAmount = includeInterestInCap ? totalAmount : totalPrincipal
     const cumulativeCapAmount = cycleLoanTotal + capAmount
     let useGrace = false
 

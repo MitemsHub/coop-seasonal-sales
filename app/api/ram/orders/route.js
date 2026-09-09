@@ -233,6 +233,9 @@ async function calculateEligibilityForRam(supabase, memberId, memberSnapshot, un
     exceededLoanLimit = loanEligible <= 0
   }
 
+  const ramStatuses = ['Pending', 'Approved']
+  const { data: ramCheck, error: ramCheckErr } = await supabase.from('ram_orders').select('id').limit(1)
+  const ramOrdersTableMissing = isMissingTable(ramCheckErr, 'ram_orders')
   let activeRamCycleId = null
   let usedLoanQtyThisCycle = 0
   const cyclesHasLoanRate = await hasColumn(supabase, 'ram_cycles', 'loan_interest_rate_pct')
