@@ -1,24 +1,16 @@
 ---
 deployment:
   tasks:
-    # Load nvm so Node.js is available in the deployment shell
-    - export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-
-    # Use Node.js 20
-    - nvm use 20
-
     # Install production dependencies only
+    - export CI=true DEBIAN_FRONTEND=noninteractive GIT_TERMINAL_PROMPT=0 GCM_INTERACTIVE=never HOMEBREW_NO_AUTO_UPDATE=1 GIT_EDITOR=: EDITOR=: VISUAL='' GIT_SEQUENCE_EDITOR=: GIT_MERGE_AUTOEDIT=no GIT_PAGER=cat PAGER=cat npm_config_yes=true PIP_NO_INPUT=1 YARN_ENABLE_IMMUTABLE_INSTALLS=false;
     - npm install --omit=dev
-
-    # Install PM2 locally (in case it's not in node_modules yet)
-    - npm install pm2
 
     # Build the Next.js standalone output
     - npm run build
 
-    # Copy static assets and public folder into standalone
+    # Copy static assets and public folder into standalone (postbuild script does this, but ensure it runs)
     - node -e "const fs=require('fs');const path=require('path');const copy=(src,dst)=>{if(!fs.existsSync(src))return;fs.rmSync(dst,{recursive:true,force:true});fs.mkdirSync(dst,{recursive:true});fs.cpSync(src,dst,{recursive:true});};copy(path.join('.next','static'),path.join('.next','standalone','.next','static'));copy('public',path.join('.next','standalone','public'));"
 
-    # Stop existing process if running, then start with PM2
-    - npx pm2 delete coop-seasonal-sales 2>/dev/null; npx pm2 start .next/standalone/server.js --name coop-seasonal-sales
-    - npx pm2 save
+    # Start or restart the app with PM2
+    - pm2 restart coop-seasonal-sales || pm2 start .next/standalone/server.js --name coop-seasonal-sales
+    - pm2 save
