@@ -145,6 +145,8 @@ export async function middleware(request) {
       const isAuthRoute = pathname.includes('/auth/check') || 
                           pathname.includes('/auth/send-otp') || 
                           pathname.includes('/auth/verify-otp') ||
+                          pathname.includes('/auth/login') ||
+                          pathname.includes('/auth/set-password') ||
                           pathname.includes('/auth/forgot-password') ||
                           pathname.includes('/auth/reset-password') ||
                           pathname.includes('/pin/session') ||

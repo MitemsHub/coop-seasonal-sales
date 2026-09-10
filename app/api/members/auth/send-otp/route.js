@@ -200,15 +200,25 @@ export async function POST(request) {
     // To detect and handle this: we check if a new auth user was auto-created.
     // If so, we need to clean it up and use the admin API to send a proper OTP.
 
-    // Check if an auth user was auto-created for this email
-    const { data: authUsers } = await authAdmin.auth.admin.listUsers({
-      page: 1,
-      perPage: 100,
-    })
-
-    const autoCreatedUser = authUsers?.users?.find(
-      (u) => u.email?.toLowerCase() === addr && !u.email_confirmed_at
-    )
+    // Check if an auth user was auto-created for this email.
+    // We page through listUsers (max 1000 per call) until we find the email
+    // or exhaust all users, so we never miss it due to pagination.
+    let autoCreatedUser = null
+    let page = 1
+    const perPage = 1000
+    while (!autoCreatedUser) {
+      const { data: authUsers, error: listErr } = await authAdmin.auth.admin.listUsers({
+        page,
+        perPage,
+      })
+      if (listErr || !authUsers?.users?.length) break
+      autoCreatedUser = authUsers.users.find(
+        (u) => u.email?.toLowerCase() === addr && !u.email_confirmed_at
+      )
+      if (authUsers.users.length < perPage) break // last page
+      page++
+      if (page > 10) break // safety cap (~10k users)
+    }
 
     if (autoCreatedUser) {
       // A user was auto-created but email is not confirmed.

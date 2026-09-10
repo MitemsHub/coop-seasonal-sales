@@ -65,14 +65,31 @@ export async function POST(request) {
     if (member.auth_user_id) {
       try {
         const { data: authUser, error: authErr } = await authAdmin.auth.admin.getUserById(member.auth_user_id)
-        if (authUser?.user?.id && !authErr) {
+        if (authErr) {
+          // API call succeeded but returned an error (e.g. user not found).
+          // Only treat as invalid when the error is definitive — not on transient
+          // network / timeout failures which could incorrectly wipe a valid link.
+          const msg = (authErr.message || '').toLowerCase()
+          const isDefinitive = msg.includes('not found') || msg.includes('404') || msg.includes('missing')
+          if (isDefinitive) {
+            authIsValid = false
+          } else {
+            // Transient or unknown error — assume the auth link is still valid
+            // so the member can still attempt login.
+            console.warn(`[member-check] Admin API error (keeping auth_user_id): ${authErr.message}`)
+            authIsValid = true
+          }
+        } else if (authUser?.user?.id) {
           authIsValid = true
         }
-      } catch {
-        authIsValid = false
+      } catch (e) {
+        // Network failure / timeout — keep the auth link intact rather than
+        // silently destroying it, which would force a duplicate signup.
+        console.warn(`[member-check] Admin API unreachable (keeping auth_user_id): ${e.message}`)
+        authIsValid = true
       }
 
-      // Clean up stale reference — the auth user was deleted
+      // Clean up stale reference — only when the API confirmed the user is gone
       if (!authIsValid) {
         console.warn(`[member-check] Cleaning stale auth_user_id "${member.auth_user_id}" for member "${mid}"`)
         await supabase
