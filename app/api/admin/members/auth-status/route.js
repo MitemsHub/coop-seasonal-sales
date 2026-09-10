@@ -18,7 +18,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 // Auth admin client to validate auth_user_ids against Supabase Auth
-const authAdmin = createClient(
+const authAdmin = createAuthClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
