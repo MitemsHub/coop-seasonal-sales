@@ -118,7 +118,7 @@ export async function GET(request) {
     const validAuthIds = await validateAuthUsers(authUserIds)
 
     // Build display-friendly member list with validated status
-    const memberList = (members || []).map((m) => ({
+    const allMembers = (members || []).map((m) => ({
       memberId: m.member_id,
       fullName: m.full_name || '',
       email: m.email || '',
@@ -127,8 +127,22 @@ export async function GET(request) {
       branchName: m.branches?.name || '',
     }))
 
+    // Filter the member list based on the requested status.
+    // After validation, some members with auth_user_id may have hasAuth=false
+    // (stale reference). They should NOT appear in the "signed_up" list.
+    let memberList = allMembers
+    if (status === 'signed_up') {
+      memberList = allMembers.filter((m) => m.hasAuth)
+    } else if (status === 'pending') {
+      // "pending" should include both null auth_user_id AND stale references
+      // (hasAuth=false means the auth user was deleted)
+      memberList = allMembers.filter((m) => !m.hasAuth)
+    }
+
     // Get stats — total, signed up, pending (across all members, not filtered)
-    // These counts are pre-validation but we'll adjust if needed
+    // After cleanup, stale auth_user_ids are set to NULL, so the raw count
+    // is now more accurate. We also re-count on this page to handle any
+    // fresh cleanups that just happened.
     const [totalResult, signedUpResult] = await Promise.all([
       supabase.from('members').select('member_id', { count: 'exact', head: true }),
       supabase.from('members').select('member_id', { count: 'exact', head: true }).not('auth_user_id', 'is', null),
@@ -137,11 +151,12 @@ export async function GET(request) {
     const total = totalResult.count || 0
     const rawSignedUp = signedUpResult.count || 0
 
-    // Note: The rawSignedUp count includes potentially stale references.
-    // A full revalidation would require checking ALL auth_user_ids (could be thousands).
-    // We use the validated page data for display accuracy, and the raw count for stats.
-    // The auto-cleanup in validateAuthUsers will gradually correct the total over time.
-    const signedUp = rawSignedUp
+    // Adjust: subtract stale references we just cleaned on this page
+    // (they were auth_user_id NOT NULL before cleanup, now NULL)
+    const staleCountOnPage = (members || []).filter(
+      (m) => m.auth_user_id && !validAuthIds.has(m.auth_user_id)
+    ).length
+    const signedUp = Math.max(0, rawSignedUp - staleCountOnPage)
     const pending = total - signedUp
 
     const totalPages = Math.ceil((count || 0) / limit)
@@ -152,7 +167,7 @@ export async function GET(request) {
       stats: { total, signedUp, pending },
       page,
       totalPages,
-      count: count || 0,
+      count: status === 'all' ? (count || 0) : memberList.length,
     })
   } catch (e) {
     return NextResponse.json({ error: e.message || 'Internal server error' }, { status: 500 })
