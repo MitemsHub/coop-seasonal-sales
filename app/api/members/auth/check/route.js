@@ -4,12 +4,23 @@
 //
 // This endpoint is UNAUTHENTICATED (used during login) so it is protected
 // by rate limiting to prevent account enumeration attacks.
+//
+// IMPORTANT: When a member has an auth_user_id, we verify the auth user
+// actually exists in Supabase Auth. If it was deleted (e.g. from the Supabase
+// dashboard), we clean the stale reference and treat them as a new user.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
+import { createClient as createAuthClient } from '@supabase/supabase-js'
 import { checkRateLimit, rateLimitResponse } from '@/lib/rateLimit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+// Auth admin client to verify auth_user_ids
+const authAdmin = createAuthClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
 
 function getClientIP(request) {
   const forwarded = request.headers.get('x-forwarded-for')
@@ -48,6 +59,29 @@ export async function POST(request) {
       return NextResponse.json({ exists: false, hasAuth: false, email: null })
     }
 
+    // If the member has an auth_user_id, verify it actually exists in Supabase Auth.
+    // This catches the case where an admin deleted the auth user from the dashboard.
+    let authIsValid = false
+    if (member.auth_user_id) {
+      try {
+        const { data: authUser, error: authErr } = await authAdmin.auth.admin.getUserById(member.auth_user_id)
+        if (authUser?.user?.id && !authErr) {
+          authIsValid = true
+        }
+      } catch {
+        authIsValid = false
+      }
+
+      // Clean up stale reference — the auth user was deleted
+      if (!authIsValid) {
+        console.warn(`[member-check] Cleaning stale auth_user_id "${member.auth_user_id}" for member "${mid}"`)
+        await supabase
+          .from('members')
+          .update({ auth_user_id: null })
+          .eq('member_id', mid)
+      }
+    }
+
     // Mask email for display (e.g. j***n@example.com)
     const rawEmail = member.email || ''
     let maskedEmail = ''
@@ -61,9 +95,11 @@ export async function POST(request) {
 
     return NextResponse.json({
       exists: true,
-      hasAuth: !!member.auth_user_id,
+      // hasAuth is only true if the auth user actually exists in Supabase Auth
+      hasAuth: authIsValid,
       email: maskedEmail,
-      rawEmail: member.auth_user_id ? rawEmail : null, // only expose raw email if they have an auth account (for login)
+      // Only expose raw email if they have a valid auth account (for login flow)
+      rawEmail: authIsValid ? rawEmail : null,
     })
   } catch (e) {
     return NextResponse.json({ error: e.message || 'Internal server error' }, { status: 500 })

@@ -3,11 +3,13 @@
 // app/components/ChatWidget.jsx
 // Floating live-chat widget — members click the bubble to open a panel
 // and exchange messages with an admin in real time.
+// Uses Supabase Realtime for instant message delivery instead of polling.
 // Position-aware: shifts up when BackToTop or cart bars are visible.
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { MessageCircle, X, Send, Minus, Paperclip, Image as ImageIcon } from 'lucide-react'
+import { MessageCircle, X, Send, Minus, Paperclip } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { createClient } from '../../lib/supabaseClient'
 
 export default function ChatWidget() {
   const { user } = useAuth()
@@ -25,6 +27,7 @@ export default function ChatWidget() {
   const fileInputRef = useRef(null)
   const prevAdminCount = useRef(0)
   const audioRef = useRef(null)
+  const channelRef = useRef(null)
 
   const senderId = user?.id || 'guest'
   const senderName = user?.name || user?.type || 'Member'
@@ -58,7 +61,6 @@ export default function ChatWidget() {
   const playNotificationSound = useCallback(() => {
     try {
       if (!audioRef.current) {
-        // Tiny inline base64 beep — no external file needed
         const ctx = new (window.AudioContext || window.webkitAudioContext)()
         const osc = ctx.createOscillator()
         const gain = ctx.createGain()
@@ -77,6 +79,7 @@ export default function ChatWidget() {
 
   // ── Fetch messages ──
   const fetchMessages = useCallback(async () => {
+    if (!user || senderId === 'guest') return
     try {
       const res = await fetch(`/api/chat/messages?sender_id=${encodeURIComponent(senderId)}`)
       const json = await res.json()
@@ -85,7 +88,6 @@ export default function ChatWidget() {
         const adminCount = json.messages.filter(
           (m) => m.sender_type === 'admin' && !m.read_at
         ).length
-        // Play sound when a new admin reply arrives
         if (adminCount > prevAdminCount.current && open) {
           playNotificationSound()
         }
@@ -93,15 +95,90 @@ export default function ChatWidget() {
         prevAdminCount.current = adminCount
       }
     } catch {}
-  }, [senderId, open, playNotificationSound])
+  }, [senderId, open, playNotificationSound, user])
 
-  // ── Poll for new messages every 4 seconds ──
+  // ── Supabase Realtime subscription for live message updates ──
   useEffect(() => {
-    if (!user) return
+    if (!user || senderId === 'guest') return
+
+    // Fetch initial messages
     fetchMessages()
-    pollRef.current = setInterval(fetchMessages, 4000)
-    return () => clearInterval(pollRef.current)
-  }, [user, fetchMessages])
+
+    // Subscribe to real-time changes on the chat_messages table
+    // Filter: only messages sent TO this member (admin replies) or FROM this member
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`chat-widget-${senderId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `sender_id=eq.${senderId}`,
+        },
+        (payload) => {
+          // New message from or to this member — add it to state
+          const newMsg = payload.new
+          setMessages((prev) => {
+            // Avoid duplicates
+            if (prev.some((m) => m.id === newMsg.id)) return prev
+            return [...prev, {
+              id: newMsg.id,
+              sender_type: newMsg.sender_type,
+              sender_id: newMsg.sender_id,
+              sender_name: newMsg.sender_name,
+              message: newMsg.message,
+              attachment_url: newMsg.attachment_url,
+              attachment_type: newMsg.attachment_type,
+              attachment_name: newMsg.attachment_name,
+              created_at: newMsg.created_at,
+              read_at: newMsg.read_at,
+            }]
+          })
+
+          // Track unread admin messages
+          if (newMsg.sender_type === 'admin' && !newMsg.read_at) {
+            setUnread((prev) => prev + 1)
+            if (open) playNotificationSound()
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `sender_id=eq.${senderId}`,
+        },
+        (payload) => {
+          // Message was updated (e.g., marked as read) — update in state
+          const updated = payload.new
+          setMessages((prev) =>
+            prev.map((m) => (m.id === updated.id ? { ...m, read_at: updated.read_at } : m))
+          )
+        }
+      )
+      .subscribe()
+
+    channelRef.current = channel
+
+    // Also do a fallback poll every 15 seconds in case realtime events are missed
+    // (Supabase Realtime has occasional delivery gaps on free tier)
+    pollRef.current = setInterval(fetchMessages, 15000)
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
+      }
+      if (pollRef.current) {
+        clearInterval(pollRef.current)
+        pollRef.current = null
+      }
+    }
+  }, [user, senderId, fetchMessages, open, playNotificationSound])
 
   // ── Auto-scroll to bottom ──
   useEffect(() => {
@@ -116,7 +193,6 @@ export default function ChatWidget() {
       audioRef.current = null
       prevAdminCount.current = 0
       setUnread(0)
-      // Tell server to mark admin messages as read for this member
       fetch('/api/chat/read', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -142,7 +218,6 @@ export default function ChatWidget() {
 
       if (json.ok) {
         setUploadError('')
-        // Send the attachment as a message
         const sendRes = await fetch('/api/chat/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -158,6 +233,7 @@ export default function ChatWidget() {
         })
         const sendJson = await sendRes.json()
         if (sendJson.ok && sendJson.message) {
+          // Optimistically add the message — Realtime will confirm
           setMessages((prev) => [...prev, sendJson.message])
         }
       } else {
@@ -204,6 +280,7 @@ export default function ChatWidget() {
       })
       const json = await res.json()
       if (json.ok && json.message) {
+        // Replace optimistic with real message — Realtime will also fire
         setMessages((prev) =>
           prev.map((m) => (m.id === optimistic.id ? { ...json.message } : m))
         )
@@ -295,6 +372,10 @@ export default function ChatWidget() {
               <div className="flex items-center gap-2">
                 <MessageCircle className="h-5 w-5 text-on-accent" />
                 <span className="text-sm font-semibold text-on-accent">Live Chat</span>
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full motion-safe:animate-ping rounded-full bg-on-accent opacity-50" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-on-accent" />
+                </span>
               </div>
               <div className="flex items-center gap-1">
                 <button

@@ -3,10 +3,12 @@
 // app/admin/chat/page.jsx
 // Admin live-chat panel — lists member conversations on the left,
 // shows the selected thread on the right, and lets the admin reply.
+// Uses Supabase Realtime for instant message delivery.
 // Features: search, read/unread filter, pagination, file sharing, notifications.
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { MessageCircle, Send, ArrowLeft, Paperclip, AlertCircle, Search, X, ChevronLeft, ChevronRight, Filter } from 'lucide-react'
+import { MessageCircle, Send, ArrowLeft, Paperclip, AlertCircle, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
+import { createClient } from '../../../lib/supabaseClient'
 
 const PAGE_SIZE = 20
 
@@ -24,6 +26,8 @@ export default function AdminChatPage() {
   const scrollRef = useRef(null)
   const fileInputRef = useRef(null)
   const prevTotalUnread = useRef(0)
+  const channelRef = useRef(null)
+  const selectedChannelRef = useRef(null)
 
   // ── Search & filter state ──
   const [search, setSearch] = useState('')
@@ -101,23 +105,114 @@ export default function AdminChatPage() {
     } catch {}
   }, [selectedId])
 
-  // ── Poll conversations + unread every 5s ──
+  // ── Supabase Realtime: listen for new messages across all conversations ──
   useEffect(() => {
     fetchConversations()
     fetchUnreadCount()
+
+    const supabase = createClient()
+
+    // Subscribe to all new chat messages (for conversation list updates + unread badge)
+    const channel = supabase
+      .channel('admin-chat-global')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+        },
+        (payload) => {
+          const newMsg = payload.new
+          // Only care about member messages for the admin view
+          if (newMsg.sender_type === 'member') {
+            // Refresh conversations to pick up the new message
+            fetchConversations()
+            fetchUnreadCount()
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'chat_messages',
+        },
+        () => {
+          // Messages may have been marked as read — refresh
+          fetchConversations()
+          fetchUnreadCount()
+        }
+      )
+      .subscribe()
+
+    channelRef.current = channel
+
+    // Fallback poll every 10 seconds for resilience
     const t = setInterval(() => {
       fetchConversations()
       fetchUnreadCount()
-    }, 5000)
-    return () => clearInterval(t)
+    }, 10000)
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
+      }
+      clearInterval(t)
+    }
   }, [fetchConversations, fetchUnreadCount])
 
-  // ── Poll messages every 3s when a thread is open ──
+  // ── Supabase Realtime: listen for messages in the selected thread ──
   useEffect(() => {
     if (!selectedId) return
     fetchMessages()
-    const t = setInterval(fetchMessages, 3000)
-    return () => clearInterval(t)
+
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`admin-chat-thread-${selectedId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `sender_id=eq.${selectedId}`,
+        },
+        (payload) => {
+          const newMsg = payload.new
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) return prev
+            return [...prev, {
+              id: newMsg.id,
+              sender_type: newMsg.sender_type,
+              sender_id: newMsg.sender_id,
+              sender_name: newMsg.sender_name,
+              message: newMsg.message,
+              attachment_url: newMsg.attachment_url,
+              attachment_type: newMsg.attachment_type,
+              attachment_name: newMsg.attachment_name,
+              created_at: newMsg.created_at,
+              read_at: newMsg.read_at,
+            }]
+          })
+        }
+      )
+      .subscribe()
+
+    selectedChannelRef.current = channel
+
+    // Fallback poll every 8 seconds
+    const t = setInterval(fetchMessages, 8000)
+
+    return () => {
+      if (selectedChannelRef.current) {
+        supabase.removeChannel(selectedChannelRef.current)
+        selectedChannelRef.current = null
+      }
+      clearInterval(t)
+    }
   }, [selectedId, fetchMessages])
 
   // ── Auto-scroll ──
@@ -290,6 +385,10 @@ export default function AdminChatPage() {
       <div className="flex items-center gap-3 border-b border-line-subtle px-5 py-3">
         <MessageCircle className="h-5 w-5 text-brand" />
         <h1 className="text-lg font-semibold text-fg">Live Chat</h1>
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full motion-safe:animate-ping rounded-full bg-brand opacity-50" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-brand" />
+        </span>
         <span className="text-sm text-muted">
           {filteredConvs.length} conversation{filteredConvs.length !== 1 ? 's' : ''}
         </span>

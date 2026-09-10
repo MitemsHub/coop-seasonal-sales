@@ -6,14 +6,61 @@
 //     ?status=signed_up|pending|all  (default: all)
 //     &search=<name or id>           (optional fuzzy search)
 //     &page=1&limit=50              (pagination, default page=1, limit=50)
+//     &validate=true                (optional: revalidate auth_user_ids against Supabase Auth)
 //
 //   Response: { ok, members, stats: { total, signedUp, pending }, page, totalPages }
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
+import { createClient as createAuthClient } from '@supabase/supabase-js'
 import { validateSession } from '@/lib/validation'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+// Auth admin client to validate auth_user_ids against Supabase Auth
+const authAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+)
+
+/**
+ * Validate that a batch of auth_user_ids actually exist in Supabase Auth.
+ * Returns a Set of valid IDs and cleans stale references in the members table.
+ */
+async function validateAuthUsers(authUserIds) {
+  if (!authUserIds || authUserIds.length === 0) return new Set()
+
+  const validIds = new Set()
+  const staleIds = []
+
+  // Check each auth_user_id (Supabase Auth admin API doesn't have a batch lookup,
+  // so we check individually — limited to the page size, typically 50)
+  for (const authUserId of authUserIds) {
+    try {
+      const { data, error } = await authAdmin.auth.admin.getUserById(authUserId)
+      if (data?.user?.id) {
+        validIds.add(authUserId)
+      } else {
+        staleIds.push(authUserId)
+      }
+    } catch {
+      staleIds.push(authUserId)
+    }
+  }
+
+  // Clean up stale references in the members table
+  if (staleIds.length > 0) {
+    console.warn(`[auth-status] Cleaning ${staleIds.length} stale auth_user_id references`)
+    const db = createClient()
+    // Set auth_user_id to NULL for members whose auth users no longer exist
+    await db
+      .from('members')
+      .update({ auth_user_id: null })
+      .in('auth_user_id', staleIds)
+  }
+
+  return validIds
+}
 
 export async function GET(request) {
   try {
@@ -35,7 +82,7 @@ export async function GET(request) {
       .from('members')
       .select('member_id, full_name, email, auth_user_id, branch_id, branches:branch_id(code, name)', { count: 'exact' })
 
-    // Filter by auth status
+    // Filter by auth status (preliminary — may be adjusted after validation)
     if (status === 'signed_up') {
       query = query.not('auth_user_id', 'is', null)
     } else if (status === 'pending') {
@@ -50,11 +97,6 @@ export async function GET(request) {
     // Get total count for stats (without pagination)
     const countQuery = supabase.from('members').select('auth_user_id', { count: 'exact', head: false })
 
-    // Apply same search filter to count query
-    if (search) {
-      // We'll compute stats separately
-    }
-
     // Paginate
     const offset = (page - 1) * limit
     query = query.order('member_id', { ascending: true }).range(offset, offset + limit - 1)
@@ -65,27 +107,44 @@ export async function GET(request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
+    // Collect auth_user_ids from this page's results for validation
+    const authUserIds = [...new Set(
+      (members || [])
+        .map(m => m.auth_user_id)
+        .filter(Boolean)
+    )]
+
+    // Validate auth_user_ids against Supabase Auth and clean stale ones
+    const validAuthIds = await validateAuthUsers(authUserIds)
+
+    // Build display-friendly member list with validated status
+    const memberList = (members || []).map((m) => ({
+      memberId: m.member_id,
+      fullName: m.full_name || '',
+      email: m.email || '',
+      hasAuth: m.auth_user_id ? validAuthIds.has(m.auth_user_id) : false,
+      branchCode: m.branches?.code || '',
+      branchName: m.branches?.name || '',
+    }))
+
     // Get stats — total, signed up, pending (across all members, not filtered)
+    // These counts are pre-validation but we'll adjust if needed
     const [totalResult, signedUpResult] = await Promise.all([
       supabase.from('members').select('member_id', { count: 'exact', head: true }),
       supabase.from('members').select('member_id', { count: 'exact', head: true }).not('auth_user_id', 'is', null),
     ])
 
     const total = totalResult.count || 0
-    const signedUp = signedUpResult.count || 0
+    const rawSignedUp = signedUpResult.count || 0
+
+    // Note: The rawSignedUp count includes potentially stale references.
+    // A full revalidation would require checking ALL auth_user_ids (could be thousands).
+    // We use the validated page data for display accuracy, and the raw count for stats.
+    // The auto-cleanup in validateAuthUsers will gradually correct the total over time.
+    const signedUp = rawSignedUp
     const pending = total - signedUp
 
     const totalPages = Math.ceil((count || 0) / limit)
-
-    // Build display-friendly member list
-    const memberList = (members || []).map((m) => ({
-      memberId: m.member_id,
-      fullName: m.full_name || '',
-      email: m.email || '',
-      hasAuth: !!m.auth_user_id,
-      branchCode: m.branches?.code || '',
-      branchName: m.branches?.name || '',
-    }))
 
     return NextResponse.json({
       ok: true,

@@ -20,18 +20,19 @@ export async function GET(request) {
     const supabase = createClient()
     const { data, error } = await supabase
       .from('members')
-      .select('member_id, full_name, phone, savings, loans, global_limit, status, branch_id, branches:branch_id(name, code)')
+      .select('member_id, full_name, phone, email, savings, loans, global_limit, status, branch_id, branches:branch_id(name, code)')
       .or(`member_id.ilike.%${q}%,full_name.ilike.%${q}%,phone.ilike.%${q}%`)
       .order('member_id')
       .limit(25)
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       ok: true,
       members: (data || []).map((m) => ({
         member_id: m.member_id,
         full_name: m.full_name || '',
         phone: m.phone || '',
+        email: m.email || '',
         savings: m.savings,
         loans: m.loans,
         global_limit: m.global_limit,
@@ -40,6 +41,13 @@ export async function GET(request) {
         branch_code: m.branches?.code || '',
       })),
     })
+
+    // Prevent browser/CDN caching of member data — always fresh
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+    response.headers.set('Pragma', 'no-cache')
+    response.headers.set('Expires', '0')
+
+    return response
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Failed to search members' }, { status: 500 })
   }
