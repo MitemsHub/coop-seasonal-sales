@@ -166,8 +166,9 @@ export async function POST(request) {
 
       if (msg.includes('email rate limit') || otpError.code === 'email_rate_limit') {
         userMessage = 'Too many requests. Please wait a few minutes before trying again.'
-      } else if (msg.includes('smtp') || msg.includes('email provider') || msg.includes('connection refused')) {
-        userMessage = 'Email delivery is temporarily unavailable. Please try again later or contact support.'
+      } else if (msg.includes('smtp') || msg.includes('email provider') || msg.includes('connection refused') || msg.includes('email')) {
+        // Include the actual Supabase error for better diagnostics
+        userMessage = `Email delivery failed: ${otpError.message || 'SMTP error'}. Please try again later or contact support.`
       } else if (msg.includes('invalid email') || otpError.code === 'invalid_email') {
         userMessage = 'The email address on file appears to be invalid. Please contact an admin to update it.'
       } else if (otpError.status === 429 || msg.includes('rate limit')) {
@@ -178,6 +179,9 @@ export async function POST(request) {
         userMessage = 'Your email domain is not supported. Please contact support.'
       } else if (msg.includes('timeout') || msg.includes('network')) {
         userMessage = 'Network timeout. Please check your connection and try again.'
+      } else {
+        // Show the actual error message for unknown errors
+        userMessage = `Failed to send OTP: ${otpError.message || 'Unknown error'}. Please try again or contact support.`
       }
 
       return NextResponse.json({ error: userMessage }, { status: 500 })
