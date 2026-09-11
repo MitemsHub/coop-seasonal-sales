@@ -27,7 +27,6 @@ import {
 } from 'lucide-react'
 import LandingHeader, { SIGNUP_URL } from './components/LandingHeader'
 import Reveal from './components/ui/Reveal'
-import ExhibitionShowcase from './components/ExhibitionShowcase'
 
 /* ---------------------------------------------------------------- */
 /*  Section heading pattern                                           */
@@ -523,9 +522,6 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
-
-      {/* ======================== EXHIBITION SHOWCASE ======================== */}
-      <ExhibitionShowcase />
 
       {/* =========================== HOW IT WORKS =========================== */}
       <section id="how" className="scroll-mt-20">

@@ -28,17 +28,26 @@ export const metadata = {
   title: 'CBN Coop • Seasonal Sales',
   description: 'CBN Coop seasonal sales platform — exhibition, food, RAM and shop modules for members and vendors.',
   icons: {
-    icon: [
-      { url: '/favicon.svg', type: 'image/svg+xml' },
-      { url: '/logo.png?v=3', type: 'image/png', sizes: '101x100' },
-    ],
-    shortcut: '/logo.png?v=3',
-    apple: '/logo.png?v=3',
+    icon: '/logo.png?v=4',
+    shortcut: '/logo.png?v=4',
+    apple: '/logo.png?v=4',
   },
   openGraph: {
     title: 'CBN Coop • Seasonal Sales',
     description: 'CBN Coop seasonal sales platform',
     siteName: 'CBN Coop',
+    images: [
+      {
+        url: '/logo.png?v=4',
+        width: 101,
+        height: 100,
+        alt: 'CBN Coop Logo',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary',
+    images: ['/logo.png?v=4'],
   },
 }
 
