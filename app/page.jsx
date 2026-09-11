@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import LandingHeader, { SIGNUP_URL } from './components/LandingHeader'
 import Reveal from './components/ui/Reveal'
+import ExhibitionShowcase from './components/ExhibitionShowcase'
 
 /* ---------------------------------------------------------------- */
 /*  Section heading pattern                                           */
@@ -53,20 +54,14 @@ function SectionHeading({ kicker, title, description }) {
 /*  through on the right and changes automatically.                   */
 /* ---------------------------------------------------------------- */
 const HERO_IMAGES = [
-  '/landing/photos/hero-logistics.jpg',
   '/landing/photos/hero-ram.jpg',
-  '/landing/photos/hero-community.jpg',
-  '/landing/photos/hero-04.jpg',
-  '/landing/photos/hero-05.jpg',
-  '/landing/photos/hero-06.jpg',
-  '/landing/photos/hero-07.jpg',
-  '/landing/photos/hero-08.jpg',
-  '/landing/photos/hero-09.jpg',
-  '/landing/photos/hero-10.jpg',
-  '/landing/photos/hero-11.jpg',
-  '/landing/photos/hero-12.jpg',
-  '/landing/photos/hero-13.jpg',
-  '/landing/photos/hero-15.jpg',
+  '/landing/photos/exhibition-food-rice.jpg',
+  '/landing/photos/exhibition-clothing.jpg',
+  '/landing/photos/exhibition-cars.jpg',
+  '/landing/photos/exhibition-fabrics-shoes.jpg',
+  '/landing/photos/exhibition-home-decor.jpg',
+  '/landing/photos/exhibition-food-maggi.jpg',
+  '/landing/photos/exhibition-food-golden-morn.jpg',
 ]
 
 const FILM_GRAIN =
@@ -191,7 +186,7 @@ function PhotoHero() {
               alt=""
               onLoad={() => markReady(slide)}
               onError={() => markReady(slide)}
-              className="h-full w-full object-cover"
+              className="hero-backdrop-photo h-full w-full object-cover"
               initial={false}
               animate={reduce ? undefined : { scale: [1, 1.07] }}
               // Zoom completes exactly as the next slide begins — the drift never looks cut short.
@@ -528,6 +523,9 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* ======================== EXHIBITION SHOWCASE ======================== */}
+      <ExhibitionShowcase />
 
       {/* =========================== HOW IT WORKS =========================== */}
       <section id="how" className="scroll-mt-20">

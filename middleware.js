@@ -152,6 +152,7 @@ export async function middleware(request) {
                           pathname.includes('/pin/session') ||
                           pathname.includes('/rep/session') ||
                           pathname.includes('/rep/access') ||
+                          pathname.includes('/vendor/session') ||
                           pathname === '/api/contact'
       
       if (!isAuthRoute) {

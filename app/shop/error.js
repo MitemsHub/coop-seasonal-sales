@@ -1,14 +1,14 @@
 'use client'
 
-// app/portal/error.js — Member portal error boundary
+// app/shop/error.js — Shop error boundary
 import BrandError from '../components/ui/BrandError'
 
-export default function PortalError({ error, reset }) {
+export default function ShopError({ error, reset }) {
   return (
     <BrandError
       error={error}
       reset={reset}
-      context="portal"
+      context="shop"
     />
   )
 }

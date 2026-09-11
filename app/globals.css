@@ -574,6 +574,43 @@ button:disabled,
   animation: sakani-shimmer 1.4s var(--ease-sakani) infinite;
 }
 
+/* ─── Exhibition showcase photos — light/dark adaptive ────────────── */
+/* In light mode: boost contrast and saturation so outdoor exhibition   */
+/* photos pop against the white canvas. In dark mode: dim brightness    */
+/* and desaturate slightly so the images sit comfortably on dark bg.    */
+.exhibition-photo {
+  filter: brightness(1.02) contrast(1.05) saturate(1.08);
+  transition: filter 0.4s ease, transform 0.5s ease;
+}
+
+.dark .exhibition-photo {
+  filter: brightness(0.82) contrast(1.08) saturate(0.85);}
+
+.group:hover .exhibition-photo {
+  filter: brightness(1.08) contrast(1.1) saturate(1.15);
+}
+
+.dark .group:hover .exhibition-photo {
+  filter: brightness(0.9) contrast(1.1) saturate(0.95);
+}
+
+/* Hero photos — same adaptive treatment but tuned for full-bleed       */
+/* backdrop use (larger, more prominent).                                */
+.hero-backdrop-photo {
+  filter: brightness(0.95) contrast(1.05) saturate(1.1);
+  transition: filter 0.6s ease;
+}
+
+.dark .hero-backdrop-photo {
+  filter: brightness(0.7) contrast(1.1) saturate(0.8);
+}
+
+/* Hover shimmer for gallery cards */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
 /* Print: receipts and confirmations should land on paper cleanly — hide
    site chrome (Navbar header, breadcrumbs) and force a white canvas. Pages
    opt in with a print-hide class on anything that shouldn't print. */

@@ -1,14 +1,14 @@
 'use client'
 
-// app/portal/error.js — Member portal error boundary
+// app/rep/error.js — Rep panel error boundary
 import BrandError from '../components/ui/BrandError'
 
-export default function PortalError({ error, reset }) {
+export default function RepError({ error, reset }) {
   return (
     <BrandError
       error={error}
       reset={reset}
-      context="portal"
+      context="rep"
     />
   )
 }

@@ -26,10 +26,19 @@ const geistMono = Geist_Mono({
 
 export const metadata = {
   title: 'CBN Coop • Seasonal Sales',
+  description: 'CBN Coop seasonal sales platform — exhibition, food, RAM and shop modules for members and vendors.',
   icons: {
-    icon: '/logo.png?v=2',
-    shortcut: '/logo.png?v=2',
-    apple: '/logo.png?v=2',
+    icon: [
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+      { url: '/logo.png?v=3', type: 'image/png', sizes: '101x100' },
+    ],
+    shortcut: '/logo.png?v=3',
+    apple: '/logo.png?v=3',
+  },
+  openGraph: {
+    title: 'CBN Coop • Seasonal Sales',
+    description: 'CBN Coop seasonal sales platform',
+    siteName: 'CBN Coop',
   },
 }
 
