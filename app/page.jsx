@@ -53,10 +53,10 @@ function SectionHeading({ kicker, title, description }) {
 /*  through on the right and changes automatically.                   */
 /* ---------------------------------------------------------------- */
 const HERO_IMAGES = [
+  '/landing/photos/exhibition-cars.jpg',
   '/landing/photos/hero-ram.jpg',
   '/landing/photos/exhibition-food-rice.jpg',
   '/landing/photos/exhibition-clothing.jpg',
-  '/landing/photos/exhibition-cars.jpg',
   '/landing/photos/exhibition-fabrics-shoes.jpg',
   '/landing/photos/exhibition-home-decor.jpg',
   '/landing/photos/exhibition-food-maggi.jpg',

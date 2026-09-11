@@ -3,9 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { BadgePercent, BarChart3, ChevronDown, ClipboardCheck, Landmark, LayoutDashboard, LogOut, Menu, Package, PanelLeftClose, PanelLeftOpen, ShoppingBag, Store, X } from 'lucide-react'
+import { ArrowRight, BadgePercent, BarChart3, ChevronDown, ClipboardCheck, Landmark, LayoutDashboard, LogOut, Menu, Package, PanelLeftClose, PanelLeftOpen, ShoppingBag, Store, X } from 'lucide-react'
 import Breadcrumbs from '../components/ui/Breadcrumbs'
-import ModuleClosedPanel from '../components/ModuleClosedPanel'
 import { getTrail } from '@/lib/breadcrumbs'
 
 const NAV = [
@@ -30,6 +29,8 @@ export default function VendorLayout({ children }) {
   // matching the admin/rep sidebars. The preference persists across reloads.
   const [sidebarVisible, setSidebarVisible] = useState(true)
   const panelRef = useRef(null)
+  // Whether the vendor has dismissed the "exhibition closed" banner.
+  const [closedDismissed, setClosedDismissed] = useState(false)
 
   const isLoginPage = pathname.startsWith('/vendor/login')
 
@@ -105,48 +106,11 @@ export default function VendorLayout({ children }) {
     router.push('/vendor/login')
   }
 
-  // The vendor's exhibition season is not live (draft or closed) — show the
-  // closed panel instead of the portal so vendors never land on an empty
-  // catalog. Order history stays reachable so they can review past seasons.
+  // The vendor's exhibition season is not live (draft or closed) — show a
+  // dismissible banner so vendors can still reach their dashboard and
+  // orders while knowing the exhibition is currently closed.
   const isClosed = profile != null && (profile?.cycle?.status || 'draft') !== 'active'
-  const isOrdersPage = pathname.startsWith('/vendor/orders')
-
-  if (isClosed && !isOrdersPage) {
-    return (
-      <div className="min-h-screen bg-canvas text-fg">
-        <div className="mx-auto flex min-h-screen max-w-md flex-col px-4 py-5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-2.5">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand text-on-accent shadow-sm">
-                <Store className="h-4.5 w-4.5" strokeWidth={2} />
-              </span>
-              <div className="min-w-0 leading-tight">
-                <p className="truncate text-sm font-bold text-fg">{profile?.vendor?.name || 'Vendor Portal'}</p>
-                <p className="truncate text-chips text-muted">{profile?.vendor?.branch || ''}</p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={doLogout}
-              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-sm font-medium text-muted transition-colors hover:border-danger-border hover:text-danger-fg"
-            >
-              <LogOut className="h-4 w-4" />
-              Log out
-            </button>
-          </div>
-          <div className="flex flex-1 items-center justify-center py-6">
-            <ModuleClosedPanel
-              variant="inline"
-              module="exhibition"
-              vendor
-              onViewOrders={() => router.push('/vendor/orders')}
-              onBack={() => router.push('/vendor/dashboard')}
-            />
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const showClosedBanner = isClosed && !closedDismissed
 
   // For member/vendor portals getTrail returns the crumbs array directly.
   const crumbs = getTrail('vendor', pathname) || []
@@ -333,7 +297,40 @@ export default function VendorLayout({ children }) {
           </div>
         </header>
 
-        <main className="px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <main className="px-4 py-6 sm:px-6 lg:px-8">
+          {showClosedBanner && (
+            <div className="mb-5 rounded-xl border border-warning-border bg-warning-bg p-4">
+              <div className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-warning/15 text-warning-fg">
+                  <Store className="h-4.5 w-4.5" strokeWidth={2} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-fg">The Exhibition is closed</p>
+                  <p className="mt-0.5 text-chips text-muted">Your stand and catalog will go live when the next cycle opens.</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => router.push('/vendor/orders')}
+                    className="inline-flex items-center gap-1 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-on-accent transition-colors hover:opacity-90"
+                  >
+                    View orders
+                    <ArrowRight className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setClosedDismissed(true)}
+                    aria-label="Dismiss"
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface hover:text-fg"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {children}
+        </main>
       </div>
     </div>
   )

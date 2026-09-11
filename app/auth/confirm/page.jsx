@@ -3,14 +3,41 @@
 // app/auth/confirm/page.jsx
 // Displayed after the user clicks the "Confirm email address" link in the
 // Supabase Auth email. Shows success / error and routes them back to sign in.
-import { useSearchParams } from 'next/navigation'
-import { Suspense } from 'react'
+// Also intercepts password-recovery redirects (type=recovery) and forwards
+// them to /reset-password so the existing reset flow handles the token.
+import { useSearchParams, useRouter } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 
 function ConfirmContent() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const success = searchParams.get('success') === 'true'
   const error = searchParams.get('error')
+  const type = searchParams.get('type')
+  const token = searchParams.get('token') || searchParams.get('token_hash')
+
+  // Password-recovery links land here from Supabase when the Site URL or
+  // email template doesn't point to /reset-password.  Forward the token
+  // via a hash fragment so the reset-password page can pick it up.
+  const [forwarding, setForwarding] = useState(false)
+
+  useEffect(() => {
+    if (type === 'recovery' && token && !success && !error) {
+      setForwarding(true)
+      // Use the token as access_token in the hash — the reset-password page
+      // already extracts access_token from the URL hash fragment.
+      router.replace(`/reset-password#access_token=${encodeURIComponent(token)}&type=recovery`)
+    }
+  }, [type, token, success, error, router])
+
+  if (forwarding) {
+    return (
+      <div className="min-h-screen bg-canvas flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-brand border-t-transparent" />
+      </div>
+    )
+  }
 
   if (success) {
     return (
