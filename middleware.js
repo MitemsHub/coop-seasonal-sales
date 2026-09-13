@@ -1,6 +1,7 @@
 // middleware.js
 // Comprehensive security middleware for the Coop Seasonal Sales System
 import { NextResponse } from 'next/server'
+import { verify } from './lib/signingEdge.js'
 
 // Rate limiting store (in production, use Redis or similar)
 const rateLimitStore = new Map()
@@ -69,8 +70,6 @@ async function validateSession(request, sessionType) {
       return { isValid: false, reason: 'No session token' }
     }
     
-    // Import the verify function to validate JWT tokens (Edge Runtime compatible)
-    const { verify } = await import('./lib/signingEdge.js')
     const claim = await verify(sessionToken)
     
     if (!claim || claim.role !== sessionType) {
