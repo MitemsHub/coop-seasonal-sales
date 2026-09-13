@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { ArrowRight, BadgePercent, BarChart3, ChevronDown, ClipboardCheck, Landmark, LayoutDashboard, LogOut, Menu, Package, PanelLeftClose, PanelLeftOpen, ShoppingBag, Store, X } from 'lucide-react'
@@ -34,6 +34,34 @@ export default function VendorLayout({ children }) {
   const [closedDismissed, setClosedDismissed] = useState(false)
 
   const isLoginPage = pathname.startsWith('/vendor/login')
+
+  // Content-area skeleton shown during authenticated page transitions (Suspense
+  // fallback). Renders only inside the layout shell so the sidebar and header
+  // are already visible — avoids the full-page flash the old loading.js caused.
+  const contentSkeleton = (
+    <div className="mx-auto max-w-5xl space-y-6">
+      <div className="space-y-2">
+        <div className="sakani-skeleton h-7 w-48 rounded-lg" />
+        <div className="sakani-skeleton h-4 w-72 rounded-lg" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="rounded-xl border border-line bg-surface p-5">
+            <div className="flex items-center justify-between">
+              <div className="sakani-skeleton h-4 w-24 rounded" />
+              <div className="sakani-skeleton h-4 w-4 rounded" />
+            </div>
+            <div className="mt-3">
+              <div className="sakani-skeleton h-7 w-16 rounded" />
+            </div>
+            <div className="mt-2">
+              <div className="sakani-skeleton h-3 w-32 rounded" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 
   // Load the session on mount and refresh it every 60s so the sidebar's cycle
   // chip tracks the admin opening/closing the vendor's season without a reload.
@@ -362,7 +390,7 @@ export default function VendorLayout({ children }) {
               </div>
             </div>
           )}
-          {children}
+          <Suspense fallback={contentSkeleton}>{children}</Suspense>
         </main>
       </div>
     </div>

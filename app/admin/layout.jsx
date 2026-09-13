@@ -3,7 +3,7 @@
 // app/admin/layout.jsx
 // Sakani admin shell — sidebar (icons + active accent pill, collapsible rail) + topbar.
 import Link from 'next/link'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '../contexts/AuthContext'
 import ThemeToggle from '../components/ui/ThemeToggle'
@@ -151,6 +151,44 @@ export default function AdminLayout({ children }) {
   const pathname = usePathname()
   const { logout, user, loading: authLoading } = useAuth()
   const isPinPage = pathname.startsWith('/admin/pin')
+
+  // Content-area skeleton shown during authenticated page transitions (Suspense
+  // fallback). Renders inside the admin shell so the sidebar and header are
+  // already visible — avoids the full-page flash the old loading.js caused.
+  const contentSkeleton = (
+    <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
+      <div className="space-y-2">
+        <div className="sakani-skeleton h-7 w-48 rounded-lg" />
+        <div className="sakani-skeleton h-4 w-72 rounded-lg" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="rounded-xl border border-line bg-surface p-4">
+            <div className="flex items-center gap-3">
+              <div className="sakani-skeleton h-10 w-10 rounded-lg" />
+              <div className="space-y-1.5">
+                <div className="sakani-skeleton h-6 w-16 rounded" />
+                <div className="sakani-skeleton h-3 w-20 rounded" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="rounded-xl border border-line bg-surface">
+        <div className="border-b border-line px-4 py-3">
+          <div className="sakani-skeleton h-4 w-40 rounded" />
+        </div>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-4 border-b border-line px-4 py-3 last:border-b-0">
+            <div className="sakani-skeleton h-4 flex-1 rounded" />
+            <div className="sakani-skeleton h-4 w-24 rounded" />
+            <div className="sakani-skeleton h-4 w-20 rounded" />
+            <div className="sakani-skeleton h-8 w-16 rounded-lg" />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 
   const [sidebarVisible, setSidebarVisible] = useState(true)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -677,7 +715,7 @@ export default function AdminLayout({ children }) {
         </header>
 
         {/* Page */}
-        <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto"><Suspense fallback={contentSkeleton}>{children}</Suspense></main>
       </div>
     </div>
   )

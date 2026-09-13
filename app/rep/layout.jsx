@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '../contexts/AuthContext'
 import DraggableModal from '../components/DraggableModal'
@@ -291,6 +291,30 @@ export default function RepLayout({ children }) {
   // desktop, where it is the real sidebar).
   const isMobileView = useIsMobileView(1024)
 
+  // Content-area skeleton shown during authenticated page transitions (Suspense
+  // fallback). Renders inside the rep shell so the sidebar and header are
+  // already visible — avoids the full-page flash the old loading.js caused.
+  const contentSkeleton = (
+    <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6 lg:p-8">
+      <div className="space-y-2">
+        <div className="sakani-skeleton h-7 w-48 rounded-lg" />
+        <div className="sakani-skeleton h-4 w-72 rounded-lg" />
+      </div>
+      <div className="rounded-xl border border-line bg-surface">
+        <div className="border-b border-line px-4 py-3">
+          <div className="sakani-skeleton h-4 w-40 rounded" />
+        </div>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-4 border-b border-line px-4 py-3 last:border-b-0">
+            <div className="sakani-skeleton h-4 flex-1 rounded" />
+            <div className="sakani-skeleton h-4 w-24 rounded" />
+            <div className="sakani-skeleton h-8 w-16 rounded-lg" />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+
   if (isLoginPage) return children
 
   const isCollapsed = !sidebarVisible && !mobileOpen
@@ -498,7 +522,7 @@ export default function RepLayout({ children }) {
         </header>
 
         {/* Page */}
-        <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto"><Suspense fallback={contentSkeleton}>{children}</Suspense></main>
       </div>
 
       <DraggableModal open={repPhoneModalOpen} onClose={() => setRepPhoneModalOpen(false)} title="Update Phone Number">
