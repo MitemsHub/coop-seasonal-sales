@@ -4,7 +4,7 @@
 // Members Settings — one home for member administration used by every module:
 //   • Members Import (moved from the food Import page) with the import log
 //   • Member details set/reset — name, phone, and account management
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { FileSpreadsheet, Pencil, RefreshCw, Search, UserRound } from 'lucide-react'
 import ProtectedRoute from '../../components/ProtectedRoute'
 import DraggableModal from '../../components/DraggableModal'
@@ -19,6 +19,15 @@ function MembersImportSection() {
   const [membersFile, setMembersFile] = useState(null)
   const [log, setLog] = useState('')
   const [loading, setLoading] = useState(false)
+  const [schema, setSchema] = useState(null)
+
+  // Fetch the import schema on mount — single source of truth for template columns.
+  useEffect(() => {
+    fetch('/api/admin/import/members/schema', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => { if (j?.ok) setSchema(j) })
+      .catch(() => {})
+  }, [])
 
   const upload = async () => {
     if (!membersFile) {
@@ -43,14 +52,25 @@ function MembersImportSection() {
   }
 
   const dlTemplate = async () => {
+    // Fetch the schema from the server (single source of truth).
+    // Fall back to a hardcoded list if the endpoint is unreachable.
+    let headers = ['member_id', 'full_name', 'grade', 'savings', 'loans', 'global_limit']
+    let sampleRow = { member_id: 'A12345', full_name: 'John Doe', grade: 'Director', savings: 2000000, loans: 0, global_limit: 40000000 }
+    try {
+      const res = await fetch('/api/admin/import/members/schema', { cache: 'no-store' })
+      const j = await res.json()
+      if (j?.ok && j.headers?.length) {
+        headers = j.headers
+        sampleRow = j.sampleRow
+      }
+    } catch {}
+
     const ExcelJSMod = await import('exceljs')
     const ExcelJS = ExcelJSMod?.default ?? ExcelJSMod
     const wb = new ExcelJS.Workbook()
     const ws = wb.addWorksheet('Members')
-    const headers = ['member_id', 'full_name', 'grade', 'savings', 'loans', 'global_limit']
-    const rows = [{ member_id: 'A12345', full_name: 'John Doe', grade: 'Director', savings: 2000000, loans: 0, global_limit: 40000000 }]
     ws.addRow(headers)
-    for (const r of rows) ws.addRow(headers.map((h) => r[h]))
+    ws.addRow(headers.map((h) => sampleRow[h] ?? ''))
     const buffer = await wb.xlsx.writeBuffer()
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
     const url = URL.createObjectURL(blob)
@@ -65,7 +85,7 @@ function MembersImportSection() {
     <Card>
       <Card.Header>
         <Card.Title>Members Import</Card.Title>
-        <Card.Description>Expected columns: member_id, full_name, grade, savings, loans, global_limit</Card.Description>
+        <Card.Description>{schema?.description || 'Loading expected columns…'}</Card.Description>
       </Card.Header>
       <Card.Body className="space-y-3">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

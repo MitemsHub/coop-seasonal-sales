@@ -149,7 +149,7 @@ function Divider() {
 
 export default function AdminLayout({ children }) {
   const pathname = usePathname()
-  const { logout } = useAuth()
+  const { logout, user, loading: authLoading } = useAuth()
   const isPinPage = pathname.startsWith('/admin/pin')
 
   const [sidebarVisible, setSidebarVisible] = useState(true)
@@ -391,6 +391,24 @@ export default function AdminLayout({ children }) {
   const isMobileView = useIsMobileView(1024)
 
   if (isPinPage) return children
+
+  // While the client-side auth check is in progress, show a loading screen
+  // instead of the full admin shell — prevents the "flash" of protected content
+  // during client-side navigation.
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-canvas">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-brand" />
+          <p className="text-sm text-muted">Verifying session…</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Session check completed but user is not authenticated — render nothing;
+  // the middleware redirect to /admin/pin is already in progress.
+  if (!user) return null
 
   const navOnClick = () => {
     if (window.innerWidth < 1024) setMobileOpen(false)

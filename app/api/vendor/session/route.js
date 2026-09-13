@@ -1,9 +1,71 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { sign, verify } from '@/lib/signingEdge'
+import crypto from 'crypto'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+// ── Rate limiting & brute-force protection ───────────────────────
+// In-memory stores — production deployments should swap these for Redis.
+const attemptStore = new Map()   // key → { count, windowStart }
+const lockoutStore = new Map()   // key → lockoutExpiresAt
+
+const MAX_ATTEMPTS = 5           // per window
+const WINDOW_MS = 15 * 60 * 1000 // 15 minutes
+const LOCKOUT_THRESHOLD = 10     // attempts before lockout
+const LOCKOUT_MS = 60 * 60 * 1000 // 1 hour
+
+function getClientIP(req) {
+  const forwarded = req.headers.get('x-forwarded-for')
+  if (forwarded) return forwarded.split(',')[0].trim()
+  return req.headers.get('x-real-ip') || req.headers.get('x-vercel-forwarded-for') || 'unknown'
+}
+
+function checkBruteForce(ip) {
+  const now = Date.now()
+
+  // Check lockout
+  const lockExpiry = lockoutStore.get(ip)
+  if (lockExpiry && now < lockExpiry) {
+    return { allowed: false, reason: 'locked' }
+  }
+  if (lockExpiry && now >= lockExpiry) {
+    lockoutStore.delete(ip)
+    attemptStore.delete(ip)
+  }
+
+  // Check rate limit window
+  const record = attemptStore.get(ip)
+  if (!record || now - record.windowStart > WINDOW_MS) {
+    attemptStore.set(ip, { count: 1, windowStart: now })
+    return { allowed: true }
+  }
+
+  record.count++
+  if (record.count > MAX_ATTEMPTS) {
+    if (record.count >= LOCKOUT_THRESHOLD) {
+      lockoutStore.set(ip, now + LOCKOUT_MS)
+      console.warn(`Vendor login lockout triggered for IP: ${ip}`)
+      return { allowed: false, reason: 'locked' }
+    }
+    return { allowed: false, reason: 'rate_limited' }
+  }
+
+  return { allowed: true }
+}
+
+// Timing-safe comparison to prevent timing attacks
+function timingSafeEqual(a, b) {
+  if (!a || !b) return false
+  const bufA = Buffer.from(a, 'utf8')
+  const bufB = Buffer.from(b, 'utf8')
+  if (bufA.length !== bufB.length) {
+    crypto.timingSafeEqual(bufA, Buffer.alloc(bufA.length))
+    return false
+  }
+  return crypto.timingSafeEqual(bufA, bufB)
+}
 
 export async function GET(req) {
   try {
@@ -63,6 +125,17 @@ export async function DELETE() {
 
 export async function POST(req) {
   try {
+    const ip = getClientIP(req)
+
+    // Brute-force check
+    const bf = checkBruteForce(ip)
+    if (!bf.allowed) {
+      const msg = bf.reason === 'locked'
+        ? 'Too many failed attempts. Account temporarily locked (1 hour).'
+        : 'Too many attempts. Please try again later.'
+      return NextResponse.json({ ok: false, error: msg }, { status: 429 })
+    }
+
     const supabase = createClient()
     const body = await req.json().catch(() => ({}))
     const code = String(body?.code || '').trim().toUpperCase()
@@ -87,8 +160,12 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: error.message || 'Invalid credentials' }, { status: 500 })
     }
 
-    if (!vendor) return NextResponse.json({ ok: false, error: 'Invalid vendor code' }, { status: 401 })
-    if (String(vendor.passcode || '') !== passcode) {
+    if (!vendor) {
+      console.warn(`Failed vendor login attempt for code=${code} from IP: ${ip}`)
+      return NextResponse.json({ ok: false, error: 'Invalid vendor code' }, { status: 401 })
+    }
+    if (!timingSafeEqual(passcode, String(vendor.passcode || ''))) {
+      console.warn(`Failed vendor login attempt for code=${code} from IP: ${ip}`)
       return NextResponse.json({ ok: false, error: 'Invalid passcode' }, { status: 401 })
     }
     if (vendor.status !== 'active') {

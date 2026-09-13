@@ -21,6 +21,7 @@ export default function VendorLayout({ children }) {
   const pathname = usePathname()
   const router = useRouter()
   const [profile, setProfile] = useState(null)
+  const [authChecked, setAuthChecked] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   // The exhibition module group starts collapsed and is click-only, matching
   // the admin/rep sidebars — with the open state remembered across reloads.
@@ -43,12 +44,20 @@ export default function VendorLayout({ children }) {
     const refresh = async () => {
       try {
         const r = await fetch('/api/vendor/session', { cache: 'no-store' })
-        if (!r.ok) return
+        if (!r.ok) {
+          if (!cancelled) setAuthChecked(true)
+          return
+        }
         const j = await r.json()
-        if (cancelled || !j?.ok) return
-        setProfile(j)
+        if (cancelled) return
+        if (j?.ok) {
+          setProfile(j)
+          setAuthChecked(true)
+        } else {
+          setAuthChecked(true)
+        }
       } catch {
-        // Best-effort — keep the last known session.
+        if (!cancelled) setAuthChecked(true)
       }
     }
     refresh()
@@ -58,6 +67,14 @@ export default function VendorLayout({ children }) {
       clearInterval(id)
     }
   }, [isLoginPage])
+
+  // Once the session check completes with no valid session, redirect to login.
+  // Uses replace to avoid a back-button loop to the login page.
+  useEffect(() => {
+    if (authChecked && !profile && !isLoginPage) {
+      router.replace('/vendor/login')
+    }
+  }, [authChecked, profile, isLoginPage, router])
 
   // Hydrate the sidebar preferences after mount (not in the useState
   // initializer) so the server and first client render agree — reading
@@ -100,6 +117,22 @@ export default function VendorLayout({ children }) {
   // The login page is standalone — render it without the portal chrome.
   // Kept after the hooks so the Rules of Hooks stay stable across navigation.
   if (isLoginPage) return children
+
+  // While the session is being verified, show a minimal loading screen instead
+  // of the full portal shell — prevents the "flash" of protected content.
+  if (!authChecked) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-canvas">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-line border-t-brand" />
+          <p className="text-sm text-muted">Verifying session…</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Session check completed but no valid session — redirect in progress.
+  if (!profile) return null
 
   const doLogout = async () => {
     await fetch('/api/vendor/session', { method: 'DELETE' }).catch(() => null)

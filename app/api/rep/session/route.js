@@ -1,9 +1,59 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '../../../../lib/supabaseServer'
 import { sign, verify } from '@/lib/signingEdge'
+import crypto from 'crypto'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+// ── Rate limiting & brute-force protection ───────────────────────
+// In-memory stores — production deployments should swap these for Redis.
+const attemptStore = new Map()   // key → { count, windowStart }
+const lockoutStore = new Map()   // key → lockoutExpiresAt
+
+const MAX_ATTEMPTS = 5           // per window
+const WINDOW_MS = 15 * 60 * 1000 // 15 minutes
+const LOCKOUT_THRESHOLD = 10     // attempts before lockout
+const LOCKOUT_MS = 60 * 60 * 1000 // 1 hour
+
+function getClientIP(req) {
+  const forwarded = req.headers.get('x-forwarded-for')
+  if (forwarded) return forwarded.split(',')[0].trim()
+  return req.headers.get('x-real-ip') || req.headers.get('x-vercel-forwarded-for') || 'unknown'
+}
+
+function checkBruteForce(ip) {
+  const now = Date.now()
+
+  // Check lockout
+  const lockExpiry = lockoutStore.get(ip)
+  if (lockExpiry && now < lockExpiry) {
+    return { allowed: false, reason: 'locked' }
+  }
+  if (lockExpiry && now >= lockExpiry) {
+    lockoutStore.delete(ip)
+    attemptStore.delete(ip)
+  }
+
+  // Check rate limit window
+  const record = attemptStore.get(ip)
+  if (!record || now - record.windowStart > WINDOW_MS) {
+    attemptStore.set(ip, { count: 1, windowStart: now })
+    return { allowed: true }
+  }
+
+  record.count++
+  if (record.count > MAX_ATTEMPTS) {
+    if (record.count >= LOCKOUT_THRESHOLD) {
+      lockoutStore.set(ip, now + LOCKOUT_MS)
+      console.warn(`Rep session lockout triggered for IP: ${ip}`)
+      return { allowed: false, reason: 'locked' }
+    }
+    return { allowed: false, reason: 'rate_limited' }
+  }
+
+  return { allowed: true }
+}
 
 function isMissingTable(error, tableName) {
   const code = String(error?.code || '')
@@ -68,6 +118,17 @@ export async function GET(req) {
 
 export async function POST(req) {
   try {
+    const ip = getClientIP(req)
+
+    // Brute-force check
+    const bf = checkBruteForce(ip)
+    if (!bf.allowed) {
+      const msg = bf.reason === 'locked'
+        ? 'Too many failed attempts. Account temporarily locked (1 hour).'
+        : 'Too many attempts. Please try again later.'
+      return NextResponse.json({ ok: false, error: msg }, { status: 429 })
+    }
+
     const supabase = createClient()
     const body = await req.json().catch(() => ({}))
     const rawModule = String(body?.module || 'food').toLowerCase()
@@ -90,7 +151,10 @@ export async function POST(req) {
       }
       if (error) return NextResponse.json({ ok: false, error: error.message || 'Invalid passcode' }, { status: 401 })
       let list = Array.isArray(vendors) ? vendors.filter((v) => v && v.id) : []
-      if (!list.length) return NextResponse.json({ ok: false, error: 'Invalid passcode' }, { status: 401 })
+      if (!list.length) {
+        console.warn(`Failed rep login attempt for code=${code} (ram) from IP: ${ip}`)
+        return NextResponse.json({ ok: false, error: 'Invalid passcode' }, { status: 401 })
+      }
       let ids = list.map((v) => Number(v.id)).filter((n) => Number.isFinite(n) && n > 0)
 
       const cycleId = await resolveActiveRamCycleId(supabase).catch(() => null)
@@ -112,7 +176,10 @@ export async function POST(req) {
         }
       }
 
-      if (!list.length) return NextResponse.json({ ok: false, error: 'Invalid passcode for this cycle' }, { status: 401 })
+      if (!list.length) {
+        console.warn(`Failed rep login attempt for code=${code} (ram cycle mismatch) from IP: ${ip}`)
+        return NextResponse.json({ ok: false, error: 'Invalid passcode for this cycle' }, { status: 401 })
+      }
       const first = list[0]
 
       const token = await sign(
@@ -142,7 +209,10 @@ export async function POST(req) {
     // Food + Exhibition both authenticate with the branch passcode and carry
     // a branch_id claim (exhibition is branch-scoped like Food).
     const { data: br, error } = await supabase.from('branches').select('id, code, name, rep_phone').eq('code', code).single()
-    if (error || !br) return NextResponse.json({ ok:false, error:'Invalid passcode' }, { status:401 })
+    if (error || !br) {
+      console.warn(`Failed rep login attempt for code=${code} (food/exhibition) from IP: ${ip}`)
+      return NextResponse.json({ ok:false, error:'Invalid passcode' }, { status:401 })
+    }
 
     const token = await sign({ role: 'rep', module: portalModule, branch_id: br.id, branch_code: br.code }, 60 * 60 * 8) // 8h
     const res = NextResponse.json({ ok:true, module: portalModule, branch: br, rep_phone: br.rep_phone || '' })

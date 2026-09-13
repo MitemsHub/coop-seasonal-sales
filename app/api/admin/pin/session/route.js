@@ -1,36 +1,114 @@
 // app/api/admin/pin/session/route.js
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
 import { sign, verify } from '@/lib/signing'
+import crypto from 'crypto'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const isProd = process.env.NODE_ENV === 'production'
 
+// ── Rate limiting & brute-force protection ───────────────────────
+// In-memory stores — production deployments should swap these for Redis.
+const attemptStore = new Map()   // key → { count, windowStart }
+const lockoutStore = new Map()   // key → lockoutExpiresAt
+
+const MAX_ATTEMPTS = 5           // per window
+const WINDOW_MS = 15 * 60 * 1000 // 15 minutes
+const LOCKOUT_THRESHOLD = 10     // attempts before lockout
+const LOCKOUT_MS = 60 * 60 * 1000 // 1 hour
+
+function getClientIP(req) {
+  const forwarded = req.headers.get('x-forwarded-for')
+  if (forwarded) return forwarded.split(',')[0].trim()
+  return req.headers.get('x-real-ip') || req.headers.get('x-vercel-forwarded-for') || 'unknown'
+}
+
+function checkBruteForce(ip) {
+  const now = Date.now()
+
+  // Check lockout
+  const lockExpiry = lockoutStore.get(ip)
+  if (lockExpiry && now < lockExpiry) {
+    return { allowed: false, reason: 'locked' }
+  }
+  if (lockExpiry && now >= lockExpiry) {
+    lockoutStore.delete(ip)
+    attemptStore.delete(ip)
+  }
+
+  // Check rate limit window
+  const record = attemptStore.get(ip)
+  if (!record || now - record.windowStart > WINDOW_MS) {
+    attemptStore.set(ip, { count: 1, windowStart: now })
+    return { allowed: true }
+  }
+
+  record.count++
+  if (record.count > MAX_ATTEMPTS) {
+    // Trigger lockout after LOCKOUT_THRESHOLD
+    if (record.count >= LOCKOUT_THRESHOLD) {
+      lockoutStore.set(ip, now + LOCKOUT_MS)
+      console.warn(`Admin PIN lockout triggered for IP: ${ip}`)
+      return { allowed: false, reason: 'locked' }
+    }
+    return { allowed: false, reason: 'rate_limited' }
+  }
+
+  return { allowed: true }
+}
+
+// Timing-safe comparison to prevent timing attacks
+function timingSafeEqual(a, b) {
+  if (!a || !b) return false
+  const bufA = Buffer.from(a, 'utf8')
+  const bufB = Buffer.from(b, 'utf8')
+  if (bufA.length !== bufB.length) {
+    // Still compare to avoid length-based timing leaks
+    crypto.timingSafeEqual(bufA, Buffer.alloc(bufA.length))
+    return false
+  }
+  return crypto.timingSafeEqual(bufA, bufB)
+}
+
 export async function POST(req) {
   try {
+    const ip = getClientIP(req)
+
+    // Brute-force check
+    const bf = checkBruteForce(ip)
+    if (!bf.allowed) {
+      const msg = bf.reason === 'locked'
+        ? 'Too many failed attempts. Account temporarily locked (1 hour).'
+        : 'Too many attempts. Please try again later.'
+      return NextResponse.json({ ok: false, error: msg }, { status: 429 })
+    }
+
     const { passcode } = await req.json()
     const PIN = process.env.ADMIN_PASSCODE
     if (!PIN) {
       console.error('ADMIN_PASSCODE environment variable is not set')
-      return NextResponse.json({ ok:false, error:'Server configuration error' }, { status:500 })
+      return NextResponse.json({ ok: false, error: 'Server configuration error' }, { status: 500 })
     }
-    if ((passcode || '') !== PIN) {
-      return NextResponse.json({ ok:false, error:'Invalid passcode' }, { status:401 })
+
+    // Timing-safe comparison instead of plain ===
+    if (!timingSafeEqual(passcode || '', PIN)) {
+      console.warn(`Failed admin PIN attempt from IP: ${ip}`)
+      return NextResponse.json({ ok: false, error: 'Invalid passcode' }, { status: 401 })
     }
-    const token = sign({ role:'admin' }, 60 * 60 * 8) // 8h
-    const res = NextResponse.json({ ok:true })
-    res.cookies.set('admin_token', token, { 
-      httpOnly: true, 
-      sameSite: 'lax', 
-      path: '/', 
-      maxAge: 60*60*8,
-      secure: isProd
+
+    const token = sign({ role: 'admin' }, 60 * 60 * 8) // 8h
+    const res = NextResponse.json({ ok: true })
+    res.cookies.set('admin_token', token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 8,
+      secure: isProd,
     })
     return res
   } catch (e) {
-    return NextResponse.json({ ok:false, error:e.message }, { status:500 })
+    return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
   }
 }
 
@@ -62,49 +140,4 @@ export async function GET(req) {
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Session error' }, { status: 500 })
   }
-}
-
-// middleware.js (only the admin guard part shown)
-
-export async function middleware(req) {
-  const res = NextResponse.next()
-  const { pathname } = req.nextUrl
-
-  const isAdminPath = pathname.startsWith('/admin') || pathname.startsWith('/api/admin')
-  const isRepApi = pathname.startsWith('/api/rep')
-
-  if (!isAdminPath && !isRepApi) return res
-
-  if (isAdminPath) {
-    // 1) accept admin_token cookie
-    const token = req.cookies.get('admin_token')?.value
-    const claim = token && verify(token)
-    if (claim?.role === 'admin') return res
-
-    // 2) fallback to Supabase Auth role=admin
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {
-        cookies: {
-          get: (name) => req.cookies.get(name)?.value,
-          set: (name, value, options) => res.cookies.set({ name, value, ...options }),
-          remove: (name, options) => res.cookies.set({ name, value: '', ...options }),
-        }
-      }
-    )
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user?.app_metadata?.role === 'admin') return res
-
-    const loginUrl = new URL('/admin/pin', req.url)
-    loginUrl.searchParams.set('redirect', pathname)
-    return NextResponse.redirect(loginUrl)
-  }
-
-  // Rep API: handled inside route by verifying rep_token
-  return res
-}
-
-export const config = {
-  matcher: ['/admin/:path*', '/api/admin/:path*', '/api/rep/:path*'],
 }
