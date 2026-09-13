@@ -166,7 +166,7 @@ export default function PortalPage() {
             {/* Reps */}
             <Reveal>
               <div className="group h-full overflow-hidden rounded-xl border border-line bg-surface shadow-xs transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-md">
-                <div className="relative aspect-[5/3] overflow-hidden bg-gradient-to-b from-white to-brand-subtle/50">
+                <div className="relative aspect-[2/1] overflow-hidden bg-gradient-to-b from-white to-brand-subtle/50">
                   <Image
                     src="/images/team-portal-1.webp"
                     alt="Branch Operations — delivery truck with packages in a city setting"
@@ -198,7 +198,7 @@ export default function PortalPage() {
             {/* Vendor */}
             <Reveal delay={0.08}>
               <div className="group h-full overflow-hidden rounded-xl border border-line bg-surface shadow-xs transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-md">
-                <div className="relative aspect-[5/3] overflow-hidden bg-gradient-to-b from-white to-brand-subtle/50">
+                <div className="relative aspect-[2/1] overflow-hidden bg-gradient-to-b from-white to-brand-subtle/50">
                   <Image
                     src="/images/team-portal-2.webp"
                     alt="Vendor Workspace — produce market with fresh goods"
@@ -230,7 +230,7 @@ export default function PortalPage() {
             {/* Admin */}
             <Reveal delay={0.16}>
               <div className="group h-full overflow-hidden rounded-xl border border-line bg-surface shadow-xs transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-md">
-                <div className="relative aspect-[5/3] overflow-hidden bg-gradient-to-b from-white to-brand-subtle/50">
+                <div className="relative aspect-[2/1] overflow-hidden bg-gradient-to-b from-white to-brand-subtle/50">
                   <Image
                     src="/images/team-portal-3.webp"
                     alt="Administration — office desk with computer, reports and analytics"
