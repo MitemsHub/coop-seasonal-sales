@@ -164,64 +164,96 @@ export default function PortalPage() {
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {/* Reps */}
             <Reveal>
-              <div className="group h-full rounded-xl border border-line bg-surface p-6 shadow-xs transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-md">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-subtle text-brand-fg transition-transform duration-200 group-hover:scale-105">
-                  <Truck className="h-5.5 w-5.5" strokeWidth={2} />
-                </span>
-                <h3 className="mt-4 text-[13px] font-semibold text-fg sm:text-base">Reps Portal</h3>
-                <p className="mt-1.5 text-sm leading-5 text-fg/80">
-                  Manage pending and delivered orders for your delivery branch. Processing and
-                  delivery coordination in one place.
-                </p>
-                <Link
-                  href="/rep/access"
-                  className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-medium text-on-accent shadow-xs transition-colors duration-200 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
-                >
-                  Sign in
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
+              <div className="group h-full overflow-hidden rounded-xl border border-line bg-surface shadow-xs transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-md">
+                <div className="relative aspect-[5/3] overflow-hidden bg-gradient-to-b from-white to-brand-subtle/50">
+                  <Image
+                    src="/images/team-portal-1.jpg"
+                    alt="Branch Operations — delivery truck with packages in a city setting"
+                    fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    className="object-contain transition-transform duration-500 ease-out group-hover:scale-105"
+                  />
+                </div>
+                <div className="p-6">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-subtle text-brand-fg transition-transform duration-200 group-hover:scale-105">
+                    <Truck className="h-5.5 w-5.5" strokeWidth={2} />
+                  </span>
+                  <h3 className="mt-4 text-[13px] font-semibold text-fg sm:text-base">Reps Portal</h3>
+                  <p className="mt-1.5 text-sm leading-5 text-fg/80">
+                    Manage orders for your delivery branch. Processing and delivery coordination in
+                    one place.
+                  </p>
+                  <Link
+                    href="/rep/access"
+                    className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-medium text-on-accent shadow-xs transition-all duration-200 hover:bg-brand-hover hover:shadow-md hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+                  >
+                    Sign in
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
               </div>
             </Reveal>
 
             {/* Vendor */}
             <Reveal delay={0.08}>
-              <div className="group h-full rounded-xl border border-line bg-surface p-6 shadow-xs transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-md">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-subtle text-brand-fg transition-transform duration-200 group-hover:scale-105">
-                  <Store className="h-5.5 w-5.5" strokeWidth={2} />
-                </span>
-                <h3 className="mt-4 text-[13px] font-semibold text-fg sm:text-base">Vendor Portal</h3>
-                <p className="mt-1.5 text-sm leading-5 text-fg/80">
-                  Manage your exhibition stand: upload products, set prices and mark orders
-                  delivered when you hand the goods over.
-                </p>
-                <Link
-                  href="/vendor"
-                  className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-medium text-on-accent shadow-xs transition-colors duration-200 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
-                >
-                  Sign in
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
+              <div className="group h-full overflow-hidden rounded-xl border border-line bg-surface shadow-xs transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-md">
+                <div className="relative aspect-[5/3] overflow-hidden bg-gradient-to-b from-white to-brand-subtle/50">
+                  <Image
+                    src="/images/team-portal-2.jpg"
+                    alt="Vendor Workspace — produce market with fresh goods"
+                    fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    className="object-contain transition-transform duration-500 ease-out group-hover:scale-105"
+                  />
+                </div>
+                <div className="p-6">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-subtle text-brand-fg transition-transform duration-200 group-hover:scale-105">
+                    <Store className="h-5.5 w-5.5" strokeWidth={2} />
+                  </span>
+                  <h3 className="mt-4 text-[13px] font-semibold text-fg sm:text-base">Vendor Portal</h3>
+                  <p className="mt-1.5 text-sm leading-5 text-fg/80">
+                    Manage your exhibition stand: upload products, set prices and mark orders as
+                    delivered once done.
+                  </p>
+                  <Link
+                    href="/vendor"
+                    className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-medium text-on-accent shadow-xs transition-all duration-200 hover:bg-brand-hover hover:shadow-md hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+                  >
+                    Sign in
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
               </div>
             </Reveal>
 
             {/* Admin */}
             <Reveal delay={0.16}>
-              <div className="group h-full rounded-xl border border-line bg-surface p-6 shadow-xs transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-md">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-subtle text-brand-fg transition-transform duration-200 group-hover:scale-105">
-                  <ShieldCheck className="h-5.5 w-5.5" strokeWidth={2} />
-                </span>
-                <h3 className="mt-4 text-[13px] font-semibold text-fg sm:text-base">Admin Portal</h3>
-                <p className="mt-1.5 text-sm leading-5 text-fg/80">
-                  Complete system control: inventory, order approvals, reporting, markups and data
-                  imports.
-                </p>
-                <Link
-                  href="/admin/pin"
-                  className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-medium text-on-accent shadow-xs transition-colors duration-200 hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
-                >
-                  Sign in
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
+              <div className="group h-full overflow-hidden rounded-xl border border-line bg-surface shadow-xs transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-md">
+                <div className="relative aspect-[5/3] overflow-hidden bg-gradient-to-b from-white to-brand-subtle/50">
+                  <Image
+                    src="/images/team-portal-3.jpg"
+                    alt="Administration — office desk with computer, reports and analytics"
+                    fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    className="object-contain transition-transform duration-500 ease-out group-hover:scale-105"
+                  />
+                </div>
+                <div className="p-6">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-subtle text-brand-fg transition-transform duration-200 group-hover:scale-105">
+                    <ShieldCheck className="h-5.5 w-5.5" strokeWidth={2} />
+                  </span>
+                  <h3 className="mt-4 text-[13px] font-semibold text-fg sm:text-base">Admin Portal</h3>
+                  <p className="mt-1.5 text-sm leading-5 text-fg/80">
+                    Complete system control: inventory, order approvals, payments, reporting, markups and data imports.
+                  </p>
+                  <Link
+                    href="/admin/pin"
+                    className="mt-5 inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-brand px-5 text-sm font-medium text-on-accent shadow-xs transition-all duration-200 hover:bg-brand-hover hover:shadow-md hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+                  >
+                    Sign in
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </div>
               </div>
             </Reveal>
           </div>
