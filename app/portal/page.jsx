@@ -172,7 +172,7 @@ export default function PortalPage() {
                     alt="Branch Operations — delivery truck with packages in a city setting"
                     fill
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                    className="object-contain transition-transform duration-500 ease-out group-hover:scale-105"
+                    className="object-contain"
                   />
                 </div>
                 <div className="p-6">
@@ -204,7 +204,7 @@ export default function PortalPage() {
                     alt="Vendor Workspace — produce market with fresh goods"
                     fill
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                    className="object-contain transition-transform duration-500 ease-out group-hover:scale-105"
+                    className="object-contain"
                   />
                 </div>
                 <div className="p-6">
@@ -236,7 +236,7 @@ export default function PortalPage() {
                     alt="Administration — office desk with computer, reports and analytics"
                     fill
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                    className="object-contain transition-transform duration-500 ease-out group-hover:scale-105"
+                    className="object-contain"
                   />
                 </div>
                 <div className="p-6">
