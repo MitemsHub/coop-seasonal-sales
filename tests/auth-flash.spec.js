@@ -52,4 +52,26 @@ test.describe('Auth flash prevention', () => {
     await page.waitForTimeout(2000)
     expect(page.url()).toContain('/admin/pin')
   })
+
+  test('rep dashboard redirects to access page without flashing content', async ({ page }) => {
+    await assertRedirectsToLogin(page, `${BASE}/rep/pending`, '/rep/access')
+  })
+
+  test('rep approved redirects to access page without flashing content', async ({ page }) => {
+    await assertRedirectsToLogin(page, `${BASE}/rep/approved`, '/rep/access')
+  })
+
+  test('rep delivered redirects to access page without flashing content', async ({ page }) => {
+    await assertRedirectsToLogin(page, `${BASE}/rep/delivered`, '/rep/access')
+  })
+
+  test('rep ram approved redirects to access page without flashing content', async ({ page }) => {
+    await assertRedirectsToLogin(page, `${BASE}/rep/ram/approved`, '/rep/access')
+  })
+
+  test('rep access page renders normally (no redirect loop)', async ({ page }) => {
+    await page.goto(`${BASE}/rep/access`, { waitUntil: 'domcontentloaded' })
+    await page.waitForTimeout(2000)
+    expect(page.url()).toContain('/rep/access')
+  })
 })
