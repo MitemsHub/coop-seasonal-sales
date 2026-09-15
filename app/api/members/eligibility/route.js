@@ -66,10 +66,14 @@ export async function GET(req) {
     const savingsBase = 0.5 * savings
     const savingsEligible = outstandingLoansTotal > 0 ? 0 : Math.max(0, savingsBase - savingsExposure)
 
-    // Loan eligibility: determined entirely by the admin-configured cycle loan
-    // cap (per member category).  No hardcoded facility or overall cap — the
-    // cycle settings on the admin Data page are the sole source of truth.
-    let loanEligible = 0
+    // Loan eligibility: compute base from savings, then cap at admin limit.
+    // baseEligible = how much the member CAN borrow based on their savings.
+    // The admin-configured cycle cap is the CEILING — the member cannot
+    // exceed it, but can borrow less if their savings don't support more.
+    const rawLoanLimit = savings * 5
+    const effectiveLimit = globalLimit > 0 ? Math.min(rawLoanLimit, globalLimit) : rawLoanLimit
+    const baseEligible = Math.max(0, effectiveLimit - outstandingLoansTotal)
+    let loanEligible = 0  // will be set after cycle cap is read
 
     // ── Cycle-level food loan cap enforcement ──────────────────────────
     // The admin-configured per-category cycle cap is the hard ceiling for
@@ -138,11 +142,16 @@ export async function GET(req) {
       }
     } catch {}
 
-    // Apply cycle cap: the member cannot borrow more than the cycle ceiling minus what they already have.
+    // Apply cycle cap as ceiling: min(baseEligible, remaining cycle cap).
+    // If member is not eligible (baseEligible = 0), loanEligible stays 0
+    // and the grace path applies instead.
     let cycleLoanRemaining = null
     if (cycleLoanCap != null && cycleLoanCap > 0) {
       cycleLoanRemaining = Math.max(0, cycleLoanCap - cycleLoanUsed)
-      loanEligible = cycleLoanRemaining
+      loanEligible = baseEligible > 0 ? Math.min(baseEligible, cycleLoanRemaining) : 0
+    } else {
+      // No cycle cap configured — member can borrow their full base eligibility
+      loanEligible = baseEligible
     }
 
     return NextResponse.json({
@@ -150,6 +159,7 @@ export async function GET(req) {
       eligibility: {
         savingsEligible,
         loanEligible,
+        baseEligible,  // savings×5 - outstanding (before cycle cap)
         outstandingLoansTotal,
         savingsExposure,
         loanExposure,

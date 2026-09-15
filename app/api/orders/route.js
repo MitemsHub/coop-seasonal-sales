@@ -109,10 +109,10 @@ export async function POST(req) {
     const savingsBase = 0.5 * memberSavings;
     const savingsEligible = outstandingLoansTotal > 0 ? 0 : Math.max(0, savingsBase - savingsExposure);
 
-    // Loan eligibility: determined entirely by the admin-configured cycle loan
-    // cap (per member category).  No hardcoded facility or overall cap — the
-    // cycle settings on the admin Data page are the sole source of truth.
-    let loanEligible = 0;
+    // Loan eligibility: compute base from savings, then cap at admin limit.
+    const rawLoanLimit = memberSavings * 5 - outstandingLoansTotal;
+    const baseEligible = globalLimit > 0 ? Math.min(Math.max(rawLoanLimit, 0), globalLimit) : Math.max(rawLoanLimit, 0);
+    let loanEligible = baseEligible;  // will be capped by cycle limit below
 
     // Price lines from DELIVERY branch
     let total = 0
@@ -220,30 +220,66 @@ export async function POST(req) {
       const capAmount = includeInterestInCap ? totalWithInterest : total
       const cumulativeCapAmount = cycleLoanTotal + capAmount
 
-      // When a cycle loan cap is configured (eligibleLoanMaxCap > 0), the
-      // admin-set cap is the sole authority.  No hardcoded facility or
-      // overall cap — the Data page settings are the only source of truth.
+      // Determine the effective ceiling for this member this cycle:
+      //  - eligibleLoanMaxCap = admin-set ceiling for eligible members
+      //  - graceLoanMaxCap = admin-set ceiling for non-eligible members
+      //
+      // The member's baseEligible (savings×5 - outstanding) determines if
+      // they are eligible or not.  The admin cap is the CEILING they cannot
+      // exceed, even if their savings would allow more.
+      //
+      // Flow:
+      //   1. baseEligible > 0 AND eligibleLoanMaxCap > 0 → eligible path
+      //      ceiling = min(baseEligible, eligibleLoanMaxCap - used)
+      //   2. baseEligible > 0 AND eligibleLoanMaxCap == 0 → eligible, no cap
+      //      ceiling = baseEligible (admin hasn't set a limit)
+      //   3. baseEligible == 0 AND graceLoanMaxCap > 0 → grace path
+      //      ceiling = graceLoanMaxCap - used
+      //   4. Neither → Loan not available
+
       if (eligibleLoanMaxCap > 0) {
-        if (cumulativeCapAmount > eligibleLoanMaxCap) {
+        // Admin set a ceiling for this category
+        const eligibleRemaining = Math.max(0, eligibleLoanMaxCap - cycleLoanTotal)
+        // Member can borrow up to min(baseEligible, admin cap remaining)
+        loanEligible = baseEligible > 0 ? Math.min(baseEligible, eligibleRemaining) : 0
+
+        if (capAmount > loanEligible) {
           return NextResponse.json(
             {
               ok: false,
               error: includeInterestInCap
-                ? `Eligible max for this cycle is ₦${eligibleLoanMaxCap.toLocaleString()}. You already have ₦${cycleLoanTotal.toLocaleString()} in this cycle; adding ₦${totalWithInterest.toLocaleString()} (incl. ${loanRatePct}% interest) would exceed it.`
-                : `Eligible max for this cycle is ₦${eligibleLoanMaxCap.toLocaleString()}. You already have ₦${cycleLoanTotal.toLocaleString()} in this cycle; adding ₦${total.toLocaleString()} would exceed it (interest is excluded from the cap).`,
+                ? `Loan limit: ₦${loanEligible.toLocaleString()} remaining this cycle (base ₦${baseEligible.toLocaleString()}, capped at ₦${eligibleLoanMaxCap.toLocaleString()}). Adding ₦${totalWithInterest.toLocaleString()} (incl. ${loanRatePct}% interest) would exceed it.`
+                : `Loan limit: ₦${loanEligible.toLocaleString()} remaining this cycle (base ₦${baseEligible.toLocaleString()}, capped at ₦${eligibleLoanMaxCap.toLocaleString()}). Adding ₦${total.toLocaleString()} would exceed it (interest excluded from cap).`,
+            },
+            { status: 400 }
+          )
+        }
+      } else if (baseEligible > 0) {
+        // Member is eligible by savings, but admin hasn't set a cycle cap.
+        // Use baseEligible as the limit.
+        loanEligible = baseEligible
+        if (capAmount > loanEligible) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: includeInterestInCap
+                ? `Loan available: ₦${loanEligible.toLocaleString()}. Adding ₦${totalWithInterest.toLocaleString()} (incl. ${loanRatePct}% interest) would exceed it.`
+                : `Loan available: ₦${loanEligible.toLocaleString()}. Adding ₦${total.toLocaleString()} would exceed it (interest excluded from cap).`,
             },
             { status: 400 }
           )
         }
       } else if (graceLoanMaxCap > 0) {
-        // No eligible cap set — try the grace path if configured
-        if (cumulativeCapAmount > graceLoanMaxCap) {
+        // Member is not eligible by savings (baseEligible = 0), but admin
+        // set a grace cap — allow up to that amount, once per cycle.
+        const graceRemaining = Math.max(0, graceLoanMaxCap - cycleLoanTotal)
+        if (capAmount > graceRemaining) {
           return NextResponse.json(
             {
               ok: false,
               error: includeInterestInCap
-                ? `You are currently not eligible for Loan. Grace max for this cycle is ₦${graceLoanMaxCap.toLocaleString()} but you already have ₦${cycleLoanTotal.toLocaleString()} and adding ₦${totalWithInterest.toLocaleString()} (incl. ${loanRatePct}% interest) would exceed it.`
-                : `You are currently not eligible for Loan. Grace max for this cycle is ₦${graceLoanMaxCap.toLocaleString()} but you already have ₦${cycleLoanTotal.toLocaleString()} and adding ₦${total.toLocaleString()} would exceed it (interest is excluded from the cap).`,
+                ? `You are not eligible for Loan (savings insufficient). Grace limit is ₦${graceLoanMaxCap.toLocaleString()} per cycle (₦${graceRemaining.toLocaleString()} remaining). Adding ₦${totalWithInterest.toLocaleString()} (incl. ${loanRatePct}% interest) would exceed it.`
+                : `You are not eligible for Loan (savings insufficient). Grace limit is ₦${graceLoanMaxCap.toLocaleString()} per cycle (₦${graceRemaining.toLocaleString()} remaining). Adding ₦${total.toLocaleString()} would exceed it (interest excluded from cap).`,
             },
             { status: 400 }
           )
