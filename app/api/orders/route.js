@@ -84,7 +84,7 @@ export async function POST(req) {
     const sumAmt = (rows) => (rows || []).reduce((s, r) => s + Number(r.total_amount || 0), 0);
 
     // Cross-module exposure: Food + Exhibition orders in the current year
-    const { loanExposureWithInterest, savingsExposure } = await getCrossModuleExposure(supabase, memberId)
+    const { loanExposure, savingsExposure } = await getCrossModuleExposure(supabase, memberId)
 
     // Cumulative loan amount in THIS cycle for this member (for cycle cap enforcement).
     let cycleLoanTotal = 0
@@ -104,7 +104,7 @@ export async function POST(req) {
     const globalLimit = Number(member.global_limit || 0);
 
     // Any outstanding loan (core + exposure) blocks Savings
-    const outstandingLoansTotal = memberLoans + loanExposureWithInterest;
+    const outstandingLoansTotal = memberLoans + loanExposure;
 
     const savingsBase = 0.5 * memberSavings;
     const savingsEligible = outstandingLoansTotal > 0 ? 0 : Math.max(0, savingsBase - savingsExposure);
@@ -114,9 +114,9 @@ export async function POST(req) {
     const LOAN_CAP = 1000000;           // ₦1,000,000 overall cap
     const rawLoanLimit = memberSavings * 5 - outstandingLoansTotal;
     const baseEligible = Math.min(Math.max(rawLoanLimit, 0), globalLimit);
-    const capRemaining = Math.max(0, LOAN_CAP - loanExposureWithInterest);
+    const capRemaining = Math.max(0, LOAN_CAP - loanExposure);
     // Facility behaves like its own pool and reduces with current exposure
-    const facilityRemaining = Math.max(0, ADDITIONAL_FACILITY - loanExposureWithInterest);
+    const facilityRemaining = Math.max(0, ADDITIONAL_FACILITY - loanExposure);
     const loanEligible = Math.min(baseEligible + facilityRemaining, capRemaining);
 
     // Price lines from DELIVERY branch

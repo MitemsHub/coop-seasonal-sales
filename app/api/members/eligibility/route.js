@@ -25,11 +25,13 @@ export async function GET(req) {
 
     let interestRatePct = 13
     let includeInterestInCap = true
+    let activeCycleId = null
     try {
       const cyclesHasInclude = await hasColumn('cycles', 'food_loan_cap_include_interest').catch(() => false)
       const select = cyclesHasInclude ? 'id,food_loan_interest_rate_pct,food_loan_cap_include_interest' : 'id,food_loan_interest_rate_pct'
       const { data: cRow, error: cErr } = await supabase.from('cycles').select(select).eq('is_active', true).maybeSingle()
       if (!cErr && cRow) {
+        activeCycleId = cRow.id
         if (cRow.food_loan_interest_rate_pct != null) {
           interestRatePct = Math.max(0, Number(cRow.food_loan_interest_rate_pct || 0))
         }
@@ -40,10 +42,10 @@ export async function GET(req) {
     } catch {}
     const interestRate = Math.max(0, Number(interestRatePct || 0)) / 100
 
-    // 1) Member snapshot (core balances)
+    // 1) Member snapshot (core balances + category for cycle cap lookup)
     const { data: m, error: mErr } = await supabase
       .from('members')
-      .select('member_id,savings,loans,global_limit')
+      .select('member_id,savings,loans,global_limit,category')
       .eq('member_id', memberId)
       .single()
     if (mErr || !m) {
@@ -73,7 +75,81 @@ export async function GET(req) {
     const capRemaining = Math.max(0, LOAN_CAP - loanExposure)
     // Facility behaves like its own pool: remaining facility reduces by existing exposure
     const facilityRemaining = Math.max(0, ADDITIONAL_FACILITY - loanExposure)
-    const loanEligible = Math.min(baseEligible + facilityRemaining, capRemaining)
+    let loanEligible = Math.min(baseEligible + facilityRemaining, capRemaining)
+
+    // ── Cycle-level food loan cap enforcement ──────────────────────────
+    // The admin-configured per-category cycle cap is the hard ceiling for
+    // how much a member can borrow via Loan in a single cycle.  When the
+    // cap is set, loanEligible is further reduced to never exceed the
+    // remaining cycle capacity (cap minus what the member already has in
+    // Pending/Posted/Delivered loan orders this cycle).
+    let cycleLoanCap = null       // the admin-set per-category cap (null = no cap set)
+    let cycleLoanUsed = 0         // cumulative loan total this cycle
+    let graceLoanCap = 0          // grace (non-eligible) cycle cap
+    try {
+      const cyclesHasPolicy = await hasColumn('cycles', 'food_loan_eligible_amount_cap').catch(() => false)
+      if (cyclesHasPolicy && activeCycleId) {
+        const cyclesHasPolicyV2 = await hasColumn('cycles', 'food_loan_eligible_amount_cap_pensioner').catch(() => false)
+        const hasCycleIdCol = await hasColumn('orders', 'cycle_id').catch(() => false)
+
+        const selectCols = cyclesHasPolicyV2
+          ? 'id,food_loan_eligible_amount_cap,food_loan_grace_amount_cap,food_loan_eligible_amount_cap_pensioner,food_loan_eligible_amount_cap_retiree,food_loan_eligible_amount_cap_active,food_loan_grace_amount_cap_pensioner,food_loan_grace_amount_cap_retiree,food_loan_grace_amount_cap_active'
+          : 'id,food_loan_eligible_amount_cap,food_loan_grace_amount_cap'
+        const { data: policyRow } = await supabase
+          .from('cycles')
+          .select(selectCols)
+          .eq('id', activeCycleId)
+          .maybeSingle()
+
+        if (policyRow) {
+          const memberCategory = String(m?.category || '').toLowerCase()
+          const group = memberCategory.includes('pension')
+            ? 'pensioner' : memberCategory.includes('retire')
+              ? 'retiree' : 'active'
+
+          const eligibleFallback = Math.max(0, Math.trunc(Number(policyRow.food_loan_eligible_amount_cap || 0)))
+          const graceFallback = Math.max(0, Math.trunc(Number(policyRow.food_loan_grace_amount_cap || 0)))
+
+          if (cyclesHasPolicyV2) {
+            const eligibleByGroup = {
+              pensioner: Math.max(0, Math.trunc(Number(policyRow.food_loan_eligible_amount_cap_pensioner || 0))),
+              retiree: Math.max(0, Math.trunc(Number(policyRow.food_loan_eligible_amount_cap_retiree || 0))),
+              active: Math.max(0, Math.trunc(Number(policyRow.food_loan_eligible_amount_cap_active || 0))),
+            }
+            const graceByGroup = {
+              pensioner: Math.max(0, Math.trunc(Number(policyRow.food_loan_grace_amount_cap_pensioner || 0))),
+              retiree: Math.max(0, Math.trunc(Number(policyRow.food_loan_grace_amount_cap_retiree || 0))),
+              active: Math.max(0, Math.trunc(Number(policyRow.food_loan_grace_amount_cap_active || 0))),
+            }
+            cycleLoanCap = (eligibleByGroup[group] || 0) > 0 ? eligibleByGroup[group] : eligibleFallback
+            graceLoanCap = (graceByGroup[group] || 0) > 0 ? graceByGroup[group] : graceFallback
+          } else {
+            cycleLoanCap = eligibleFallback
+            graceLoanCap = graceFallback
+          }
+
+          // Cumulative loan amount already in this cycle (Pending/Posted/Delivered)
+          if (hasCycleIdCol && cycleLoanCap > 0) {
+            const statuses = ['Pending', 'Posted', 'Delivered']
+            const { data: cycleRows } = await supabase
+              .from('orders')
+              .select('total_amount')
+              .eq('member_id', memberId)
+              .eq('payment_option', 'Loan')
+              .eq('cycle_id', activeCycleId)
+              .in('status', statuses)
+            cycleLoanUsed = (cycleRows || []).reduce((s, r) => s + Number(r.total_amount || 0), 0)
+          }
+        }
+      }
+    } catch {}
+
+    // Apply cycle cap: the member cannot borrow more than the cycle ceiling minus what they already have.
+    let cycleLoanRemaining = null
+    if (cycleLoanCap != null && cycleLoanCap > 0) {
+      cycleLoanRemaining = Math.max(0, cycleLoanCap - cycleLoanUsed)
+      loanEligible = Math.min(loanEligible, cycleLoanRemaining)
+    }
 
     return NextResponse.json({
       ok: true,
@@ -85,7 +161,12 @@ export async function GET(req) {
         loanExposure,
         include_interest_in_cap: includeInterestInCap,
         interest_rate: interestRate,
-        interest_rate_pct: interestRatePct
+        interest_rate_pct: interestRatePct,
+        // Cycle-level food loan cap info (for UI display)
+        cycleLoanCap,
+        cycleLoanUsed,
+        cycleLoanRemaining,
+        graceLoanCap,
       },
       memberSnapshot: {
         savings,
