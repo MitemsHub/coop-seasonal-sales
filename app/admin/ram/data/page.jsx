@@ -60,6 +60,11 @@ function RamDataContent() {
   const [creatingCycle, setCreatingCycle] = useState(false)
   const [activatingCycle, setActivatingCycle] = useState(false)
   const [cycleSetup, setCycleSetup] = useState(null)
+  const [editingCycle, setEditingCycle] = useState(false)
+  const [editCycleCode, setEditCycleCode] = useState('')
+  const [editCycleName, setEditCycleName] = useState('')
+  const [editCycleStartsAt, setEditCycleStartsAt] = useState('')
+  const [editCycleEndsAt, setEditCycleEndsAt] = useState('')
 
   const pageSize = 10
 
@@ -201,6 +206,55 @@ function RamDataContent() {
       setMsg({ type: 'error', text: e?.message || 'Failed to set active cycle' })
     } finally {
       setActivatingCycle(false)
+    }
+  }
+
+  const startEditCycle = () => {
+    const c = (cycles || []).find((x) => Number(x?.id) === Number(selectedCycleId))
+    if (!c) return
+    setEditCycleCode(c.code || '')
+    setEditCycleName(c.name || '')
+    setEditCycleStartsAt(c.starts_at ? String(c.starts_at).slice(0, 16) : '')
+    setEditCycleEndsAt(c.ends_at ? String(c.ends_at).slice(0, 16) : '')
+    setEditingCycle(true)
+  }
+
+  const cancelEditCycle = () => {
+    setEditingCycle(false)
+    setEditCycleCode('')
+    setEditCycleName('')
+    setEditCycleStartsAt('')
+    setEditCycleEndsAt('')
+  }
+
+  const saveEditCycle = async () => {
+    if (!selectedCycleId) return
+    try {
+      setSavingPolicy(true)
+      setPolicyMsg('')
+      const payload = {
+        id: Number(selectedCycleId),
+        code: editCycleCode.trim(),
+        name: editCycleName.trim(),
+      }
+      if (editCycleStartsAt) payload.starts_at = editCycleStartsAt
+      if (editCycleEndsAt) payload.ends_at = editCycleEndsAt
+
+      const res = await fetch('/api/admin/ram/cycles', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to update cycle')
+      setPolicyMsg('Cycle updated successfully')
+      setEditingCycle(false)
+      await loadCycles()
+    } catch (e) {
+      setPolicyMsg(`Error: ${e?.message || 'Failed to update cycle'}`)
+    } finally {
+      setSavingPolicy(false)
     }
   }
 
@@ -493,7 +547,62 @@ function RamDataContent() {
               >
                 {activatingCycle ? 'Updating...' : 'Set Active'}
               </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+                onClick={editingCycle ? cancelEditCycle : startEditCycle}
+                disabled={selectedCycleId == null}
+              >
+                {editingCycle ? 'Cancel Edit' : 'Edit Cycle'}
+              </button>
             </div>
+            {editingCycle && (
+              <div className="mt-3 rounded-xl border border-line bg-surface p-3 space-y-2">
+                <div className="text-xs font-semibold text-fg mb-2">Edit Selected Cycle</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input
+                    className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    placeholder="Code"
+                    value={editCycleCode}
+                    onChange={(e) => setEditCycleCode(e.target.value)}
+                  />
+                  <input
+                    className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    placeholder="Name"
+                    value={editCycleName}
+                    onChange={(e) => setEditCycleName(e.target.value)}
+                  />
+                  <div>
+                    <label className="block text-xs font-medium text-subtext mb-1">Starts At</label>
+                    <input
+                      type="datetime-local"
+                      className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
+                      value={editCycleStartsAt}
+                      onChange={(e) => setEditCycleStartsAt(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-subtext mb-1">Ends At</label>
+                    <input
+                      type="datetime-local"
+                      className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
+                      value={editCycleEndsAt}
+                      onChange={(e) => setEditCycleEndsAt(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-lg bg-success-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+                    onClick={saveEditCycle}
+                    disabled={savingPolicy || !editCycleCode.trim() || !editCycleName.trim()}
+                  >
+                    {savingPolicy ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="rounded-xl border border-line bg-subtle/40 p-4">

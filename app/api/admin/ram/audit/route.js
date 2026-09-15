@@ -40,6 +40,16 @@ export async function GET(req) {
       return NextResponse.json({ ok: true, events: [], total: 0, locations: [] })
     }
 
+    // Check if the module column exists on audit_log.
+    const { error: moduleColErr } = await supabase.from('audit_log').select('module').limit(1)
+    const hasModule = !moduleColErr
+    if (!hasModule) {
+      return NextResponse.json(
+        { ok: false, error: 'The audit_log.module column is missing. Please run the migration script migrations/add-audit-module-column.sql in your Supabase SQL editor.' },
+        { status: 500 }
+      )
+    }
+
     let countQ = supabase.from('audit_log').select('id', { count: 'exact', head: true }).eq('module', 'ram').in('order_id', orderIds)
     if (action && ACTIONS.includes(action)) countQ = countQ.eq('action', action)
     const { count } = await countQ

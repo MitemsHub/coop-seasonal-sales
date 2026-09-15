@@ -44,6 +44,13 @@ export default function AdminMarkupsPage() {
   const [exportingExcel, setExportingExcel] = useState(false)
   const [exportingPDF, setExportingPDF] = useState(false)
 
+  // Bulk delivery location update states
+  const [bulkBranchCode, setBulkBranchCode] = useState('')
+  const [bulkSkus, setBulkSkus] = useState('')
+  const [bulkCycleId, setBulkCycleId] = useState('')
+  const [bulkProcessing, setBulkProcessing] = useState(false)
+  const [bulkResult, setBulkResult] = useState(null)
+
   const Spinner = ({ className = 'h-4 w-4 text-on-accent' }) => (
     <svg className={`animate-spin ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -366,6 +373,39 @@ export default function AdminMarkupsPage() {
       alert('PDF export failed. Please try again.')
     } finally {
       setExportingPDF(false)
+    }
+  }
+
+  const bulkUpdateDelivery = async () => {
+    try {
+      setBulkProcessing(true)
+      setBulkResult(null)
+      setMessage('')
+      const skusArray = bulkSkus.split(',').map((s) => s.trim()).filter(Boolean)
+      if (!bulkBranchCode || skusArray.length === 0) {
+        setBulkResult({ ok: false, error: 'Please select a branch and enter at least one SKU' })
+        return
+      }
+      const payload = {
+        branch_code: bulkBranchCode,
+        skus: skusArray,
+      }
+      if (bulkCycleId) payload.cycle_id = Number(bulkCycleId)
+
+      const res = await fetch('/api/admin/markups/bulk-location-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to process bulk update')
+      setBulkResult(json)
+      setMessage(json.message || 'Bulk update completed')
+    } catch (err) {
+      setBulkResult({ ok: false, error: err.message })
+      setMessage(`Bulk update failed: ${err.message}`)
+    } finally {
+      setBulkProcessing(false)
     }
   }
 
@@ -797,6 +837,88 @@ export default function AdminMarkupsPage() {
             </button>
           </div>
         </div>
+      </div>
+      {/* Bulk Delivery Location Update Section */}
+      <div className="mb-4 bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
+        <h2 className="text-[15px] font-semibold mb-2">Bulk Remove Items from Orders</h2>
+        <p className="text-sm text-muted mb-3">
+          Remove specific items from all Pending/Posted orders at a delivery branch. Useful when a product becomes unavailable after orders were placed —
+          affected orders will have those items removed and totals recalculated. Orders with no remaining items will be automatically cancelled.
+        </p>
+        <div className="flex gap-4 items-end flex-wrap">
+          <div className="w-full sm:w-64">
+            <Label htmlFor="bulk-branch">Delivery Branch</Label>
+            <Select
+              id="bulk-branch"
+              value={bulkBranchCode}
+              onChange={(e) => setBulkBranchCode(e.target.value)}
+              disabled={loadingBranches}
+            >
+              <option value="">Select branch</option>
+              {branches.map((b) => (
+                <option key={b.code} value={b.code}>{b.name} ({b.code})</option>
+              ))}
+            </Select>
+          </div>
+          <div className="w-full sm:w-80">
+            <Label htmlFor="bulk-skus">Item SKUs (comma-separated)</Label>
+            <Input
+              id="bulk-skus"
+              type="text"
+              value={bulkSkus}
+              onChange={(e) => setBulkSkus(e.target.value)}
+              placeholder="e.g., RICE-25KG, GROUNDNUT-OIL"
+            />
+          </div>
+          <div className="w-full sm:w-48">
+            <Label htmlFor="bulk-cycle">Cycle (optional)</Label>
+            <Select
+              id="bulk-cycle"
+              value={bulkCycleId}
+              onChange={(e) => setBulkCycleId(e.target.value)}
+            >
+              <option value="">All cycles</option>
+              {cycles.map((c) => (
+                <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
+              ))}
+            </Select>
+          </div>
+          <button
+            type="button"
+            onClick={bulkUpdateDelivery}
+            className="px-4 py-2 rounded-lg bg-danger-fg text-on-accent hover:opacity-90 text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
+            disabled={bulkProcessing || !bulkBranchCode || !bulkSkus.trim()}
+          >
+            {bulkProcessing && <Spinner className="h-4 w-4" />}
+            <span>{bulkProcessing ? 'Processing…' : 'Remove Items'}</span>
+          </button>
+        </div>
+        {bulkResult && (
+          <div className={`mt-3 p-3 rounded-lg border text-sm ${bulkResult.ok ? 'border-success-border bg-success-bg' : 'border-danger-border bg-danger-bg'}`}>
+            {bulkResult.ok ? (
+              <div>
+                <p className="font-medium">✅ {bulkResult.message}</p>
+                {bulkResult.affected_orders > 0 && (
+                  <p className="mt-1 text-xs text-muted">
+                    Affected orders: {bulkResult.affected_orders} | Removed lines: {bulkResult.removed_lines}
+                  </p>
+                )}
+                {bulkResult.missing_skus?.length > 0 && (
+                  <p className="mt-1 text-xs text-warning-fg">
+                    ⚠️ SKUs not found: {bulkResult.missing_skus.join(', ')}
+                  </p>
+                )}
+                {bulkResult.errors?.length > 0 && (
+                  <p className="mt-1 text-xs text-danger-fg">
+                    Errors: {bulkResult.errors.map((e) => `Order #${e.order_id}: ${e.error}`).join('; ')}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-danger-fg">❌ {bulkResult.error}</p>
+            )}
+          </div>
+        )}
       </div>
     </div>
     </ProtectedRoute>

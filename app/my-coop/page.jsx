@@ -508,7 +508,7 @@ function MyCoopContent() {
           </div>
 
           {/* KPI row */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${(isFoodOpen || isRamOpen || exhibitionOpen) ? 'xl:grid-cols-4' : 'xl:grid-cols-2'}`}>
             <StatCard
               featured
               icon={PiggyBank}
@@ -524,20 +524,24 @@ function MyCoopContent() {
               delta={elig ? `${elig.interest_rate_pct}% interest` : 'unavailable'}
               trend="flat"
             />
-            <StatCard
-              icon={Banknote}
-              title="Outstanding"
-              value={outstanding !== null ? naira(outstanding) : '—'}
-              delta={elig ? 'loans + exposure' : 'unavailable'}
-              trend={outstanding > 0 ? 'up' : 'flat'}
-            />
-            <StatCard
-              icon={TrendingUp}
-              title="Available credit"
-              value={elig ? naira(Number(elig.loanEligible || 0) + Number(elig.savingsEligible || 0)) : '—'}
-              delta={elig ? 'loan + savings credit' : 'unavailable'}
-              trend={elig && Number(elig.loanEligible || 0) + Number(elig.savingsEligible || 0) > 0 ? 'up' : 'flat'}
-            />
+            {(isFoodOpen || isRamOpen || exhibitionOpen) && (
+              <>
+                <StatCard
+                  icon={Banknote}
+                  title="Outstanding"
+                  value={outstanding !== null ? naira(outstanding) : '—'}
+                  delta={elig ? 'loans + exposure' : 'unavailable'}
+                  trend={outstanding > 0 ? 'up' : 'flat'}
+                />
+                <StatCard
+                  icon={TrendingUp}
+                  title="Available credit"
+                  value={elig ? naira(Number(elig.loanEligible || 0) + Number(elig.savingsEligible || 0)) : '—'}
+                  delta={elig ? 'loan + savings credit' : 'unavailable'}
+                  trend={elig && Number(elig.loanEligible || 0) + Number(elig.savingsEligible || 0) > 0 ? 'up' : 'flat'}
+                />
+              </>
+            )}
           </div>
 
           {/* Charts row */}
@@ -564,7 +568,7 @@ function MyCoopContent() {
 
             <div className="ui-card p-4">
               <div>
-                <h2 className="font-display text-h2 font-semibold tracking-tight text-fg">Payment mix</h2>
+                <h2 className="font-display text-h2 font-semibold tracking-tight text-fg">Payment Method</h2>
                 <p className="mt-0.5 text-chips text-muted">How you've paid across orders</p>
               </div>
               <div className="mt-4">

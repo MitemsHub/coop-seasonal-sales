@@ -64,12 +64,16 @@ export async function GET(req) {
     if (Number.isFinite(orderDbId) && orderDbId > 0) {
       const { data: order } = await supabase.from('exhibition_orders').select(ORDER_SELECT).eq('id', orderDbId).maybeSingle()
       if (!order) return NextResponse.json({ ok: false, error: 'Order not found' }, { status: 404 })
-      const { data: events, error } = await supabase
+      // Check if the module column exists on audit_log.
+      const { error: moduleColErr } = await supabase.from('audit_log').select('module').limit(1)
+      const hasModule = !moduleColErr
+      let eventsQuery = supabase
         .from('audit_log')
         .select('id, actor, action, detail, created_at')
-        .eq('module', 'exhibition')
         .eq('order_id', String(orderDbId))
         .order('created_at', { ascending: true })
+      if (hasModule) eventsQuery = eventsQuery.eq('module', 'exhibition')
+      const { data: events, error } = await eventsQuery
       if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
       return NextResponse.json({ ok: true, order: orderContext(order), events: (events || []).map(mapEvent) })
     }
@@ -92,6 +96,16 @@ export async function GET(req) {
     const orderIds = (matched || []).map((o) => String(o.id))
     if (!orderIds.length) {
       return NextResponse.json({ ok: true, events: [], total: 0, branches: [] })
+    }
+
+    // Check if the module column exists on audit_log.
+    const { error: moduleColErr } = await supabase.from('audit_log').select('module').limit(1)
+    const hasModule = !moduleColErr
+    if (!hasModule) {
+      return NextResponse.json(
+        { ok: false, error: 'The audit_log.module column is missing. Please run the migration script migrations/add-audit-module-column.sql in your Supabase SQL editor.' },
+        { status: 500 }
+      )
     }
 
     let countQ = supabase
