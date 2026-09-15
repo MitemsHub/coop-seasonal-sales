@@ -192,7 +192,7 @@ function computeMaxAffordableQty({ unitPrice, maxCap, eligibleAmount, includeInt
   return best
 }
 
-async function calculateEligibilityForRam(supabase, memberId, memberSnapshot, unitPrice) {
+async function calculateEligibilityForRam(supabase, memberId, memberSnapshot, unitPrice, qty) {
   // Atomic exposure check: locks the member row to prevent concurrent
   // requests from both passing the exposure check.
   const principalEstimate = unitPrice // preliminary estimate for the atomic check
@@ -200,6 +200,7 @@ async function calculateEligibilityForRam(supabase, memberId, memberSnapshot, un
     p_member_id: memberId,
     p_payment_option: 'Loan', // check against loan first; savings checked separately
     p_principal_amount: principalEstimate,
+    p_qty: qty || 1,
   })
   if (exposureErr) throw new Error(exposureErr.message)
   if (!exposureResult?.ok) throw new Error(exposureResult?.error)
@@ -455,7 +456,7 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: 'Member is not eligible for ram pricing' }, { status: 400 })
     }
 
-    const eligibility = await calculateEligibilityForRam(supabase, memberId, member, unitPrice)
+    const eligibility = await calculateEligibilityForRam(supabase, memberId, member, unitPrice, qty)
 
     // Reject orders outside the ram cycle date window
     if (eligibility.activeRamCycleId != null) {
