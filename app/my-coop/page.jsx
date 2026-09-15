@@ -508,7 +508,7 @@ function MyCoopContent() {
           </div>
 
           {/* KPI row */}
-          <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${(isFoodOpen || isRamOpen || exhibitionOpen) ? 'xl:grid-cols-4' : 'xl:grid-cols-2'}`}>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
               featured
               icon={PiggyBank}
@@ -524,24 +524,20 @@ function MyCoopContent() {
               delta={elig ? `${elig.interest_rate_pct}% interest` : 'unavailable'}
               trend="flat"
             />
-            {(isFoodOpen || isRamOpen || exhibitionOpen) && (
-              <>
-                <StatCard
-                  icon={Banknote}
-                  title="Outstanding"
-                  value={outstanding !== null ? naira(outstanding) : '—'}
-                  delta={elig ? 'loans + exposure' : 'unavailable'}
-                  trend={outstanding > 0 ? 'up' : 'flat'}
-                />
-                <StatCard
-                  icon={TrendingUp}
-                  title="Available credit"
-                  value={elig ? naira(Number(elig.loanEligible || 0) + Number(elig.savingsEligible || 0)) : '—'}
-                  delta={elig ? 'loan + savings credit' : 'unavailable'}
-                  trend={elig && Number(elig.loanEligible || 0) + Number(elig.savingsEligible || 0) > 0 ? 'up' : 'flat'}
-                />
-              </>
-            )}
+            <StatCard
+              icon={Banknote}
+              title="Outstanding"
+              value={outstanding !== null ? naira(outstanding) : '—'}
+              delta={elig ? 'loans + exposure' : 'unavailable'}
+              trend={outstanding > 0 ? 'up' : 'flat'}
+            />
+            <StatCard
+              icon={TrendingUp}
+              title="Available credit"
+              value={(isFoodOpen || isRamOpen || exhibitionOpen) && elig ? naira(Number(elig.loanEligible || 0) + Number(elig.savingsEligible || 0)) : '₦0'}
+              delta={(isFoodOpen || isRamOpen || exhibitionOpen) ? (elig ? 'loan + savings credit' : 'unavailable') : 'No active cycle — credit appears when a cycle opens'}
+              trend={(isFoodOpen || isRamOpen || exhibitionOpen) && elig && Number(elig.loanEligible || 0) + Number(elig.savingsEligible || 0) > 0 ? 'up' : 'flat'}
+            />
           </div>
 
           {/* Charts row */}
