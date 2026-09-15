@@ -142,16 +142,22 @@ export async function GET(req) {
       }
     } catch {}
 
-    // Apply cycle cap as ceiling: min(baseEligible, remaining cycle cap).
-    // If member is not eligible (baseEligible = 0), loanEligible stays 0
-    // and the grace path applies instead.
+    // Apply cycle cap as ceiling.
+    // The facility (graceLoanCap) is ADDED to the savings-based eligibility
+    // for eligible members — it's a universal pool, not just for non-eligible.
+    // The admin-set eligible cap is the absolute ceiling.
+    //
+    // totalBorrowable = baseEligible + facility (savings-based + grace pool)
+    // ceiling          = eligibleCap - cycleLoanUsed (admin cap minus what they've used)
+    // loanEligible     = min(totalBorrowable, ceiling)
     let cycleLoanRemaining = null
     if (cycleLoanCap != null && cycleLoanCap > 0) {
       cycleLoanRemaining = Math.max(0, cycleLoanCap - cycleLoanUsed)
-      loanEligible = baseEligible > 0 ? Math.min(baseEligible, cycleLoanRemaining) : 0
+      const totalBorrowable = baseEligible + graceLoanCap
+      loanEligible = Math.min(totalBorrowable, cycleLoanRemaining)
     } else {
-      // No cycle cap configured — member can borrow their full base eligibility
-      loanEligible = baseEligible
+      // No cycle cap configured — member gets their full base + facility
+      loanEligible = baseEligible + graceLoanCap
     }
 
     return NextResponse.json({
