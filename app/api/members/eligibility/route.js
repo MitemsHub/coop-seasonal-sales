@@ -66,16 +66,10 @@ export async function GET(req) {
     const savingsBase = 0.5 * savings
     const savingsEligible = outstandingLoansTotal > 0 ? 0 : Math.max(0, savingsBase - savingsExposure)
 
-    // Loan eligibility: base eligibility plus N300,000 facility (only if base > 0), capped at N1,000,000
-    const ADDITIONAL_FACILITY = 300000 // ₦300,000 facility (total pool)
-    const LOAN_CAP = 1000000 // ₦1,000,000 overall cap
-    const rawLoanLimit = savings * 5
-    const effectiveLimit = Math.min(rawLoanLimit, globalLimit)
-    const baseEligible = Math.max(0, effectiveLimit - outstandingLoansTotal)
-    const capRemaining = Math.max(0, LOAN_CAP - loanExposure)
-    // Facility behaves like its own pool: remaining facility reduces by existing exposure
-    const facilityRemaining = Math.max(0, ADDITIONAL_FACILITY - loanExposure)
-    let loanEligible = Math.min(baseEligible + facilityRemaining, capRemaining)
+    // Loan eligibility: determined entirely by the admin-configured cycle loan
+    // cap (per member category).  No hardcoded facility or overall cap — the
+    // cycle settings on the admin Data page are the sole source of truth.
+    let loanEligible = 0
 
     // ── Cycle-level food loan cap enforcement ──────────────────────────
     // The admin-configured per-category cycle cap is the hard ceiling for
@@ -148,7 +142,7 @@ export async function GET(req) {
     let cycleLoanRemaining = null
     if (cycleLoanCap != null && cycleLoanCap > 0) {
       cycleLoanRemaining = Math.max(0, cycleLoanCap - cycleLoanUsed)
-      loanEligible = Math.min(loanEligible, cycleLoanRemaining)
+      loanEligible = cycleLoanRemaining
     }
 
     return NextResponse.json({

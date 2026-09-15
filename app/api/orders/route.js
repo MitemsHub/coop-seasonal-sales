@@ -109,15 +109,10 @@ export async function POST(req) {
     const savingsBase = 0.5 * memberSavings;
     const savingsEligible = outstandingLoansTotal > 0 ? 0 : Math.max(0, savingsBase - savingsExposure);
 
-    // Loan eligibility: base eligibility plus N300,000 facility, capped against remaining of N1,000,000
-    const ADDITIONAL_FACILITY = 300000; // ₦300,000 facility (total pool)
-    const LOAN_CAP = 1000000;           // ₦1,000,000 overall cap
-    const rawLoanLimit = memberSavings * 5 - outstandingLoansTotal;
-    const baseEligible = Math.min(Math.max(rawLoanLimit, 0), globalLimit);
-    const capRemaining = Math.max(0, LOAN_CAP - loanExposure);
-    // Facility behaves like its own pool and reduces with current exposure
-    const facilityRemaining = Math.max(0, ADDITIONAL_FACILITY - loanExposure);
-    const loanEligible = Math.min(baseEligible + facilityRemaining, capRemaining);
+    // Loan eligibility: determined entirely by the admin-configured cycle loan
+    // cap (per member category).  No hardcoded facility or overall cap — the
+    // cycle settings on the admin Data page are the sole source of truth.
+    let loanEligible = 0;
 
     // Price lines from DELIVERY branch
     let total = 0
@@ -224,31 +219,24 @@ export async function POST(req) {
     } else if (paymentOption === 'Loan') {
       const capAmount = includeInterestInCap ? totalWithInterest : total
       const cumulativeCapAmount = cycleLoanTotal + capAmount
-      if (eligibleLoanMaxCap > 0 && cumulativeCapAmount > eligibleLoanMaxCap) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: includeInterestInCap
-              ? `Eligible max for this cycle is ₦${eligibleLoanMaxCap.toLocaleString()}. You already have ₦${cycleLoanTotal.toLocaleString()} in this cycle; adding ₦${totalWithInterest.toLocaleString()} (incl. ${loanRatePct}% interest) would exceed it.`
-              : `Eligible max for this cycle is ₦${eligibleLoanMaxCap.toLocaleString()}. You already have ₦${cycleLoanTotal.toLocaleString()} in this cycle; adding ₦${total.toLocaleString()} would exceed it (interest is excluded from the cap).`,
-          },
-          { status: 400 }
-        )
-      }
 
-      const eligibilityCapAmount = includeInterestInCap ? totalWithInterest : total
-      if (eligibilityCapAmount > loanEligible) {
-        if (graceLoanMaxCap <= 0) {
+      // When a cycle loan cap is configured (eligibleLoanMaxCap > 0), the
+      // admin-set cap is the sole authority.  No hardcoded facility or
+      // overall cap — the Data page settings are the only source of truth.
+      if (eligibleLoanMaxCap > 0) {
+        if (cumulativeCapAmount > eligibleLoanMaxCap) {
           return NextResponse.json(
             {
               ok: false,
               error: includeInterestInCap
-                ? `Total (incl. ${loanRatePct}% interest) ₦${totalWithInterest.toLocaleString()} exceeds Loan available ₦${loanEligible.toLocaleString()}`
-                : `Principal total ₦${total.toLocaleString()} exceeds Loan available ₦${loanEligible.toLocaleString()} (interest is excluded from the cap)`,
+                ? `Eligible max for this cycle is ₦${eligibleLoanMaxCap.toLocaleString()}. You already have ₦${cycleLoanTotal.toLocaleString()} in this cycle; adding ₦${totalWithInterest.toLocaleString()} (incl. ${loanRatePct}% interest) would exceed it.`
+                : `Eligible max for this cycle is ₦${eligibleLoanMaxCap.toLocaleString()}. You already have ₦${cycleLoanTotal.toLocaleString()} in this cycle; adding ₦${total.toLocaleString()} would exceed it (interest is excluded from the cap).`,
             },
             { status: 400 }
           )
         }
+      } else if (graceLoanMaxCap > 0) {
+        // No eligible cap set — try the grace path if configured
         if (cumulativeCapAmount > graceLoanMaxCap) {
           return NextResponse.json(
             {
@@ -280,6 +268,15 @@ export async function POST(req) {
             )
           }
         }
+      } else {
+        // No loan caps configured for this cycle — Loan not available
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'Loan payment is not available for this cycle. No loan limits have been configured by the admin.',
+          },
+          { status: 400 }
+        )
       }
     } else if (paymentOption !== 'Cash') {
       return NextResponse.json({ ok:false, error:'Invalid payment option' }, { status:400 })
@@ -307,7 +304,7 @@ export async function POST(req) {
     // and inserts the order + lines in a single transaction to prevent
     // race conditions where concurrent requests both pass the exposure check.
     const finalTotal = paymentOption === 'Loan' ? totalWithInterest : total
-    const useGrace = ordersHasFoodGraceFlag && paymentOption === 'Loan' && (includeInterestInCap ? totalWithInterest : total) > loanEligible && graceLoanMaxCap > 0 && cumulativeCapAmount <= graceLoanMaxCap
+    const useGrace = ordersHasFoodGraceFlag && paymentOption === 'Loan' && eligibleLoanMaxCap <= 0 && graceLoanMaxCap > 0 && cumulativeCapAmount <= graceLoanMaxCap
 
     const { data: rpcResult, error: rpcErr } = await supabase.rpc('create_food_order_atomic', {
       p_member_id: member.member_id,
