@@ -31,6 +31,13 @@ function DataManagementPageContent() {
   const [creatingCycle, setCreatingCycle] = useState(false)
   const [activatingCycle, setActivatingCycle] = useState(false)
 
+  const [editingCycle, setEditingCycle] = useState(false)
+  const [editCycleCode, setEditCycleCode] = useState('')
+  const [editCycleName, setEditCycleName] = useState('')
+  const [editCycleStartsAt, setEditCycleStartsAt] = useState('')
+  const [editCycleEndsAt, setEditCycleEndsAt] = useState('')
+  const [savingCycleEdit, setSavingCycleEdit] = useState(false)
+
   const [policyLoading, setPolicyLoading] = useState(false)
   const [policySaving, setPolicySaving] = useState(false)
   const [policyMsg, setPolicyMsg] = useState('')
@@ -272,6 +279,54 @@ function DataManagementPageContent() {
     } finally {
       setActivatingCycle(false)
     }
+  }
+
+  const startEditCycle = () => {
+    if (selectedCycleId == null) return
+    const cycle = cycles.find(c => c.id === selectedCycleId)
+    if (!cycle) return
+    setEditCycleCode(cycle.code || '')
+    setEditCycleName(cycle.name || '')
+    setEditCycleStartsAt(cycle.starts_at ? cycle.starts_at.substring(0, 10) : '')
+    setEditCycleEndsAt(cycle.ends_at ? cycle.ends_at.substring(0, 10) : '')
+    setEditingCycle(true)
+  }
+
+  const saveEditCycle = async () => {
+    if (selectedCycleId == null || savingCycleEdit) return
+    setSavingCycleEdit(true)
+    setMessage('')
+    try {
+      const payload = {
+        id: selectedCycleId,
+        code: editCycleCode.trim(),
+        name: editCycleName.trim()
+      }
+      if (editCycleStartsAt) payload.starts_at = editCycleStartsAt
+      else payload.starts_at = null
+      if (editCycleEndsAt) payload.ends_at = editCycleEndsAt
+      else payload.ends_at = null
+
+      const res = await fetch('/api/admin/cycles', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload)
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to update cycle')
+      setMessage('Cycle updated successfully')
+      setEditingCycle(false)
+      await loadCycles()
+    } catch (e2) {
+      setMessage(`Error: ${e2.message}`)
+    } finally {
+      setSavingCycleEdit(false)
+    }
+  }
+
+  const cancelEditCycle = () => {
+    setEditingCycle(false)
   }
 
   const clearAllOrders = async (e) => {
@@ -668,6 +723,11 @@ function DataManagementPageContent() {
                 <Button onClick={setActiveCycle} loading={activatingCycle} disabled={selectedCycleId == null}>
                   {activatingCycle ? 'Setting…' : 'Set Selected as Active'}
                 </Button>
+                {!editingCycle && (
+                  <Button variant="secondary" onClick={startEditCycle} disabled={selectedCycleId == null}>
+                    Edit Cycle
+                  </Button>
+                )}
                 <Button variant="secondary" onClick={loadCycles} loading={loadingCycles} disabled={loadingCycles}>
                   {loadingCycles ? 'Refreshing…' : 'Refresh'}
                 </Button>
@@ -675,6 +735,58 @@ function DataManagementPageContent() {
               <div className="mt-2 text-xs text-muted">
                 Active cycle id: {activeCycleId ?? '—'}
               </div>
+
+              {editingCycle && (
+                <div className="mt-3 border border-line-subtle rounded-xl p-3 bg-subtle/40">
+                  <div className="text-sm font-medium text-fg mb-2">Edit Selected Cycle</div>
+                  <div className="grid gap-2">
+                    <input
+                      type="text"
+                      value={editCycleCode}
+                      onChange={(e) => setEditCycleCode(e.target.value)}
+                      placeholder="Code (e.g., 2026-Q2)"
+                      className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
+                      required
+                    />
+                    <input
+                      type="text"
+                      value={editCycleName}
+                      onChange={(e) => setEditCycleName(e.target.value)}
+                      placeholder="Name (e.g., Fresh Food Q2 2026)"
+                      className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
+                      required
+                    />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <div className="text-xs text-muted mb-1">Starts At</div>
+                        <input
+                          type="date"
+                          value={editCycleStartsAt}
+                          onChange={(e) => setEditCycleStartsAt(e.target.value)}
+                          className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
+                        />
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted mb-1">Ends At</div>
+                        <input
+                          type="date"
+                          value={editCycleEndsAt}
+                          onChange={(e) => setEditCycleEndsAt(e.target.value)}
+                          className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      <Button onClick={saveEditCycle} loading={savingCycleEdit} disabled={savingCycleEdit}>
+                        {savingCycleEdit ? 'Saving…' : 'Save Changes'}
+                      </Button>
+                      <Button variant="secondary" onClick={cancelEditCycle} disabled={savingCycleEdit}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <form onSubmit={createCycle} className="border border-line-subtle rounded-xl p-3 bg-subtle/40">
