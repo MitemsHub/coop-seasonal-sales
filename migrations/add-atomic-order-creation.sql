@@ -84,11 +84,9 @@ BEGIN
   v_savings_eligible := CASE WHEN v_outstanding > 0 THEN 0 ELSE GREATEST(0, v_savings_base - v_savings_exposure) END;
 
   v_raw_loan_limit := v_member_savings * 5 - v_outstanding;
-  v_effective_limit := LEAST(v_raw_loan_limit, v_global_limit);
+  v_effective_limit := CASE WHEN v_global_limit > 0 THEN LEAST(v_raw_loan_limit, v_global_limit) ELSE v_raw_loan_limit END;
   v_base_eligible := GREATEST(0, v_effective_limit);
-  v_facility_remaining := GREATEST(0, 300000 - v_loan_exposure);
-  v_cap_remaining := GREATEST(0, 1000000 - v_loan_exposure);
-  v_loan_eligible := LEAST(v_base_eligible + v_facility_remaining, v_cap_remaining);
+  v_loan_eligible := v_base_eligible;  -- updated when cycle caps are read
 
   -- Enforce limits
   IF p_payment_option = 'Savings' THEN

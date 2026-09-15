@@ -1,18 +1,17 @@
--- Migration: Harden create_food_order_atomic with cycle-cap enforcement
--- The previous version only checked the general eligibility (₦1M / ₦300K
--- facility) inside the transaction.  The per-category cycle caps
--- (food_loan_eligible_amount_cap_*) and grace logic were only checked in
--- the JS pre-code, which runs outside the transaction and is vulnerable
--- to race conditions where two concurrent requests both read stale
--- cycleLoanTotal and both pass the cap check.
+-- migrations/fix-food-atomic-loan-formula.sql
+-- Updates create_food_order_atomic to use the dynamic facility pool formula
+-- instead of hardcoded ₦300K facility and ₦1M cap.
 --
--- This migration replaces the function so that:
---   1. The active cycle's per-category eligible & grace caps are read
---      inside the transaction (after the FOR UPDATE lock).
---   2. The member's cumulative loan total for the current cycle is
---      re-queried inside the transaction.
---   3. The cycle cap, grace cap, and grace-used-once checks are all
---      enforced inside the same transaction that inserts the order.
+-- New formula:
+--   baseEligible = savings × 5 - outstanding
+--   totalBorrowable = baseEligible + graceLoanMaxCap (facility pool)
+--   ceiling = eligibleCap - cycleLoanUsed
+--   loanEligible = min(totalBorrowable, ceiling)
+--
+-- The admin-configured cycle loan caps on the Food Data Management page
+-- are the sole source of truth.  The facility (grace amount) is added to
+-- eligible members' base eligibility — it's a universal pool, not just
+-- for non-eligible members.
 
 CREATE OR REPLACE FUNCTION create_food_order_atomic(
   p_member_id TEXT,
@@ -44,8 +43,6 @@ DECLARE
   v_raw_loan_limit NUMERIC := 0;
   v_effective_limit NUMERIC := 0;
   v_base_eligible NUMERIC := 0;
-  v_facility_remaining NUMERIC := 0;
-  v_cap_remaining NUMERIC := 0;
   v_loan_eligible NUMERIC := 0;
   v_order_id TEXT;
   v_order RECORD;
@@ -100,17 +97,14 @@ BEGIN
   v_savings_base := 0.5 * v_member_savings;
   v_savings_eligible := CASE WHEN v_outstanding > 0 THEN 0 ELSE GREATEST(0, v_savings_base - v_savings_exposure) END;
 
+  -- Loan eligibility: base from savings, no hardcoded facility or cap
   v_raw_loan_limit := v_member_savings * 5 - v_outstanding;
   v_effective_limit := CASE WHEN v_global_limit > 0 THEN LEAST(v_raw_loan_limit, v_global_limit) ELSE v_raw_loan_limit END;
   v_base_eligible := GREATEST(0, v_effective_limit);
-  -- loanEligible will be set by cycle-cap enforcement below; default to base + grace cap
-  v_loan_eligible := v_base_eligible;  -- updated when cycle caps are read
+  -- loanEligible will be set by cycle-cap enforcement below
+  v_loan_eligible := v_base_eligible;
 
   -- ── Cycle-cap enforcement (inside the transaction) ──────────────
-  -- Read per-category cycle caps and the member's cumulative loan
-  -- total for the current cycle, then enforce the cap.  Wrapped in
-  -- an EXCEPTION block so older schemas missing the columns are
-  -- gracefully skipped (the function still works without cycle caps).
   IF p_cycle_id IS NOT NULL AND p_payment_option = 'Loan' THEN
     BEGIN
       SELECT
@@ -210,7 +204,6 @@ BEGIN
       END IF;
     EXCEPTION WHEN OTHERS THEN
       -- Column missing or other schema issue — skip cycle cap enforcement.
-      -- The general eligibility check still applies.
       NULL;
     END;
   END IF;
