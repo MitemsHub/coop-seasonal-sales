@@ -18,7 +18,7 @@ WHERE a.module IS NULL
 UPDATE audit_log a
 SET module = 'ram'
 WHERE a.module IS NULL
-  AND EXISTS (SELECT 1 FROM ram_orders r WHERE r.id::text = a.order_id);
+  AND EXISTS (SELECT 1 FROM ram_orders r WHERE CAST(r.id AS TEXT) = a.order_id);
 
 -- Orphaned/legacy rows: fall back on the row shape.
 -- cycle_id / delivery_branch_id only ever appear on food (admin) rows.
