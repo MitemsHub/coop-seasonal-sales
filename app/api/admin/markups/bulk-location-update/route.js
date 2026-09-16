@@ -56,12 +56,12 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: `No items found for SKUs: ${skus.join(', ')}` }, { status: 404 })
     }
 
-    // 3. Find all orders at this delivery branch (Pending/Posted status only — don't touch Delivered/Cancelled)
+    // 3. Find all orders at this delivery branch (Pending/Posted/Delivered — don't touch Cancelled)
     let ordersQuery = supabase
       .from('orders')
       .select('order_id, status, total_amount, payment_option')
       .eq('delivery_branch_id', branchId)
-      .in('status', ['Pending', 'Posted'])
+      .in('status', ['Pending', 'Posted', 'Delivered'])
 
     if (cycleId != null) {
       ordersQuery = ordersQuery.eq('cycle_id', cycleId)
@@ -73,7 +73,7 @@ export async function POST(request) {
     if (!orders || orders.length === 0) {
       return NextResponse.json({
         ok: true,
-        message: 'No Pending/Posted orders found for this branch',
+        message: 'No Pending/Posted/Delivered orders found for this branch',
         affected_orders: 0,
         removed_lines: 0,
         missing_skus: missingSkus,

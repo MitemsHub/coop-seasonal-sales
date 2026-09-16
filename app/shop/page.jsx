@@ -1341,9 +1341,9 @@ const itemCards = useMemo(() => (
                             Bank Transfer Details
                           </div>
                           <div className="mt-1 space-y-0.5 text-xs text-muted">
-                            <div>Fidelity Bank</div>
-                            <div>Account Number: 5080056982</div>
-                            <div>Account Name: CBN Staff Multipurpose Coop. Soc. Ltd.</div>
+                            <div>Guaranty Trust Bank</div>
+                            <div>Account Number: 0023723318</div>
+                            <div>Account Name: CBN Staff Multipurpose Cooperative Society Limited</div>
                           </div>
                         </div>
                         <a

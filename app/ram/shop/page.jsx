@@ -788,9 +788,9 @@ function RamShopPageContent() {
                         </div>
                         <div className="mb-3 p-3 bg-surface border border-info-border rounded-lg w-full">
                           <div className="text-xs font-semibold text-muted mb-1">Bank Transfer Details</div>
-                          <div className="text-sm text-fg">Fidelity Bank</div>
-                          <div className="text-sm text-fg">Account Number: 5080056982</div>
-                          <div className="text-sm text-fg">Account Name: CBN Staff Multipurpose Coop. Soc. Ltd.</div>
+                          <div className="text-sm text-fg">Guaranty Trust Bank</div>
+                          <div className="text-sm text-fg">Account Number: 0023723318</div>
+                          <div className="text-sm text-fg">Account Name: CBN Staff Multipurpose Cooperative Society Limited</div>
                         </div>
                         <a
                           href="https://wa.me/+2349061388502"

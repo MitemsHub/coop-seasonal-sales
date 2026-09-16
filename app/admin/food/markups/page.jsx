@@ -842,7 +842,7 @@ export default function AdminMarkupsPage() {
       <div className="mb-4 bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
         <h2 className="text-[15px] font-semibold mb-2">Bulk Remove Items from Orders</h2>
         <p className="text-sm text-muted mb-3">
-          Remove specific items from all Pending/Posted orders at a delivery branch. Useful when a product becomes unavailable after orders were placed —
+          Remove specific items from all Pending/Posted/Delivered orders at a delivery branch. Useful when a product becomes unavailable after orders were placed —
           affected orders will have those items removed and totals recalculated. Orders with no remaining items will be automatically cancelled.
         </p>
         <div className="flex gap-4 items-end flex-wrap">
