@@ -670,7 +670,7 @@ export default function AdminMarkupsPage() {
         )}
       </div>
 
-      <div className="bg-surface rounded-xl shadow-lg border border-line-subtle overflow-hidden">
+      <div className="mb-4 bg-surface rounded-xl shadow-lg border border-line-subtle overflow-hidden">
         <div className="p-4 border-b border-line-subtle bg-subtle/60 flex flex-col lg:flex-row lg:items-center gap-3">
           <div className="text-sm font-semibold">Current Markups</div>
           <div className="w-full sm:w-72">
