@@ -665,11 +665,6 @@ function DataManagementPageContent() {
               Prices will be saved to cycle: <strong>{cycles.find(c => c.id === selectedCycleId)?.name || selectedCycleId}</strong>{cycles.find(c => c.id === selectedCycleId)?.is_active ? ' (Active)' : ''}
             </div>
           )}
-          {isDemandTrackingMode && (
-            <div className="mb-3 p-2 bg-info-bg border border-info-border rounded text-xs sm:text-sm text-info-fg">
-              Demand Tracking Mode: Initial stock column is not needed as items have unlimited availability based on member demand.
-            </div>
-          )}
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <input
               type="file"
