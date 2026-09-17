@@ -901,9 +901,7 @@ function RamDataContent() {
             </div>
           </div>
           <div className="mt-3 flex justify-end">
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
+            <Button
               onClick={async () => {
                 if (!pricingEditing) {
                   setPricingEditing(true)
@@ -912,7 +910,8 @@ function RamDataContent() {
                 const ok = await savePrices()
                 if (ok) setPricingEditing(false)
               }}
-              disabled={savingPolicy || selectedCycleId == null}
+              loading={savingPolicy}
+              disabled={selectedCycleId == null}
             >
               {savingPolicy ? 'Saving...' : (pricingEditing ? 'Save Prices' : 'Edit')}
             </Button>
@@ -939,9 +938,7 @@ function RamDataContent() {
                     disabled={loadingCycles || savingPolicy || selectedCycleId == null || !loanRateEditing}
                   />
                 </div>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
+                <Button
                   onClick={async () => {
                     if (!loanRateEditing) {
                       setLoanRateEditing(true)
@@ -950,7 +947,8 @@ function RamDataContent() {
                     const ok = await saveLoanInterestRate()
                     if (ok) setLoanRateEditing(false)
                   }}
-                  disabled={savingPolicy || selectedCycleId == null}
+                  loading={savingPolicy}
+                  disabled={selectedCycleId == null}
                 >
                   {savingPolicy ? 'Saving...' : (loanRateEditing ? 'Save' : 'Edit')}
                 </Button>
@@ -973,9 +971,7 @@ function RamDataContent() {
                     disabled={loadingCycles || savingPolicy || selectedCycleId == null || !vendorRateEditing}
                   />
                 </div>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
+                <Button
                   onClick={async () => {
                     if (!vendorRateEditing) {
                       setVendorRateEditing(true)
@@ -984,7 +980,8 @@ function RamDataContent() {
                     const ok = await saveVendorDeductionRate()
                     if (ok) setVendorRateEditing(false)
                   }}
-                  disabled={savingPolicy || selectedCycleId == null}
+                  loading={savingPolicy}
+                  disabled={selectedCycleId == null}
                 >
                   {savingPolicy ? 'Saving...' : (vendorRateEditing ? 'Save' : 'Edit')}
                 </Button>

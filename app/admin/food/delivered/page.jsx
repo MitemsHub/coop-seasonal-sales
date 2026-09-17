@@ -421,8 +421,7 @@ function DeliveredPageContent() {
               disabled={!nextCursor || loading}
             >
               Next
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+            </Button>
           </div>
         </div>
 

@@ -1335,10 +1335,9 @@ function InventoryPageContent() {
                 size="sm"
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, filteredAndPaginatedRows.totalPages))}
                 disabled={currentPage === filteredAndPaginatedRows.totalPages}
-                className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Next
-              </button>
+              </Button>
             </div>
             <div className="text-sm text-subtext">
               Showing {Math.min((currentPage - 1) * itemsPerPage + 1, filteredAndPaginatedRows.totalItems)} to {Math.min(currentPage * itemsPerPage, filteredAndPaginatedRows.totalItems)} of {filteredAndPaginatedRows.totalItems} items
