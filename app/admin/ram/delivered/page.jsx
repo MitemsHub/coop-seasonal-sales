@@ -5,6 +5,7 @@ import ProtectedRoute from '../../../components/ProtectedRoute'
 import { AnimatePresence, motion } from 'framer-motion'
 import DraggableModal from '../../../components/DraggableModal'
 import RamOrderAuditModal from '../../../components/RamOrderAuditModal'
+import Button from '../../../components/ui/Button'
 import ExportButton from '../../../components/ui/ExportButton'
 import { createManifestDoc, addManifestTable, sanitizePdfText } from '../../../lib/pdfExport'
 import { CheckSquare, ChevronLeft, ChevronRight, Inbox, RefreshCw, RotateCcw, Search } from 'lucide-react'
@@ -437,17 +438,15 @@ function RamDeliveredContent() {
                   }
                 }}
               />
-              <button
-                type="button"
+              <Button
                 onClick={() => {
                   setPage(1)
                   fetchOrders({ page: 1 })
                 }}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:opacity-50"
+                leftIcon={Search}
               >
-                <Search className="h-4 w-4" />
                 Search
-              </button>
+              </Button>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -484,33 +483,30 @@ function RamDeliveredContent() {
         <div className="flex flex-col gap-3 border-b border-line bg-subtle p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <div className="mr-1 text-sm font-semibold text-fg">Delivered Orders</div>
-            <button
-              type="button"
+            <Button
               onClick={fetchOrders}
-              disabled={loading}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
+              loading={loading}
+              variant="accent"
             >
-              <RefreshCw className={['h-3.5 w-3.5', loading ? 'animate-spin' : ''].join(' ')} />
               {loading ? 'Loading…' : 'Refresh'}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="secondary"
               onClick={toggleSelectAll}
               disabled={!pageRows.length}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+              leftIcon={CheckSquare}
             >
-              <CheckSquare className="h-3.5 w-3.5" />
               {allSelectedOnPage ? 'Deselect All' : 'Select All'}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="danger"
               onClick={requestRollbackSelected}
               disabled={!selectedCount || rollbackBulkBusy}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-warning-fg px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+              loading={rollbackBulkBusy}
+              leftIcon={RotateCcw}
             >
-              <RotateCcw className="h-3.5 w-3.5" />
               {rollbackBulkBusy && selectedCount ? 'Rolling back…' : `Rollback Selected (${selectedCount})`}
-            </button>
+            </Button>
           </div>
           <div className="flex items-center gap-2">
             <select
@@ -527,9 +523,9 @@ function RamDeliveredContent() {
               <option value={50}>50</option>
               <option value={100}>100</option>
             </select>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+            <Button
+              variant="secondary"
+              leftIcon={ChevronLeft}
               onClick={() => {
                 const next = Math.max(1, safePage - 1)
                 setPage(next)
@@ -537,15 +533,14 @@ function RamDeliveredContent() {
               }}
               disabled={safePage <= 1}
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
               Prev
-            </button>
+            </Button>
             <div className="text-sm text-muted">
               Page <span className="font-medium text-fg">{safePage}</span> / {pageCount}
             </div>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+            <Button
+              variant="secondary"
+              rightIcon={ChevronRight}
               onClick={() => {
                 const next = Math.min(pageCount, safePage + 1)
                 setPage(next)
@@ -554,8 +549,7 @@ function RamDeliveredContent() {
               disabled={safePage >= pageCount}
             >
               Next
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -685,9 +679,8 @@ function RamDeliveredContent() {
         overlayClassName="bg-black/40"
         footer={
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+            <Button
+              variant="secondary"
               onClick={() => {
                 setRollbackConfirmOpen(false)
                 setRollbackConfirmOrder(null)
@@ -695,15 +688,14 @@ function RamDeliveredContent() {
               disabled={!!rollbackBusyId}
             >
               Cancel
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-lg bg-warning-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+            </Button>
+            <Button
+              variant="danger"
               onClick={confirmRollback}
-              disabled={!!rollbackBusyId}
+              loading={!!rollbackBusyId}
             >
               {rollbackBusyId ? 'Rolling back…' : 'Yes, Rollback'}
-            </button>
+            </Button>
           </div>
         }
       >
@@ -740,22 +732,20 @@ function RamDeliveredContent() {
         overlayClassName="bg-black/40"
         footer={
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+            <Button
+              variant="secondary"
               onClick={() => setRollbackBulkConfirmOpen(false)}
               disabled={rollbackBulkBusy}
             >
               Cancel
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-lg bg-warning-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+            </Button>
+            <Button
+              variant="danger"
               onClick={confirmRollbackSelected}
-              disabled={rollbackBulkBusy}
+              loading={rollbackBulkBusy}
             >
               {rollbackBulkBusy ? 'Rolling back…' : 'Yes, Rollback'}
-            </button>
+            </Button>
           </div>
         }
       >

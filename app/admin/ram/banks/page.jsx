@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import Button from '../../../components/ui/Button'
 import DraggableModal from '../../../components/DraggableModal'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import { Landmark, RefreshCw, Trash2 } from 'lucide-react'
@@ -384,15 +385,13 @@ function RamBanksContent() {
                 value={term}
                 onChange={(e) => setTerm(e.target.value)}
               />
-              <button
-                type="button"
+              <Button
                 onClick={fetchRows}
-                disabled={loading}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
+                loading={loading}
+                variant="accent"
               >
-                <RefreshCw className={['h-4 w-4', loading ? 'animate-spin' : ''].join(' ')} />
                 {loading ? 'Loading…' : 'Refresh'}
-              </button>
+              </Button>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <label className="inline-flex items-center gap-2 text-sm text-fg">
@@ -512,9 +511,8 @@ function RamBanksContent() {
         overlayClassName="bg-black/40"
         footer={
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+            <Button
+              variant="secondary"
               onClick={() => {
                 setBankModalOpen(false)
                 setBankLoc(null)
@@ -522,15 +520,13 @@ function RamBanksContent() {
               disabled={savingBank}
             >
               Cancel
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
+            </Button>
+            <Button
               onClick={saveBank}
-              disabled={savingBank}
+              loading={savingBank}
             >
               {savingBank ? 'Saving…' : 'Save'}
-            </button>
+            </Button>
           </div>
         }
       >
@@ -560,13 +556,12 @@ function RamBanksContent() {
         overlayClassName="bg-black/40"
         footer={
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle"
+            <Button
+              variant="secondary"
               onClick={() => setInvoiceListOpen(false)}
             >
               Close
-            </button>
+            </Button>
           </div>
         }
       >
@@ -609,21 +604,21 @@ function RamBanksContent() {
                         ) : (
                           <span className="text-subtext">—</span>
                         )}
-                        <button
-                          type="button"
-                          className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle"
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           onClick={() => openEditInvoice(inv)}
                         >
                           Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 rounded-lg bg-danger-fg px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110"
+                        </Button>
+                        <Button
+                          variant="danger"
+                          size="sm"
                           onClick={() => confirmDeleteInvoice(inv)}
+                          leftIcon={Trash2}
                         >
-                          <Trash2 className="h-3 w-3" />
                           Delete
-                        </button>
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -645,9 +640,8 @@ function RamBanksContent() {
         overlayClassName="bg-black/40"
         footer={
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+            <Button
+              variant="secondary"
               onClick={() => {
                 setInvoiceEditOpen(false)
                 setInvoiceEditRow(null)
@@ -655,15 +649,13 @@ function RamBanksContent() {
               disabled={invoiceSaving}
             >
               Cancel
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
+            </Button>
+            <Button
               onClick={saveInvoiceEdits}
-              disabled={invoiceSaving}
+              loading={invoiceSaving}
             >
               {invoiceSaving ? 'Saving…' : 'Save'}
-            </button>
+            </Button>
           </div>
         }
       >
@@ -698,9 +690,8 @@ function RamBanksContent() {
         overlayClassName="bg-black/40"
         footer={
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+            <Button
+              variant="secondary"
               onClick={() => {
                 setInvoiceDeleteOpen(false)
                 setInvoiceDeleteRow(null)
@@ -708,15 +699,14 @@ function RamBanksContent() {
               disabled={invoiceDeleting}
             >
               Cancel
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-lg bg-danger-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+            </Button>
+            <Button
+              variant="danger"
               onClick={deleteInvoice}
-              disabled={invoiceDeleting}
+              loading={invoiceDeleting}
             >
               {invoiceDeleting ? 'Deleting…' : 'Delete'}
-            </button>
+            </Button>
           </div>
         }
       >
@@ -735,22 +725,20 @@ function RamBanksContent() {
         overlayClassName="bg-black/40"
         footer={
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+            <Button
+              variant="secondary"
               onClick={() => setInvoiceUploadOpen(false)}
               disabled={uploading}
             >
               Cancel
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-lg bg-success-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+            </Button>
+            <Button
               onClick={uploadInvoice}
-              disabled={uploading || !invoiceFile}
+              loading={uploading}
+              disabled={!invoiceFile}
             >
               {uploading ? 'Uploading…' : 'Upload'}
-            </button>
+            </Button>
           </div>
         }
       >

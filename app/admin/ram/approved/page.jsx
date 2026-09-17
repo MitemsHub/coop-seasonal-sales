@@ -5,6 +5,7 @@ import ProtectedRoute from '../../../components/ProtectedRoute'
 import { AnimatePresence, motion } from 'framer-motion'
 import DraggableModal from '../../../components/DraggableModal'
 import RamOrderAuditModal from '../../../components/RamOrderAuditModal'
+import Button from '../../../components/ui/Button'
 import ExportButton from '../../../components/ui/ExportButton'
 import { CheckSquare, ChevronLeft, ChevronRight, Inbox, RefreshCw, RotateCcw, Search, Truck } from 'lucide-react'
 
@@ -637,17 +638,15 @@ function RamApprovedContent() {
                   }
                 }}
               />
-              <button
-                type="button"
+              <Button
                 onClick={() => {
                   setPage(1)
                   fetchOrders({ page: 1 })
                 }}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:opacity-50"
+                leftIcon={Search}
               >
-                <Search className="h-4 w-4" />
                 Search
-              </button>
+              </Button>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -684,42 +683,38 @@ function RamApprovedContent() {
         <div className="flex flex-col gap-3 border-b border-line bg-subtle p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <div className="mr-1 text-sm font-semibold text-fg">Approved Orders</div>
-            <button
-              type="button"
+            <Button
               onClick={fetchOrders}
-              disabled={loading}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
+              loading={loading}
+              variant="accent"
             >
-              <RefreshCw className={['h-3.5 w-3.5', loading ? 'animate-spin' : ''].join(' ')} />
               {loading ? 'Loading…' : 'Refresh'}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="secondary"
               onClick={toggleSelectAll}
               disabled={!pagedOrders.length}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+              leftIcon={CheckSquare}
             >
-              <CheckSquare className="h-3.5 w-3.5" />
               {allSelected ? 'Deselect All' : 'Select All'}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
               onClick={deliverSelected}
               disabled={!selectedCount || delivering}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-success-fg px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+              loading={delivering}
+              leftIcon={Truck}
             >
-              <Truck className="h-3.5 w-3.5" />
               {delivering && selectedCount ? 'Delivering…' : `Deliver Selected (${selectedCount})`}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="danger"
               onClick={requestRollbackSelected}
               disabled={!selectedCount || delivering || rollbackBulkBusy}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-warning-fg px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+              loading={rollbackBulkBusy}
+              leftIcon={RotateCcw}
             >
-              <RotateCcw className="h-3.5 w-3.5" />
               {rollbackBulkBusy && selectedCount ? 'Rolling back…' : `Rollback Selected (${selectedCount})`}
-            </button>
+            </Button>
           </div>
           <div className="flex items-center gap-2">
             <select
@@ -735,10 +730,9 @@ function RamApprovedContent() {
               <option value={25}>25</option>
               <option value={50}>50</option>
               <option value={100}>100</option>
-            </select>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+            </select>              <Button
+              variant="secondary"
+              leftIcon={ChevronLeft}
               onClick={() => {
                 const next = Math.max(1, safePage - 1)
                 setPage(next)
@@ -746,15 +740,14 @@ function RamApprovedContent() {
               }}
               disabled={safePage <= 1}
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
               Prev
-            </button>
+            </Button>
             <div className="text-sm text-muted">
               Page <span className="font-medium text-fg">{safePage}</span> / {pageCount}
             </div>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+            <Button
+              variant="secondary"
+              rightIcon={ChevronRight}
               onClick={() => {
                 const next = Math.min(pageCount, safePage + 1)
                 setPage(next)
@@ -763,8 +756,7 @@ function RamApprovedContent() {
               disabled={safePage >= pageCount}
             >
               Next
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -915,9 +907,8 @@ function RamApprovedContent() {
         overlayClassName="bg-black/40"
         footer={
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+            <Button
+              variant="secondary"
               onClick={() => {
                 setDeliverConfirmOpen(false)
                 setDeliverConfirmIds([])
@@ -925,15 +916,13 @@ function RamApprovedContent() {
               disabled={delivering}
             >
               Cancel
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-lg bg-success-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+            </Button>
+            <Button
               onClick={confirmDeliver}
-              disabled={delivering}
+              loading={delivering}
             >
               {delivering ? 'Delivering…' : 'Yes, Delivered'}
-            </button>
+            </Button>
           </div>
         }
       >
@@ -959,9 +948,8 @@ function RamApprovedContent() {
         overlayClassName="bg-black/40"
         footer={
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+            <Button
+              variant="secondary"
               onClick={() => {
                 setRollbackConfirmOpen(false)
                 setRollbackConfirmOrder(null)
@@ -969,15 +957,14 @@ function RamApprovedContent() {
               disabled={!!rollbackBusyId}
             >
               Cancel
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-lg bg-warning-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+            </Button>
+            <Button
+              variant="danger"
               onClick={confirmRollback}
-              disabled={!!rollbackBusyId}
+              loading={!!rollbackBusyId}
             >
               {rollbackBusyId ? 'Rolling back…' : 'Yes, Rollback'}
-            </button>
+            </Button>
           </div>
         }
       >
@@ -1014,22 +1001,20 @@ function RamApprovedContent() {
         overlayClassName="bg-black/40"
         footer={
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+            <Button
+              variant="secondary"
               onClick={() => setRollbackBulkConfirmOpen(false)}
               disabled={rollbackBulkBusy}
             >
               Cancel
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-lg bg-warning-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+            </Button>
+            <Button
+              variant="danger"
               onClick={confirmRollbackSelected}
-              disabled={rollbackBulkBusy}
+              loading={rollbackBulkBusy}
             >
               {rollbackBulkBusy ? 'Rolling back…' : 'Yes, Rollback'}
-            </button>
+            </Button>
           </div>
         }
       >

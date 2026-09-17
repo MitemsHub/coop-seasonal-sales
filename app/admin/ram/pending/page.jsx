@@ -7,6 +7,7 @@ import RamOrderAuditModal from '../../../components/RamOrderAuditModal'
 import { AnimatePresence, motion } from 'framer-motion'
 import ExportButton from '../../../components/ui/ExportButton'
 import { createManifestDoc, addManifestTable, sanitizePdfText } from '../../../lib/pdfExport'
+import Button from '../../../components/ui/Button'
 import { CheckCircle2, CheckSquare, ChevronLeft, ChevronRight, Inbox, RefreshCw, RotateCcw, Search, XCircle } from 'lucide-react'
 
 function safeJsonFactory() {
@@ -543,17 +544,15 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
                   }
                 }}
               />
-              <button
-                type="button"
+              <Button
                 onClick={() => {
                   setPage(1)
                   fetchOrders({ page: 1 })
                 }}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:opacity-50"
+                leftIcon={Search}
               >
-                <Search className="h-4 w-4" />
                 Search
-              </button>
+              </Button>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -627,55 +626,47 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
         <div className="flex flex-col gap-3 border-b border-line bg-subtle p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <div className="mr-1 text-sm font-semibold text-fg">{status} Orders</div>
-            <button
-              type="button"
+            <Button
               onClick={fetchOrders}
-              disabled={loading}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
+              loading={loading}
+              variant="accent"
             >
-              <RefreshCw className={['h-3.5 w-3.5', loading ? 'animate-spin' : ''].join(' ')} />
               {loading ? 'Loading…' : 'Refresh'}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="secondary"
               onClick={selectAll}
               disabled={!pagedOrders.length}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+              leftIcon={CheckSquare}
             >
-              <CheckSquare className="h-3.5 w-3.5" />
               {allSelectedOnPage ? 'Deselect All' : 'Select All'}
-            </button>
+            </Button>
             {status === 'Pending' && (
-              <button
-                type="button"
+              <Button
                 onClick={() => openBulkModal('Approved')}
                 disabled={!selectedCount || bulkBusy}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-success-fg px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+                leftIcon={CheckCircle2}
               >
-                <CheckCircle2 className="h-3.5 w-3.5" />
                 Approve Selected ({selectedCount})
-              </button>
+              </Button>
             )}
             {status === 'Pending' ? (
-              <button
-                type="button"
+              <Button
+                variant="danger"
                 onClick={() => openCancelModal(Array.from(selected))}
                 disabled={!selectedCount || bulkBusy}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-danger-fg px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+                leftIcon={XCircle}
               >
-                <XCircle className="h-3.5 w-3.5" />
                 Cancel Selected ({selectedCount})
-              </button>
+              </Button>
             ) : (
-              <button
-                type="button"
+              <Button
                 onClick={() => openRestoreModal(Array.from(selected))}
                 disabled={!selectedCount || bulkBusy}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
+                leftIcon={RotateCcw}
               >
-                <RotateCcw className="h-3.5 w-3.5" />
                 Restore Selected ({selectedCount})
-              </button>
+              </Button>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -693,9 +684,9 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
               <option value={50}>50</option>
               <option value={100}>100</option>
             </select>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+            <Button
+              variant="secondary"
+              leftIcon={ChevronLeft}
               onClick={() => {
                 const next = Math.max(1, safePage - 1)
                 setPage(next)
@@ -703,15 +694,14 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
               }}
               disabled={safePage <= 1}
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
               Prev
-            </button>
+            </Button>
             <div className="text-sm text-muted">
               Page <span className="font-medium text-fg">{safePage}</span> / {pageCount}
             </div>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+            <Button
+              variant="secondary"
+              rightIcon={ChevronRight}
               onClick={() => {
                 const next = Math.min(pageCount, safePage + 1)
                 setPage(next)
@@ -720,8 +710,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
               disabled={safePage >= pageCount}
             >
               Next
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -896,25 +885,15 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
         }
         footer={
           <div className="flex gap-2 justify-end">
-            <button
-              type="button"
-              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle"
+            <Button
+              variant="secondary"
               onClick={() => setShowModal(null)}
               disabled={bulkBusy || editBusy}
             >
               Close
-            </button>
-            <button
-              type="button"
-              className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani ${
-                showModal?.type === 'edit'
-                  ? 'bg-brand hover:bg-brand-hover'
-                  : showModal?.type === 'cancel'
-                    ? 'bg-danger-fg hover:brightness-110'
-                    : showModal?.type === 'restore'
-                      ? 'bg-brand hover:bg-brand-hover'
-                      : 'bg-brand hover:bg-brand-hover'
-              } disabled:opacity-50`}
+            </Button>
+            <Button
+              variant={showModal?.type === 'cancel' ? 'danger' : 'brand'}
               onClick={
                 showModal?.type === 'edit'
                   ? submitEdit
@@ -924,10 +903,10 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
                       ? submitRestore
                       : submitBulk
               }
-              disabled={bulkBusy || editBusy}
+              loading={bulkBusy || editBusy}
             >
               {bulkBusy || editBusy ? 'Working...' : showModal?.type === 'cancel' ? 'Cancel' : showModal?.type === 'restore' ? 'Restore' : 'Confirm'}
-            </button>
+            </Button>
           </div>
         }
       >
