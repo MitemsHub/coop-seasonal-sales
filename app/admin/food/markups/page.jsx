@@ -636,16 +636,14 @@ export default function AdminMarkupsPage() {
       <div className="mb-4 bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
         <h2 className="text-[15px] font-semibold mb-2">Bulk Upload Markups (.xlsx)</h2>
         <p className="text-sm text-muted mb-3">Expected columns: branch_code, cycle_id, sku, amount, active</p>
-        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-          <div className="w-full sm:w-auto">
-            <Input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={e => setUploadFile(e.target.files?.[0] || null)}
-              className="cursor-pointer py-1.5 file:mr-3 file:rounded-md file:border-0 file:bg-subtle file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-fg file:transition-colors hover:file:bg-muted"
-            />
-          </div>
-          <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={e => setUploadFile(e.target.files?.[0] || null)}
+            className="flex-1 min-w-0 px-3 py-2 text-sm border border-line-subtle rounded-lg bg-surface cursor-pointer file:mr-3 file:rounded-md file:border-0 file:bg-subtle file:px-3 file:py-1 file:text-sm file:font-medium file:text-fg file:transition-colors hover:file:bg-muted"
+          />
+          <div className="flex gap-2 shrink-0">
             <button
               onClick={downloadMarkupsTemplate}
               type="button"
