@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import DraggableModal from '../../../components/DraggableModal'
+import Button from '../../../components/ui/Button'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 
 function safeJsonFactory() {
@@ -232,14 +233,12 @@ function AdminFoodBanksContent() {
             placeholder="Search branch / bank / account"
             className="w-full sm:w-80 px-3 py-2 border rounded-lg text-sm"
           />
-          <button
-            type="button"
+          <Button
             onClick={fetchRows}
-            disabled={loading}
-            className="px-4 py-2 rounded-lg text-sm bg-brand text-on-accent hover:bg-brand-hover disabled:opacity-50 whitespace-nowrap"
+            loading={loading}
           >
             {loading ? 'Refreshing…' : 'Refresh'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -408,14 +407,12 @@ function AdminFoodBanksContent() {
             className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
             disabled={bankSaving}
           />
-          <button
-            type="button"
+          <Button
             onClick={saveBank}
-            disabled={bankSaving}
-            className="px-3 py-2 rounded-lg text-sm bg-brand text-on-accent hover:bg-brand-hover disabled:opacity-50"
+            loading={bankSaving}
           >
             {bankSaving ? 'Saving…' : 'Save'}
-          </button>
+          </Button>
         </div>
       </DraggableModal>
 
@@ -442,14 +439,13 @@ function AdminFoodBanksContent() {
             className="w-full text-sm"
             disabled={invoiceUploading}
           />
-          <button
-            type="button"
+          <Button
             onClick={uploadInvoice}
-            disabled={invoiceUploading || !invoiceFile}
-            className="px-3 py-2 rounded-lg text-sm bg-brand text-on-accent hover:bg-brand-hover disabled:opacity-50"
+            loading={invoiceUploading}
+            disabled={!invoiceFile}
           >
             {invoiceUploading ? 'Uploading…' : 'Upload'}
-          </button>
+          </Button>
         </div>
       </DraggableModal>
     </div>

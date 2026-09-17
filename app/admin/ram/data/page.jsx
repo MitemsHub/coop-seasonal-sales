@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
+import Button from '../../../components/ui/Button'
 import DraggableModal from '../../../components/DraggableModal'
 
 function safeJsonFactory() {
@@ -485,23 +486,13 @@ function RamDataContent() {
         <p className="text-sm text-muted">Manage ram cycles, pricing, delivery locations and shopping status.</p>
       </div>
       <div className="mb-4 flex justify-end">
-        <button
-          className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
+        <Button
+          variant="accent"
           onClick={refreshAll}
-          disabled={refreshing || loading || loadingCycles}
+          loading={refreshing || loading || loadingCycles}
         >
-          {(refreshing || loading || loadingCycles) && (
-            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-              />
-            </svg>
-          )}
-          <span>{refreshing || loading || loadingCycles ? 'Refreshing...' : 'Refresh'}</span>
-        </button>
+          {refreshing || loading || loadingCycles ? 'Refreshing...' : 'Refresh'}
+        </Button>
       </div>
 
       {!!msg && (
@@ -539,22 +530,20 @@ function RamDataContent() {
                   )}
                 </select>
               </div>
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
+              <Button
                 onClick={setActiveCycle}
-                disabled={activatingCycle || selectedCycleId == null || selectedCycleId === activeCycleId}
+                loading={activatingCycle}
+                disabled={selectedCycleId == null || selectedCycleId === activeCycleId}
               >
                 {activatingCycle ? 'Updating...' : 'Set Active'}
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+              </Button>
+              <Button
+                variant="secondary"
                 onClick={editingCycle ? cancelEditCycle : startEditCycle}
                 disabled={selectedCycleId == null}
               >
                 {editingCycle ? 'Cancel Edit' : 'Edit Cycle'}
-              </button>
+              </Button>
             </div>
             {editingCycle && (
               <div className="mt-3 rounded-xl border border-line bg-surface p-3 space-y-2">
@@ -592,14 +581,14 @@ function RamDataContent() {
                   </div>
                 </div>
                 <div className="flex justify-end">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-2 rounded-lg bg-success-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+                  <Button
+                    variant="accent"
                     onClick={saveEditCycle}
-                    disabled={savingPolicy || !editCycleCode.trim() || !editCycleName.trim()}
+                    loading={savingPolicy}
+                    disabled={!editCycleCode.trim() || !editCycleName.trim()}
                   >
                     {savingPolicy ? 'Saving...' : 'Save Changes'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -639,13 +628,13 @@ function RamDataContent() {
                 Make active
               </label>
               <div className="sm:col-span-2">
-                <button
+                <Button
                   type="submit"
-                  className="inline-flex items-center gap-2 rounded-lg bg-success-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
-                  disabled={creatingCycle}
+                  variant="accent"
+                  loading={creatingCycle}
                 >
                   {creatingCycle ? 'Creating...' : 'Create Cycle'}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
@@ -926,7 +915,7 @@ function RamDataContent() {
               disabled={savingPolicy || selectedCycleId == null}
             >
               {savingPolicy ? 'Saving...' : (pricingEditing ? 'Save Prices' : 'Edit')}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -964,7 +953,7 @@ function RamDataContent() {
                   disabled={savingPolicy || selectedCycleId == null}
                 >
                   {savingPolicy ? 'Saving...' : (loanRateEditing ? 'Save' : 'Edit')}
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -998,7 +987,7 @@ function RamDataContent() {
                   disabled={savingPolicy || selectedCycleId == null}
                 >
                   {savingPolicy ? 'Saving...' : (vendorRateEditing ? 'Save' : 'Edit')}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -1039,13 +1028,14 @@ function RamDataContent() {
             Active
           </label>
           <div className="sm:col-span-2 lg:col-span-3">
-            <button
-              className="inline-flex items-center gap-2 rounded-lg bg-success-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+            <Button
+              variant="accent"
               onClick={createLocation}
-              disabled={saving || !String(form.delivery_location).trim()}
+              loading={saving}
+              disabled={!String(form.delivery_location).trim()}
             >
               {saving ? 'Saving...' : 'Add'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -1058,26 +1048,21 @@ function RamDataContent() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          <div className="flex items-center justify-between sm:justify-end gap-2 text-xs text-subtext">
-            <button
-              type="button"
-              className="px-2 py-1 rounded border border-line bg-surface hover:bg-subtle disabled:opacity-50"
-              onClick={() => setPage(Math.max(1, safePage - 1))}
-              disabled={safePage <= 1}
-            >
-              Prev
-            </button>
-            <div>
-              Page {safePage} / {pageCount}
-            </div>
-            <button
-              type="button"
-              className="px-2 py-1 rounded border border-line bg-surface hover:bg-subtle disabled:opacity-50"
-              onClick={() => setPage(Math.min(pageCount, safePage + 1))}
-              disabled={safePage >= pageCount}
-            >
-              Next
-            </button>
+          <div className="flex items-center justify-between sm:justify-end gap-2 text-xs text-subtext">              <Button variant="secondary" size="sm"
+                onClick={() => setPage(Math.max(1, safePage - 1))}
+                disabled={safePage <= 1}
+              >
+                Prev
+              </Button>
+              <div>
+                Page {safePage} / {pageCount}
+              </div>
+              <Button variant="secondary" size="sm"
+                onClick={() => setPage(Math.min(pageCount, safePage + 1))}
+                disabled={safePage >= pageCount}
+              >
+                Next
+              </Button>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -1165,17 +1150,17 @@ function RamDataContent() {
         title="Edit Delivery Location"
         footer={
           <div className="flex gap-2 justify-end">
-            <button type="button" className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle" onClick={() => setEditing(null)} disabled={saving}>
+            <Button variant="secondary" onClick={() => setEditing(null)} disabled={saving}>
               Close
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-lg bg-success-fg px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+            </Button>
+            <Button
+              variant="accent"
               onClick={saveEdit}
-              disabled={saving || !String(editing?.delivery_location || '').trim()}
+              loading={saving}
+              disabled={!String(editing?.delivery_location || '').trim()}
             >
               {saving ? 'Saving...' : 'Save'}
-            </button>
+            </Button>
           </div>
         }
       >
@@ -1214,9 +1199,9 @@ function RamDataContent() {
         title="New cycle created. Setup required"
         footer={
           <div className="flex justify-end">
-            <button type="button" className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover" onClick={() => setCycleSetup(null)}>
+            <Button onClick={() => setCycleSetup(null)}>
               Okay
-            </button>
+            </Button>
           </div>
         }
       >
