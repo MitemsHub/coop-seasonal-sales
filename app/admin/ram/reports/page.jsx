@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
+import Button from '../../../components/ui/Button'
 import ExportButton from '../../../components/ui/ExportButton'
 import { FileBarChart2 } from 'lucide-react'
 
@@ -127,25 +128,21 @@ function SummaryTable({ title, rows, pagination, loading }) {
         <div className="text-fg">{title}</div>
         {pageSize ? (
           <div className="flex items-center gap-2 text-xs font-normal text-subtext">
-            <button
-              type="button"
-              className="px-2 py-1 rounded border border-line bg-surface hover:bg-subtle disabled:opacity-50"
+            <Button variant="secondary" size="sm"
               onClick={() => pagination?.onChange?.(Math.max(1, safePage - 1))}
               disabled={safePage <= 1}
             >
               Prev
-            </button>
+            </Button>
             <div>
               Page {safePage} / {pageCount}
             </div>
-            <button
-              type="button"
-              className="px-2 py-1 rounded border border-line bg-surface hover:bg-subtle disabled:opacity-50"
+            <Button variant="secondary" size="sm"
               onClick={() => pagination?.onChange?.(Math.min(pageCount, safePage + 1))}
               disabled={safePage >= pageCount}
             >
               Next
-            </button>
+            </Button>
           </div>
         ) : null}
       </div>
@@ -965,37 +962,21 @@ function RamReportsContent() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <h1 className="text-h2 font-bold tracking-tight text-fg">Ram Sales · Report</h1>
         <div className="flex gap-2">
-          <button
-            className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50 disabled:cursor-not-allowed"
+          <Button
             onClick={refreshAll}
-            disabled={loading}
+            loading={loading}
           >
-            {loading ? (
-              <span className="inline-flex items-center gap-2">
-                <Spinner className="w-4 h-4" />
-                Refreshing…
-              </span>
-            ) : (
-              'Refresh'
-            )}
-          </button>
-          <button
-            className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button
+            variant="accent"
             onClick={downloadReport}
-            disabled={!summary || reportBusy}
+            loading={reportBusy}
+            disabled={!summary}
+            leftIcon={FileBarChart2}
           >
-            {reportBusy ? (
-              <span className="inline-flex items-center gap-2">
-                <Spinner className="w-4 h-4" />
-                Preparing…
-              </span>
-            ) : (
-              <>
-                <FileBarChart2 className="h-4 w-4" />
-                Download Report
-              </>
-            )}
-          </button>
+            {reportBusy ? 'Preparing…' : 'Download Report'}
+          </Button>
         </div>
       </div>
 
@@ -1237,20 +1218,13 @@ function RamReportsContent() {
             />
           </div>
           <div className="mt-3">
-            <button
-              className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
+            <Button
               onClick={downloadDeliveryPack}
-              disabled={deliveryPackBusy}
+              loading={deliveryPackBusy}
+              leftIcon={FileBarChart2}
             >
-              {deliveryPackBusy ? (
-                <span className="inline-flex items-center gap-2">
-                  <Spinner className="w-4 h-4" />
-                  Preparing…
-                </span>
-              ) : (
-                'Download Delivery Pack'
-              )}
-            </button>
+              {deliveryPackBusy ? 'Preparing…' : 'Download Delivery Pack'}
+            </Button>
           </div>
         </div>
       </div>

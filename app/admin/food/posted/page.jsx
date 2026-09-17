@@ -8,7 +8,8 @@ import ExportButton from '../../../components/ui/ExportButton'
 
 import { createManifestDoc, addManifestTable, sanitizePdfText } from '../../../lib/pdfExport'
 import { announceRepFoodStats } from '../../../lib/repFoodStatsSync'
-import { CheckSquare, ChevronLeft, ChevronRight, Inbox, RefreshCw, RotateCcw, Truck, Zap } from 'lucide-react'
+import Button from '../../../components/ui/Button'
+import { CheckSquare, ChevronLeft, ChevronRight, Inbox, RefreshCw, RotateCcw, Search, Truck, Zap } from 'lucide-react'
 
 function PostedAdminPageContent() {
   const [orders, setOrders] = useState([])
@@ -417,14 +418,13 @@ function PostedAdminPageContent() {
               onChange={(e) => setTerm(e.target.value)}
               onKeyDown={handleKeyPress}
             />
-            <button
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
+            <Button
               onClick={handleSearch}
-              disabled={loading}
+              loading={loading}
+              leftIcon={Search}
             >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
               Search
-            </button>
+            </Button>
           </div>
 
           <select className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={payment} onChange={(e) => setPayment(e.target.value)} disabled={loading}>
@@ -508,9 +508,10 @@ function PostedAdminPageContent() {
               <option value={50}>50</option>
               <option value={100}>100</option>
             </select>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={ChevronLeft}
               onClick={() => {
                 if (pageIndex <= 0) return
                 const nextIndex = pageIndex - 1
@@ -521,13 +522,13 @@ function PostedAdminPageContent() {
               }}
               disabled={pageIndex <= 0 || loading}
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
               Prev
-            </button>
+            </Button>
             <div className="text-sm text-muted">Page <span className="font-medium text-fg">{pageIndex + 1}</span></div>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+            <Button
+              variant="secondary"
+              size="sm"
+              rightIcon={ChevronRight}
               onClick={() => {
                 if (!nextCursor) return
                 const nextIndex = pageIndex + 1
