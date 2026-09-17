@@ -636,6 +636,11 @@ export default function AdminMarkupsPage() {
       <div className="mb-4 bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
         <h2 className="text-[15px] font-semibold mb-2">Bulk Upload Markups (.xlsx)</h2>
         <p className="text-sm text-muted mb-3">Expected columns: branch_code, cycle_id, sku, amount, active</p>
+        {selectedCycleId && (
+          <div className="mb-3 px-2 py-1.5 rounded-lg bg-info-bg border border-info-border text-xs text-info-fg">
+            Markups will be saved to cycle: <strong>{cycles.find(c => c.id === selectedCycleId)?.name || selectedCycleId}</strong>{cycles.find(c => c.id === selectedCycleId)?.is_active ? ' (Active)' : ''}
+          </div>
+        )}
         <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
           <input
             type="file"
