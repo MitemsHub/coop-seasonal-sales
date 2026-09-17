@@ -70,11 +70,11 @@ function SummaryTable({ title, rows, columns, pagination }) {
         <h3 className="text-sm font-semibold text-fg">{title}</h3>
         {pageSize > 0 && pageCount > 1 && (
           <div className="flex items-center gap-2 text-xs text-muted">
-            <button type="button" className="px-2 py-1 rounded border border-line bg-surface hover:bg-subtle disabled:opacity-50"
-              onClick={() => pagination.onChange?.(Math.max(1, safePage - 1))} disabled={safePage <= 1}>Prev</button>
+            <Button variant="secondary" size="sm"
+              onClick={() => pagination.onChange?.(Math.max(1, safePage - 1))} disabled={safePage <= 1}>Prev</Button>
             <span>{safePage} / {pageCount}</span>
-            <button type="button" className="px-2 py-1 rounded border border-line bg-surface hover:bg-subtle disabled:opacity-50"
-              onClick={() => pagination.onChange?.(Math.min(pageCount, safePage + 1))} disabled={safePage >= pageCount}>Next</button>
+            <Button variant="secondary" size="sm"
+              onClick={() => pagination.onChange?.(Math.min(pageCount, safePage + 1))} disabled={safePage >= pageCount}>Next</Button>
           </div>
         )}
       </div>
@@ -823,9 +823,9 @@ export default function ExhibitionReportsPage() {
                     <div className="flex items-center justify-between border-t border-line px-3 py-2 text-xs text-muted">
                       <span>{filteredVendors.length} vendors</span>
                       <div className="flex items-center gap-2">
-                        <button type="button" className="px-2 py-1 rounded border border-line bg-surface hover:bg-subtle disabled:opacity-50" onClick={() => setVendorPage((p) => Math.max(1, p - 1))} disabled={safeVendorPage <= 1}>Prev</button>
+                        <Button variant="secondary" size="sm" onClick={() => setVendorPage((p) => Math.max(1, p - 1))} disabled={safeVendorPage <= 1}>Prev</Button>
                         <span>{safeVendorPage} / {vendorPageCount}</span>
-                        <button type="button" className="px-2 py-1 rounded border border-line bg-surface hover:bg-subtle disabled:opacity-50" onClick={() => setVendorPage((p) => Math.min(vendorPageCount, p + 1))} disabled={safeVendorPage >= vendorPageCount}>Next</button>
+                        <Button variant="secondary" size="sm" onClick={() => setVendorPage((p) => Math.min(vendorPageCount, p + 1))} disabled={safeVendorPage >= vendorPageCount}>Next</Button>
                       </div>
                     </div>
                   )}

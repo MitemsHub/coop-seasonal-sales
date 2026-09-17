@@ -3,6 +3,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
+import Button from '../../../components/ui/Button'
 import ExportButton from '../../../components/ui/ExportButton'
 import { FileBarChart2, Package } from 'lucide-react'
 
@@ -1362,7 +1363,7 @@ function ReportsPageContent() {
   if (err) return (
     <div className="p-6">
       <div className="text-danger-fg mb-3">Error: {err}</div>
-      <button className="px-3 py-2 bg-brand text-on-accent rounded" onClick={loadSummary}>Retry</button>
+      <Button onClick={loadSummary}>Retry</Button>
     </div>
   )
   if (!data) return <div className="p-6">No data</div>
@@ -1374,31 +1375,20 @@ function ReportsPageContent() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
         <h1 className="text-h2 font-semibold mb-2 sm:mb-0">Admin · Reports</h1>
         <div className="flex gap-2">
-          <button
-            className="px-4 py-2 rounded-lg bg-brand text-on-accent hover:bg-brand-hover text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
+          <Button
             onClick={loadSummary}
-            disabled={loading}
+            loading={loading}
           >
-            {loading && (
-              <span
-                className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"
-                aria-hidden="true"
-              />
-            )}
-            <span>{loading ? 'Refreshing…' : 'Refresh'}</span>
-          </button>
-          <button
-            className="px-4 py-2 rounded-lg bg-brand text-on-accent hover:bg-brand-hover text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button
             onClick={downloadReport}
-            disabled={!data || reportBusy}
+            loading={reportBusy}
+            disabled={!data}
+            leftIcon={FileBarChart2}
           >
-            {reportBusy ? (
-              <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" aria-hidden="true" />
-            ) : (
-              <FileBarChart2 className="h-4 w-4" />
-            )}
-            <span>{reportBusy ? 'Preparing…' : 'Download Report'}</span>
-          </button>
+            {reportBusy ? 'Preparing…' : 'Download Report'}
+          </Button>
         </div>
       </div>
 
@@ -1887,23 +1877,9 @@ function PaginatedSection({ title, data, allData, cols, currentPage, setCurrentP
         {showPagination && (
           <div className="flex items-center justify-between px-4 py-3 bg-subtle border-t border-line-subtle">
             <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-              <span className="text-sm text-muted">
-                Page {currentPage} of {totalPages}
-              </span>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
+              <Button variant="secondary" size="sm" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}>Previous</Button>
+              <span className="text-sm text-muted">Page {currentPage} of {totalPages}</span>
+              <Button variant="secondary" size="sm" onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>Next</Button>
             </div>
             <div className="text-sm text-subtext">
               Showing {Math.min((currentPage - 1) * itemsPerPage + 1, allData?.length || 0)} to {Math.min(currentPage * itemsPerPage, allData?.length || 0)} of {allData?.length || 0} items

@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
+import Button from '../../../components/ui/Button'
 import ExportButton from '../../../components/ui/ExportButton'
 
 
@@ -230,14 +231,12 @@ function DepartmentInventorySection() {
       
       {/* Filters and Controls */}
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4 sm:mb-6">
-        <button
+        <Button
           onClick={loadDepartmentInventory}
-          disabled={loading}
-          className="px-3 py-2 rounded-lg bg-brand text-on-accent hover:bg-brand-hover text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-2"
+          loading={loading}
         >
-          {loading && <Spinner />}
-          <span>{loading ? 'Loading…' : 'Refresh'}</span>
-        </button>
+          {loading ? 'Loading…' : 'Refresh'}
+        </Button>
         
         <select
           value={selectedBranch}
@@ -347,23 +346,25 @@ function DepartmentInventorySection() {
         {showPagination && (
           <div className="flex items-center justify-between px-4 py-3 bg-subtle border-t border-line-subtle">
             <div className="flex items-center space-x-2">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Previous
-              </button>
+              </Button>
               <span className="text-sm text-muted">
                 Page {currentPage} of {totalPages}
               </span>
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}
-                className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Next
-              </button>
+              </Button>
             </div>
             <div className="text-sm text-subtext">
               Showing {Math.min((currentPage - 1) * itemsPerPage + 1, departmentData.length)} to {Math.min(currentPage * itemsPerPage, departmentData.length)} of {departmentData.length} items
@@ -549,14 +550,12 @@ function ItemsInventorySection() {
       
       {/* Controls */}
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4 sm:mb-6">
-        <button
+        <Button
           onClick={loadItemsInventory}
-          disabled={loading}
-          className="px-3 py-2 rounded-lg bg-brand text-on-accent hover:bg-brand-hover text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-2"
+          loading={loading}
         >
-          {loading && <Spinner />}
-          <span>{loading ? 'Loading…' : 'Refresh'}</span>
-        </button>
+          {loading ? 'Loading…' : 'Refresh'}
+        </Button>
         
         <ExportButton
           format="excel"
@@ -639,23 +638,25 @@ function ItemsInventorySection() {
         {showPagination && (
           <div className="flex items-center justify-between px-4 py-3 bg-subtle border-t border-line-subtle">
             <div className="flex items-center space-x-2">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Previous
-              </button>
+              </Button>
               <span className="text-sm text-muted">
                 Page {currentPage} of {totalPages}
               </span>
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}
-                className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Next
-              </button>
+              </Button>
             </div>
             <div className="text-sm text-muted">
               Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, itemsData.length)} of {itemsData.length} items
@@ -830,14 +831,12 @@ function DeliveryMemberInventorySection() {
       <h2 className="text-h2 font-bold mb-4 sm:mb-6 text-fg">Admin · Inventory by Delivery Branch & Branch</h2>
 
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4 sm:mb-6">
-        <button
+        <Button
           onClick={load}
-          disabled={loading}
-          className="px-3 py-2 rounded-lg bg-brand text-on-accent hover:bg-brand-hover text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-2"
+          loading={loading}
         >
-          {loading && <Spinner />}
-          <span>{loading ? 'Loading…' : 'Refresh'}</span>
-        </button>
+          {loading ? 'Loading…' : 'Refresh'}
+        </Button>
         <select
           value={deliveryBranch}
           onChange={(e) => setDeliveryBranch(e.target.value)}
@@ -913,9 +912,9 @@ function DeliveryMemberInventorySection() {
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 bg-subtle border-t border-line-subtle">
             <div className="flex items-center space-x-2">
-              <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
+              <Button variant="secondary" size="sm" onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1}>Previous</Button>
               <span className="text-sm text-muted">Page {currentPage} of {totalPages}</span>
-              <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
+              <Button variant="secondary" size="sm" onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages}>Next</Button>
             </div>
             <div className="text-sm text-subtext">Showing {Math.min(startIndex + 1, rows.length)} to {Math.min(startIndex + paginated.length, rows.length)} of {rows.length} items</div>
           </div>
@@ -1212,14 +1211,12 @@ function InventoryPageContent() {
 
       {/* Controls */}
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4 sm:mb-6">
-        <button 
+        <Button 
           onClick={() => load()}
-          disabled={busy}
-          className="px-3 py-2 rounded-lg bg-brand text-on-accent hover:bg-brand-hover text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-2"
+          loading={busy}
         >
-          {busy && <Spinner />}
-          <span>{busy ? 'Loading…' : 'Refresh'}</span>
-        </button>
+          {busy ? 'Loading…' : 'Refresh'}
+        </Button>
         
         <select 
           value={selectedBranch}
@@ -1322,17 +1319,20 @@ function InventoryPageContent() {
         {filteredAndPaginatedRows.totalPages > 1 && (
           <div className="flex items-center justify-between px-4 py-3 bg-subtle border-t border-line-subtle">
             <div className="flex items-center space-x-2">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Previous
-              </button>
+              </Button>
               <span className="text-sm text-muted">
                 Page {currentPage} of {filteredAndPaginatedRows.totalPages}
               </span>
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, filteredAndPaginatedRows.totalPages))}
                 disabled={currentPage === filteredAndPaginatedRows.totalPages}
                 className="px-3 py-1 text-sm border border-line rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
