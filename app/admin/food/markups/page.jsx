@@ -5,6 +5,7 @@ import ProtectedRoute from '../../../components/ProtectedRoute'
 import { Input } from '../../../components/ui/Input'
 import Select from '../../../components/ui/Select'
 import Label from '../../../components/ui/Label'
+import Button from '../../../components/ui/Button'
 import ExportButton from '../../../components/ui/ExportButton'
 import { FileSpreadsheet } from 'lucide-react'
 
@@ -547,14 +548,13 @@ export default function AdminMarkupsPage() {
               required
             />
           </div>
-          <button
+          <Button
             type="submit"
-            className="px-4 py-2 rounded-lg bg-brand text-on-accent hover:bg-brand-hover text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
-            disabled={savingPrice || !priceBranchCode}
+            loading={savingPrice}
+            disabled={!priceBranchCode}
           >
-            {savingPrice && <Spinner />}
-            <span>{savingPrice ? 'Updating…' : 'Update Price'}</span>
-          </button>
+            {savingPrice ? 'Updating…' : 'Update Price'}
+          </Button>
         </form>
       </div>
 
@@ -620,14 +620,12 @@ export default function AdminMarkupsPage() {
                 required
               />
             </div>
-            <button
+            <Button
               type="submit"
-              className="px-4 py-2 rounded-lg bg-brand text-on-accent hover:bg-brand-hover text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
-              disabled={saving}
+              loading={saving}
             >
-              {saving && <Spinner />}
-              <span>{saving ? 'Saving…' : 'Save Markup'}</span>
-            </button>
+              {saving ? 'Saving…' : 'Save Markup'}
+            </Button>
           </div>
         </form>
       </div>
@@ -649,23 +647,19 @@ export default function AdminMarkupsPage() {
             className="flex-1 min-w-0 px-3 py-2 text-sm border border-line-subtle rounded-lg bg-surface cursor-pointer file:mr-3 file:rounded-md file:border-0 file:bg-subtle file:px-3 file:py-1 file:text-sm file:font-medium file:text-fg file:transition-colors hover:file:bg-muted"
           />
           <div className="flex gap-2 shrink-0">
-            <button
+            <Button
+              variant="secondary"
               onClick={downloadMarkupsTemplate}
-              type="button"
-              className="px-3 py-2 rounded-lg border border-line bg-surface hover:bg-subtle text-sm font-medium text-muted inline-flex items-center gap-2"
+              leftIcon={FileSpreadsheet}
             >
-              <FileSpreadsheet className="h-4 w-4" />
-              Download Excel Template
-            </button>
-            <button
+              Download Template
+            </Button>
+            <Button
               onClick={uploadMarkups}
-              type="button"
-              className="px-3 py-2 rounded-lg bg-brand text-on-accent hover:bg-brand-hover text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
-              disabled={uploading}
+              loading={uploading}
             >
-              {uploading && <Spinner />}
-              <span>{uploading ? 'Uploading…' : 'Upload Markups'}</span>
-            </button>
+              {uploading ? 'Uploading…' : 'Upload Markups'}
+            </Button>
           </div>
         </div>
         {uploadLog && (
@@ -821,23 +815,23 @@ export default function AdminMarkupsPage() {
             Showing {filteredMarkups.length === 0 ? 0 : startIdx + 1}–{Math.min(startIdx + itemsPerPage, filteredMarkups.length)} of {filteredMarkups.length}
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="px-3 py-1.5 rounded border text-xs sm:text-sm bg-surface hover:bg-subtle disabled:opacity-50"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               disabled={currentPage === 1}
             >
               Prev
-            </button>
+            </Button>
             <span className="text-xs sm:text-sm text-muted">Page {currentPage} of {totalPages}</span>
-            <button
-              type="button"
-              className="px-3 py-1.5 rounded border text-xs sm:text-sm bg-surface hover:bg-subtle disabled:opacity-50"
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               disabled={currentPage >= totalPages}
             >
               Next
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -886,15 +880,14 @@ export default function AdminMarkupsPage() {
               ))}
             </Select>
           </div>
-          <button
-            type="button"
+          <Button
+            variant="danger"
             onClick={bulkUpdateDelivery}
-            className="px-4 py-2 rounded-lg bg-danger-fg text-on-accent hover:opacity-90 text-sm font-medium disabled:opacity-50 inline-flex items-center gap-2"
-            disabled={bulkProcessing || !bulkBranchCode || !bulkSkus.trim()}
+            loading={bulkProcessing}
+            disabled={!bulkBranchCode || !bulkSkus.trim()}
           >
-            {bulkProcessing && <Spinner className="h-4 w-4" />}
-            <span>{bulkProcessing ? 'Processing…' : 'Remove Items'}</span>
-          </button>
+            {bulkProcessing ? 'Processing…' : 'Remove Items'}
+          </Button>
         </div>
         {bulkResult && (
           <div className={`mt-3 p-3 rounded-lg border text-sm ${bulkResult.ok ? 'border-success-border bg-success-bg' : 'border-danger-border bg-danger-bg'}`}>
