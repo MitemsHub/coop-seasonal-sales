@@ -635,6 +635,11 @@ function DataManagementPageContent() {
             <p className="text-xs text-muted mb-3">
               Recomputes order line prices and order totals using the latest branch prices and markups.
             </p>
+            {selectedCycleId && (
+              <div className="mb-3 px-2 py-1.5 rounded-lg bg-info-bg border border-info-border text-xs text-info-fg">
+                Targeting cycle: <strong>{cycles.find(c => c.id === selectedCycleId)?.name || selectedCycleId}</strong>{cycles.find(c => c.id === selectedCycleId)?.is_active ? ' (Active)' : ''}
+              </div>
+            )}
             <div className="flex flex-col gap-2">
               <input
                 value={confirmRepriceOrders}
@@ -655,6 +660,11 @@ function DataManagementPageContent() {
           <p className="text-xs text-muted mb-3">
             {loadingMode ? <span className="inline-block h-3 w-64 animate-pulse rounded bg-muted" /> : 'Expected columns: sku, item_name, unit, category, branch_code, price'}
           </p>
+          {selectedCycleId && (
+            <div className="mb-3 px-2 py-1.5 rounded-lg bg-info-bg border border-info-border text-xs text-info-fg">
+              Prices will be saved to cycle: <strong>{cycles.find(c => c.id === selectedCycleId)?.name || selectedCycleId}</strong>{cycles.find(c => c.id === selectedCycleId)?.is_active ? ' (Active)' : ''}
+            </div>
+          )}
           {isDemandTrackingMode && (
             <div className="mb-3 p-2 bg-info-bg border border-info-border rounded text-xs sm:text-sm text-info-fg">
               Demand Tracking Mode: Initial stock column is not needed as items have unlimited availability based on member demand.
@@ -691,7 +701,7 @@ function DataManagementPageContent() {
           <p className="text-xs text-muted mb-3">
             Upload and manage images for inventory items to improve the shopping experience.
           </p>
-          <ItemManagement />
+          <ItemManagement cycleId={selectedCycleId} cycles={cycles} />
         </div>
 
         <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">

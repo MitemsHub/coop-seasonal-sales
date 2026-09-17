@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient'
 import ImageUpload from './ImageUpload'
 import Button from './ui/Button'
 
-export default function ItemManagement() {
+export default function ItemManagement({ cycleId, cycles }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedItem, setSelectedItem] = useState(null)
@@ -16,17 +16,34 @@ export default function ItemManagement() {
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 8
 
+  const activeCycleName = cycles?.find(c => c.id === cycleId)?.name || null
+  const activeCycleCode = cycles?.find(c => c.id === cycleId)?.code || null
+
   useEffect(() => {
     fetchItems()
-  }, [])
+  }, [cycleId])
 
   const fetchItems = async () => {
     try {
-      const { data, error } = await supabase
-        .from('items')
-        .select('*')
-        .order('name')
+      let query = supabase.from('items').select('*').order('name')
 
+      // When a cycle is selected, only show items that have prices in that cycle
+      if (cycleId) {
+        const { data: priceItems, error: priceErr } = await supabase
+          .from('branch_item_prices')
+          .select('item_id')
+          .eq('cycle_id', cycleId)
+
+        if (!priceErr && priceItems?.length) {
+          const itemIds = [...new Set(priceItems.map(p => p.item_id))]
+          query = query.in('item_id', itemIds)
+        } else if (!priceErr && priceItems?.length === 0) {
+          // No prices for this cycle yet — show all items so images can be managed
+          // (prices may not be imported yet but images should still be settable)
+        }
+      }
+
+      const { data, error } = await query
       if (error) throw error
       setItems(data || [])
     } catch (error) {
@@ -115,7 +132,17 @@ export default function ItemManagement() {
   return (
     <div className="space-y-6 w-full max-w-full overflow-x-hidden">
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <h2 className="text-h2 font-semibold text-fg">Item Image Management</h2>
+        <div>
+          <h2 className="text-h2 font-semibold text-fg">Item Image Management</h2>
+          {activeCycleName && (
+            <div className="mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-info-bg border border-info-border text-xs text-info-fg">
+              <span className="font-medium">{activeCycleName}</span>
+              {activeCycleCode && <span className="text-info-fg/60">({activeCycleCode})</span>}
+              <span className="text-info-fg/60">•</span>
+              <span>Items with prices in this cycle</span>
+            </div>
+          )}
+        </div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 min-w-0">
           <Button
             variant="secondary"
