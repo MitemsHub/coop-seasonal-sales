@@ -17,7 +17,7 @@ export async function GET() {
       supabase.from('orders').select('order_id', { count: 'exact', head: true }).eq('status', 'Delivered'),
       supabase.from('ram_orders').select('id', { count: 'exact', head: true }).eq('status', 'Delivered'),
       supabase.from('exhibition_orders').select('id', { count: 'exact', head: true }).eq('status', 'Delivered'),
-      supabase.from('member_reviews').select('rating', { count: 'exact', head: true }).eq('approved', true),
+      supabase.from('member_reviews').select('rating', { count: 'exact', head: true }),
     ])
 
     const memberCount = membersRes.count ?? 0
@@ -30,7 +30,6 @@ export async function GET() {
       const { data: ratings } = await supabase
         .from('member_reviews')
         .select('rating')
-        .eq('approved', true)
       if (ratings && ratings.length > 0) {
         const sum = ratings.reduce((acc, r) => acc + (r.rating || 0), 0)
         rating = Math.round((sum / ratings.length) * 10) / 10

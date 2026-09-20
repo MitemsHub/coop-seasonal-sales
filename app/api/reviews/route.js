@@ -13,7 +13,6 @@ export async function GET() {
     const { data: reviews, error } = await supabase
       .from('member_reviews')
       .select('id, rating, review_text, reviewer_name, branch_name, module, created_at')
-      .eq('approved', true)
       .order('created_at', { ascending: false })
       .limit(20)
 
@@ -81,14 +80,14 @@ export async function POST(request) {
         review_text: review_text || '',
         reviewer_name: reviewer_name || '',
         branch_name: branch_name || '',
-        approved: false,
+        approved: true,
       })
       .select('id')
       .single()
 
     if (error) throw error
 
-    return NextResponse.json({ ok: true, id: data.id, message: 'Review submitted. It will appear after moderation.' })
+    return NextResponse.json({ ok: true, id: data.id, message: 'Thank you for your review!' })
   } catch (err) {
     console.error('Submit review error:', err)
     return NextResponse.json(

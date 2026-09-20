@@ -78,7 +78,7 @@ export default function ReviewPrompt({ memberId, module, orderId, branchName, me
       </div>
 
       <p className="mt-1 text-xs text-muted">
-        Your feedback helps us improve. Reviews are shared anonymously after moderation.
+        Your feedback helps us improve and is shared anonymously.
       </p>
 
       {/* Star rating */}
