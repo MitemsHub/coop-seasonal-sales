@@ -86,7 +86,8 @@ function ReportsPageContent() {
         const res = await fetch('/api/admin/reports/branches', { cache: 'no-store' })
         const json = await res.json()
         if (json.ok) setBranches(json.branches || [])
-      } catch (_) {}
+        else setErr(json.error || 'Failed to load branches')
+      } catch (e) { setErr(e.message || 'Failed to load branches') }
     })()
   }, [])
 
@@ -331,7 +332,8 @@ function ReportsPageContent() {
         const res = await fetch('/api/admin/reports/departments', { cache: 'no-store' })
         const json = await res.json()
         if (json.ok) setDepartments(json.departments || [])
-      } catch (_) {}
+        else console.error('Failed to load departments:', json.error)
+      } catch (e) { console.error('Failed to load departments:', e.message) }
     })()
   }, [])
 

@@ -675,6 +675,8 @@ function DeliveryMemberInventorySection() {
   const [deliveryBranch, setDeliveryBranch] = useState('')
   const [memberBranch, setMemberBranch] = useState('')
   const [branches, setBranches] = useState([])
+  const [branchError, setBranchError] = useState(null)
+  const [dataError, setDataError] = useState(null)
   const [exportingExcel, setExportingExcel] = useState(false)
   const [exportingPDF, setExportingPDF] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
@@ -687,7 +689,8 @@ function DeliveryMemberInventorySection() {
         const res = await fetch('/api/branches/list', { cache: 'no-store', signal: ac.signal })
         const json = await res.json()
         if (json.ok) setBranches(json.branches || [])
-      } catch (_) {}
+        else setBranchError(json.error || 'Failed to load branches')
+      } catch (e) { if (!ac.signal.aborted) setBranchError(e.message || 'Failed to load branches') }
     }
     loadBranches()
     return () => ac.abort()
@@ -722,8 +725,10 @@ function DeliveryMemberInventorySection() {
         const res = await fetch(`/api/admin/inventory/delivery-branch-member?${params.toString()}`, { cache: 'no-store', signal: ac.signal })
         const json = await res.json()
         if (json.ok) setRows(json.data || [])
-      } catch (_) {}
-      finally {
+        else setDataError(json.error || 'Failed to load inventory')
+      } catch (e) {
+        if (!ac.signal.aborted) setDataError(e.message || 'Failed to load inventory')
+      } finally {
         if (!ac.signal.aborted) setLoading(false)
       }
     }
@@ -829,6 +834,9 @@ function DeliveryMemberInventorySection() {
   return (
     <div className="mt-8">
       <h2 className="text-h2 font-bold mb-4 sm:mb-6 text-fg">Admin · Inventory by Delivery Branch & Branch</h2>
+
+      {branchError && <p className="mb-3 text-sm text-danger">{branchError}</p>}
+      {dataError && <p className="mb-3 text-sm text-danger">{dataError}</p>}
 
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-4 sm:mb-6">
         <Button

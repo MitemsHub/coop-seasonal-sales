@@ -122,8 +122,8 @@ function MyCoopContent() {
         const eligRes = await fetch(`/api/members/eligibility?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' })
         const eligJson = await eligRes.json().catch(() => null)
         if (!cancelled) setElig(eligJson?.ok ? eligJson.eligibility : null)
-      } catch {
-        // optional — leave eligibility blank
+      } catch (e) {
+        console.error('Failed to load eligibility:', e.message)
       }
 
       // 3) Food orders (enriched with principal + interest)
@@ -131,16 +131,16 @@ function MyCoopContent() {
         const ordRes = await fetch(`/api/orders/member?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' })
         const ordJson = await ordRes.json().catch(() => null)
         if (!cancelled) setOrders(ordJson?.ok ? (ordJson.orders || []) : [])
-      } catch {
-        // optional — leave orders blank
+      } catch (e) {
+        console.error('Failed to load food orders:', e.message)
       }
 
       // 4) Active food cycle
       try {
         const { data: fc } = await supabase.from('cycles').select('id, code, name, ends_at').eq('is_active', true).maybeSingle()
         if (!cancelled) setFoodCycle(fc || null)
-      } catch {
-        // optional
+      } catch (e) {
+        console.error('Failed to load food cycle:', e.message)
       }
 
       // 5) Active ram cycle + ram order totals for this member
@@ -163,8 +163,8 @@ function MyCoopContent() {
             cycleTotal: cycleRows.reduce((s, r) => s + Number(r.total_amount || 0), 0),
           })
         }
-      } catch {
-        // optional
+      } catch (e) {
+        console.error('Failed to load ram data:', e.message)
       }
 
       // 6) Shopping availability for quick actions (food, ram, exhibition)

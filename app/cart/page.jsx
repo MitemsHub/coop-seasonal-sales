@@ -272,9 +272,11 @@ function CartPageContent() {
       const data = await res.json()
       if (data.ok) {
         setBranches(data.branches || [])
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to load branches' })
       }
     } catch (error) {
-      console.error('Error loading branches:', error)
+      setMessage({ type: 'error', text: 'Failed to load branches. Check your connection.' })
     }
   }
 
@@ -284,9 +286,11 @@ function CartPageContent() {
       const data = await res.json()
       if (data.ok) {
         setDepartments(data.departments || [])
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to load departments' })
       }
     } catch (error) {
-      console.error('Error loading departments:', error)
+      setMessage({ type: 'error', text: 'Failed to load departments. Check your connection.' })
     }
   }
 
@@ -300,9 +304,11 @@ function CartPageContent() {
       const data = await safeJson(res, '/api/items/prices')
       if (data.ok) {
         setItems(data.items || [])
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to load items' })
       }
     } catch (error) {
-      console.error('Error loading items:', error)
+      setMessage({ type: 'error', text: 'Failed to load items. Check your connection.' })
     } finally {
       setItemsBusy(false)
     }

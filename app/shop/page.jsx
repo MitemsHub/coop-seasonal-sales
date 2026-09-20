@@ -519,6 +519,7 @@ function ShopPageContent() {
         setQty({})
       } catch (e) {
         setItems([])
+        setMessage({ type: 'error', text: e?.message || 'Failed to load items. Please try again.' })
       } finally {
         setItemsBusy(false)
       }
