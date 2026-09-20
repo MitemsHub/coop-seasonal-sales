@@ -454,7 +454,7 @@ export default function LandingPage() {
     { value: liveStats ? fmt(liveStats.members) : '—', label: 'Verified members', icon: Users },
     { value: liveStats ? String(liveStats.branches) : '—', label: 'Branches nationwide', icon: MapPin },
     { value: liveStats ? fmt(liveStats.delivered) : '—', label: 'Orders delivered', icon: Truck },
-    { value: liveStats ? `${liveStats.rating}★` : '—', label: 'Average member rating', icon: Star },
+    { value: liveStats ? (liveStats.rating != null ? `${liveStats.rating}★` : 'Rate us') : '—', label: 'Average member rating', icon: Star },
   ]
 
   const services = [

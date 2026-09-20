@@ -25,7 +25,7 @@ export async function GET() {
     const deliveredCount = (foodDeliveredRes.count ?? 0) + (ramDeliveredRes.count ?? 0) + (exhibitionDeliveredRes.count ?? 0)
 
     // Compute average rating from member_reviews
-    let rating = 4.8 // fallback if no reviews yet
+    let rating = null
     if (ratingRes.count > 0) {
       const { data: ratings } = await supabase
         .from('member_reviews')
@@ -49,7 +49,7 @@ export async function GET() {
     console.error('Public stats error:', err)
     return NextResponse.json({
       ok: true,
-      stats: { members: 0, branches: 0, delivered: 0, rating: 4.8 },
+      stats: { members: 0, branches: 0, delivered: 0, rating: null },
     })
   }
 }
