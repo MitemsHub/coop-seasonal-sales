@@ -26,17 +26,17 @@ const STAT_CHIPS = [
 // Rotating module chip — same treatment as the landing page hero word, so the
 // portal chip cycles the seasonal modules instead of a static "Ram season".
 const SEASON_WORDS = ['Food season', 'Ram season', 'Coop Exhibition']
+const PORTAL_ROTATE_MS = 2800
 
 function RotatingSeasonChip() {
   const reduce = useReducedMotion()
   const [i, setI] = useState(0)
-  const ROTATE_MS = 2800
 
   useEffect(() => {
     if (reduce) return
-    const id = setInterval(() => setI((v) => (v + 1) % SEASON_WORDS.length), ROTATE_MS)
+    const id = setInterval(() => setI((v) => (v + 1) % SEASON_WORDS.length), PORTAL_ROTATE_MS)
     return () => clearInterval(id)
-  }, [reduce, ROTATE_MS])
+  }, [reduce])
 
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-fluid-xs py-fluid-2xs text-chips font-medium text-white sm:text-xs">
