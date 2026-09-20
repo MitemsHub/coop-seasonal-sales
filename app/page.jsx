@@ -126,7 +126,7 @@ function PhotoHero() {
   const markReady = (i) => setReady((r) => (r[i] ? r : { ...r, [i]: true }))
   const imgRef = useRef(null)
   const COUNT = HERO_IMAGES.length
-  const AUTOPLAY_MS = 4000
+  const AUTOPLAY_MS = 3000
 
   // Cached photos can fire `load` synchronously during React's commit, before its
   // delegated onLoad listener is ready — which silently leaves a slide invisible.
@@ -177,7 +177,7 @@ function PhotoHero() {
             initial={{ opacity: 0 }}
             animate={{ opacity: ready[slide] ? 1 : 0 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.8, ease: 'easeInOut' }}
+            transition={{ duration: 0.6, ease: 'easeInOut' }}
           >
             <motion.img
               ref={imgRef}
