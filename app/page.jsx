@@ -365,63 +365,65 @@ function TestimonialsSection({ testimonials }) {
             <p className="mt-4 text-sm text-muted">No reviews yet — be the first to share your experience!</p>
           </div>
         ) : (
-        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {visibleIndices.map((i) => {
-            const t = testimonials[i]
-            return (
-              <Reveal key={`${t.name}-${i}`} delay={i * 0.07}>
-                <figure className="flex h-full flex-col rounded-xl border border-line bg-surface p-5 shadow-xs">
-                  <Quote className="h-5 w-5 text-brand/40" />
-                  <blockquote className="mt-3 flex-1 text-sm leading-6 text-fg">
-                    &ldquo;{t.quote}&rdquo;
-                  </blockquote>
-                  <figcaption className="mt-4 flex items-center gap-2.5 border-t border-line pt-4">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-subtle text-xs font-bold text-brand-fg">
-                      {t.name.charAt(0)}
-                    </span>
-                    <div className="leading-tight">
-                      <p className="text-xs font-semibold text-fg">{t.name}</p>
-                      <p className="text-[11px] text-muted">{t.branch}</p>
-                    </div>
-                    <span className="ml-auto flex items-center gap-0.5 text-[11px] font-medium text-accent">
-                      <Star className="h-3 w-3 fill-accent text-accent" /> {Number(t.rating).toFixed(1)}
-                    </span>
-                  </figcaption>
-                </figure>
-              </Reveal>
-            )
-          })}
-        </div>
-
-        {/* Carousel controls */}
-        {isCarousel && (
-          <div className="mt-6 flex items-center justify-center gap-3">
-            <button
-              onClick={() => go(-1)}
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-surface text-fg transition-colors hover:bg-subtle"
-              aria-label="Previous reviews"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <div className="flex gap-1.5">
-              {testimonials.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setSlide(i)}
-                  className={`h-2 w-2 rounded-full transition-colors ${i === slide ? 'bg-brand' : 'bg-line'}`}
-                  aria-label={`Go to review ${i + 1}`}
-                />
-              ))}
+          <>
+            <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {visibleIndices.map((i) => {
+                const t = testimonials[i]
+                return (
+                  <Reveal key={`${t.name}-${i}`} delay={i * 0.07}>
+                    <figure className="flex h-full flex-col rounded-xl border border-line bg-surface p-5 shadow-xs">
+                      <Quote className="h-5 w-5 text-brand/40" />
+                      <blockquote className="mt-3 flex-1 text-sm leading-6 text-fg">
+                        &ldquo;{t.quote}&rdquo;
+                      </blockquote>
+                      <figcaption className="mt-4 flex items-center gap-2.5 border-t border-line pt-4">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-subtle text-xs font-bold text-brand-fg">
+                          {t.name.charAt(0)}
+                        </span>
+                        <div className="leading-tight">
+                          <p className="text-xs font-semibold text-fg">{t.name}</p>
+                          <p className="text-[11px] text-muted">{t.branch}</p>
+                        </div>
+                        <span className="ml-auto flex items-center gap-0.5 text-[11px] font-medium text-accent">
+                          <Star className="h-3 w-3 fill-accent text-accent" /> {Number(t.rating).toFixed(1)}
+                        </span>
+                      </figcaption>
+                    </figure>
+                  </Reveal>
+                )
+              })}
             </div>
-            <button
-              onClick={() => go(1)}
-              className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-surface text-fg transition-colors hover:bg-subtle"
-              aria-label="Next reviews"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-        )}
+
+            {/* Carousel controls */}
+            {isCarousel && (
+              <div className="mt-6 flex items-center justify-center gap-3">
+                <button
+                  onClick={() => go(-1)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-surface text-fg transition-colors hover:bg-subtle"
+                  aria-label="Previous reviews"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <div className="flex gap-1.5">
+                  {testimonials.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setSlide(i)}
+                      className={`h-2 w-2 rounded-full transition-colors ${i === slide ? 'bg-brand' : 'bg-line'}`}
+                      aria-label={`Go to review ${i + 1}`}
+                    />
+                  ))}
+                </div>
+                <button
+                  onClick={() => go(1)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-surface text-fg transition-colors hover:bg-subtle"
+                  aria-label="Next reviews"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </section>
