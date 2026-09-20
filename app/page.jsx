@@ -66,6 +66,9 @@ const HERO_IMAGES = [
 const FILM_GRAIN =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E\")"
 
+const ROTATE_MS = 2800
+const HERO_AUTOPLAY_MS = 3000
+
 /* ---------------------------------------------------------------- */
 /*  Rotating category word — the noun in the first hero line animates  */
 /*  from 'food' into the other things the Coop moves.                 */
@@ -89,13 +92,12 @@ const CATEGORY_WORDS = [
 function RotatingHeroWord() {
   const reduce = useReducedMotion()
   const [i, setI] = useState(0)
-  const ROTATE_MS = 2800
 
   useEffect(() => {
     if (reduce) return
     const id = setInterval(() => setI((v) => (v + 1) % CATEGORY_WORDS.length), ROTATE_MS)
     return () => clearInterval(id)
-  }, [reduce, ROTATE_MS])
+  }, [reduce])
 
   const word = CATEGORY_WORDS[i]
 
@@ -126,7 +128,6 @@ function PhotoHero() {
   const markReady = (i) => setReady((r) => (r[i] ? r : { ...r, [i]: true }))
   const imgRef = useRef(null)
   const COUNT = HERO_IMAGES.length
-  const AUTOPLAY_MS = 3000
 
   // Cached photos can fire `load` synchronously during React's commit, before its
   // delegated onLoad listener is ready — which silently leaves a slide invisible.
@@ -153,9 +154,9 @@ function PhotoHero() {
   // Auto-advance the backdrop, pausing on hover/focus and for reduced-motion users.
   useEffect(() => {
     if (reduce || paused) return
-    const id = setInterval(() => setSlide((s) => (s + 1) % COUNT), AUTOPLAY_MS)
+    const id = setInterval(() => setSlide((s) => (s + 1) % COUNT), HERO_AUTOPLAY_MS)
     return () => clearInterval(id)
-  }, [reduce, paused, COUNT, AUTOPLAY_MS])
+  }, [reduce, paused, COUNT])
 
   const go = (dir) => setSlide((s) => (s + dir + COUNT) % COUNT)
   const goTo = (i) => setSlide(i)
@@ -165,7 +166,7 @@ function PhotoHero() {
       className="relative overflow-hidden bg-canvas"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
-      onFocus={() => setPaused(true)}
+      onFocus={(e) => { if (e.target === e.currentTarget) setPaused(true) }}
       onBlur={() => setPaused(false)}
     >
       {/* Full-bleed photo backdrop — crossfades automatically */}
@@ -189,7 +190,7 @@ function PhotoHero() {
               initial={false}
               animate={reduce ? undefined : { scale: [1, 1.07] }}
               // Zoom completes exactly as the next slide begins — the drift never looks cut short.
-              transition={{ duration: AUTOPLAY_MS / 1000, ease: 'easeInOut' }}
+              transition={{ duration: HERO_AUTOPLAY_MS / 1000, ease: 'easeInOut' }}
               loading="eager"
               fetchPriority={slide === 0 ? 'high' : undefined}
               draggable={false}
