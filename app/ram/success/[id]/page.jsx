@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { Beef, CheckCircle2, FileText, Home, Printer, Receipt } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import Skeleton from '../../../components/ui/Skeleton'
+import ReviewPrompt from '../../../components/ReviewPrompt'
 
 function RamSuccessContent() {
   const router = useRouter()
@@ -441,6 +442,15 @@ function RamSuccessContent() {
                 <p className="text-chips text-muted">Thank you for shopping with CBN Coop — every order keeps the Coop strong.</p>
               </div>
             </div>
+
+            {/* Review prompt */}
+            <ReviewPrompt
+              memberId={memberId}
+              module="ram"
+              orderId={order.id}
+              branchName=""
+              memberName={member?.full_name || ''}
+            />
           </div>
         </div>
       </main>

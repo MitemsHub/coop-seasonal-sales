@@ -13,6 +13,7 @@ import useCartCount from '../../../hooks/useCartCount'
 import { writePendingIds, hasNewPending, writePendingFresh } from '../../../lib/exhibitionPendingBadge'
 import Button from '../../../components/ui/Button'
 import Skeleton from '../../../components/ui/Skeleton'
+import ReviewPrompt from '../../../components/ReviewPrompt'
 
 const naira = (v) => `₦${Number(v || 0).toLocaleString()}`
 // ASCII-only currency for the PDF so the glyph never scrambles in viewers.
@@ -330,6 +331,15 @@ function SuccessContent() {
                   <p className="text-chips text-muted">Thank you for shopping with CBN Coop — every order keeps the Coop strong.</p>
                 </div>
               </div>
+
+              {/* Review prompt */}
+              <ReviewPrompt
+                memberId={memberId}
+                module="exhibition"
+                orderId={order.order_id}
+                branchName={order.branch?.name || ''}
+                memberName={order.member_name_snapshot || ''}
+              />
             </div>
           )}
         </div>

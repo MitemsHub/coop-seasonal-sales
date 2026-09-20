@@ -11,6 +11,7 @@ import { useAuth } from '../../../contexts/AuthContext'
 import { CheckCircle2, FileText, Home, Printer, Receipt, ShoppingBasket } from 'lucide-react'
 import Button from '../../../components/ui/Button'
 import Skeleton from '../../../components/ui/Skeleton'
+import ReviewPrompt from '../../../components/ReviewPrompt'
 
 function SuccessContent() {
   const params = useParams()
@@ -355,6 +356,15 @@ function SuccessContent() {
                 <p className="text-chips text-muted">Thank you for shopping with CBN Coop — every order keeps the Coop strong.</p>
               </div>
             </div>
+
+            {/* Review prompt */}
+            <ReviewPrompt
+              memberId={order.member_id || fallbackMemberId}
+              module="food"
+              orderId={order.order_id}
+              branchName={order.branch_name || ''}
+              memberName={order.member_name || ''}
+            />
           </div>
         </div>
       </div>

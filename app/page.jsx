@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import {
@@ -328,15 +328,117 @@ function PhotoHero() {
 }
 
 /* ---------------------------------------------------------------- */
+/*  Testimonials — grid for ≤3, auto-scrolling carousel for >3        */
+/* ---------------------------------------------------------------- */
+function TestimonialsSection({ testimonials }) {
+  const [slide, setSlide] = useState(0)
+  const count = testimonials.length
+  const isCarousel = count > 3
+
+  const go = useCallback((dir) => {
+    setSlide((s) => (s + dir + count) % count)
+  }, [count])
+
+  // Auto-advance carousel every 4s
+  useEffect(() => {
+    if (!isCarousel) return
+    const id = setInterval(() => setSlide((s) => (s + 1) % count), 4000)
+    return () => clearInterval(id)
+  }, [isCarousel, count])
+
+  // For carousel, show 3 cards centered on current slide
+  const visibleIndices = isCarousel
+    ? [slide, (slide + 1) % count, (slide + 2) % count]
+    : testimonials.map((_, i) => i)
+
+  return (
+    <section>
+      <div className="mx-auto max-w-7xl px-4 py-16 lg:px-6 lg:py-24">
+        <SectionHeading
+          kicker="Member stories"
+          title="What members say about their Coop"
+        />
+
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {visibleIndices.map((i) => {
+            const t = testimonials[i]
+            return (
+              <Reveal key={`${t.name}-${i}`} delay={i * 0.07}>
+                <figure className="flex h-full flex-col rounded-xl border border-line bg-surface p-5 shadow-xs">
+                  <Quote className="h-5 w-5 text-brand/40" />
+                  <blockquote className="mt-3 flex-1 text-sm leading-6 text-fg">
+                    &ldquo;{t.quote}&rdquo;
+                  </blockquote>
+                  <figcaption className="mt-4 flex items-center gap-2.5 border-t border-line pt-4">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-subtle text-xs font-bold text-brand-fg">
+                      {t.name.charAt(0)}
+                    </span>
+                    <div className="leading-tight">
+                      <p className="text-xs font-semibold text-fg">{t.name}</p>
+                      <p className="text-[11px] text-muted">{t.branch}</p>
+                    </div>
+                    <span className="ml-auto flex items-center gap-0.5 text-[11px] font-medium text-accent">
+                      <Star className="h-3 w-3 fill-accent text-accent" /> {Number(t.rating).toFixed(1)}
+                    </span>
+                  </figcaption>
+                </figure>
+              </Reveal>
+            )
+          })}
+        </div>
+
+        {/* Carousel controls */}
+        {isCarousel && (
+          <div className="mt-6 flex items-center justify-center gap-3">
+            <button
+              onClick={() => go(-1)}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-surface text-fg transition-colors hover:bg-subtle"
+              aria-label="Previous reviews"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <div className="flex gap-1.5">
+              {testimonials.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setSlide(i)}
+                  className={`h-2 w-2 rounded-full transition-colors ${i === slide ? 'bg-brand' : 'bg-line'}`}
+                  aria-label={`Go to review ${i + 1}`}
+                />
+              ))}
+            </div>
+            <button
+              onClick={() => go(1)}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-line bg-surface text-fg transition-colors hover:bg-subtle"
+              aria-label="Next reviews"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+/* ---------------------------------------------------------------- */
 /*  Landing page                                                      */
 /* ---------------------------------------------------------------- */
 export default function LandingPage() {
   const [liveStats, setLiveStats] = useState(null)
+  const [reviews, setReviews] = useState([])
 
   useEffect(() => {
     fetch('/api/public/stats', { cache: 'no-store' })
       .then((r) => r.json())
       .then((json) => { if (json.ok) setLiveStats(json.stats) })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/reviews', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((json) => { if (json.ok && json.reviews?.length) setReviews(json.reviews) })
       .catch(() => {})
   }, [])
 
@@ -405,7 +507,8 @@ export default function LandingPage() {
     'Community You Can Count On: Your branch representative knows you and your needs. No call centres, just people you trust.',
   ]
 
-  const testimonials = [
+  // Default testimonials — used as fallback when no approved reviews exist yet
+  const defaultTestimonials = [
     {
       quote:
         'I order on Sunday night and pick up on Tuesday. Same prices the branch agreed on. No surprises at all.',
@@ -428,6 +531,24 @@ export default function LandingPage() {
       rating: 4.9,
     },
   ]
+
+  // Format reviewer name: "John Doe" → "John D."
+  const formatName = (fullName) => {
+    if (!fullName) return 'A Member'
+    const parts = fullName.trim().split(/\s+/)
+    if (parts.length === 1) return parts[0]
+    return `${parts[0]} ${parts[parts.length - 1].charAt(0)}.`
+  }
+
+  // Map API reviews to testimonial format, fall back to defaults
+  const testimonials = reviews.length > 0
+    ? reviews.map((r) => ({
+        quote: r.review_text || 'Great experience with CBN Coop.',
+        name: formatName(r.reviewer_name),
+        branch: r.branch_name || 'CBN Coop',
+        rating: r.rating,
+      }))
+    : defaultTestimonials
 
   const faqs = [
     {
@@ -600,38 +721,7 @@ export default function LandingPage() {
       </section>
 
       {/* =========================== TESTIMONIALS =========================== */}
-      <section>
-        <div className="mx-auto max-w-7xl px-4 py-16 lg:px-6 lg:py-24">
-          <SectionHeading
-            kicker="Member stories"
-            title="What members say about their Coop"
-          />
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {testimonials.map((t, i) => (
-              <Reveal key={t.name} delay={i * 0.07}>
-                <figure className="flex h-full flex-col rounded-xl border border-line bg-surface p-5 shadow-xs">
-                  <Quote className="h-5 w-5 text-brand/40" />
-                  <blockquote className="mt-3 flex-1 text-sm leading-6 text-fg">
-                    &ldquo;{t.quote}&rdquo;
-                  </blockquote>
-                  <figcaption className="mt-4 flex items-center gap-2.5 border-t border-line pt-4">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-subtle text-xs font-bold text-brand-fg">
-                      {t.name.charAt(0)}
-                    </span>
-                    <div className="leading-tight">
-                      <p className="text-xs font-semibold text-fg">{t.name}</p>
-                      <p className="text-[11px] text-muted">{t.branch}</p>
-                    </div>
-                    <span className="ml-auto flex items-center gap-0.5 text-[11px] font-medium text-accent">
-                      <Star className="h-3 w-3 fill-accent text-accent" /> {t.rating.toFixed(1)}
-                    </span>
-                  </figcaption>
-                </figure>
-              </Reveal>
-            ))}
-          </div>
-        </div>
-      </section>
+      <TestimonialsSection testimonials={testimonials} />
 
       {/* ================================ FAQ ================================ */}
       <section id="faq" className="scroll-mt-20 border-t border-line bg-subtle/40">
