@@ -359,6 +359,12 @@ function TestimonialsSection({ testimonials }) {
           title="What members say about their Coop"
         />
 
+        {count === 0 ? (
+          <div className="mt-10 text-center">
+            <Quote className="mx-auto h-10 w-10 text-brand/20" />
+            <p className="mt-4 text-sm text-muted">No reviews yet — be the first to share your experience!</p>
+          </div>
+        ) : (
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visibleIndices.map((i) => {
             const t = testimonials[i]
@@ -415,6 +421,7 @@ function TestimonialsSection({ testimonials }) {
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
+        )}
         )}
       </div>
     </section>
@@ -507,31 +514,6 @@ export default function LandingPage() {
     'Community You Can Count On: Your branch representative knows you and your needs. No call centres, just people you trust.',
   ]
 
-  // Default testimonials — used as fallback when no approved reviews exist yet
-  const defaultTestimonials = [
-    {
-      quote:
-        'I order on Sunday night and pick up on Tuesday. Same prices the branch agreed on. No surprises at all.',
-      name: 'Amaka O.',
-      branch: 'Lagos Branch',
-      rating: 4.8,
-    },
-    {
-      quote:
-        "The Ram portal changed everything for us. Ordering early gave peace of mind, and the quality was unmatched, the best in the market. It's proof that the Coop delivers real value to its members.",
-      name: 'Tunde A.',
-      branch: 'Akure Branch',
-      rating: 5.0,
-    },
-    {
-      quote:
-        'The loan payment option means I never miss a cycle, even when cash is tight. With flexible payments and trusted vendors, CBN Coop truly works like a cooperative: affordable, reliable, and built for members.',
-      name: 'Blessing E.',
-      branch: 'Asaba Branch',
-      rating: 4.9,
-    },
-  ]
-
   // Format reviewer name: "John Doe" → "John D."
   const formatName = (fullName) => {
     if (!fullName) return 'A Member'
@@ -540,15 +522,13 @@ export default function LandingPage() {
     return `${parts[0]} ${parts[parts.length - 1].charAt(0)}.`
   }
 
-  // Map API reviews to testimonial format, fall back to defaults
-  const testimonials = reviews.length > 0
-    ? reviews.map((r) => ({
-        quote: r.review_text || 'Great experience with CBN Coop.',
-        name: formatName(r.reviewer_name),
-        branch: r.branch_name || 'CBN Coop',
-        rating: r.rating,
-      }))
-    : defaultTestimonials
+  // Map API reviews to testimonial format
+  const testimonials = reviews.map((r) => ({
+    quote: r.review_text || 'Great experience with CBN Coop.',
+    name: formatName(r.reviewer_name),
+    branch: r.branch_name || 'CBN Coop',
+    rating: r.rating,
+  }))
 
   const faqs = [
     {
