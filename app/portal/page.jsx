@@ -6,12 +6,17 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { ArrowRight, MapPin, ShieldCheck, ShoppingBasket, Store, Truck } from 'lucide-react'
 import Image from 'next/image'
 import LandingHeader, { SIGNUP_URL } from '../components/LandingHeader'
 import MemberAuth from '../components/MemberAuth'
 import Reveal from '../components/ui/Reveal'
+
+// WebGL shader backdrop (componentry.dev HeroGeometric, brand-adapted) —
+// client-only: three.js never touches the server bundle or SSR pass.
+const HeroGeometric = dynamic(() => import('../components/HeroGeometric'), { ssr: false })
 
 const PORTAL_NAV = [
   { href: '#member', label: 'Member sign in' },
@@ -80,6 +85,9 @@ export default function PortalPage() {
         <div className="relative mx-auto max-w-7xl px-4 py-10 sm:py-14 lg:px-6 lg:py-16">
           <Reveal>
             <div className="relative overflow-hidden rounded-2xl border border-brand-800 bg-gradient-to-br from-brand-900 via-brand-800 to-brand-700 shadow-xl">
+              {/* Animated dithered brand-green shader backdrop — the static
+                  gradient above stays as the pre-hydration fallback. */}
+              <HeroGeometric />
               <div
                 className="pointer-events-none absolute inset-0 opacity-20"
                 style={{
