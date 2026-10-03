@@ -36,6 +36,7 @@ import {
   ChevronDown,
   ChevronUp,
   GripVertical,
+  Undo2,
 } from 'lucide-react'
 
 const fmtPrice = (v) =>
@@ -82,6 +83,11 @@ function CatalogManager({ open, onClose }) {
   const [newCategory, setNewCategory] = useState('')
   const [saving, setSaving] = useState(false)
   const [pendingDelete, setPendingDelete] = useState(null)
+  const [search, setSearch] = useState('') // quick find over name / category / unit
+  const [catFilter, setCatFilter] = useState('') // '' = every category
+  const [drafts, setDrafts] = useState({}) // unsaved inline edits, keyed by item id
+  const [savingId, setSavingId] = useState(null) // row whose Save is in flight
+  const [newUnit, setNewUnit] = useState('')
   const [dragId, setDragId] = useState(null) // item being dragged
   const [reordering, setReordering] = useState(false)
   const itemsRef = useRef([])
@@ -112,6 +118,20 @@ function CatalogManager({ open, onClose }) {
     return [...set].sort()
   }, [items])
 
+  // Table growth: search + a category dropdown instead of pagination — pages
+  // would split one drag-to-reorder list, while a filter keeps every item one
+  // keystroke away in a single reorderable view.
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return items.filter((i) => {
+      if (catFilter && String(i.category || '') !== catFilter) return false
+      if (q && !`${i.name} ${i.category || ''} ${i.unit || ''}`.toLowerCase().includes(q)) return false
+      return true
+    })
+  }, [items, search, catFilter])
+
+  const filterActive = !!catFilter || !!search.trim()
+
   const addItem = async (e) => {
     e.preventDefault()
     if (newName.trim().length < 2) return
@@ -121,13 +141,14 @@ function CatalogManager({ open, onClose }) {
       const res = await fetch('/api/admin/food-survey/catalog', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newName.trim(), category: newCategory.trim() || 'Other' }),
+        body: JSON.stringify({ name: newName.trim(), category: newCategory.trim() || 'Other', unit: newUnit.trim() }),
       })
       const json = await res.json()
       if (!res.ok || !json.ok) throw new Error(json?.error || 'Failed to add item')
       setItems((prev) => [...prev, json.item])
       setNewName('')
       setNewCategory('')
+      setNewUnit('')
     } catch (err) {
       setError(err.message)
     } finally {
@@ -146,8 +167,81 @@ function CatalogManager({ open, onClose }) {
       const json = await res.json()
       if (!res.ok || !json.ok) throw new Error(json?.error || 'Failed to update item')
       setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...json.item } : i)))
+      return json.item
     } catch (err) {
       setError(err.message)
+      return null
+    }
+  }
+
+  /* ── Inline edits — drafts until Save ────────────────────────────────
+     Fields are edited into a per-row draft; nothing touches the API until
+     the row's Save button (or Enter) is pressed, so every change is an
+     explicit, visible commit. */
+  const val = (item, field) => {
+    const d = drafts[item.id]
+    if (d && d[field] !== undefined) return d[field]
+    return field === 'unit' ? String(item.unit || '') : item[field]
+  }
+
+  const editField = (item, field, value) =>
+    setDrafts((prev) => ({ ...prev, [item.id]: { ...prev[item.id], [field]: value } }))
+
+  const isDirty = (item) => {
+    const d = drafts[item.id]
+    if (!d) return false
+    if (d.name !== undefined && d.name !== item.name) return true
+    if (d.category !== undefined && d.category !== String(item.category || '')) return true
+    if (d.unit !== undefined && d.unit !== String(item.unit || '')) return true
+    return false
+  }
+
+  const revertRow = (id) =>
+    setDrafts((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+
+  // How many rows a category re-wording touches: wording that already exists
+  // elsewhere = moving this row only; brand-new wording = renaming the old
+  // category everywhere it is still used (so the form stays in one group).
+  const categoryScope = (item) => {
+    const next = String(drafts[item.id]?.category ?? '').trim()
+    if (!next || next === String(item.category || '')) return 0
+    const taken = items.some((i) => i.id !== item.id && String(i.category || '') === next)
+    if (taken) return 1
+    return items.filter((i) => String(i.category || '') === String(item.category || '')).length
+  }
+
+  const saveRow = async (item) => {
+    const d = drafts[item.id]
+    if (!d) return
+    const patch = {}
+    if (d.name !== undefined && d.name.trim() !== item.name) patch.name = d.name.trim()
+    const cat = String(d.category ?? '').trim()
+    if (d.category !== undefined && cat && cat !== String(item.category || '')) patch.category = cat
+    if (d.unit !== undefined && d.unit.trim() !== String(item.unit || '')) patch.unit = d.unit.trim()
+    if (!Object.keys(patch).length) return revertRow(item.id)
+    if (patch.name !== undefined && patch.name.length < 2) {
+      setError('An item name needs at least 2 characters.')
+      return
+    }
+    setSavingId(item.id)
+    setError(null)
+    try {
+      if (patch.category !== undefined && categoryScope(item) > 1) {
+        const old = String(item.category || '')
+        for (const sib of itemsRef.current) {
+          if (sib.id === item.id || String(sib.category || '') !== old) continue
+          const savedSibling = await patchItem(sib.id, { category: patch.category })
+          if (!savedSibling) return // error is shown; keep the draft unsaved
+        }
+      }
+      const saved = await patchItem(item.id, patch)
+      if (saved) revertRow(item.id)
+    } finally {
+      setSavingId(null)
     }
   }
 
@@ -218,8 +312,10 @@ function CatalogManager({ open, onClose }) {
         <div>
           <h2 className="text-[15px] font-semibold text-fg">Survey item list</h2>
           <p className="mt-0.5 text-xs text-muted">
-            The items reps see on the survey form. Editing a category re-groups the form for everyone. Drag an item
-            by the ⠿ handle (or use ↑ ↓) to reorder — reps see them in this exact order.
+            The items reps see on the survey form. Edit a field, then press <strong>Save</strong> to keep it;
+            re-wording a category re-groups every item still using the old wording. Use the search box or the
+            category dropdown to find items in a long list, and drag by the ⠿ handle (or ↑ ↓) to set the order — reps
+            see them in this exact order.
           </p>
         </div>
         <Button variant="ghost" size="sm" onClick={onClose}>
@@ -242,10 +338,57 @@ function CatalogManager({ open, onClose }) {
             ))}
           </datalist>
         </div>
+        <div className="sm:w-36">
+          <Label htmlFor="cat-unit">Unit</Label>
+          <Input id="cat-unit" value={newUnit} onChange={(e) => setNewUnit(e.target.value)} placeholder="e.g. Bag" list="cat-units" maxLength={50} />
+          <datalist id="cat-units">
+            {['Bag', 'Carton', 'Gallon', 'Bucket', 'Crate', 'Piece', 'Kg', 'Log', 'Tin', 'Bale'].map((u) => (
+              <option key={u} value={u} />
+            ))}
+          </datalist>
+        </div>
         <Button type="submit" loading={saving} leftIcon={Plus}>
           Add item
         </Button>
       </form>
+
+      {/* Search + category filter: keeps a growing list manageable without
+          splitting it into pages (which would break drag reordering). */}
+      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtext" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search items…"
+            aria-label="Search the item list"
+            className="pl-8"
+          />
+        </div>
+        <Select value={catFilter} onChange={(e) => setCatFilter(e.target.value)} className="sm:w-52" aria-label="Filter by category">
+          <option value="">All categories</option>
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </Select>
+        {filterActive && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSearch('')
+              setCatFilter('')
+            }}
+          >
+            Clear
+          </Button>
+        )}
+        <p className="text-xs text-muted sm:pl-1">
+          {filterActive ? `${filtered.length} of ${items.length} items` : `${items.length} items`}
+        </p>
+      </div>
 
       {error && (
         <div className="mb-3 rounded-lg border border-danger-border bg-danger-bg p-2.5 text-sm text-danger-fg">{error}</div>
@@ -267,12 +410,17 @@ function CatalogManager({ open, onClose }) {
                 </th>
                 <th className="p-2 font-medium">Item</th>
                 <th className="p-2 font-medium">Category</th>
+                <th className="p-2 font-medium">Unit</th>
                 <th className="p-2 font-medium">Shown</th>
                 <th className="p-2 text-right font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {items.map((item, idx) => (
+              {filtered.map((item) => {
+                const idx = items.findIndex((i) => i.id === item.id)
+                const dirty = isDirty(item)
+                const scope = dirty ? categoryScope(item) : 0
+                return (
                 <tr
                   key={item.id}
                   onDragOver={(e) => {
@@ -280,43 +428,74 @@ function CatalogManager({ open, onClose }) {
                     e.preventDefault()
                     if (dragId !== item.id) moveItem(dragId, item.id)
                   }}
-                  className={dragId === item.id ? 'opacity-50' : ''}
+                  className={[dragId === item.id ? 'opacity-50' : '', dirty ? 'bg-brand-subtle/50' : '']
+                    .filter(Boolean)
+                    .join(' ')}
                 >
                   <td className="p-2">
                     <span
-                      draggable
-                      onDragStart={() => setDragId(item.id)}
+                      draggable={!filterActive}
+                      onDragStart={() => !filterActive && setDragId(item.id)}
                       onDragEnd={() => {
                         if (dragId) persistOrder()
                         else setDragId(null)
                       }}
-                      title="Drag to reorder"
-                      className="inline-flex h-7 w-6 cursor-grab items-center justify-center rounded text-subtext transition-colors hover:bg-subtle hover:text-fg active:cursor-grabbing"
+                      title={filterActive ? 'Clear the search/filter to reorder' : 'Drag to reorder'}
+                      className={`inline-flex h-7 w-6 items-center justify-center rounded text-subtext transition-colors hover:bg-subtle hover:text-fg ${
+                        filterActive ? 'cursor-not-allowed opacity-40' : 'cursor-grab active:cursor-grabbing'
+                      }`}
                     >
                       <GripVertical className="h-4 w-4" strokeWidth={2} />
                     </span>
                   </td>
                   <td className="p-2">
                     <Input
-                      defaultValue={item.name}
-                      onBlur={(e) => {
-                        const v = e.target.value.trim()
-                        if (v && v !== item.name) patchItem(item.id, { name: v })
+                      value={val(item, 'name')}
+                      onChange={(e) => editField(item, 'name', e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          saveRow(item)
+                        }
                       }}
                       className="h-8 text-xs sm:text-sm"
-                      aria-label="Item name"
+                      aria-label={`Item name for ${item.name}`}
                     />
                   </td>
                   <td className="p-2">
                     <Input
-                      defaultValue={item.category}
+                      value={val(item, 'category')}
                       list="cat-categories"
-                      onBlur={(e) => {
-                        const v = e.target.value.trim()
-                        if (v && v !== item.category) patchItem(item.id, { category: v })
+                      onChange={(e) => editField(item, 'category', e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          saveRow(item)
+                        }
                       }}
                       className="h-8 text-xs sm:text-sm"
-                      aria-label="Category"
+                      aria-label={`Category for ${item.name}`}
+                    />
+                    {scope > 1 && (
+                      <p className="mt-1 text-[10px] leading-tight text-muted">
+                        Saving renames “{item.category}” on all {scope} items
+                      </p>
+                    )}
+                  </td>
+                  <td className="p-2">
+                    <Input
+                      value={val(item, 'unit')}
+                      list="cat-units"
+                      onChange={(e) => editField(item, 'unit', e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          saveRow(item)
+                        }
+                      }}
+                      placeholder="—"
+                      className="h-8 text-xs sm:text-sm"
+                      aria-label={`Unit for ${item.name}`}
                     />
                   </td>
                   <td className="p-2">
@@ -333,10 +512,33 @@ function CatalogManager({ open, onClose }) {
                   </td>
                   <td className="p-2 text-right">
                     <div className="flex items-center justify-end gap-1">
+                      {dirty && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => saveRow(item)}
+                            disabled={savingId === item.id}
+                            aria-label={`Save changes to ${item.name}`}
+                            title="Save this row (or press Enter inside a field)"
+                            className="inline-flex h-7 items-center rounded-md bg-brand px-2 text-[11px] font-semibold text-on-accent transition-colors hover:bg-brand-hover disabled:opacity-60"
+                          >
+                            {savingId === item.id ? 'Saving…' : 'Save'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => revertRow(item.id)}
+                            aria-label={`Discard changes to ${item.name}`}
+                            title="Discard changes"
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-subtle hover:text-fg"
+                          >
+                            <Undo2 className="h-3.5 w-3.5" strokeWidth={2.2} />
+                          </button>
+                        </>
+                      )}
                       <button
                         type="button"
                         onClick={() => moveBy(idx, -1)}
-                        disabled={idx === 0 || reordering}
+                        disabled={filterActive || idx === 0 || reordering}
                         aria-label={`Move ${item.name} up`}
                         title="Move up"
                         className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-subtle hover:text-fg disabled:opacity-30"
@@ -346,7 +548,7 @@ function CatalogManager({ open, onClose }) {
                       <button
                         type="button"
                         onClick={() => moveBy(idx, 1)}
-                        disabled={idx === items.length - 1 || reordering}
+                        disabled={filterActive || idx === items.length - 1 || reordering}
                         aria-label={`Move ${item.name} down`}
                         title="Move down"
                         className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-subtle hover:text-fg disabled:opacity-30"
@@ -364,11 +566,19 @@ function CatalogManager({ open, onClose }) {
                     </div>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
               {!items.length && (
                 <tr>
-                  <td colSpan={5} className="p-4 text-center text-muted">
+                  <td colSpan={6} className="p-4 text-center text-muted">
                     No items yet — add the first one above.
+                  </td>
+                </tr>
+              )}
+              {items.length > 0 && !filtered.length && (
+                <tr>
+                  <td colSpan={6} className="p-4 text-center text-muted">
+                    Nothing matches your search or filter.
                   </td>
                 </tr>
               )}

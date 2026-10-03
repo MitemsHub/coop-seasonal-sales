@@ -10,7 +10,7 @@ import FoodSurveyForm from '../../components/FoodSurveyForm'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
 import EmptyState from '../../components/ui/EmptyState'
-import { ClipboardList, Pencil, Plus, RefreshCw, Upload } from 'lucide-react'
+import { ClipboardList, Pencil, Plus, RefreshCw } from 'lucide-react'
 
 const fmtDate = (iso) => {
   try {
@@ -63,7 +63,7 @@ export default function RepSurveyPage() {
   return (
     <ProtectedRoute allowedRoles={['rep']}>
       <div className="mx-auto max-w-5xl p-3 sm:p-4 md:p-6">
-        <div className="mb-2 flex flex-wrap items-start justify-between gap-3">
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-h2 font-bold tracking-tight text-fg">Food Distribution · Item Survey</h1>
             <p className="mt-1 text-sm text-muted">
@@ -74,24 +74,20 @@ export default function RepSurveyPage() {
             <Button variant="secondary" onClick={load} loading={loading} leftIcon={RefreshCw}>
               Refresh
             </Button>
-            <Button
-              onClick={() => {
-                setEditingSub(null)
-                setShowForm((v) => !v)
-              }}
-              leftIcon={showForm ? undefined : Plus}
-            >
-              {showForm ? 'Close form' : 'New response'}
-            </Button>
+            {/* Only the admin can open or close the survey for everyone
+                (SurveyStatusPanel). This button only starts or dismisses this
+                rep's own draft — never the survey itself. */}
+            {!editingSub &&
+              (showForm ? (
+                <Button variant="secondary" onClick={() => setShowForm(false)}>
+                  Cancel
+                </Button>
+              ) : (
+                <Button onClick={() => setShowForm(true)} leftIcon={Plus}>
+                  New response
+                </Button>
+              ))}
           </div>
-        </div>
-
-        {/* Shared-link hint — reps can also just forward this to a colleague */}
-        <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-info-border bg-info-bg px-3.5 py-2.5 text-xs text-info-fg">
-          <Upload className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
-          No portal needed — share{' '}
-          <code className="rounded bg-surface px-1.5 py-0.5 font-semibold text-fg">/survey</code> and anyone can fill
-          the survey without logging in.
         </div>
 
         {/* Editing an existing response */}

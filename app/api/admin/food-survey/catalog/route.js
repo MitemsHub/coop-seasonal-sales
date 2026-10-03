@@ -1,26 +1,38 @@
 // app/api/admin/food-survey/catalog/route.js
 // Admin CRUD over the survey item catalog (the list reps see on /survey):
 //   GET    → all items (incl. inactive), with per-item submission counts
-//   POST   → add an item        { name, category, sort_order? }
-//   PATCH  → edit an item       { id, name?, category?, sort_order?, active? }
+//   POST   → add an item        { name, category, unit?, sort_order? }
+//   PATCH  → edit an item       { id, name?, category?, unit?, sort_order?, active? }
 //            or batch reorder    { order: [id, id, …] }  (drag & drop)
 //   DELETE ?id= → remove an item (entries keep their snapshot name/category;
 //                 catalog_id on entries is set NULL by the FK)
 // Middleware enforces the admin session for /api/admin/*.
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
+import { supportsUnit } from '@/lib/foodSurveyCatalog'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const clean = (v, max) => String(v ?? '').trim().slice(0, max)
 
+// `unit` only exists after migrations/add-food-survey-unit.sql has run; until
+// then the routes below simply drop the column from selects/writes so the
+// catalog keeps working (saving a unit answers with a pointer to the file).
+const COLUMNS = 'id, name, category, sort_order, active, created_at'
+const COLUMNS_WITH_UNIT = 'id, name, category, unit, sort_order, active, created_at'
+const ITEM_COLUMNS = 'id, name, category, sort_order, active'
+const ITEM_COLUMNS_WITH_UNIT = 'id, name, category, unit, sort_order, active'
+const NEEDS_UNIT_MIGRATION =
+  'Unit is not set up yet — run migrations/add-food-survey-unit.sql in Supabase, then try again.'
+
 export async function GET() {
   try {
     const supabase = createClient()
+    const withUnit = await supportsUnit(supabase)
     const { data, error } = await supabase
       .from('food_survey_catalog')
-      .select('id, name, category, sort_order, active, created_at')
+      .select(withUnit ? COLUMNS_WITH_UNIT : COLUMNS)
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true })
     if (error) {
@@ -46,6 +58,9 @@ export async function POST(req) {
     if (name.length < 2) return NextResponse.json({ ok: false, error: 'Enter an item name' }, { status: 400 })
 
     const supabase = createClient()
+    const withUnit = await supportsUnit(supabase)
+    const unit = clean(body.unit, 50)
+    if (unit && !withUnit) return NextResponse.json({ ok: false, error: NEEDS_UNIT_MIGRATION }, { status: 400 })
 
     const { data: dupe } = await supabase
       .from('food_survey_catalog')
@@ -67,8 +82,8 @@ export async function POST(req) {
 
     const { data, error } = await supabase
       .from('food_survey_catalog')
-      .insert({ name, category, sort_order: sort })
-      .select('id, name, category, sort_order, active')
+      .insert(withUnit ? { name, category, unit, sort_order: sort } : { name, category, sort_order: sort })
+      .select(withUnit ? ITEM_COLUMNS_WITH_UNIT : ITEM_COLUMNS)
       .single()
     if (error) {
       console.error('Catalog insert error:', error)
@@ -110,6 +125,8 @@ export async function PATCH(req) {
       return NextResponse.json({ ok: false, error: 'Missing item id' }, { status: 400 })
     }
 
+    const supabase = createClient()
+    const withUnit = await supportsUnit(supabase)
     const patch = {}
     if (body.name !== undefined) {
       const name = clean(body.name, 255)
@@ -121,16 +138,19 @@ export async function PATCH(req) {
       if (!category) return NextResponse.json({ ok: false, error: 'Enter a category' }, { status: 400 })
       patch.category = category
     }
+    if (body.unit !== undefined) {
+      if (!withUnit) return NextResponse.json({ ok: false, error: NEEDS_UNIT_MIGRATION }, { status: 400 })
+      patch.unit = clean(body.unit, 50)
+    }
     if (body.sort_order !== undefined) patch.sort_order = Number(body.sort_order) || 0
     if (body.active !== undefined) patch.active = !!body.active
     if (!Object.keys(patch).length) return NextResponse.json({ ok: false, error: 'Nothing to update' }, { status: 400 })
 
-    const supabase = createClient()
     const { data, error } = await supabase
       .from('food_survey_catalog')
       .update(patch)
       .eq('id', id)
-      .select('id, name, category, sort_order, active')
+      .select(withUnit ? ITEM_COLUMNS_WITH_UNIT : ITEM_COLUMNS)
       .maybeSingle()
     if (error) {
       console.error('Catalog update error:', error)

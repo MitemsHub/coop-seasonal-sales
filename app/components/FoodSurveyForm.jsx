@@ -1309,6 +1309,7 @@ function FoodSurveyFormInner({
                             {item.category}
                           </Badge>
                         )}
+                        {item.unit ? <span className="text-[11px] font-medium text-muted">· {item.unit}</span> : null}
                         {variant === 'admin' && r.name && (
                           <span className="text-[11px] text-muted">renamed from “{item.name}”</span>
                         )}

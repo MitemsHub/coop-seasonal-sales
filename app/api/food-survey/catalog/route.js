@@ -2,6 +2,7 @@
 // Public: the surveyable item list (name + category) for the /survey form.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
+import { supportsUnit } from '@/lib/foodSurveyCatalog'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -9,9 +10,16 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   try {
     const supabase = createClient()
+    // `unit` only exists after migrations/add-food-survey-unit.sql — fall
+    // back to the old columns until then so the form keeps loading.
+    const withUnit = await supportsUnit(supabase)
     const { data, error } = await supabase
       .from('food_survey_catalog')
-      .select('id, name, category, sort_order, active')
+      .select(
+        withUnit
+          ? 'id, name, category, unit, sort_order, active'
+          : 'id, name, category, sort_order, active'
+      )
       .eq('active', true)
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true })
