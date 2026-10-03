@@ -5,6 +5,7 @@
 // Deliberately outside /rep so middleware never gates it; the API endpoints it
 // calls (/api/food-survey/*, /api/branches/list) are public too.
 // (The old /uploads route redirects here.)
+import { useEffect, useState } from 'react'
 import EntryHeader from '../components/EntryHeader'
 import FoodSurveyForm from '../components/FoodSurveyForm'
 import { ClipboardList } from 'lucide-react'
@@ -12,6 +13,26 @@ import { ClipboardList } from 'lucide-react'
 export const dynamic = 'force-dynamic'
 
 export default function FoodSurveyPage() {
+  // Year of the open food cycle (e.g. "2026" from code "2026Q3" /
+  // name "2026 Q3 Distribution") so the intro copy stays current each cycle.
+  const [cycleYear, setCycleYear] = useState('')
+  useEffect(() => {
+    let alive = true
+    fetch('/api/food-survey/status', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!alive) return
+        const src = `${j?.cycle?.code || ''} ${j?.cycle?.name || ''}`
+        const m = src.match(/20\d{2}/)
+        if (m) setCycleYear(m[0])
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
+  const year = cycleYear || String(new Date().getFullYear())
+
   return (
     <div className="flex min-h-screen flex-col bg-canvas">
       <EntryHeader
@@ -36,7 +57,7 @@ export default function FoodSurveyPage() {
               Food Distribution Item Survey
             </h1>
             <p className="mt-2 text-sm text-muted sm:text-base">
-              Tell us what&apos;s on your branch&apos;s shelves before the food cycle opens —
+              Kindly fill the survey form for the {year} food distribution —
               for each item, enter the price and add a clear photo.
             </p>
           </div>
