@@ -172,10 +172,16 @@ const GradientPlane = ({ color1, color2, speed = 1 }) => {
 
     useFrame((state) => {
         const { clock, size } = state;
-        uniforms.uTime.value = clock.getElapsedTime() * speed;
-        uniforms.uResolution.value.set(size.width, size.height);
-        uniforms.uColor1.value.set(sanitizeHexColor(color1, HERO_GEOMETRIC_FALLBACK_COLOR_1));
-        uniforms.uColor2.value.set(sanitizeHexColor(color2, HERO_GEOMETRIC_FALLBACK_COLOR_2));
+        // R3F clones the `uniforms` prop object when it applies it to the
+        // material, so writing to the memoized snapshot would never reach the
+        // GPU (the shader would sit frozen at uTime=0). Always go through the
+        // material's own uniforms.
+        const mat = meshRef.current?.material;
+        const u = mat?.uniforms || uniforms;
+        u.uTime.value = clock.getElapsedTime() * speed;
+        u.uResolution.value.set(size.width, size.height);
+        u.uColor1.value.set(sanitizeHexColor(color1, HERO_GEOMETRIC_FALLBACK_COLOR_1));
+        u.uColor2.value.set(sanitizeHexColor(color2, HERO_GEOMETRIC_FALLBACK_COLOR_2));
     });
 
     return (
