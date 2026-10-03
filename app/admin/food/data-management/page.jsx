@@ -28,8 +28,10 @@ function DataManagementPageContent() {
   const [newCycleStartsAt, setNewCycleStartsAt] = useState('')
   const [newCycleEndsAt, setNewCycleEndsAt] = useState('')
   const [newCycleMakeActive, setNewCycleMakeActive] = useState(true)
+  const [newCycleSurveyOpen, setNewCycleSurveyOpen] = useState(false)
   const [creatingCycle, setCreatingCycle] = useState(false)
   const [activatingCycle, setActivatingCycle] = useState(false)
+  const [togglingSurvey, setTogglingSurvey] = useState(false)
 
   const [editingCycle, setEditingCycle] = useState(false)
   const [editCycleCode, setEditCycleCode] = useState('')
@@ -231,6 +233,7 @@ function DataManagementPageContent() {
         name: newCycleName.trim(),
         make_active: !!newCycleMakeActive
       }
+      if (newCycleSurveyOpen) payload.survey_open = true
       if (newCycleStartsAt) payload.starts_at = newCycleStartsAt
       if (newCycleEndsAt) payload.ends_at = newCycleEndsAt
 
@@ -247,6 +250,7 @@ function DataManagementPageContent() {
       setNewCycleName('')
       setNewCycleStartsAt('')
       setNewCycleEndsAt('')
+      setNewCycleSurveyOpen(false)
       await loadCycles()
       if (json.active_cycle_id != null) setSelectedCycleId(json.active_cycle_id)
       if (json.active_cycle_id != null) loadFoodCyclePolicy(json.active_cycle_id)
@@ -278,6 +282,35 @@ function DataManagementPageContent() {
       setMessage(`Error: ${e.message}`)
     } finally {
       setActivatingCycle(false)
+    }
+  }
+
+  // Open/close the item survey (/survey) for the selected cycle. Opening one
+  // cycle closes the survey for all the others; the cycle's end date (if any)
+  // still auto-closes it in code.
+  const toggleSurveyOpen = async () => {
+    if (selectedCycleId == null || togglingSurvey) return
+    const target = cycles.find(c => c.id === selectedCycleId)
+    const open = !target?.survey_open
+    setTogglingSurvey(true)
+    setMessage('')
+    try {
+      const res = await fetch('/api/admin/cycles', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ id: selectedCycleId, survey_open: open })
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to update the survey status')
+      setMessage(open
+        ? 'Survey opened — reps can now submit the /survey form for this cycle.'
+        : 'Survey closed — reps can no longer submit or edit responses.')
+      await loadCycles()
+    } catch (e) {
+      setMessage(`Error: ${e.message}`)
+    } finally {
+      setTogglingSurvey(false)
     }
   }
 
@@ -719,7 +752,7 @@ function DataManagementPageContent() {
                 ) : (
                   cycles.map(c => (
                     <option key={c.id} value={c.id}>
-                      {c.name} ({c.code}){c.is_active ? ' · Active' : ''}
+                      {c.name} ({c.code}){c.is_active ? ' · Active' : ''}{c.survey_open ? ' · Survey open' : ''}
                     </option>
                   ))
                 )}
@@ -727,6 +760,15 @@ function DataManagementPageContent() {
               <div className="mt-2 flex gap-2 flex-wrap">
                 <Button onClick={setActiveCycle} loading={activatingCycle} disabled={selectedCycleId == null}>
                   {activatingCycle ? 'Setting…' : 'Set Selected as Active'}
+                </Button>
+                <Button
+                  variant={cycles.find(c => c.id === selectedCycleId)?.survey_open ? 'secondary' : 'brand'}
+                  onClick={toggleSurveyOpen}
+                  loading={togglingSurvey}
+                  disabled={selectedCycleId == null || togglingSurvey}
+                  title="Open or close the item survey (/survey) reps fill for this cycle"
+                >
+                  {cycles.find(c => c.id === selectedCycleId)?.survey_open ? 'Close Survey' : 'Open Survey'}
                 </Button>
                 {!editingCycle && (
                   <Button variant="secondary" onClick={startEditCycle} disabled={selectedCycleId == null}>
@@ -834,6 +876,14 @@ function DataManagementPageContent() {
                     onChange={(e) => setNewCycleMakeActive(e.target.checked)}
                   />
                   Make this cycle active immediately
+                </label>
+                <label className="flex items-center gap-2 text-sm text-fg">
+                  <input
+                    type="checkbox"
+                    checked={newCycleSurveyOpen}
+                    onChange={(e) => setNewCycleSurveyOpen(e.target.checked)}
+                  />
+                  Open the item survey for this cycle right away
                 </label>
                 <Button type="submit" loading={creatingCycle} disabled={creatingCycle} className="w-full sm:w-auto">
                   {creatingCycle ? 'Creating…' : 'Create Cycle'}

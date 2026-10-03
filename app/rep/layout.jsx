@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   ChevronDown,
+  ClipboardList,
   Clock,
   Landmark,
   LayoutDashboard,
@@ -146,6 +147,7 @@ export default function RepLayout({ children }) {
   const activeKey = useMemo(() => {
     if (pathname === '/rep') return 'dashboard'
     if (pathname.startsWith('/rep/posted')) return 'food_posted'
+    if (pathname.startsWith('/rep/survey')) return 'food_survey'
     if (pathname.startsWith('/rep/delivered')) return 'food_delivered'
     if (pathname.startsWith('/rep/banks')) return 'food_banks'
     if (pathname.startsWith('/rep/ram/approved')) return 'ram_approved'
@@ -392,6 +394,7 @@ export default function RepLayout({ children }) {
               {!isCollapsed && foodOpen && (
                 <div className="mt-1 space-y-0.5">
                   <NavLink href="/rep/posted" label="Posted" icon={Send} active={activeKey === 'food_posted'} collapsed={false} onNavigate={navOnClick} count={foodLive === false ? 0 : pendingCounts.food} />
+                  <NavLink href="/rep/survey" label="Item Survey" icon={ClipboardList} active={activeKey === 'food_survey'} collapsed={false} onNavigate={navOnClick} />
                   <NavLink href="/rep/delivered" label="Delivered" icon={Truck} active={activeKey === 'food_delivered'} collapsed={false} onNavigate={navOnClick} />
                   <NavLink href="/rep/banks" label="Banks" icon={Landmark} active={activeKey === 'food_banks'} collapsed={false} onNavigate={navOnClick} />
                 </div>

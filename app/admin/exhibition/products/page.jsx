@@ -54,7 +54,7 @@ export default function ExhibitionProductsPage() {
         fetch(`/api/admin/exhibition/products?${params}`, { cache: 'no-store' }).then((r) => r.json()),
         fetch('/api/admin/exhibition/cycles', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
         fetch('/api/admin/exhibition/vendors', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
-        fetch('/api/exhibition/categories', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
+        fetch('/api/admin/exhibition/categories', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
       ])
       if (p?.ok) setProducts(p.products || [])
       else setMsg({ type: 'error', text: p?.error || 'Failed to load products' })

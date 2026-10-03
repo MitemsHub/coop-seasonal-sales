@@ -31,8 +31,9 @@ export default function RepLoginPage() {
   const [branchName, setBranchName] = useState('')
   const [branchId, setBranchId] = useState(null)
 
-  // ── localStorage keys for remembering prefs ──
-  const prefsKey = (bc) => `rep_food_prefs_${bc}`
+  // ── localStorage keys removed on purpose: the department question must be
+  // asked (and validated) on EVERY login — a branch that logged in before
+  // must never be skipped straight into its last department.
 
   // Fetch departments list when needed
   useEffect(() => {
@@ -92,42 +93,7 @@ export default function RepLoginPage() {
       setBranchId(bid)
       setBranchRepPhone(existingPhone)
 
-      // Check if we have saved preferences for this branch
-      try {
-        const saved = JSON.parse(localStorage.getItem(prefsKey(bc)) || '{}')
-
-        if (saved.isDeptRep !== undefined && saved.department) {
-          // Saved prefs exist — skip prompts, go straight to dashboard
-          setPhone(saved.phone || existingPhone || '')
-          setSelectedDept(saved.department || '')
-          setIsDeptRep(saved.isDeptRep)
-
-          // Save phone to DB if we have one and it's not already saved
-          const phoneToSave = saved.phone || existingPhone
-          if (phoneToSave) {
-            await fetch('/api/rep/profile/phone', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-              body: JSON.stringify({ rep_phone: phoneToSave }),
-            }).catch(() => null)
-          }
-
-          login({
-            type: 'rep',
-            id: bc,
-            authenticated: true,
-            module: 'food',
-            branchCode: bc,
-            branchName: bn,
-            branchId: bid,
-            ...(saved.isDeptRep && saved.department ? { department: saved.department } : {}),
-          })
-          router.push('/rep')
-          return
-        }
-      } catch {}
-
-      // No saved prefs — show the department question
+      // Always ask the department question — even if this branch logged in before.
       setLoginStep('department-question')
     } catch (e) {
       setMsg(e.message)
@@ -142,7 +108,7 @@ export default function RepLoginPage() {
       // Department rep — show dept dropdown + phone
       setLoginStep('department-phone')
     } else {
-      // General rep — if phone exists, skip to dashboard
+      // Branch rep — if phone exists, skip to dashboard
       if (branchRepPhone) {
         finishLogin({ isDeptRep: false, department: '', phone: branchRepPhone })
       } else {
@@ -197,16 +163,7 @@ export default function RepLoginPage() {
     }
   }
 
-  const finishLogin = ({ isDeptRep: isDept, department, phone: phoneVal }) => {
-    // Save prefs to localStorage
-    try {
-      localStorage.setItem(prefsKey(branchCode), JSON.stringify({
-        isDeptRep: isDept,
-        department,
-        phone: phoneVal,
-      }))
-    } catch {}
-
+  const finishLogin = ({ isDeptRep: isDept, department }) => {
     login({
       type: 'rep',
       id: branchCode,
@@ -343,7 +300,7 @@ export default function RepLoginPage() {
                       onClick={() => submitDepartmentQuestion(false)}
                       className="rounded-xl border border-line bg-surface px-4 py-3 text-sm font-semibold text-fg transition-all duration-200 hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
                     >
-                      No, general rep
+                      No, Branch Rep
                     </button>
                   </div>
                 </motion.div>

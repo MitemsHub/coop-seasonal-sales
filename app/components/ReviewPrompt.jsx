@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Star, X, Send, CheckCircle2 } from 'lucide-react'
-import { Button } from './ui/Button'
+import Button from './ui/Button'
 
 /**
  * ReviewPrompt — shown after order success, lets members leave a review.

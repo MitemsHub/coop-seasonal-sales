@@ -202,7 +202,9 @@ export async function POST(req) {
           code,
         },
       })
-      res.cookies.set('rep_token', token, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 8 })
+      // Browser-session cookie (no maxAge): closing the browser ends the
+      // session, so the next visit always asks for the passcode again.
+      res.cookies.set('rep_token', token, { httpOnly: true, sameSite: 'lax', path: '/' })
       return res
     }
 
@@ -214,9 +216,11 @@ export async function POST(req) {
       return NextResponse.json({ ok:false, error:'Invalid passcode' }, { status:401 })
     }
 
-    const token = await sign({ role: 'rep', module: portalModule, branch_id: br.id, branch_code: br.code }, 60 * 60 * 8) // 8h
+    const token = await sign({ role: 'rep', module: portalModule, branch_id: br.id, branch_code: br.code }, 60 * 60 * 8) // 8h token
     const res = NextResponse.json({ ok:true, module: portalModule, branch: br, rep_phone: br.rep_phone || '' })
-    res.cookies.set('rep_token', token, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 60*60*8 })
+    // Browser-session cookie (no maxAge): closing the browser ends the
+    // session, so the next visit always asks for the passcode again.
+    res.cookies.set('rep_token', token, { httpOnly: true, sameSite: 'lax', path: '/' })
     return res
   } catch (e) {
     return NextResponse.json({ ok:false, error:e.message }, { status:500 })

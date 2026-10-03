@@ -35,7 +35,7 @@ export default function Navbar() {
   const hideOnAdmin = !!pathname?.startsWith('/admin')
   const hideOnRep = !!pathname?.startsWith('/rep')
   const hideOnVendor = !!pathname?.startsWith('/vendor')
-  const hideOnLanding = pathname === '/' || pathname === '/portal' || pathname === '/contact'
+  const hideOnLanding = pathname === '/' || pathname === '/portal' || pathname === '/contact' || pathname === '/survey' || pathname === '/uploads'
   const hideOnPrivileged = userType === 'admin' || userType === 'rep'
   const hideNavbar = hideOnAdmin || hideOnRep || hideOnVendor || hideOnLanding || hideOnPrivileged
 

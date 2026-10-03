@@ -16,6 +16,7 @@ import {
   BarChart3,
   Boxes,
   CheckCircle2,
+  ClipboardList,
   ChevronDown,
   Clock,
   Database,
@@ -254,7 +255,7 @@ export default function AdminLayout({ children }) {
       setOpenModule('food')
       const isOps = ['/admin/food/banks', '/admin/food/inventory', '/admin/food/markups',
         '/admin/food/reports', '/admin/food/audit', '/admin/food/data-management',
-        '/admin/food/cart', '/admin/food/import'].some((p) => pathname.startsWith(p))
+        '/admin/food/cart', '/admin/food/import', '/admin/food/survey'].some((p) => pathname.startsWith(p))
       setFoodSub(isOps ? 'ops' : 'orders')
     } else if (pathname.startsWith('/admin/ram')) {
       setOpenModule('ram')
@@ -376,6 +377,7 @@ export default function AdminLayout({ children }) {
     if (pathname.startsWith('/admin/food/audit')) return 'food_audit'
     if (pathname.startsWith('/admin/food/data-management')) return 'food_data'
     if (pathname.startsWith('/admin/food/cart')) return 'food_cart'
+    if (pathname.startsWith('/admin/food/survey')) return 'food_survey'
     if (pathname.startsWith('/admin/ram/pending')) return 'ram_pending'
     if (pathname.startsWith('/admin/ram/cancelled')) return 'ram_cancelled'
     if (pathname.startsWith('/admin/ram/approved')) return 'ram_approved'
@@ -537,6 +539,7 @@ export default function AdminLayout({ children }) {
                   <div className="mt-0.5 space-y-0.5 pl-4">
                     <NavLink href="/admin/food/banks" label="Banks" icon={Landmark} active={activeKey === 'food_banks'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/food/inventory" label="Inventory" icon={Boxes} active={activeKey === 'food_inventory'} collapsed={false} onNavigate={navOnClick} />
+                    <NavLink href="/admin/food/survey" label="Item Survey" icon={ClipboardList} active={activeKey === 'food_survey'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/food/markups" label="Markups" icon={Percent} active={activeKey === 'food_markups'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/food/reports" label="Report" icon={BarChart3} active={activeKey === 'food_reports'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/food/audit" label="Audit Log" icon={History} active={activeKey === 'food_audit'} collapsed={false} onNavigate={navOnClick} />

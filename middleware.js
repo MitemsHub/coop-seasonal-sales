@@ -86,6 +86,15 @@ async function validateSession(request, sessionType) {
 // Main middleware function
 export async function middleware(request) {
   const { pathname } = request.nextUrl
+
+  // Legacy route — the public food survey moved to /survey (every other survey
+  // surface carries the name). Hard 307 so links reps already received keep
+  // working without JS. Exact match only: static photo files under
+  // /uploads/… are served from /public and never reach this branch.
+  if (pathname === '/uploads') {
+    return NextResponse.redirect(new URL('/survey', request.url), 307)
+  }
+
   const clientIP = getClientIP(request)
   
   // Create response with security headers
@@ -331,11 +340,11 @@ export async function middleware(request) {
 
       const claim = sessionValidation.claim
       const mod = claim?.module
-      if (mod === 'ram' && (pathname.startsWith('/rep/pending') || pathname.startsWith('/rep/posted') || pathname.startsWith('/rep/delivered') || pathname.startsWith('/rep/banks'))) {
+      if (mod === 'ram' && (pathname.startsWith('/rep/pending') || pathname.startsWith('/rep/posted') || pathname.startsWith('/rep/delivered') || pathname.startsWith('/rep/banks') || pathname.startsWith('/rep/survey'))) {
         const dest = new URL('/rep/ram/approved', request.url)
         return NextResponse.redirect(dest)
       }
-      if (mod === 'exhibition' && (pathname.startsWith('/rep/pending') || pathname.startsWith('/rep/posted') || pathname.startsWith('/rep/delivered') || pathname.startsWith('/rep/banks') || pathname.startsWith('/rep/ram/'))) {
+      if (mod === 'exhibition' && (pathname.startsWith('/rep/pending') || pathname.startsWith('/rep/posted') || pathname.startsWith('/rep/delivered') || pathname.startsWith('/rep/banks') || pathname.startsWith('/rep/ram/') || pathname.startsWith('/rep/survey'))) {
         const dest = new URL('/rep/exhibition/pending', request.url)
         return NextResponse.redirect(dest)
       }
@@ -373,6 +382,8 @@ export const config = {
     // Match shop routes (for member protection)
     '/shop/:path*',
     // Match member exhibition routes
-    '/exhibition/:path*'
+    '/exhibition/:path*',
+    // Legacy /uploads → /survey redirect (exact — photo files unaffected)
+    '/uploads'
   ]
 }

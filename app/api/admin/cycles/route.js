@@ -18,6 +18,11 @@ function validateCycleName(name) {
   return { ok: true, value: sanitized }
 }
 
+const surveyMigrationHint = (err) =>
+  /survey_open/i.test(err?.message || '')
+    ? 'Survey activation needs the new column — run migrations/cycle-survey-open.sql in the Supabase SQL editor first.'
+    : err?.message || 'Failed to update cycle'
+
 async function getActiveCycleId(supabase) {
   const { data, error } = await supabase
     .from('cycles')
@@ -40,8 +45,19 @@ export async function GET(request) {
 
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
-  const active = (cycles || []).find(c => c.is_active)
-  return NextResponse.json({ ok: true, cycles: cycles || [], active_cycle_id: active?.id || null })
+  // survey_open comes from migrations/cycle-survey-open.sql — merged best-effort
+  // so cycle pages keep working even before the migration has been run
+  // (survey_open stays null = "unknown / migration not run" in that case).
+  let flags = null
+  try {
+    const { data: flagRows, error: flagErr } = await supabase.from('cycles').select('id, survey_open')
+    if (!flagErr) flags = flagRows || []
+  } catch {}
+  const flagById = new Map((flags || []).map(f => [f.id, !!f.survey_open]))
+  const out = (cycles || []).map(c => ({ ...c, survey_open: flags ? (flagById.get(c.id) ?? false) : null }))
+
+  const active = out.find(c => c.is_active)
+  return NextResponse.json({ ok: true, cycles: out, active_cycle_id: active?.id || null })
 }
 
 export async function POST(request) {
@@ -63,6 +79,13 @@ export async function POST(request) {
   }
 
   const insertPayload = { code: codeRes.value, name: nameRes.value, is_active: makeActive }
+  // Optionally open the item survey for this cycle at creation time.
+  const openSurvey = !!body.survey_open
+  if (openSurvey) {
+    const { error: closeErr } = await supabase.from('cycles').update({ survey_open: false }).neq('id', 0)
+    if (closeErr) return NextResponse.json({ ok: false, error: surveyMigrationHint(closeErr) }, { status: 500 })
+    insertPayload.survey_open = true
+  }
   if (body.starts_at) insertPayload.starts_at = body.starts_at
   if (body.ends_at) insertPayload.ends_at = body.ends_at
 
@@ -153,6 +176,21 @@ export async function PATCH(request) {
   if (!targetRes.data?.id) return NextResponse.json({ ok: false, error: 'Cycle not found' }, { status: 404 })
 
   const cycleId = targetRes.data.id
+
+  // Survey activation: open the item survey (/survey) for this cycle — which
+  // closes it for every other cycle — or close it again. Independent of
+  // is_active; the end date (if any) still auto-closes it in code.
+  if (body.survey_open !== undefined) {
+    const openSurvey = !!body.survey_open
+    if (openSurvey) {
+      const { error: offErr } = await supabase.from('cycles').update({ survey_open: false }).neq('id', cycleId)
+      if (offErr) return NextResponse.json({ ok: false, error: surveyMigrationHint(offErr) }, { status: 500 })
+    }
+    const { error: onErr } = await supabase.from('cycles').update({ survey_open: openSurvey }).eq('id', cycleId)
+    if (onErr) return NextResponse.json({ ok: false, error: surveyMigrationHint(onErr) }, { status: 500 })
+    return NextResponse.json({ ok: true, cycle_id: cycleId, survey_open: openSurvey })
+  }
+
   const { error: offErr } = await supabase.from('cycles').update({ is_active: false }).neq('id', 0)
   if (offErr) return NextResponse.json({ ok: false, error: offErr.message }, { status: 500 })
 
