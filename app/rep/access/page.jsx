@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, Package, ShoppingBasket, Store } from 'lucide-react'
+import { ArrowRight, Beef, ShoppingBasket, Store } from 'lucide-react'
 import EntryHeader from '../../components/EntryHeader'
 import Badge from '../../components/ui/Badge'
 import ModuleClosedPanel from '../../components/ModuleClosedPanel'
@@ -83,13 +83,13 @@ export default function RepAccessPage() {
           {
             href: '/rep/login?module=food',
             label: 'Food Distribution',
-            icon: Package,
+            icon: ShoppingBasket,
             badge: { open: availability.food },
           },
           {
             href: '/rep/login?module=ram',
             label: 'Ram Sales',
-            icon: ShoppingBasket,
+            icon: Beef,
             badge: { open: availability.ram },
           },
           {
@@ -123,7 +123,7 @@ export default function RepAccessPage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-subtle text-brand-fg ring-2 ring-brand-700/40 transition-transform duration-200 ease-sakani group-hover:scale-105">
-                  <Package className="h-5.5 w-5.5" strokeWidth={2} />
+                  <ShoppingBasket className="h-5.5 w-5.5" strokeWidth={2} />
                 </span>
                 <span className="flex flex-col items-end gap-1.5">
                   <AvailabilityBadge open={availability.food} />
@@ -147,7 +147,7 @@ export default function RepAccessPage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-subtle text-brand-fg ring-2 ring-warning-600/50 transition-transform duration-200 ease-sakani group-hover:scale-105">
-                  <ShoppingBasket className="h-5.5 w-5.5" strokeWidth={2} />
+                  <Beef className="h-5.5 w-5.5" strokeWidth={2} />
                 </span>
                 <span className="flex flex-col items-end gap-1.5">
                   <AvailabilityBadge open={availability.ram} />

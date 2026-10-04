@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { AlertCircle, ArrowLeft, KeyRound, Package, Phone, ShieldCheck, ShoppingBasket, Store, Users, ChevronDown } from 'lucide-react'
+import { AlertCircle, ArrowLeft, KeyRound, Beef, Phone, ShieldCheck, ShoppingBasket, Store, Users, ChevronDown } from 'lucide-react'
 import EntryHeader from '../../components/EntryHeader'
 
 export default function RepLoginPage() {
@@ -214,7 +214,7 @@ export default function RepLoginPage() {
                     : 'Set up your department and contact.'}
               </p>
               <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-brand-subtle px-3 py-1 text-xs font-semibold text-brand-fg">
-                {isRam ? <ShoppingBasket className="h-3.5 w-3.5" aria-hidden="true" /> : isExhibition ? <Store className="h-3.5 w-3.5" aria-hidden="true" /> : <Package className="h-3.5 w-3.5" aria-hidden="true" />}
+                {isRam ? <Beef className="h-3.5 w-3.5" aria-hidden="true" /> : isExhibition ? <Store className="h-3.5 w-3.5" aria-hidden="true" /> : <ShoppingBasket className="h-3.5 w-3.5" aria-hidden="true" />}
                 {isRam ? 'Ram Sales' : isExhibition ? 'Coop Exhibition' : 'Food Distribution'} module
               </span>
             </div>
