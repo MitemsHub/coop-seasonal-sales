@@ -2,6 +2,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 
@@ -14,6 +15,11 @@ const STEP = {
   ENTER_PASSWORD: 'enter_password',
   FORGOT_PASSWORD: 'forgot_password',
 }
+
+// Shared transition for the step crossfade and the card's height morph —
+// expo-out keeps both in sync so a step change reads as one smooth motion
+// instead of an instant re-render jump.
+const STEP_TRANSITION = { duration: 0.28, ease: [0.16, 1, 0.3, 1] }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const n = (id) => document.getElementById(id)
@@ -766,7 +772,17 @@ export default function MemberAuth() {
   const { title, sub } = titles[step] || titles[STEP.ENTER_ID]
 
   return (
-    <div className="space-y-3 md:space-y-4">
+    <div>
+      <AnimatePresence initial={false}>
+        <motion.div
+          key={step}
+          className="space-y-3 md:space-y-4"
+          initial={{ height: 0, opacity: 0, y: 10 }}
+          animate={{ height: 'auto', opacity: 1, y: 0 }}
+          exit={{ height: 0, opacity: 0, y: -8 }}
+          transition={STEP_TRANSITION}
+          style={{ overflow: 'hidden' }}
+        >
       {/* Step heading — skip on ENTER_ID since the portal page already shows it */}
       {step !== STEP.ENTER_ID && (
         <div className="mb-1">
@@ -851,6 +867,8 @@ export default function MemberAuth() {
           onBack={goToLogin}
         />
       )}
+        </motion.div>
+      </AnimatePresence>
     </div>
   )
 }
