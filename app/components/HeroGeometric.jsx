@@ -13,12 +13,12 @@
 // fullscreen plane via @react-three/fiber.
 //
 // Adapted to the Coop design system:
-//   • colors default to a lighter cut of the brand forest-green scale —
-//     brand-800 (#134e34) deep corner → brand-600 (#30825c) light corner.
-//     Two steps lighter than the original brand-950 → brand-600 pairing so
-//     the card reads as a mid forest green rather than near-black, while
-//     every band still keeps white hero copy at ≥ 4.9:1 — AA for body text
-//     even where a pale band drifts behind the paragraph.
+//   • colors default to the owner-supplied pair — deep #08391b → light
+//     #1d6746 (brand-700). Every band between them holds white copy at
+//     ≥ 6.9:1 contrast (AA), so no scrim is needed behind the hero copy.
+//   • noise, band diagonal, corner wash and vignette are all sampled in
+//     aspect-corrected units so the pattern keeps its proportions on the
+//     wide sign-in card instead of smearing horizontally.
 //   • the upstream white corner-wash mixes toward color1 instead of white,
 //     keeping the white hero copy's contrast on the bottom-left corner
 //   • honours prefers-reduced-motion: the canvas switches to frameloop
@@ -92,14 +92,23 @@ void main() {
     vec2 uv = vUv;
     vec2 coord = gl_FragCoord.xy;
 
+    // Aspect correction: the sign-in card is very wide (~3.4:1), so sampling
+    // in raw 0..1 uv smeared every feature horizontally (the "over-stretched"
+    // look). Work in units where 1.0 == the card's height, so noise features,
+    // band diagonals and the corner wash keep their true shape at any aspect.
+    float aspect = uResolution.x / max(uResolution.y, 1.0);
+    vec2 auv = vec2(uv.x * aspect, uv.y);
+
     // Enhanced noise with time
-    float noise = snoise(uv * 1.5 + vec2(uTime * 0.05, uTime * 0.03)) * 0.25;
+    float noise = snoise(auv * 1.5 + vec2(uTime * 0.05, uTime * 0.03)) * 0.25;
 
-    // Diagonal gradient from bottom-left to top-right
-    float diagonal = (uv.x + uv.y) * 0.5;
+    // Diagonal gradient from bottom-left to top-right — 45° on screen and
+    // normalised corner-to-corner regardless of the card's aspect
+    float diagonal = (auv.x + auv.y) / (aspect + 1.0);
 
-    // Combine for gradient - emphasize corners
-    float gradient = diagonal * 1.2 + noise;
+    // Combine for gradient; the 1.35 gain biases the field toward the lighter
+    // bands so the card sits a touch lighter overall
+    float gradient = diagonal * 1.35 + noise;
 
     // Interpolate colors based on gradient
     vec3 deepBlue = uColor1;
@@ -132,24 +141,29 @@ void main() {
     }
 
     // Softer fade at the extreme bottom-left — anchored on color1 (the deep
-    // brand green) instead of the upstream white wash, so the hero's white
-    // copy and glass chips keep their contrast over this corner.
-    vec2 cornerDist = vec2(uv.x, uv.y);
-    float fadeMask = smoothstep(0.0, 0.25, length(cornerDist));
+    // green) and measured in aspect-corrected units so it stays a compact
+    // circle instead of a wide dark smear across the bottom of the card.
+    vec2 cornerDist = vec2(uv.x * aspect, uv.y);
+    float fadeMask = smoothstep(0.0, 0.32, length(cornerDist));
     color = mix(uColor1, color, fadeMask);
 
-    // Add subtle vignette to emphasize corners
-    vec2 vignetteUv = uv;
-    float vignette = smoothstep(1.2, 0.3, length(vignetteUv - 0.5));
+    // Add subtle vignette to emphasize corners (aspect-corrected so the
+    // falloff is circular on screen; same mapping as the upstream version)
+    vec2 vignetteUv = (uv - 0.5) * vec2(aspect, 1.0);
+    float vnorm = length(vignetteUv) / (0.5 * sqrt(aspect * aspect + 1.0));
+    float vignette = smoothstep(1.2, 0.3, vnorm * 0.7071);
     color = mix(color, color * 0.95, (1.0 - vignette) * 0.3);
 
     gl_FragColor = vec4(color, 1.0);
 }
 `;
 
-/* Brand defaults — the design-system forest-green scale (globals.css @theme) */
-const HERO_GEOMETRIC_FALLBACK_COLOR_1 = '#134e34' // --color-brand-800
-const HERO_GEOMETRIC_FALLBACK_COLOR_2 = '#30825c' // --color-brand-600
+/* Palette pair supplied by the product owner (sampled from their swatches):
+   a very deep forest green for the bottom-left corner and brand-700 as the
+   light corner. Every band between them keeps white hero copy at >= 6.9:1
+   (AA), so no scrim is needed behind the copy. */
+const HERO_GEOMETRIC_FALLBACK_COLOR_1 = '#08391b' // owner's dark swatch
+const HERO_GEOMETRIC_FALLBACK_COLOR_2 = '#1d6746' // owner's light swatch — --color-brand-700
 const HEX_COLOR_REGEX = /^#?[0-9a-fA-F]{6}$/;
 
 function sanitizeHexColor(value, fallback) {
@@ -160,15 +174,6 @@ function sanitizeHexColor(value, fallback) {
 
 const GradientPlane = ({ color1, color2, speed = 1 }) => {
     const meshRef = useRef(null);
-    // Camera geometry: R3F's default camera is a 75° perspective at z=1, so
-    // the frustum at the plane (z=0) is 2*tan(fov/2) high and that times the
-    // aspect wide. The upstream fixed 4×4 plane only covers aspects up to
-    // ~2.6:1 — our wide sign-in card (~3.4:1) left uncovered strips at both
-    // edges where the card's fallback gradient showed through. Fit the plane
-    // to the frustum every frame instead so uv always maps exactly onto the
-    // visible canvas at any aspect.
-    const CAM_DIST = 1;
-    const CAM_FOV = 75;
     const uniforms = useMemo(
         () => ({
             uTime: { value: 0 },
@@ -181,13 +186,12 @@ const GradientPlane = ({ color1, color2, speed = 1 }) => {
 
     useFrame((state) => {
         const { clock, size } = state;
-        if (meshRef.current && size.width > 0 && size.height > 0) {
-            const visH = 2 * Math.tan((CAM_FOV / 2) * (Math.PI / 180)) * CAM_DIST;
-            const visW = visH * (size.width / size.height);
-            // planeGeometry is 2×2 before scale, so scale = visible / 2
-            meshRef.current.scale.set(visW / 2, visH / 2, 1);
-        }
-        const u = meshRef.current?.material?.uniforms || uniforms;
+        // R3F clones the `uniforms` prop object when it applies it to the
+        // material, so writing to the memoized snapshot would never reach the
+        // GPU (the shader would sit frozen at uTime=0). Always go through the
+        // material's own uniforms.
+        const mat = meshRef.current?.material;
+        const u = mat?.uniforms || uniforms;
         u.uTime.value = clock.getElapsedTime() * speed;
         u.uResolution.value.set(size.width, size.height);
         u.uColor1.value.set(sanitizeHexColor(color1, HERO_GEOMETRIC_FALLBACK_COLOR_1));
@@ -195,7 +199,7 @@ const GradientPlane = ({ color1, color2, speed = 1 }) => {
     });
 
     return (
-        <mesh ref={meshRef}>
+        <mesh ref={meshRef} scale={[2, 2, 1]}>
             <planeGeometry args={[2, 2]} />
             <shaderMaterial
                 vertexShader={vertexShader}

@@ -79,10 +79,10 @@ export default function PortalPage() {
         <div className="relative mx-auto max-w-7xl px-4 py-10 sm:py-14 lg:px-6 lg:py-16">
           <Reveal>
             {/* The animated dithered brand-green shader lives INSIDE this
-                card — it must not bleed past its rounded border. The lighter
-                brand gradient below is only the pre-hydration / no-WebGL
-                fallback. */}
-            <div className="relative overflow-hidden rounded-2xl border border-brand-800 bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 shadow-xl">
+                card — it must not bleed past its rounded border. The gradient
+                below mirrors the shader's owner-supplied palette and is only
+                the pre-hydration / no-WebGL fallback. */}
+            <div className="relative overflow-hidden rounded-2xl border border-brand-800 bg-gradient-to-br from-[#08391b] via-brand-800 to-brand-700 shadow-xl">
               <HeroGeometric />
 
               <div className="relative grid gap-10 p-6 sm:p-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-14 lg:p-12">
