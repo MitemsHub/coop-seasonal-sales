@@ -99,10 +99,11 @@ void main() {
     float aspect = uResolution.x / max(uResolution.y, 1.0);
     vec2 auv = vec2(uv.x * aspect, uv.y);
 
-    // Enhanced noise with time — amplitude 0.3 keeps the band boundaries
-    // wandering visibly (the reference demo reorganises its arcs within
-    // seconds); velocity matches upstream's 0.05/0.03.
-    float noise = snoise(auv * 1.5 + vec2(uTime * 0.05, uTime * 0.03)) * 0.3;
+    // Noise frequency 0.9 (wavelength ≈ 1.1× the card height) gives big
+    // sweeping arcs like the reference demo instead of small dense contours;
+    // amplitude 0.35 keeps boundaries wandering visibly, including at the
+    // top-right, and velocity matches upstream's 0.05/0.03.
+    float noise = snoise(auv * 0.9 + vec2(uTime * 0.05, uTime * 0.03)) * 0.35;
 
     // Diagonal gradient from bottom-left to top-right — measured in raw uv
     // so it stays a clean 45° on screen like the reference (running it on the
@@ -110,12 +111,12 @@ void main() {
     // The noise above stays aspect-corrected so blobs keep their round shape.
     float diagonal = (uv.x + uv.y) * 0.5;
 
-    // Combine for gradient. With the +0.3 offset the field sits inside the
-    // dithered band range across most of the card (like the reference demo),
-    // so ribbon arcs sweep through the middle instead of piling up on the
-    // left — while the top-right stays solidly on the light swatch (#1d6746)
-    // and the deep swatch reads as ribbons + the bottom-left corner wash.
-    float gradient = diagonal * 1.15 + 0.3 + noise;
+    // Combine for gradient. Gain 0.7 / offset 0.45 compresses the band range
+    // across the whole card so the top-right (previously pinned at mean 1.35,
+    // far above every threshold — hence no ribbons there) now dips through
+    // the 0.8 boundary when noise falls, while the bottom-left still cycles
+    // through the deep swatch and the light swatch stays dominant overall.
+    float gradient = diagonal * 0.7 + 0.45 + noise;
 
     // Interpolate colors based on gradient
     vec3 deepBlue = uColor1;
@@ -257,11 +258,14 @@ const GradientPlane = ({ color1, color2, speed = 1 }) => {
 export default function HeroGeometric({
     color1 = HERO_GEOMETRIC_FALLBACK_COLOR_1,
     color2 = HERO_GEOMETRIC_FALLBACK_COLOR_2,
-    // 1.5 matches the reference demo's perceived sweep: upstream's raw
-    // 0.05/0.03 velocities translate a much larger share of its narrow hero
-    // per second, so the wide card's clock runs a touch faster to keep the
-    // same "arcs are moving" feel.
-    speed = 1.5,
+    // 2 matches the reference demo's perceived sweep at the new, larger
+    // feature size: the arcs are ~600px wide now, so the clock runs faster
+    // to cross them at the original's pace (absolute drift ≈ 54px/s).
+    speed = 2,
+    // Softens the backdrop behind the hero copy: a CSS blur over the canvas,
+    // with a proportional over-scale so the blur's transparent edge never
+    // shows inside the card (the card clips the overflow).
+    blur = 0,
     className = '',
 }) {
     // Freeze the shader on its first frame when the user prefers reduced
@@ -279,6 +283,11 @@ export default function HeroGeometric({
         <motion.div
             className={`pointer-events-none absolute inset-0 ${className}`}
             aria-hidden="true"
+            style={
+                blur > 0
+                    ? { filter: `blur(${blur}px)`, transform: `scale(${1 + blur / 200})` }
+                    : undefined
+            }
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.9, delay: 0.15, ease: 'easeOut' }}
