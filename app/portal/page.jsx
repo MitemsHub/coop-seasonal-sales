@@ -82,7 +82,7 @@ export default function PortalPage() {
                 card — it must not bleed past its rounded border. The gradient
                 below mirrors the shader's owner-supplied palette and is only
                 the pre-hydration / no-WebGL fallback. */}
-            <div className="relative overflow-hidden rounded-2xl border border-brand-800 bg-gradient-to-br from-[#08391b] via-brand-800 to-brand-700 shadow-xl">
+            <div className="relative overflow-hidden rounded-2xl border border-brand-800 bg-gradient-to-br from-[#08391b] via-brand-700 to-brand-700 shadow-xl">
               <HeroGeometric />
 
               <div className="relative grid gap-10 p-6 sm:p-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-14 lg:p-12">

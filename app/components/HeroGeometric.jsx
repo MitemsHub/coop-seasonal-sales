@@ -102,13 +102,18 @@ void main() {
     // Enhanced noise with time
     float noise = snoise(auv * 1.5 + vec2(uTime * 0.05, uTime * 0.03)) * 0.25;
 
-    // Diagonal gradient from bottom-left to top-right — 45° on screen and
-    // normalised corner-to-corner regardless of the card's aspect
-    float diagonal = (auv.x + auv.y) / (aspect + 1.0);
+    // Diagonal gradient from bottom-left to top-right — measured in raw uv
+    // so it stays a clean 45° on screen like the reference (running it on the
+    // aspect-corrected axes tilted it nearly vertical on this wide card).
+    // The noise above stays aspect-corrected so blobs keep their round shape.
+    float diagonal = (uv.x + uv.y) * 0.5;
 
-    // Combine for gradient; the 1.35 gain biases the field toward the lighter
-    // bands so the card sits a touch lighter overall
-    float gradient = diagonal * 1.35 + noise;
+    // Combine for gradient. The +0.5 offset (with a slightly softer gain)
+    // pushes the bulk of the field into the two lightest bands so the owner's
+    // light swatch (#1d6746) is the dominant colour of the card; the deep
+    // swatch survives as dithered ribbons toward the bottom-left and the
+    // compact corner wash, instead of swallowing the whole surface.
+    float gradient = diagonal * 1.2 + 0.5 + noise;
 
     // Interpolate colors based on gradient
     vec3 deepBlue = uColor1;
@@ -172,20 +177,52 @@ function sanitizeHexColor(value, fallback) {
     return trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
 }
 
+// Write a hex into a THREE.Color as its RAW sRGB components. Three r152+
+// normally converts every Color into linear working space (and @react-three/
+// fiber re-enables that when the Canvas boots via `enabled = !legacy`), but
+// this raw ShaderMaterial writes its output straight to the framebuffer with
+// no sRGB re-encoding — so #1d6746 would DISPLAY as #032210 (measured!),
+// making every band look near-black no matter which swatches were chosen.
+// setRGB's default source space IS the working space, so no conversion can
+// happen here regardless of ColorManagement.enabled: the shader's output
+// equals the intended sRGB hexes exactly.
+function rawColor(target, hex) {
+    const h = hex.slice(1); // sanitizeHexColor guarantees '#' + 6 hex chars
+    target.setRGB(
+        parseInt(h.slice(0, 2), 16) / 255,
+        parseInt(h.slice(2, 4), 16) / 255,
+        parseInt(h.slice(4, 6), 16) / 255
+    );
+    return target;
+}
+
 const GradientPlane = ({ color1, color2, speed = 1 }) => {
     const meshRef = useRef(null);
     const uniforms = useMemo(
         () => ({
             uTime: { value: 0 },
             uResolution: { value: new THREE.Vector2(1000, 1000) },
-            uColor1: { value: new THREE.Color(HERO_GEOMETRIC_FALLBACK_COLOR_1) },
-            uColor2: { value: new THREE.Color(HERO_GEOMETRIC_FALLBACK_COLOR_2) },
+            uColor1: { value: rawColor(new THREE.Color(), HERO_GEOMETRIC_FALLBACK_COLOR_1) },
+            uColor2: { value: rawColor(new THREE.Color(), HERO_GEOMETRIC_FALLBACK_COLOR_2) },
         }),
         []
     );
 
     useFrame((state) => {
         const { clock, size } = state;
+        // Fit the plane to the camera frustum every frame: R3F's default
+        // camera is 75° at z=1, so the visible area at the plane is
+        // 2*tan(fov/2) high and that times the canvas aspect wide. A fixed
+        // 4×4 plane only covers aspects up to ~2.6:1 — the wide sign-in card
+        // (~3.4:1) leaves uncovered strips at both edges where the card's
+        // flat fallback gradient bleeds through as hard vertical bands.
+        // With the fit, uv maps exactly onto the canvas at any aspect.
+        if (meshRef.current && size.width > 0 && size.height > 0) {
+            const visH = 2 * Math.tan((75 / 2) * (Math.PI / 180)) * 1;
+            const visW = visH * (size.width / size.height);
+            // planeGeometry is 2×2 before scale, so scale = visible / 2
+            meshRef.current.scale.set(visW / 2, visH / 2, 1);
+        }
         // R3F clones the `uniforms` prop object when it applies it to the
         // material, so writing to the memoized snapshot would never reach the
         // GPU (the shader would sit frozen at uTime=0). Always go through the
@@ -194,12 +231,12 @@ const GradientPlane = ({ color1, color2, speed = 1 }) => {
         const u = mat?.uniforms || uniforms;
         u.uTime.value = clock.getElapsedTime() * speed;
         u.uResolution.value.set(size.width, size.height);
-        u.uColor1.value.set(sanitizeHexColor(color1, HERO_GEOMETRIC_FALLBACK_COLOR_1));
-        u.uColor2.value.set(sanitizeHexColor(color2, HERO_GEOMETRIC_FALLBACK_COLOR_2));
+        rawColor(u.uColor1.value, sanitizeHexColor(color1, HERO_GEOMETRIC_FALLBACK_COLOR_1));
+        rawColor(u.uColor2.value, sanitizeHexColor(color2, HERO_GEOMETRIC_FALLBACK_COLOR_2));
     });
 
     return (
-        <mesh ref={meshRef} scale={[2, 2, 1]}>
+        <mesh ref={meshRef}>
             <planeGeometry args={[2, 2]} />
             <shaderMaterial
                 vertexShader={vertexShader}
