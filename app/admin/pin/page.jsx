@@ -85,7 +85,7 @@ export default function AdminPinPage() {
                 className={[
                   'h-10 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm text-fg placeholder:text-subtext',
                   'transition-[border-color,box-shadow] duration-200 ease-sakani',
-                  'hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30',
+                  'hover:border-line-strong focus:border-brand focus:outline-none',
                 ].join(' ')}
               />
             </div>

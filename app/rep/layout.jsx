@@ -534,7 +534,7 @@ export default function RepLayout({ children }) {
             value={repPhoneInput}
             onChange={(e) => setRepPhoneInput(e.target.value)}
             placeholder="e.g. 0803 123 4567"
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             disabled={repPhoneSaving}
           />
           <div className="flex gap-2">

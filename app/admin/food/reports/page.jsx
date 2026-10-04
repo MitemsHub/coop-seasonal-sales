@@ -1417,7 +1417,7 @@ function ReportsPageContent() {
         <h2 className="text-[15px] sm:text-xl font-medium mb-2">Branch Pack (Excel)</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap items-center gap-2 sm:gap-3">
           <select
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full sm:w-auto"
+            className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full sm:w-auto"
             value={branchCode}
             onChange={e => setBranchCode(e.target.value)}
           >

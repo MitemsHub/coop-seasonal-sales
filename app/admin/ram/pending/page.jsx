@@ -533,7 +533,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
           <div className="flex flex-col lg:flex-row gap-2 lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 min-w-0">
               <input
-                className="w-full max-w-[420px] min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="w-full max-w-[420px] min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                 placeholder="Search (Order ID / Member ID)"
                 value={term}
                 onChange={(e) => setTerm(e.target.value)}
@@ -557,7 +557,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
 
             <div className="flex flex-wrap items-center gap-2">
               <select
-                className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                 value={payment}
                 onChange={(e) => {
                   const next = e.target.value
@@ -572,7 +572,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
                 <option value="Loan">Loan</option>
               </select>
               <select
-                className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                 value={locationId}
                 onChange={(e) => {
                   const next = e.target.value
@@ -589,7 +589,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
                 ))}
               </select>
               <input
-                className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                 placeholder="Member grade (e.g. Retiree)"
                 value={memberGrade}
                 onChange={(e) => {
@@ -916,7 +916,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
               <div>
                 <div className="text-xs font-medium text-subtext mb-1">Delivery Location</div>
                 <select
-                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                   value={editLocationId}
                   onChange={(e) => setEditLocationId(e.target.value)}
                   disabled={editBusy || bulkBusy}
@@ -932,7 +932,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
               <div>
                 <div className="text-xs font-medium text-subtext mb-1">Payment</div>
                 <select
-                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                   value={editPaymentOption}
                   onChange={(e) => setEditPaymentOption(e.target.value)}
                   disabled={editBusy || bulkBusy}
@@ -946,7 +946,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
               <div>
                 <div className="text-xs font-medium text-subtext mb-1">Qty</div>
                 <input
-                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                   value={editQty}
                   onChange={(e) => setEditQty(e.target.value)}
                   inputMode="numeric"
@@ -956,7 +956,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
               <div>
                 <div className="text-xs font-medium text-subtext mb-1">Unit Price</div>
                 <input
-                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                   value={editUnitPrice}
                   onChange={(e) => setEditUnitPrice(e.target.value)}
                   inputMode="numeric"
@@ -966,7 +966,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
               <div>
                 <div className="text-xs font-medium text-subtext mb-1">Member ID</div>
                 <input
-                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                   value={editMemberId}
                   onChange={(e) => setEditMemberId(e.target.value)}
                   disabled={editBusy || bulkBusy}
@@ -975,7 +975,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
               <div>
                 <div className="text-xs font-medium text-subtext mb-1">Member Phone</div>
                 <input
-                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                  className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                   value={editPhone}
                   onChange={(e) => setEditPhone(e.target.value)}
                   disabled={editBusy || bulkBusy}
@@ -1001,7 +1001,7 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
             <div>
               <div className="text-xs font-medium text-subtext mb-1">Reason (optional)</div>
               <textarea
-                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                 rows={3}
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}

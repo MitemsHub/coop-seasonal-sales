@@ -134,7 +134,7 @@ function ExhibitionShopContent() {
                   <select
                     value={selectedBranch}
                     onChange={(e) => handleBranchChange(e.target.value)}
-                    className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-medium text-fg focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-medium text-fg focus:border-brand focus:outline-none"
                   >
                     {availableBranches.map((b) => (
                       <option key={b.code} value={b.code}>{b.name}</option>

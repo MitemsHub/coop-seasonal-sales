@@ -102,7 +102,7 @@ function AdminCartPageContent() {
             <select
               value={selectedMember}
               onChange={(e) => handleMemberSelect(e.target.value)}
-              className="w-full rounded-lg border border-line bg-surface px-4 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="w-full rounded-lg border border-line bg-surface px-4 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             >
               <option value="">Choose a member...</option>
               {members.map(member => (

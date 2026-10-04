@@ -214,21 +214,21 @@ function RepExhibitionBanksContent() {
             value={bankName}
             onChange={(e) => setBankName(e.target.value)}
             placeholder="Bank name"
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             disabled={saving}
           />
           <input
             value={accountName}
             onChange={(e) => setAccountName(e.target.value)}
             placeholder="Account name"
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             disabled={saving}
           />
           <input
             value={accountNumber}
             onChange={(e) => setAccountNumber(e.target.value)}
             placeholder="Account number"
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             disabled={saving}
           />
           <div className="flex justify-end gap-2 pt-1">

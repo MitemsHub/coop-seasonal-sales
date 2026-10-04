@@ -15,7 +15,7 @@ const Select = forwardRef(function Select(
         className={[
           'h-9 w-full appearance-none rounded-lg border border-line bg-surface pl-3 pr-9 text-sm text-fg',
           'transition-[border-color,box-shadow,background-color] duration-200 ease-sakani',
-          'hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25',
+          'hover:border-line-strong focus:border-brand focus:outline-none',
           'disabled:cursor-not-allowed disabled:opacity-60',
           'placeholder:text-subtext',
         ].join(' ')}

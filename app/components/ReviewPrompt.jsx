@@ -119,7 +119,7 @@ export default function ReviewPrompt({ memberId, module, orderId, branchName, me
         onChange={(e) => setReviewText(e.target.value)}
         placeholder="Tell us more about your experience (optional)"
         rows={3}
-        className="mt-3 w-full rounded-lg border border-line bg-canvas px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 resize-none"
+        className="mt-3 w-full rounded-lg border border-line bg-canvas px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none resize-none"
       />
 
       {error && <p className="mt-2 text-xs text-danger">{error}</p>}

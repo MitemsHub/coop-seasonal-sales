@@ -212,7 +212,7 @@ export default function ExhibitionVendorsPage() {
               onChange={(e) => setTerm(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && load()}
               placeholder="Search name, code or phone…"
-              className="w-full rounded-xl border border-line bg-surface py-2 pl-9 pr-3 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="w-full rounded-xl border border-line bg-surface py-2 pl-9 pr-3 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             />
           </div>
           <Select value={cycleFilter} onChange={(e) => setCycleFilter(e.target.value)} className="sm:w-64">

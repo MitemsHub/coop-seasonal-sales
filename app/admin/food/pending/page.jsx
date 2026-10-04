@@ -556,7 +556,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
           <div className="flex flex-col lg:flex-row gap-2 lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 min-w-0">
               <input
-                className="w-full max-w-[420px] min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="w-full max-w-[420px] min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                 placeholder="Search (Order / Member / Branch)"
                 value={term}
                 onChange={(e) => setTerm(e.target.value)}
@@ -573,7 +573,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
 
             <div className="flex flex-wrap items-center gap-2">
               <select
-                className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                 value={payment}
                 onChange={(e) => {
                   const next = e.target.value
@@ -592,7 +592,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
               {status === 'Cancelled' && (
                 <>
                   <select
-                    className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                     value={deliveryBranch}
                     onChange={(e) => {
                       const next = e.target.value
@@ -610,7 +610,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
                     ))}
                   </select>
                   <input
-                    className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                     placeholder="Member category (e.g. Pensioner)"
                     value={memberCategory}
                     onChange={(e) => {
@@ -1054,7 +1054,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
             value={modalInput}
             onChange={(e) => setModalInput(e.target.value)}
             placeholder={showModal.placeholder}
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             autoFocus
           />
         </DraggableModal>

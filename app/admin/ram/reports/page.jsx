@@ -1043,7 +1043,7 @@ function RamReportsContent() {
         <div className="p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
             <select
-              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={appsLocationId}
               onChange={(e) => setAppsLocationId(e.target.value)}
             >
@@ -1056,7 +1056,7 @@ function RamReportsContent() {
             </select>
 
             <select
-              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={appsStatus}
               onChange={(e) => setAppsStatus(e.target.value)}
             >
@@ -1067,7 +1067,7 @@ function RamReportsContent() {
             </select>
 
             <select
-              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={appsPayment}
               onChange={(e) => setAppsPayment(e.target.value)}
             >
@@ -1079,13 +1079,13 @@ function RamReportsContent() {
 
             <input
               type="date"
-              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={appsFrom}
               onChange={(e) => setAppsFrom(e.target.value)}
             />
             <input
               type="date"
-              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={appsTo}
               onChange={(e) => setAppsTo(e.target.value)}
             />
@@ -1117,7 +1117,7 @@ function RamReportsContent() {
         <div className="p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
             <select
-              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={packLocationId}
               onChange={(e) => setPackLocationId(e.target.value)}
             >
@@ -1129,7 +1129,7 @@ function RamReportsContent() {
             ))}
             </select>
             <select
-              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={packStatus}
               onChange={(e) => setPackStatus(e.target.value)}
             >
@@ -1139,7 +1139,7 @@ function RamReportsContent() {
             <option value="Cancelled">Cancelled</option>
             </select>
             <select
-              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={packPayment}
               onChange={(e) => setPackPayment(e.target.value)}
             >
@@ -1150,13 +1150,13 @@ function RamReportsContent() {
             </select>
             <input
               type="date"
-              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={packFrom}
               onChange={(e) => setPackFrom(e.target.value)}
             />
             <input
               type="date"
-              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={packTo}
               onChange={(e) => setPackTo(e.target.value)}
             />
@@ -1193,7 +1193,7 @@ function RamReportsContent() {
         <div className="p-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             <select
-              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={deliveryPackLocationId}
               onChange={(e) => setDeliveryPackLocationId(e.target.value)}
             >
@@ -1206,13 +1206,13 @@ function RamReportsContent() {
             </select>
             <input
               type="date"
-              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={deliveryPackFrom}
               onChange={(e) => setDeliveryPackFrom(e.target.value)}
             />
             <input
               type="date"
-              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={deliveryPackTo}
               onChange={(e) => setDeliveryPackTo(e.target.value)}
             />

@@ -120,7 +120,7 @@ export default function SearchableSelect({
         className={[
           'flex h-9 w-full items-center gap-2 rounded-lg border border-line bg-surface pl-3 pr-2 text-sm text-fg',
           'transition-[border-color,box-shadow,background-color] duration-200 ease-sakani',
-          'hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25',
+          'hover:border-line-strong focus:border-brand focus:outline-none',
           'disabled:cursor-not-allowed disabled:opacity-60',
         ].join(' ')}
       >

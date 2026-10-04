@@ -623,7 +623,7 @@ function RamShopPageContent() {
                       setCategoryTouched(true)
                       setSelectedRamCategory(e.target.value)
                     }}
-                    className="mt-1 w-full border-2 border-line-subtle rounded-xl px-3 py-1.5 focus:border-green-600 focus:ring-2 focus:ring-green-200 transition-all duration-200 text-sm bg-surface"
+                    className="mt-1 w-full border-2 border-line-subtle rounded-xl px-3 py-1.5 focus:border-green-600 transition-all duration-200 text-sm bg-surface"
                   >
                     <option value="Junior">Junior</option>
                     <option value="Senior">Senior</option>
@@ -645,7 +645,7 @@ function RamShopPageContent() {
                 <select
                   value={paymentOption}
                   onChange={(e) => setPaymentOption(e.target.value)}
-                  className="w-full border-2 border-line-subtle rounded-xl px-3 py-2 focus:border-green-600 focus:ring-2 focus:ring-green-200 transition-all duration-200 text-sm"
+                  className="w-full border-2 border-line-subtle rounded-xl px-3 py-2 focus:border-green-600 transition-all duration-200 text-sm"
                 >
                   <option value="" disabled>
                     Select payment option
@@ -814,7 +814,7 @@ function RamShopPageContent() {
                 <select
                   value={deliveryLocationId}
                   onChange={(e) => setDeliveryLocationId(e.target.value)}
-                  className="w-full border-2 border-line-subtle rounded-xl px-3 py-2 focus:border-green-600 focus:ring-2 focus:ring-green-200 transition-all duration-200 text-sm"
+                  className="w-full border-2 border-line-subtle rounded-xl px-3 py-2 focus:border-green-600 transition-all duration-200 text-sm"
                 >
                   <option value="" disabled>
                     Select delivery location

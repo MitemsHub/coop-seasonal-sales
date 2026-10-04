@@ -129,7 +129,7 @@ function ResetPasswordContent() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={isLoading}
-              className={`w-full py-2.5 px-4 border-2 rounded-xl focus:ring-2 focus:ring-brand/20 transition-all duration-200 outline-none text-sm text-fg placeholder:text-subtext disabled:bg-subtle disabled:cursor-not-allowed ${
+              className={`w-full py-2.5 px-4 border-2 rounded-xl transition-all duration-200 outline-none text-sm text-fg placeholder:text-subtext disabled:bg-subtle disabled:cursor-not-allowed ${
                 !password ? 'border-line-subtle focus:border-brand' : pwValid ? 'border-success focus:border-success' : 'border-danger focus:border-danger'
               }`}
               placeholder="At least 6 characters"
@@ -147,7 +147,7 @@ function ResetPasswordContent() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               disabled={isLoading || !pwValid}
-              className={`w-full py-2.5 px-4 border-2 rounded-xl focus:ring-2 focus:ring-brand/20 transition-all duration-200 outline-none text-sm text-fg placeholder:text-subtext disabled:bg-subtle disabled:cursor-not-allowed ${
+              className={`w-full py-2.5 px-4 border-2 rounded-xl transition-all duration-200 outline-none text-sm text-fg placeholder:text-subtext disabled:bg-subtle disabled:cursor-not-allowed ${
                 !confirmPassword ? 'border-line-subtle focus:border-brand' : match ? 'border-success focus:border-success' : 'border-danger focus:border-danger'
               }`}
               placeholder="Re-enter password"

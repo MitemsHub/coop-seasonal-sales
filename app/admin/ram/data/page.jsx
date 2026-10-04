@@ -514,7 +514,7 @@ function RamDataContent() {
               <div className="flex-1">
                 <label className="block text-xs font-medium text-subtext mb-1">Cycle</label>
                 <select
-                  className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
+                  className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full"
                   value={selectedCycleId ?? ''}
                   onChange={(e) => setSelectedCycleId(e.target.value ? Number(e.target.value) : null)}
                   disabled={loadingCycles || cycles.length === 0}
@@ -550,13 +550,13 @@ function RamDataContent() {
                 <div className="text-xs font-semibold text-fg mb-2">Edit Selected Cycle</div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <input
-                    className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                     placeholder="Code"
                     value={editCycleCode}
                     onChange={(e) => setEditCycleCode(e.target.value)}
                   />
                   <input
-                    className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                     placeholder="Name"
                     value={editCycleName}
                     onChange={(e) => setEditCycleName(e.target.value)}
@@ -565,7 +565,7 @@ function RamDataContent() {
                     <label className="block text-xs font-medium text-subtext mb-1">Starts At</label>
                     <input
                       type="datetime-local"
-                      className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
+                      className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full"
                       value={editCycleStartsAt}
                       onChange={(e) => setEditCycleStartsAt(e.target.value)}
                     />
@@ -574,7 +574,7 @@ function RamDataContent() {
                     <label className="block text-xs font-medium text-subtext mb-1">Ends At</label>
                     <input
                       type="datetime-local"
-                      className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
+                      className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full"
                       value={editCycleEndsAt}
                       onChange={(e) => setEditCycleEndsAt(e.target.value)}
                     />
@@ -598,14 +598,14 @@ function RamDataContent() {
             <div className="text-xs text-muted mb-2">Create New Cycle</div>
             <form onSubmit={createCycle} className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <input
-                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                 placeholder="Code (e.g. RAM-APR-2026)"
                 value={newCycleCode}
                 onChange={(e) => setNewCycleCode(e.target.value)}
                 required
               />
               <input
-                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                 placeholder="Name (e.g. April 2026)"
                 value={newCycleName}
                 onChange={(e) => setNewCycleName(e.target.value)}
@@ -613,13 +613,13 @@ function RamDataContent() {
               />
               <input
                 type="datetime-local"
-                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                 value={newCycleStartsAt}
                 onChange={(e) => setNewCycleStartsAt(e.target.value)}
               />
               <input
                 type="datetime-local"
-                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                 value={newCycleEndsAt}
                 onChange={(e) => setNewCycleEndsAt(e.target.value)}
               />
@@ -678,7 +678,7 @@ function RamDataContent() {
                         <td className="p-2 font-medium">Pensioner</td>
                         <td className="p-2">
                           <input
-                            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
+                            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full"
                             value={eligiblePensionerQty}
                             onChange={(e) => setEligiblePensionerQty(e.target.value)}
                             inputMode="numeric"
@@ -700,7 +700,7 @@ function RamDataContent() {
                         <td className="p-2 font-medium">Retiree</td>
                         <td className="p-2">
                           <input
-                            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
+                            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full"
                             value={eligibleRetireeQty}
                             onChange={(e) => setEligibleRetireeQty(e.target.value)}
                             inputMode="numeric"
@@ -722,7 +722,7 @@ function RamDataContent() {
                         <td className="p-2 font-medium">Active (Others)</td>
                         <td className="p-2">
                           <input
-                            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
+                            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full"
                             value={eligibleActiveQty}
                             onChange={(e) => setEligibleActiveQty(e.target.value)}
                             inputMode="numeric"
@@ -784,7 +784,7 @@ function RamDataContent() {
                         <td className="p-2 font-medium">Pensioner</td>
                         <td className="p-2">
                           <input
-                            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
+                            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full"
                             value={nonEligiblePensionerQty}
                             onChange={(e) => setNonEligiblePensionerQty(e.target.value)}
                             inputMode="numeric"
@@ -806,7 +806,7 @@ function RamDataContent() {
                         <td className="p-2 font-medium">Retiree</td>
                         <td className="p-2">
                           <input
-                            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
+                            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full"
                             value={nonEligibleRetireeQty}
                             onChange={(e) => setNonEligibleRetireeQty(e.target.value)}
                             inputMode="numeric"
@@ -828,7 +828,7 @@ function RamDataContent() {
                         <td className="p-2 font-medium">Active (Others)</td>
                         <td className="p-2">
                           <input
-                            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
+                            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full"
                             value={nonEligibleActiveQty}
                             onChange={(e) => setNonEligibleActiveQty(e.target.value)}
                             inputMode="numeric"
@@ -862,7 +862,7 @@ function RamDataContent() {
             <div>
               <label className="block text-xs font-medium text-subtext mb-1">Junior price</label>
               <input
-                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
+                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full"
                 value={priceJunior}
                 onChange={(e) => setPriceJunior(e.target.value)}
                 inputMode="numeric"
@@ -872,7 +872,7 @@ function RamDataContent() {
             <div>
               <label className="block text-xs font-medium text-subtext mb-1">Senior price</label>
               <input
-                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
+                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full"
                 value={priceSenior}
                 onChange={(e) => setPriceSenior(e.target.value)}
                 inputMode="numeric"
@@ -882,7 +882,7 @@ function RamDataContent() {
             <div>
               <label className="block text-xs font-medium text-subtext mb-1">Executive price</label>
               <input
-                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
+                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full"
                 value={priceExecutive}
                 onChange={(e) => setPriceExecutive(e.target.value)}
                 inputMode="numeric"
@@ -892,7 +892,7 @@ function RamDataContent() {
             <div>
               <label className="block text-xs font-medium text-subtext mb-1">Undefined price</label>
               <input
-                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
+                className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full"
                 value={priceUndefined}
                 onChange={(e) => setPriceUndefined(e.target.value)}
                 inputMode="numeric"
@@ -929,7 +929,7 @@ function RamDataContent() {
                 <div className="flex-1">
                   <label className="block text-xs font-medium text-subtext mb-1">Rate (%)</label>
                   <input
-                    className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
+                    className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full"
                     type="number"
                     min="0"
                     step="0.01"
@@ -962,7 +962,7 @@ function RamDataContent() {
                 <div className="flex-1">
                   <label className="block text-xs font-medium text-subtext mb-1">Rate (%)</label>
                   <input
-                    className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full"
+                    className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full"
                     type="number"
                     min="0"
                     step="0.01"
@@ -995,27 +995,27 @@ function RamDataContent() {
         <div className="text-sm font-medium mb-3">Add Delivery Location</div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <input
-            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             placeholder="Delivery location code/name"
             value={form.delivery_location}
             onChange={(e) => onFormChange('delivery_location', e.target.value)}
           />
-          <input className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="Contact name" value={form.name} onChange={(e) => onFormChange('name', e.target.value)} />
-          <input className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="Phone" value={form.phone} onChange={(e) => onFormChange('phone', e.target.value)} />
+          <input className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none" placeholder="Contact name" value={form.name} onChange={(e) => onFormChange('name', e.target.value)} />
+          <input className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none" placeholder="Phone" value={form.phone} onChange={(e) => onFormChange('phone', e.target.value)} />
           <input
-            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             placeholder="Rep passcode"
             value={form.rep_code}
             onChange={(e) => onFormChange('rep_code', e.target.value)}
           />
           <input
-            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 sm:col-span-2"
+            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none sm:col-span-2"
             placeholder="Address"
             value={form.address}
             onChange={(e) => onFormChange('address', e.target.value)}
           />
           <input
-            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             placeholder="Sort order"
             value={form.sort_order}
             onChange={(e) => onFormChange('sort_order', e.target.value)}
@@ -1040,7 +1040,7 @@ function RamDataContent() {
       <div className="ui-card overflow-hidden">
         <div className="p-4 border-b border-line bg-subtle flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <input
-            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full sm:max-w-sm"
+            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full sm:max-w-sm"
             placeholder="Search delivery locations..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -1163,22 +1163,22 @@ function RamDataContent() {
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <input
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             placeholder="Delivery location code/name"
             value={editing?.delivery_location || ''}
             onChange={(e) => onEditChange('delivery_location', e.target.value)}
           />
-          <input className="rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="Contact name" value={editing?.name || ''} onChange={(e) => onEditChange('name', e.target.value)} />
-          <input className="rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="Phone" value={editing?.phone || ''} onChange={(e) => onEditChange('phone', e.target.value)} />
+          <input className="rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none" placeholder="Contact name" value={editing?.name || ''} onChange={(e) => onEditChange('name', e.target.value)} />
+          <input className="rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none" placeholder="Phone" value={editing?.phone || ''} onChange={(e) => onEditChange('phone', e.target.value)} />
           <input
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             placeholder="Rep passcode"
             value={editing?.rep_code || ''}
             onChange={(e) => onEditChange('rep_code', e.target.value)}
           />
-          <input className="rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" placeholder="Sort order" value={editing?.sort_order ?? ''} onChange={(e) => onEditChange('sort_order', e.target.value)} />
+          <input className="rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none" placeholder="Sort order" value={editing?.sort_order ?? ''} onChange={(e) => onEditChange('sort_order', e.target.value)} />
           <input
-            className="rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 sm:col-span-2"
+            className="rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none sm:col-span-2"
             placeholder="Address"
             value={editing?.address || ''}
             onChange={(e) => onEditChange('address', e.target.value)}

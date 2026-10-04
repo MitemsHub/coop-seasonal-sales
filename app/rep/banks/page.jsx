@@ -407,21 +407,21 @@ function RepFoodBanksContent() {
             value={bankName}
             onChange={(e) => setBankName(e.target.value)}
             placeholder="Bank name"
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             disabled={savingBank || paid?.is_paid}
           />
           <input
             value={accountName}
             onChange={(e) => setAccountName(e.target.value)}
             placeholder="Account name"
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             disabled={savingBank || paid?.is_paid}
           />
           <input
             value={accountNumber}
             onChange={(e) => setAccountNumber(e.target.value)}
             placeholder="Account number"
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             disabled={savingBank || paid?.is_paid}
           />
           <button
@@ -508,14 +508,14 @@ function RepFoodBanksContent() {
             value={invoiceRef}
             onChange={(e) => setInvoiceRef(e.target.value)}
             placeholder="Invoice reference (optional)"
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             disabled={uploading || paid?.is_paid}
           />
           <textarea
             value={invoiceNotes}
             onChange={(e) => setInvoiceNotes(e.target.value)}
             placeholder="Notes (optional)"
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             rows={3}
             disabled={uploading || paid?.is_paid}
           />
@@ -544,7 +544,7 @@ function RepFoodBanksContent() {
             value={invoiceEditRef}
             onChange={(e) => setInvoiceEditRef(e.target.value)}
             placeholder="Invoice reference"
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             disabled={invoiceSaving || paid?.is_paid}
           />
           <div className="grid gap-2 sm:grid-cols-2">
@@ -552,14 +552,14 @@ function RepFoodBanksContent() {
               value={invoiceEditDate}
               onChange={(e) => setInvoiceEditDate(e.target.value)}
               placeholder="Invoice date (YYYY-MM-DD)"
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               disabled={invoiceSaving || paid?.is_paid}
             />
             <input
               value={invoiceEditAmount}
               onChange={(e) => setInvoiceEditAmount(e.target.value)}
               placeholder="Amount (optional)"
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               disabled={invoiceSaving || paid?.is_paid}
             />
           </div>
@@ -567,7 +567,7 @@ function RepFoodBanksContent() {
             value={invoiceEditNotes}
             onChange={(e) => setInvoiceEditNotes(e.target.value)}
             placeholder="Notes"
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             rows={3}
             disabled={invoiceSaving || paid?.is_paid}
           />

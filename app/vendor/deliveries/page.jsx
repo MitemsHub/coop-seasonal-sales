@@ -593,7 +593,7 @@ export default function VendorDeliveriesPage() {
                 onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && doSearch()}
                 placeholder="Search order ID or member…"
-                className="w-full max-w-[320px] min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="w-full max-w-[320px] min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               />
               <button
                 type="button"

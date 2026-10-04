@@ -133,7 +133,7 @@ export default function VendorLoginPage() {
                       onClick={() => setHubOpen((o) => !o)}
                       className={[
                         'flex w-full items-center justify-between gap-2 rounded-lg border border-line bg-surface py-2 pl-9 pr-3 text-left text-sm transition-[border-color,box-shadow] duration-200 ease-sakani',
-                        'hover:border-line-strong focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30',
+                        'hover:border-line-strong focus:border-brand focus:outline-none',
                         hubOpen ? 'border-brand ring-2 ring-brand/30' : '',
                       ].join(' ')}
                     >
@@ -208,7 +208,7 @@ export default function VendorLoginPage() {
                       onChange={(e) => setPasscode(e.target.value)}
                       placeholder="Provided by the administrator"
                       autoComplete="off"
-                      className="w-full rounded-lg border border-line bg-surface py-2 pl-9 pr-3 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                      className="w-full rounded-lg border border-line bg-surface py-2 pl-9 pr-3 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                     />
                   </div>
                 </div>

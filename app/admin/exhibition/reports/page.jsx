@@ -54,7 +54,7 @@ function Spinner({ className = '' }) {
   )
 }
 
-const selectCls = 'bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30'
+const selectCls = 'bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none'
 
 function SummaryTable({ title, rows, columns, pagination }) {
   const pageSize = pagination?.pageSize || 0
@@ -798,7 +798,7 @@ export default function ExhibitionReportsPage() {
                 <h3 className="text-sm font-semibold text-fg">By Vendor</h3>
                 <div className="flex items-center gap-2">
                   <input type="text" placeholder="Search vendor…" value={vendorSearch} onChange={(e) => { setVendorSearch(e.target.value); setVendorPage(1) }}
-                    className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-fg w-40 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand/30" />
+                    className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-fg w-40 focus:border-brand focus:outline-none" />
                   <Button size="sm" variant="secondary" onClick={exportVendorCsv}>Export CSV</Button>
                 </div>
               </div>

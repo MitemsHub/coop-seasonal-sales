@@ -238,7 +238,7 @@ export default function RepLoginPage() {
                       <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtext" aria-hidden="true" />
                       <input
                         id="rep-code"
-                        className="w-full rounded-lg border border-line bg-surface py-2 pl-10 pr-3 text-sm text-fg placeholder:text-subtext transition-colors duration-200 ease-sakani focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                        className="w-full rounded-lg border border-line bg-surface py-2 pl-10 pr-3 text-sm text-fg placeholder:text-subtext transition-colors duration-200 ease-sakani focus:border-brand focus:outline-none"
                         value={code}
                         onChange={e=>setCode(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter' && code.trim()) submitPasscode() }}
@@ -328,7 +328,7 @@ export default function RepLoginPage() {
                           id="rep-dept"
                           value={selectedDept}
                           onChange={(e) => setSelectedDept(e.target.value)}
-                          className="w-full appearance-none rounded-lg border border-line bg-surface py-2 pl-10 pr-9 text-sm text-fg transition-colors duration-200 ease-sakani focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                          className="w-full appearance-none rounded-lg border border-line bg-surface py-2 pl-10 pr-9 text-sm text-fg transition-colors duration-200 ease-sakani focus:border-brand focus:outline-none"
                         >
                           <option value="">Select your department</option>
                           {departments.map((d) => (
@@ -350,7 +350,7 @@ export default function RepLoginPage() {
                       <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtext" aria-hidden="true" />
                       <input
                         id="rep-phone"
-                        className="w-full rounded-lg border border-line bg-surface py-2 pl-10 pr-3 text-sm text-fg placeholder:text-subtext transition-colors duration-200 ease-sakani focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                        className="w-full rounded-lg border border-line bg-surface py-2 pl-10 pr-3 text-sm text-fg placeholder:text-subtext transition-colors duration-200 ease-sakani focus:border-brand focus:outline-none"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         placeholder={branchRepPhone && !isDeptRep ? branchRepPhone : 'e.g. 08012345678'}

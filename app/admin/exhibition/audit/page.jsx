@@ -140,7 +140,7 @@ export default function AdminExhibitionAuditPage() {
                 <div className="flex gap-2">
                   <input
                     id="audit-search"
-                    className="w-full min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    className="w-full min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                     placeholder="Order ID / member…"
                     value={term}
                     onChange={(e) => setTerm(e.target.value)}

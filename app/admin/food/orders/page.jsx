@@ -138,7 +138,7 @@ function AdminOrdersPageContent() {
                   setSelectedMember(e.target.value)
                   setTimeout(handleFilterChange, 100)
                 }}
-                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               >
                 <option value="">All Members</option>
                 {members.map(member => (
@@ -157,7 +157,7 @@ function AdminOrdersPageContent() {
                   setStatusFilter(e.target.value)
                   setTimeout(handleFilterChange, 100)
                 }}
-                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               >
                 <option value="">All Statuses</option>
                 <option value="pending">Pending</option>

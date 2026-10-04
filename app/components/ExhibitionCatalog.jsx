@@ -76,7 +76,7 @@ export default function ExhibitionCatalog({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search products or vendors…"
-          className="w-full rounded-xl border border-line bg-surface py-2.5 pl-9 pr-8 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+          className="w-full rounded-xl border border-line bg-surface py-2.5 pl-9 pr-8 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
         />
         {!!search && (
           <button

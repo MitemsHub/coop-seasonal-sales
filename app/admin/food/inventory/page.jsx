@@ -244,7 +244,7 @@ function DepartmentInventorySection() {
             setSelectedBranch(e.target.value)
             setCurrentPage(1)
           }}
-          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
         >
           <option value="All Branches">All Branches</option>
           {branches.map(branch => (
@@ -258,7 +258,7 @@ function DepartmentInventorySection() {
             setSelectedDepartment(e.target.value)
             setCurrentPage(1)
           }}
-          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
         >
           <option value="All Departments">All Departments</option>
           {departments.map(dept => (
@@ -848,7 +848,7 @@ function DeliveryMemberInventorySection() {
         <select
           value={deliveryBranch}
           onChange={(e) => setDeliveryBranch(e.target.value)}
-          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
         >
           <option value="">All Delivery Branches</option>
           {branches.map(b => (<option key={`del-${b.code}`} value={b.name}>{b.name}</option>))}
@@ -856,7 +856,7 @@ function DeliveryMemberInventorySection() {
         <select
           value={memberBranch}
           onChange={(e) => setMemberBranch(e.target.value)}
-          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
         >
           <option value="">All Member Branches</option>
           {branches.map(b => (<option key={`mem-${b.code}`} value={b.name}>{b.name}</option>))}
@@ -1229,7 +1229,7 @@ function InventoryPageContent() {
         <select 
           value={selectedBranch}
           onChange={(e) => setSelectedBranch(e.target.value)}
-          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+          className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
         >
           <option value="">All Branches</option>
           {branches.map(branch => (

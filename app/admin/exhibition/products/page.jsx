@@ -252,7 +252,7 @@ export default function ExhibitionProductsPage() {
               onChange={(e) => setTerm(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && load()}
               placeholder="Search name or SKU…"
-              className="w-full rounded-xl border border-line bg-surface py-2 pl-9 pr-3 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="w-full rounded-xl border border-line bg-surface py-2 pl-9 pr-3 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             />
           </div>
           <div className="flex flex-wrap gap-2">

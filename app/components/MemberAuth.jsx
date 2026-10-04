@@ -32,14 +32,11 @@ function MemberIdInput({ value, onChange, validation, memberStatus, isChecking, 
           id="member-id"
           value={value}
           onChange={onChange}
-          className={`w-full py-2 pl-3 pr-8 md:py-3 md:pl-4 md:pr-10 border-2 rounded-xl focus:ring-2 focus:ring-brand/20 transition-all duration-200 outline-none text-[13px] md:text-base text-fg placeholder:text-subtext ${
+          className={`w-full py-2 pl-3 pr-8 md:py-3 md:pl-4 md:pr-10 border-2 rounded-xl transition-all duration-200 outline-none text-[13px] md:text-base text-fg placeholder:text-subtext ${
             !value
               ? 'border-line-subtle focus:border-brand'
               : validation.isValid
-                // Full treatment once the ID is entered: success border + pale
-                // brand ring + solid brand outer line, shown persistently (the
-                // old look only flashed with focus, then disappeared on blur).
-                ? 'border-success focus:border-success shadow-[0_0_0_2px_rgba(29,103,70,0.2),0_0_0_4px_#1d6746]'
+                ? 'border-brand focus:border-brand'
                 : 'border-danger focus:border-danger'
           }`}
           placeholder="Your Staff ID"
@@ -78,11 +75,11 @@ function MemberIdInput({ value, onChange, validation, memberStatus, isChecking, 
               Member ID not found in the system
             </div>
           ) : memberStatus === 'found' ? (
-            <div className="flex items-center text-success-fg">
+            <div className="flex items-center text-brand">
               <svg className="w-3 h-3 md:w-4 md:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              Member found — ready to continue
+              Member found, let's proceed
             </div>
           ) : !validation.isValid ? (
             <div className="flex items-center text-danger-fg">
@@ -201,7 +198,7 @@ function OtpInput({ otp, setOtp, error, isLoading, onSubmit, onBack }) {
           value={otp}
           onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
           disabled={isLoading}
-          className="w-full py-2 pl-3 pr-3 md:py-3 md:pl-4 border-2 rounded-xl focus:ring-2 focus:ring-brand/20 transition-all duration-200 outline-none text-[13px] md:text-base text-fg placeholder:text-subtext border-line-subtle focus:border-brand disabled:bg-subtle disabled:cursor-not-allowed tracking-[0.3em] text-center font-mono text-lg"
+          className="w-full py-2 pl-3 pr-3 md:py-3 md:pl-4 border-2 rounded-xl transition-all duration-200 outline-none text-[13px] md:text-base text-fg placeholder:text-subtext border-line-subtle focus:border-brand disabled:bg-subtle disabled:cursor-not-allowed tracking-[0.3em] text-center font-mono text-lg"
           placeholder="000000"
           maxLength={6}
         />
@@ -270,8 +267,8 @@ function PasswordSetup({ password, setPassword, confirmPassword, setConfirmPassw
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           disabled={isLoading}
-          className={`w-full py-2 pl-3 pr-3 md:py-3 md:pl-4 border-2 rounded-xl focus:ring-2 focus:ring-brand/20 transition-all duration-200 outline-none text-[13px] md:text-base text-fg placeholder:text-subtext disabled:bg-subtle disabled:cursor-not-allowed ${
-            !password ? 'border-line-subtle focus:border-brand' : pwValid ? 'border-success focus:border-success' : 'border-danger focus:border-danger'
+          className={`w-full py-2 pl-3 pr-3 md:py-3 md:pl-4 border-2 rounded-xl transition-all duration-200 outline-none text-[13px] md:text-base text-fg placeholder:text-subtext disabled:bg-subtle disabled:cursor-not-allowed ${
+            !password ? 'border-line-subtle focus:border-brand' : pwValid ? 'border-brand focus:border-brand' : 'border-danger focus:border-danger'
           }`}
           placeholder="Min. 6 characters"
           autoFocus
@@ -288,8 +285,8 @@ function PasswordSetup({ password, setPassword, confirmPassword, setConfirmPassw
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
           disabled={isLoading || !pwValid}
-          className={`w-full py-2 pl-3 pr-3 md:py-3 md:pl-4 border-2 rounded-xl focus:ring-2 focus:ring-brand/20 transition-all duration-200 outline-none text-[13px] md:text-base text-fg placeholder:text-subtext disabled:bg-subtle disabled:cursor-not-allowed ${
-            !confirmPassword ? 'border-line-subtle focus:border-brand' : match ? 'border-success focus:border-success' : 'border-danger focus:border-danger'
+          className={`w-full py-2 pl-3 pr-3 md:py-3 md:pl-4 border-2 rounded-xl transition-all duration-200 outline-none text-[13px] md:text-base text-fg placeholder:text-subtext disabled:bg-subtle disabled:cursor-not-allowed ${
+            !confirmPassword ? 'border-line-subtle focus:border-brand' : match ? 'border-brand focus:border-brand' : 'border-danger focus:border-danger'
           }`}
           placeholder="Re-enter password"
         />
@@ -363,7 +360,7 @@ function PasswordLogin({ maskedEmail, password, setPassword, error, isLoading, o
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           disabled={isLoading}
-          className="w-full py-2 pl-3 pr-3 md:py-3 md:pl-4 border-2 rounded-xl focus:ring-2 focus:ring-brand/20 transition-all duration-200 outline-none text-[13px] md:text-base text-fg placeholder:text-subtext border-line-subtle focus:border-brand disabled:bg-subtle disabled:cursor-not-allowed"
+          className="w-full py-2 pl-3 pr-3 md:py-3 md:pl-4 border-2 rounded-xl transition-all duration-200 outline-none text-[13px] md:text-base text-fg placeholder:text-subtext border-line-subtle focus:border-brand disabled:bg-subtle disabled:cursor-not-allowed"
           placeholder="Enter your password"
           autoFocus
         />

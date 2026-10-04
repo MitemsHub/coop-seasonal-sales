@@ -66,7 +66,7 @@ function SocialButton({ href, label, icon, tint, sub }) {
 }
 
 const INPUT_CLS =
-  'w-full rounded-xl border border-line bg-surface px-4 py-2.5 text-sm text-fg placeholder:text-subtext focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand transition-[border-color,box-shadow] duration-200'
+  'w-full rounded-xl border border-line bg-surface px-4 py-2.5 text-sm text-fg placeholder:text-subtext focus:outline-none focus:border-brand transition-[border-color,box-shadow] duration-200'
 
 export default function ContactPage() {
   const [name, setName] = useState('')

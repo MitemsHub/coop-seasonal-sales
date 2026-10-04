@@ -412,7 +412,7 @@ function PostedAdminPageContent() {
         <div className="flex flex-col lg:flex-row lg:items-center gap-2">
           <div className="flex gap-2 flex-1 min-w-[220px]">
             <input
-              className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               placeholder="Search (Order / Member / Branch)"
               value={term}
               onChange={(e) => setTerm(e.target.value)}
@@ -427,7 +427,7 @@ function PostedAdminPageContent() {
             </Button>
           </div>
 
-          <select className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={payment} onChange={(e) => setPayment(e.target.value)} disabled={loading}>
+          <select className="rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none" value={payment} onChange={(e) => setPayment(e.target.value)} disabled={loading}>
             <option value="">All payments</option>
             <option value="Savings">Savings</option>
             <option value="Loan">Loan</option>
@@ -728,7 +728,7 @@ function PostedAdminPageContent() {
           value={modalInput}
           onChange={(e) => setModalInput(e.target.value)}
           placeholder={showModal?.placeholder || ''}
-          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
           autoFocus
         />
       </DraggableModal>

@@ -416,7 +416,7 @@ export default function AdminChatPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by name or message…"
-                className="w-full rounded-lg border border-line bg-canvas py-2 pl-8 pr-8 text-xs text-fg placeholder:text-muted focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand/30"
+                className="w-full rounded-lg border border-line bg-canvas py-2 pl-8 pr-8 text-xs text-fg placeholder:text-muted focus:border-brand focus:outline-none"
               />
               {search && (
                 <button
@@ -626,7 +626,7 @@ export default function AdminChatPage() {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Type a reply…"
-                    className="flex-1 rounded-xl border border-line bg-canvas px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand/30"
+                    className="flex-1 rounded-xl border border-line bg-canvas px-3 py-2 text-sm text-fg placeholder:text-muted focus:border-brand focus:outline-none"
                     disabled={sending}
                   />
                   <button

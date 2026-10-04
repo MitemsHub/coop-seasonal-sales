@@ -468,14 +468,14 @@ function AdminExhibitionBanksContent() {
             value={bankName}
             onChange={(e) => setBankName(e.target.value)}
             placeholder="Bank name"
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             disabled={saving}
           />
           <input
             value={accountName}
             onChange={(e) => setAccountName(e.target.value)}
             placeholder="Account name"
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             disabled={saving}
           />
           <input
@@ -483,7 +483,7 @@ function AdminExhibitionBanksContent() {
             onChange={(e) => setAccountNumber(e.target.value)}
             placeholder="Account number"
             inputMode="numeric"
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             disabled={saving}
           />
           <div className="flex justify-end gap-2 pt-1">
@@ -607,7 +607,7 @@ function AdminExhibitionBanksContent() {
             <div>
               <div className="text-xs font-medium text-muted mb-1">Invoice reference (optional)</div>
               <input
-                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                 value={invoiceRef}
                 onChange={(e) => setInvoiceRef(e.target.value)}
                 disabled={uploading}
@@ -616,7 +616,7 @@ function AdminExhibitionBanksContent() {
             <div>
               <div className="text-xs font-medium text-muted mb-1">Notes (optional)</div>
               <input
-                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                 value={invoiceNotes}
                 onChange={(e) => setInvoiceNotes(e.target.value)}
                 disabled={uploading}
@@ -651,7 +651,7 @@ function AdminExhibitionBanksContent() {
           <div>
             <div className="text-xs font-medium text-muted mb-1">Invoice reference</div>
             <input
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={invoiceEditRef}
               onChange={(e) => setInvoiceEditRef(e.target.value)}
             />
@@ -659,7 +659,7 @@ function AdminExhibitionBanksContent() {
           <div>
             <div className="text-xs font-medium text-muted mb-1">Amount</div>
             <input
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={invoiceEditAmount}
               onChange={(e) => setInvoiceEditAmount(e.target.value)}
               inputMode="decimal"
@@ -668,7 +668,7 @@ function AdminExhibitionBanksContent() {
           <div>
             <div className="text-xs font-medium text-muted mb-1">Invoice date (YYYY-MM-DD)</div>
             <input
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={invoiceEditDate}
               onChange={(e) => setInvoiceEditDate(e.target.value)}
               placeholder="YYYY-MM-DD"
@@ -677,7 +677,7 @@ function AdminExhibitionBanksContent() {
           <div>
             <div className="text-xs font-medium text-muted mb-1">Notes</div>
             <input
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={invoiceEditNotes}
               onChange={(e) => setInvoiceEditNotes(e.target.value)}
             />

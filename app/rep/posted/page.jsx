@@ -792,7 +792,7 @@ function RepPostedPageContent() {
       <div className="ui-card p-4 mb-4">
         <div className="flex flex-wrap items-center gap-2">
           <select
-            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30 w-full sm:w-56 shrink-0"
+            className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full sm:w-56 shrink-0"
             value={dept}
             onChange={(e) => {
               const v = e.target.value
@@ -811,7 +811,7 @@ function RepPostedPageContent() {
 
           <div className="flex items-center gap-2 flex-1 min-w-[240px] sm:max-w-[560px]">
             <input
-              className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               placeholder="Search (Order / Member)"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}

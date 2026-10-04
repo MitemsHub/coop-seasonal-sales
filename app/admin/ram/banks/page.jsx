@@ -380,7 +380,7 @@ function RamBanksContent() {
           <div className="flex flex-col lg:flex-row gap-2 lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 min-w-0">
               <input
-                className="w-full max-w-[420px] min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+                className="w-full max-w-[420px] min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                 placeholder="Search (location, vendor, bank, account...)"
                 value={term}
                 onChange={(e) => setTerm(e.target.value)}
@@ -533,15 +533,15 @@ function RamBanksContent() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <div className="text-xs font-medium text-subtext mb-1">Bank</div>
-            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={bankName} onChange={(e) => setBankName(e.target.value)} />
+            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none" value={bankName} onChange={(e) => setBankName(e.target.value)} />
           </div>
           <div>
             <div className="text-xs font-medium text-subtext mb-1">Account Name</div>
-            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={accountName} onChange={(e) => setAccountName(e.target.value)} />
+            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none" value={accountName} onChange={(e) => setAccountName(e.target.value)} />
           </div>
           <div>
             <div className="text-xs font-medium text-subtext mb-1">Account Number</div>
-            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} inputMode="numeric" />
+            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} inputMode="numeric" />
           </div>
         </div>
       </DraggableModal>
@@ -662,19 +662,19 @@ function RamBanksContent() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <div className="text-xs font-medium text-subtext mb-1">Invoice reference</div>
-            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={invoiceEditRef} onChange={(e) => setInvoiceEditRef(e.target.value)} />
+            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none" value={invoiceEditRef} onChange={(e) => setInvoiceEditRef(e.target.value)} />
           </div>
           <div>
             <div className="text-xs font-medium text-subtext mb-1">Amount</div>
-            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={invoiceEditAmount} onChange={(e) => setInvoiceEditAmount(e.target.value)} inputMode="decimal" />
+            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none" value={invoiceEditAmount} onChange={(e) => setInvoiceEditAmount(e.target.value)} inputMode="decimal" />
           </div>
           <div>
             <div className="text-xs font-medium text-subtext mb-1">Invoice date (YYYY-MM-DD)</div>
-            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={invoiceEditDate} onChange={(e) => setInvoiceEditDate(e.target.value)} placeholder="YYYY-MM-DD" />
+            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none" value={invoiceEditDate} onChange={(e) => setInvoiceEditDate(e.target.value)} placeholder="YYYY-MM-DD" />
           </div>
           <div>
             <div className="text-xs font-medium text-subtext mb-1">Notes</div>
-            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={invoiceEditNotes} onChange={(e) => setInvoiceEditNotes(e.target.value)} />
+            <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none" value={invoiceEditNotes} onChange={(e) => setInvoiceEditNotes(e.target.value)} />
           </div>
         </div>
       </DraggableModal>
@@ -756,11 +756,11 @@ function RamBanksContent() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <div className="text-xs font-medium text-subtext mb-1">Invoice reference (optional)</div>
-              <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={invoiceRef} onChange={(e) => setInvoiceRef(e.target.value)} disabled={uploading} />
+              <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none" value={invoiceRef} onChange={(e) => setInvoiceRef(e.target.value)} disabled={uploading} />
             </div>
             <div>
               <div className="text-xs font-medium text-subtext mb-1">Notes (optional)</div>
-              <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30" value={invoiceNotes} onChange={(e) => setInvoiceNotes(e.target.value)} disabled={uploading} />
+              <input className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none" value={invoiceNotes} onChange={(e) => setInvoiceNotes(e.target.value)} disabled={uploading} />
             </div>
           </div>
         </div>
