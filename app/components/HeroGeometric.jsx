@@ -13,12 +13,12 @@
 // fullscreen plane via @react-three/fiber.
 //
 // Adapted to the Coop design system:
-//   • colors default to the brand forest-green scale — brand-950 (#052315)
-//     deep corner → brand-600 (#30825c) light corner, so the shader reads as
-//     the same green card it replaces, only alive. The light end is kept at
-//     brand-600 (not brand-500) so every band keeps white hero copy at
-//     ≥ 4.9:1 contrast — AA for body text even where a pale band drifts
-//     behind the paragraph.
+//   • colors default to a lighter cut of the brand forest-green scale —
+//     brand-800 (#134e34) deep corner → brand-600 (#30825c) light corner.
+//     Two steps lighter than the original brand-950 → brand-600 pairing so
+//     the card reads as a mid forest green rather than near-black, while
+//     every band still keeps white hero copy at ≥ 4.9:1 — AA for body text
+//     even where a pale band drifts behind the paragraph.
 //   • the upstream white corner-wash mixes toward color1 instead of white,
 //     keeping the white hero copy's contrast on the bottom-left corner
 //   • honours prefers-reduced-motion: the canvas switches to frameloop
@@ -148,7 +148,7 @@ void main() {
 `;
 
 /* Brand defaults — the design-system forest-green scale (globals.css @theme) */
-const HERO_GEOMETRIC_FALLBACK_COLOR_1 = '#052315' // --color-brand-950
+const HERO_GEOMETRIC_FALLBACK_COLOR_1 = '#134e34' // --color-brand-800
 const HERO_GEOMETRIC_FALLBACK_COLOR_2 = '#30825c' // --color-brand-600
 const HEX_COLOR_REGEX = /^#?[0-9a-fA-F]{6}$/;
 

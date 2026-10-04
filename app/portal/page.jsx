@@ -75,21 +75,16 @@ export default function PortalPage() {
       />
 
       {/* =================== HERO — brand gradient + member sign in =================== */}
-      <section
-        id="member"
-        className="relative scroll-mt-20 overflow-hidden bg-gradient-to-br from-brand-900 via-brand-800 to-brand-700"
-      >
-        {/* Full-bleed animated dithered brand-green shader — covers the whole
-            sign-in screen edge to edge. The gradient on the section is only
-            the pre-hydration / no-WebGL fallback. */}
-        <HeroGeometric />
-
+      <section id="member" className="relative scroll-mt-20 overflow-hidden">
         <div className="relative mx-auto max-w-7xl px-4 py-10 sm:py-14 lg:px-6 lg:py-16">
           <Reveal>
-            {/* Copy and sign-in card float over the full-bleed shader in a
-                translucent glass panel — keeps white text at AA contrast over
-                the lightest band while the animation shows through. */}
-            <div className="relative overflow-hidden rounded-2xl border border-white/15 bg-brand-950/35 shadow-xl">
+            {/* The animated dithered brand-green shader lives INSIDE this
+                card — it must not bleed past its rounded border. The lighter
+                brand gradient below is only the pre-hydration / no-WebGL
+                fallback. */}
+            <div className="relative overflow-hidden rounded-2xl border border-brand-800 bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 shadow-xl">
+              <HeroGeometric />
+
               <div className="relative grid gap-10 p-6 sm:p-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-14 lg:p-12">
                 {/* Copy */}
                 <div>
