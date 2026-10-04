@@ -36,7 +36,10 @@ function MemberIdInput({ value, onChange, validation, memberStatus, isChecking, 
             !value
               ? 'border-line-subtle focus:border-brand'
               : validation.isValid
-                ? 'border-success focus:border-success'
+                // Full treatment once the ID is entered: success border + pale
+                // brand ring + solid brand outer line, shown persistently (the
+                // old look only flashed with focus, then disappeared on blur).
+                ? 'border-success focus:border-success shadow-[0_0_0_2px_rgba(29,103,70,0.2),0_0_0_4px_#1d6746]'
                 : 'border-danger focus:border-danger'
           }`}
           placeholder="Your Staff ID"
