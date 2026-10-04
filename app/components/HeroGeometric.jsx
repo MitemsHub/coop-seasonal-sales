@@ -160,6 +160,15 @@ function sanitizeHexColor(value, fallback) {
 
 const GradientPlane = ({ color1, color2, speed = 1 }) => {
     const meshRef = useRef(null);
+    // Camera geometry: R3F's default camera is a 75° perspective at z=1, so
+    // the frustum at the plane (z=0) is 2*tan(fov/2) high and that times the
+    // aspect wide. The upstream fixed 4×4 plane only covers aspects up to
+    // ~2.6:1 — our wide sign-in card (~3.4:1) left uncovered strips at both
+    // edges where the card's fallback gradient showed through. Fit the plane
+    // to the frustum every frame instead so uv always maps exactly onto the
+    // visible canvas at any aspect.
+    const CAM_DIST = 1;
+    const CAM_FOV = 75;
     const uniforms = useMemo(
         () => ({
             uTime: { value: 0 },
@@ -172,12 +181,13 @@ const GradientPlane = ({ color1, color2, speed = 1 }) => {
 
     useFrame((state) => {
         const { clock, size } = state;
-        // R3F clones the `uniforms` prop object when it applies it to the
-        // material, so writing to the memoized snapshot would never reach the
-        // GPU (the shader would sit frozen at uTime=0). Always go through the
-        // material's own uniforms.
-        const mat = meshRef.current?.material;
-        const u = mat?.uniforms || uniforms;
+        if (meshRef.current && size.width > 0 && size.height > 0) {
+            const visH = 2 * Math.tan((CAM_FOV / 2) * (Math.PI / 180)) * CAM_DIST;
+            const visW = visH * (size.width / size.height);
+            // planeGeometry is 2×2 before scale, so scale = visible / 2
+            meshRef.current.scale.set(visW / 2, visH / 2, 1);
+        }
+        const u = meshRef.current?.material?.uniforms || uniforms;
         u.uTime.value = clock.getElapsedTime() * speed;
         u.uResolution.value.set(size.width, size.height);
         u.uColor1.value.set(sanitizeHexColor(color1, HERO_GEOMETRIC_FALLBACK_COLOR_1));
@@ -185,7 +195,7 @@ const GradientPlane = ({ color1, color2, speed = 1 }) => {
     });
 
     return (
-        <mesh ref={meshRef} scale={[2, 2, 1]}>
+        <mesh ref={meshRef}>
             <planeGeometry args={[2, 2]} />
             <shaderMaterial
                 vertexShader={vertexShader}
