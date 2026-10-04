@@ -99,8 +99,10 @@ void main() {
     float aspect = uResolution.x / max(uResolution.y, 1.0);
     vec2 auv = vec2(uv.x * aspect, uv.y);
 
-    // Enhanced noise with time
-    float noise = snoise(auv * 1.5 + vec2(uTime * 0.05, uTime * 0.03)) * 0.25;
+    // Enhanced noise with time — amplitude 0.3 keeps the band boundaries
+    // wandering visibly (the reference demo reorganises its arcs within
+    // seconds); velocity matches upstream's 0.05/0.03.
+    float noise = snoise(auv * 1.5 + vec2(uTime * 0.05, uTime * 0.03)) * 0.3;
 
     // Diagonal gradient from bottom-left to top-right — measured in raw uv
     // so it stays a clean 45° on screen like the reference (running it on the
@@ -108,12 +110,12 @@ void main() {
     // The noise above stays aspect-corrected so blobs keep their round shape.
     float diagonal = (uv.x + uv.y) * 0.5;
 
-    // Combine for gradient. The +0.5 offset (with a slightly softer gain)
-    // pushes the bulk of the field into the two lightest bands so the owner's
-    // light swatch (#1d6746) is the dominant colour of the card; the deep
-    // swatch survives as dithered ribbons toward the bottom-left and the
-    // compact corner wash, instead of swallowing the whole surface.
-    float gradient = diagonal * 1.2 + 0.5 + noise;
+    // Combine for gradient. With the +0.3 offset the field sits inside the
+    // dithered band range across most of the card (like the reference demo),
+    // so ribbon arcs sweep through the middle instead of piling up on the
+    // left — while the top-right stays solidly on the light swatch (#1d6746)
+    // and the deep swatch reads as ribbons + the bottom-left corner wash.
+    float gradient = diagonal * 1.15 + 0.3 + noise;
 
     // Interpolate colors based on gradient
     vec3 deepBlue = uColor1;
@@ -255,7 +257,11 @@ const GradientPlane = ({ color1, color2, speed = 1 }) => {
 export default function HeroGeometric({
     color1 = HERO_GEOMETRIC_FALLBACK_COLOR_1,
     color2 = HERO_GEOMETRIC_FALLBACK_COLOR_2,
-    speed = 1,
+    // 1.5 matches the reference demo's perceived sweep: upstream's raw
+    // 0.05/0.03 velocities translate a much larger share of its narrow hero
+    // per second, so the wide card's clock runs a touch faster to keep the
+    // same "arcs are moving" feel.
+    speed = 1.5,
     className = '',
 }) {
     // Freeze the shader on its first frame when the user prefers reduced
