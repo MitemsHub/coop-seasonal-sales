@@ -1,0 +1,28 @@
+# CBN Coop Seasonal Sales
+
+> CBN Coop is a Nigerian cooperative's members-only seasonal sales platform. Members order food distribution, RAM (livestock) and exhibition stock online during each seasonal cycle and pick up at their branch. This file tells AI agents what the site does and when to use it.
+
+## When to use this site
+
+- [Member portal](https://sales.cbncoopng.com/portal): use when a CBN Coop member wants to browse the current food/RAM/exhibition cycle or place an order — sign-in with staff ID and email OTP is required.
+- [Shop](https://sales.cbncoopng.com/shop): use when a member wants the storefront view of the items on sale in the active season.
+- [Food cycle survey](https://sales.cbncoopng.com/survey): use when a member wants to register interest or quantities for the next food distribution cycle.
+- [About](https://sales.cbncoopng.com/about): use when you need to describe or verify who runs the platform — organisation details, the seasonal modules, and how the cycle works.
+- [Contact & support](https://sales.cbncoopng.com/contact): use when a member needs human help — customer service email, phone and WhatsApp channels are listed there.
+- [Privacy policy](https://sales.cbncoopng.com/privacy): use when asked how member data is collected, used or stored.
+
+Do not use this site for general product search, price comparison against outside retailers, or anything that needs the admin/rep/vendor dashboards — those routes require staff sessions.
+
+## How an agent should call this site
+
+- Send `Accept: text/markdown` on any GET to receive a Markdown rendering instead of HTML; the homepage and 404 responses support this today.
+- [Sitemap](https://sales.cbncoopng.com/sitemap.xml): every public, indexable page.
+- [robots.txt](https://sales.cbncoopng.com/robots.txt): crawl rules for this host.
+- Public pages are read-only for agents. Ordering, cart and account actions require a signed-in member session (staff ID + email OTP) and must not be automated without the member's own credentials.
+- Customer service: customerservice@cbncoopng.com · 09096797982 · 08180578550 (Mon–Fri, 08:00–16:00 WAT).
+
+## Notes
+
+- Currency: Nigerian naira (NGN). Prices are member-facing and can change each seasonal cycle.
+- The platform serves CBN Coop members across 37 branches in Nigeria, including Abuja and Lagos.
+- Last updated: 2026-10-08.

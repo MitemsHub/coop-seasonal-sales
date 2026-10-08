@@ -11,6 +11,8 @@ import ToastProvider from './components/ui/Toast'
 import { Geist, Geist_Mono } from 'next/font/google'
 import PageTransition from './components/PageTransition'
 import ChatWidget from './components/ChatWidget'
+import { siteMetadata } from '../lib/siteMetadata'
+import { structuredData } from '../lib/schema'
 
 const geist = Geist({
   subsets: ['latin'],
@@ -24,32 +26,9 @@ const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
 })
 
-export const metadata = {
-  title: 'CBN Coop • Seasonal Sales',
-  description: 'CBN Coop seasonal sales platform — exhibition, food, RAM and shop modules for members and vendors.',
-  icons: {
-    icon: '/logo.png?v=4',
-    shortcut: '/logo.png?v=4',
-    apple: '/logo.png?v=4',
-  },
-  openGraph: {
-    title: 'CBN Coop • Seasonal Sales',
-    description: 'CBN Coop seasonal sales platform',
-    siteName: 'CBN Coop',
-    images: [
-      {
-        url: '/logo.png?v=4',
-        width: 101,
-        height: 100,
-        alt: 'CBN Coop Logo',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary',
-    images: ['/logo.png?v=4'],
-  },
-}
+// Head metadata lives in lib/siteMetadata.js (single source of truth, covered
+// by unit tests): metadataBase, canonical resolution, og:type, brand title.
+export const metadata = siteMetadata
 
 export default function RootLayout({ children }) {
   return (
@@ -65,6 +44,12 @@ var r=(u&&(u.type==='admin'||u.type==='rep'||u.type==='member'))?u.type:'guest';
 var t=localStorage.getItem('theme:'+r)||localStorage.getItem('theme');
 if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')}catch(e){}`,
           }}
+        />
+        {/* JSON-LD identity (Organization + WebSite + SoftwareApplication) —
+            parsed by search/AI crawlers to verify who runs this site. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
       </head>
       <body className="min-h-screen bg-canvas text-fg antialiased">

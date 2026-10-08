@@ -2,6 +2,13 @@
 // Comprehensive security middleware for the Coop Seasonal Sales System
 import { NextResponse } from 'next/server'
 import { verify } from './lib/signingEdge.js'
+import {
+  wantsMarkdown,
+  isAssetPath,
+  HOMEPAGE_MARKDOWN,
+  notFoundMarkdown,
+  markdownResponse,
+} from './lib/agentContent.js'
 
 // Rate limiting store (in production, use Redis or similar)
 const rateLimitStore = new Map()
@@ -19,7 +26,31 @@ const securityHeaders = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-  'Content-Security-Policy': `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co${isLocalSupabase ? ` ${supabaseUrl}` : ''};`
+  // wss:// is required because ChatWidget subscribes to Supabase Realtime over
+  // WebSockets; without it the live chat silently falls back to polling under
+  // this CSP (now applied to every page, including the landing page).
+  'Content-Security-Policy': `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co${isLocalSupabase ? ` ${supabaseUrl} ${supabaseUrl.replace(/^http/, 'ws')}` : ''};`
+}
+
+// Paths the original, narrower middleware matcher covered. Rate limiting stays
+// pinned to exactly that surface so widening the matcher (needed for Markdown
+// negotiation + Markdown 404s) does not change existing abuse protection.
+const LEGACY_RATE_LIMIT_RE = /^\/(api|admin|rep|vendor|shop|exhibition)(\/|$)|^\/uploads$/
+function isLegacyRateLimitedPath(pathname) {
+  return LEGACY_RATE_LIMIT_RE.test(pathname)
+}
+
+// Forward just enough context to the internal existence probe so protected
+// routes answer with their real status (redirect/401) instead of a false 404.
+function probeHeaders(request) {
+  const headers = new Headers()
+  headers.set('accept', 'text/markdown')
+  headers.set('x-md-probe', '1')
+  for (const name of ['cookie', 'user-agent', 'x-forwarded-for', 'x-real-ip']) {
+    const value = request.headers.get(name)
+    if (value) headers.set(name, value)
+  }
+  return headers
 }
 
 // Rate limiting function
@@ -95,6 +126,42 @@ export async function middleware(request) {
     return NextResponse.redirect(new URL('/survey', request.url), 307)
   }
 
+  // Static assets (build files and /public files) were never matched by the
+  // old, narrower matcher — pass them through untouched: no negotiation, no
+  // headers, no rate limiting.
+  if (isAssetPath(pathname)) {
+    return NextResponse.next()
+  }
+
+  const method = (request.method || 'GET').toUpperCase()
+  const isProbe = request.headers.get('x-md-probe') === '1'
+
+  // ---- Agent content negotiation (GET/HEAD documents only) -------------
+  // An explicit `Accept: text/markdown` receives Markdown instead of HTML:
+  //   - '/' returns the homepage summary;
+  //   - every other path first asks the app itself whether it exists (the
+  //     x-md-probe marker prevents recursion; redirect: 'manual' keeps
+  //     auth redirects visible) — a real 404 becomes a Markdown 404 with a
+  //     link to llms.txt/sitemap, anything else falls through to HTML.
+  if (!isProbe && (method === 'GET' || method === 'HEAD') && wantsMarkdown(request.headers.get('accept'))) {
+    if (pathname === '/') {
+      return markdownResponse(method === 'HEAD' ? null : HOMEPAGE_MARKDOWN, 200)
+    }
+    try {
+      const probe = await fetch(new URL(pathname, request.url).toString(), {
+        method: 'GET',
+        redirect: 'manual',
+        cache: 'no-store',
+        headers: probeHeaders(request),
+      })
+      if (probe.status === 404) {
+        return markdownResponse(method === 'HEAD' ? null : notFoundMarkdown(pathname), 404)
+      }
+    } catch {
+      // Existence probe failed — fall through to normal HTML handling.
+    }
+  }
+
   const clientIP = getClientIP(request)
   
   // Create response with security headers
@@ -105,11 +172,18 @@ export async function middleware(request) {
     response.headers.set(key, value)
   })
   if (isProd) response.headers.set('X-Frame-Options', 'DENY')
+
+  // Document responses depend on Accept (Markdown vs HTML negotiation), so
+  // advertise it. Next appends its own RSC vary values to this header.
+  response.headers.set('Vary', 'Accept')
   
   // Rate limiting is a production anti-abuse measure. The in-memory store is a
   // dev stand-in (real deployments use Redis), so local development + smoke
   // tests run without throttling — otherwise a long test run trips the window.
-  if (isProd) {
+  // Scoped to the originally matched routes (isLegacyRateLimitedPath) so the
+  // widened matcher does not newly throttle landing-page traffic; internal
+  // probes (isProbe) are already counted via their originating request.
+  if (isProd && !isProbe && isLegacyRateLimitedPath(pathname)) {
     const globalRateLimit = checkRateLimit(`global:${clientIP}`, 100, 60000) // 100 requests per minute
     if (!globalRateLimit) {
       console.warn(`Global rate limit exceeded for IP: ${clientIP}`);
@@ -370,20 +444,19 @@ export async function middleware(request) {
 // Configure which routes the middleware should run on
 export const config = {
   matcher: [
-    // Match all API routes
+    // Every path must reach the middleware so agents get Markdown content
+    // negotiation on pages and a Markdown body on 404s for paths that do not
+    // exist at all. Static assets early-return in-code (isAssetPath).
+    '/',
+    '/:path*',
+    // Original security surface, kept explicit:
     '/api/:path*',
-    // Match admin routes
     '/admin/:path*',
-    // Match rep routes
     '/rep/:path*',
-    // Match vendor routes (incl. the bare /vendor entry)
     '/vendor',
     '/vendor/:path*',
-    // Match shop routes (for member protection)
     '/shop/:path*',
-    // Match member exhibition routes
     '/exhibition/:path*',
-    // Legacy /uploads → /survey redirect (exact — photo files unaffected)
     '/uploads'
   ]
 }

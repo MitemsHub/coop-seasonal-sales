@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /rep/
+Disallow: /vendor/
+Disallow: /api/
+
+Sitemap: https://sales.cbncoopng.com/sitemap.xml
