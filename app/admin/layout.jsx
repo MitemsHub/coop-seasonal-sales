@@ -126,19 +126,28 @@ function GroupToggle({ open, onToggle, label, collapsed, onNavigate, status, sta
   )
 }
 
-function SubGroupToggle({ open, onToggle, label }) {
+function SubGroupToggle({ open, onToggle, label, icon: Icon }) {
   return (
     <button
       type="button"
       onClick={onToggle}
       className={[
-        'flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-xs font-semibold',
-        'transition-colors duration-200 ease-sakani',
-        open ? 'text-fg' : 'text-muted hover:bg-subtle hover:text-fg',
+        'flex w-full items-center justify-between rounded-lg transition-colors duration-200 ease-sakani',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
+        // With an icon it matches the NavLink rows (Report, Audit Log…);
+        // without it stays the compact sub-heading the other groups use.
+        Icon ? 'gap-2.5 px-3 py-2 text-sm font-medium' : 'px-3 py-1.5 text-xs font-semibold',
+        open ? 'text-fg' : 'text-muted hover:bg-subtle hover:text-fg',
       ].join(' ')}
     >
-      <span>{label}</span>
+      {Icon ? (
+        <span className="flex min-w-0 items-center gap-2.5">
+          <Icon className={['h-4 w-4 shrink-0', open ? 'text-fg' : 'text-subtext'].join(' ')} strokeWidth={2} />
+          <span className="truncate">{label}</span>
+        </span>
+      ) : (
+        <span>{label}</span>
+      )}
       <ChevronDown className={['h-3.5 w-3.5 transition-transform duration-200 ease-sakani', open ? 'rotate-180' : ''].join(' ')} />
     </button>
   )
@@ -566,16 +575,19 @@ export default function AdminLayout({ children }) {
                     <NavLink href="/admin/food/reports" label="Report" icon={BarChart3} active={activeKey === 'food_reports'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/food/audit" label="Audit Log" icon={History} active={activeKey === 'food_audit'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/food/data-management" label="Data" icon={Database} active={activeKey === 'food_data'} collapsed={false} onNavigate={navOnClick} />
-                    <div className="mt-1 border-t border-line-subtle pt-1">
-                      <SubGroupToggle open={foodItemsOpen} onToggle={() => setFoodItemsOpen((v) => !v)} label="Items Management" />
-                      {foodItemsOpen && (
-                        <div className="mt-0.5 space-y-0.5 pl-4">
-                          <NavLink href="/admin/food/survey" label="Items Survey" icon={ClipboardList} active={activeKey === 'food_survey'} collapsed={false} onNavigate={navOnClick} />
-                          <NavLink href="/admin/food/items-import" label="Items Import" icon={FileDown} active={activeKey === 'food_items_import'} collapsed={false} onNavigate={navOnClick} />
-                          <NavLink href="/admin/food/item-images" label="Items Image Mang." icon={ImageIcon} active={activeKey === 'food_item_images'} collapsed={false} onNavigate={navOnClick} />
-                        </div>
-                      )}
-                    </div>
+                    <SubGroupToggle
+                      open={foodItemsOpen}
+                      onToggle={() => setFoodItemsOpen((v) => !v)}
+                      label="Items Management"
+                      icon={Package}
+                    />
+                    {foodItemsOpen && (
+                      <div className="mt-0.5 space-y-0.5 pl-4">
+                        <NavLink href="/admin/food/survey" label="Items Survey" icon={ClipboardList} active={activeKey === 'food_survey'} collapsed={false} onNavigate={navOnClick} />
+                        <NavLink href="/admin/food/items-import" label="Items Import" icon={FileDown} active={activeKey === 'food_items_import'} collapsed={false} onNavigate={navOnClick} />
+                        <NavLink href="/admin/food/item-images" label="Items Image Mang." icon={ImageIcon} active={activeKey === 'food_item_images'} collapsed={false} onNavigate={navOnClick} />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
