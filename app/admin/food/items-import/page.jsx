@@ -268,7 +268,7 @@ function ItemsImportContent() {
   useEffect(() => {
     setOutGroupPage(1)
     setOutRowPages({})
-    setCollapsedBranches(new Set())
+    setExpandedBranches(new Set())
   }, [outSearch, selectedCycleId])
 
   // Admin-managed pick lists (Categories & units panel) — loaded once.
