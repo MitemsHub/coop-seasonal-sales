@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabaseClient'
 import ImageUpload from './ImageUpload'
+import ItemImagePicker from './ItemImagePicker'
 import Button from './ui/Button'
 
-export default function ItemManagement({ cycleId, cycles }) {
+export default function ItemManagement({ cycleId, cycles, reloadToken }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedItem, setSelectedItem] = useState(null)
@@ -17,6 +18,12 @@ export default function ItemManagement({ cycleId, cycles }) {
   // Large screens (xl+) show 5-6 cards per row, so 10 per page fills two clean
   // rows instead of the old fixed 8; smaller screens stay at 8.
   const [itemsPerPage, setItemsPerPage] = useState(8)
+  // Bulk image assignment: tick items across pages, pick one bank image,
+  // apply it to the whole selection in one PATCH.
+  const [bulkMode, setBulkMode] = useState(false)
+  const [bulkSelected, setBulkSelected] = useState(() => new Set())
+  const [bulkImage, setBulkImage] = useState('')
+  const [bulkBusy, setBulkBusy] = useState(false)
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1280px)')
@@ -37,6 +44,15 @@ export default function ItemManagement({ cycleId, cycles }) {
   useEffect(() => {
     fetchItems()
   }, [cycleId])
+
+  // The page's Add-image panel bumps this after attaching a new photo so the
+  // grid shows it without a manual Refresh.
+  useEffect(() => {
+    if (!reloadToken) return
+    fetchItems()
+    setRefreshKey((p) => p + 1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadToken])
 
   const fetchItems = async () => {
     try {
@@ -72,6 +88,55 @@ export default function ItemManagement({ cycleId, cycles }) {
   const withVersion = (url) => {
     if (!url) return url
     return url.includes('v=') ? url : (url.includes('?') ? `${url}&v=${Date.now()}` : `${url}?v=${Date.now()}`)
+  }
+
+  /* ── Bulk image assignment ──────────────────────────────────────── */
+  const toggleBulkItem = (id) =>
+    setBulkSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const selectCurrentPage = (pageItems) =>
+    setBulkSelected((prev) => {
+      const next = new Set(prev)
+      for (const it of pageItems) next.add(it.item_id)
+      return next
+    })
+
+  const exitBulk = () => {
+    setBulkMode(false)
+    setBulkSelected(new Set())
+    setBulkImage('')
+  }
+
+  const applyBulkImage = async () => {
+    if (bulkBusy || !bulkImage || bulkSelected.size === 0) return
+    setBulkBusy(true)
+    try {
+      const res = await fetch('/api/admin/items', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ item_ids: [...bulkSelected], image_url: withVersion(bulkImage) }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Bulk assign failed')
+      await fetchItems()
+      setRefreshKey((p) => p + 1)
+      setBulkSelected(new Set())
+      const skipped = json.requested - json.updated
+      setMessage({
+        type: 'success',
+        text: `Image assigned to ${json.updated} item${json.updated === 1 ? '' : 's'}${skipped > 0 ? ` (${skipped} unchanged)` : ''}`,
+      })
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message || 'Bulk assign failed' })
+    } finally {
+      setBulkBusy(false)
+    }
   }
 
   const updateItemImage = async (itemId, imageUrl) => {
@@ -160,6 +225,13 @@ export default function ItemManagement({ cycleId, cycles }) {
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 min-w-0">
           <Button
+            variant={bulkMode ? 'brand' : 'secondary'}
+            size="sm"
+            onClick={() => (bulkMode ? exitBulk() : setBulkMode(true))}
+          >
+            {bulkMode ? 'Exit bulk mode' : 'Bulk assign'}
+          </Button>
+          <Button
             variant="secondary"
             size="sm"
             onClick={() => {
@@ -176,6 +248,52 @@ export default function ItemManagement({ cycleId, cycles }) {
         </div>
       </div>
 
+      {/* Bulk assign bar — pick one bank image, tick items, apply to all */}
+      {bulkMode && (
+        <div className="rounded-lg border border-brand/40 bg-subtle/50 p-3 space-y-3">
+          <div className="grid gap-3 md:grid-cols-2">
+            <ItemImagePicker
+              value={bulkImage}
+              onChange={setBulkImage}
+              label="Image to assign (search the bank)"
+            />
+            <div className="flex flex-col justify-end gap-2">
+              <div className="flex flex-wrap items-center gap-3 text-xs">
+                <button
+                  type="button"
+                  onClick={() => selectCurrentPage(currentItems)}
+                  className="font-semibold text-brand underline"
+                >
+                  Select this page ({currentItems.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBulkSelected(new Set())}
+                  disabled={bulkSelected.size === 0}
+                  className="font-semibold text-muted underline disabled:opacity-50"
+                >
+                  Clear selection
+                </button>
+                <span className="text-muted">{bulkSelected.size} selected</span>
+              </div>
+              <Button
+                onClick={applyBulkImage}
+                loading={bulkBusy}
+                disabled={bulkBusy || !bulkImage || bulkSelected.size === 0}
+              >
+                {bulkBusy
+                  ? 'Assigning…'
+                  : `Assign image to ${bulkSelected.size} item${bulkSelected.size === 1 ? '' : 's'}`}
+              </Button>
+            </div>
+          </div>
+          <p className="text-caption text-muted">
+            Tick the items below (your selection persists across pages), choose the bank image on the left, then
+            apply — every selected item starts showing it right away, in every branch and cycle.
+          </p>
+        </div>
+      )}
+
       {message && (
         <div className={`p-3 rounded-lg text-sm ${
           message.type === 'success' 
@@ -190,6 +308,19 @@ export default function ItemManagement({ cycleId, cycles }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
         {currentItems.map(item => (
           <div key={item.item_id} className="bg-surface border border-line-subtle rounded-lg p-3 hover:shadow-md transition-shadow overflow-hidden">
+            {/* Bulk selection */}
+            {bulkMode && (
+              <label className="mb-2 flex cursor-pointer select-none items-center gap-2 text-xs font-medium text-fg">
+                <input
+                  type="checkbox"
+                  checked={bulkSelected.has(item.item_id)}
+                  onChange={() => toggleBulkItem(item.item_id)}
+                  aria-label={`Select ${item.name} for bulk image assignment`}
+                  className="h-4 w-4 rounded border-line"
+                />
+                {bulkSelected.has(item.item_id) ? 'Selected' : 'Select for bulk assign'}
+              </label>
+            )}
             {/* Item Image */}
             <div className="mb-3">
               <div className="relative w-full h-28 bg-muted rounded-lg overflow-hidden">
@@ -230,18 +361,20 @@ export default function ItemManagement({ cycleId, cycles }) {
                 {item.unit} • {item.category}
               </div>
               
-              {/* Upload Button */}
-              <Button
-                variant="secondary"
-                size="sm"
-                className="w-full mt-2"
-                onClick={() => {
-                  setSelectedItem(item)
-                  setShowImageUpload(true)
-                }}
-              >
-                {item.image_url ? 'Change Image' : 'Add Image'}
-              </Button>
+              {/* Upload Button (single-item mode only — bulk mode uses the bar above) */}
+              {!bulkMode && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full mt-2"
+                  onClick={() => {
+                    setSelectedItem(item)
+                    setShowImageUpload(true)
+                  }}
+                >
+                  {item.image_url ? 'Change Image' : 'Add Image'}
+                </Button>
+              )}
             </div>
           </div>
         ))}

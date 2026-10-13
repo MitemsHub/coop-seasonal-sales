@@ -31,6 +31,7 @@ import Select from '../../../components/ui/Select'
 import Label from '../../../components/ui/Label'
 import ItemImagePicker from '../../../components/ItemImagePicker'
 import {
+  BarChart3,
   CheckCircle2,
   ChevronDown,
   FileSpreadsheet,
@@ -43,6 +44,78 @@ import {
 } from 'lucide-react'
 
 const fmtPrice = (v) => Number(v || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 })
+
+const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ')
+
+// Field-by-field comparison of the SAVED shop item vs the rep's draft.
+// The editor shows the full table so refining is an informed decision; the
+// collapsed card just shows how many fields differ.
+const draftDiffs = (saved, draft) => {
+  if (!saved || !draft) return []
+  const savedPrice = saved.price == null || saved.price === '' ? null : Number(saved.price)
+  return [
+    { field: 'Name', saved: saved.name || '', draft: draft.draft_name || '', changed: norm(saved.name) !== norm(draft.draft_name) },
+    { field: 'Category', saved: saved.category || '', draft: draft.draft_category || '', changed: norm(saved.category) !== norm(draft.draft_category) },
+    { field: 'Unit', saved: saved.unit || '', draft: draft.draft_unit || '', changed: norm(saved.unit) !== norm(draft.draft_unit) },
+    {
+      field: 'Price (₦)',
+      saved: savedPrice != null && savedPrice > 0 ? fmtPrice(savedPrice) : '—',
+      draft: Number(draft.draft_price) > 0 ? fmtPrice(draft.draft_price) : '—',
+      changed: (savedPrice || 0) !== Number(draft.draft_price || 0),
+    },
+  ]
+}
+
+// Pagination: both lists page at 10 rows so a big cycle never renders as one
+// endless scroll, and the outsourced branch cards page on their own so 13+
+// branches don't stack at once either. Same visual language as ItemManagement.
+const ROWS_PER_PAGE = 10
+const GROUPS_PER_PAGE = 5
+
+const clampPage = (p, total) => Math.max(1, Math.min(p, Math.max(1, total)))
+
+function ListPager({ page, totalPages, onChange }) {
+  if (totalPages <= 1) return null
+  const current = clampPage(page, totalPages)
+  const nums = []
+  for (let i = 1; i <= totalPages; i++) {
+    if (totalPages <= 7 || i === 1 || i === totalPages || Math.abs(i - current) <= 1) nums.push(i)
+    else if (nums[nums.length - 1] !== '…') nums.push('…')
+  }
+  const btn =
+    'rounded-lg border border-line-subtle bg-subtle px-2.5 py-1.5 text-caption font-medium text-fg transition-colors hover:bg-muted disabled:opacity-40 disabled:hover:bg-subtle'
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-1.5 pt-3">
+      <button type="button" className={btn} disabled={current === 1} onClick={() => onChange(current - 1)}>
+        ‹ Prev
+      </button>
+      {nums.map((n, i) =>
+        n === '…' ? (
+          <span key={`ellipsis-${i}`} className="px-1 text-caption text-muted select-none">
+            …
+          </span>
+        ) : (
+          <button
+            key={n}
+            type="button"
+            onClick={() => onChange(n)}
+            aria-current={current === n ? 'page' : undefined}
+            className={
+              current === n
+                ? 'rounded-lg bg-brand px-2.5 py-1.5 text-caption font-bold text-on-accent'
+                : btn
+            }
+          >
+            {n}
+          </button>
+        )
+      )}
+      <button type="button" className={btn} disabled={current === totalPages} onClick={() => onChange(current + 1)}>
+        Next ›
+      </button>
+    </div>
+  )
+}
 
 const emptyNew = { name: '', sku: '', category: '', unit: '', price: '', markup: '', image_url: '' }
 
@@ -82,6 +155,13 @@ function ItemsImportContent() {
   const [genSearch, setGenSearch] = useState('')
   const [outSearch, setOutSearch] = useState('')
   const [collapsedBranches, setCollapsedBranches] = useState(() => new Set())
+  const [branchReport, setBranchReport] = useState(null) // submission report for the cycle
+  const [reportOpen, setReportOpen] = useState(false)
+
+  /* ── Pagination (rows are paged per list; branch cards too) ────── */
+  const [genPage, setGenPage] = useState(1)
+  const [outGroupPage, setOutGroupPage] = useState(1)
+  const [outRowPages, setOutRowPages] = useState({}) // groupKey → page
 
   const [editKey, setEditKey] = useState(null) // 'general:<id>' | 'outsourced:<key>' | null
   const [form, setForm] = useState(null)
@@ -120,9 +200,10 @@ function ItemsImportContent() {
     setSectionsError(null)
     try {
       const qs = `cycle_id=${encodeURIComponent(String(selectedCycleId))}`
-      const [gRes, oRes] = await Promise.all([
+      const [gRes, oRes, rRes] = await Promise.all([
         fetch(`/api/admin/items?section=general&${qs}`, { cache: 'no-store', credentials: 'same-origin' }),
         fetch(`/api/admin/items?section=outsourced&${qs}`, { cache: 'no-store', credentials: 'same-origin' }),
+        fetch(`/api/admin/items?section=submission_report&${qs}`, { cache: 'no-store', credentials: 'same-origin' }),
       ])
       const g = await gRes.json()
       const o = await oRes.json()
@@ -130,6 +211,10 @@ function ItemsImportContent() {
       if (!oRes.ok || !o.ok) throw new Error(o.error || 'Failed to load outsourced items')
       setGeneralRows(g.rows || [])
       setOutRows(o.rows || [])
+      // The report is a nicety — its failure must never break the sections.
+      const r = await rRes.json().catch(() => ({}))
+      if (rRes.ok && r.ok) setBranchReport(r)
+      else setBranchReport(null)
     } catch (e) {
       setSectionsError(e.message)
     } finally {
@@ -144,6 +229,15 @@ function ItemsImportContent() {
   useEffect(() => {
     loadSections()
   }, [loadSections])
+
+  // Paging restarts whenever the underlying list changes (new search, new cycle).
+  useEffect(() => {
+    setGenPage(1)
+  }, [genSearch, selectedCycleId])
+  useEffect(() => {
+    setOutGroupPage(1)
+    setOutRowPages({})
+  }, [outSearch, selectedCycleId])
 
   // Demand tracking mode — when on, the items upload needs no stock column.
   useEffect(() => {
@@ -279,6 +373,13 @@ function ItemsImportContent() {
       image_url: row.image_url || '',
       draft: row.draft || null,
       saved: !!row.saved,
+      // Snapshot of what is actually in the shop right now — the diff table
+      // in the editor compares the draft against THESE, not the prefilled
+      // form values (which mix draft and saved fields on purpose).
+      saved_values:
+        section === 'outsourced' && row.saved && row.draft
+          ? { name: row.name || '', category: row.category || '', unit: row.unit || '', price: row.price }
+          : null,
     })
     if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -368,6 +469,11 @@ function ItemsImportContent() {
     return generalRows.filter((r) => `${r.name} ${r.category} ${r.sku} ${r.unit}`.toLowerCase().includes(q))
   }, [generalRows, genSearch])
 
+  const genTotalPages = Math.ceil(filteredGeneral.length / ROWS_PER_PAGE) || 1
+  const genPageClamped = clampPage(genPage, genTotalPages)
+  const genStart = (genPageClamped - 1) * ROWS_PER_PAGE
+  const pagedGeneral = filteredGeneral.slice(genStart, genStart + ROWS_PER_PAGE)
+
   const filteredOutsourced = useMemo(() => {
     const q = outSearch.trim().toLowerCase()
     if (!q) return outRows
@@ -408,10 +514,33 @@ function ItemsImportContent() {
   const setAllBranches = (collapsed) =>
     setCollapsedBranches(collapsed ? new Set(branchGroups.map((g) => g.key)) : new Set())
 
+  const outGroupTotalPages = Math.ceil(branchGroups.length / GROUPS_PER_PAGE) || 1
+  const outGroupPageClamped = clampPage(outGroupPage, outGroupTotalPages)
+  const outGroupsStart = (outGroupPageClamped - 1) * GROUPS_PER_PAGE
+  const pagedBranchGroups = branchGroups.slice(outGroupsStart, outGroupsStart + GROUPS_PER_PAGE)
+
+  /* ── Submission report (who filed the survey, who hasn't) ───────── */
+  const reportSubmitted = useMemo(
+    () =>
+      (branchReport?.branches || [])
+        .filter((b) => b.submitted)
+        .sort((a, b) => b.entries - a.entries || String(a.name).localeCompare(String(b.name))),
+    [branchReport]
+  )
+  const reportMissing = useMemo(
+    () =>
+      (branchReport?.branches || [])
+        .filter((b) => !b.submitted)
+        .sort((a, b) => String(a.name).localeCompare(String(b.name))),
+    [branchReport]
+  )
+
   /* ── Row editor (shared by both sections) ────────────────────────── */
   const editor = () => {
     if (!form) return null
     const isOut = form.section === 'outsourced'
+    const diffRows = isOut && form.saved_values && form.draft ? draftDiffs(form.saved_values, form.draft) : []
+    const diffChanged = diffRows.filter((r) => r.changed).length
     return (
       <div className="mt-3 rounded-lg border border-brand/40 bg-subtle/50 p-3">
         {isOut && form.draft && (
@@ -437,6 +566,56 @@ function ItemsImportContent() {
                 Rep photos are raw and not used in the shop — pick the refined image from the bank below.
               </p>
             </div>
+          </div>
+        )}
+
+        {/* Diff: rep draft vs. what is actually in the shop right now */}
+        {diffRows.length > 0 && (
+          <div className="mb-3 rounded-lg border border-line bg-surface p-2.5">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-fg">Rep draft vs. saved item</p>
+              {diffChanged === 0 ? (
+                <span className="rounded-full bg-success-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-success-fg">
+                  Identical
+                </span>
+              ) : (
+                <span className="rounded-full bg-warning-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-warning-fg">
+                  {diffChanged} of {diffRows.length} fields differ
+                </span>
+              )}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-muted">
+                    <th className="py-1 pr-2 font-medium">Field</th>
+                    <th className="py-1 pr-2 font-medium">Saved in shop</th>
+                    <th className="py-1 font-medium">Rep draft</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {diffRows.map((r) => (
+                    <tr key={r.field} className={`border-t border-line-subtle ${r.changed ? 'bg-warning-bg' : ''}`}>
+                      <td className="py-1.5 pr-2 font-medium text-fg">{r.field}</td>
+                      <td className="py-1.5 pr-2 text-muted">{r.saved || '—'}</td>
+                      <td className={`py-1.5 ${r.changed ? 'font-semibold text-warning-fg' : 'text-muted'}`}>
+                        {r.draft || '—'}
+                        {r.changed && (
+                          <span className="ml-1.5 rounded bg-surface px-1 py-px text-[10px] font-bold uppercase tracking-wide text-warning-fg">
+                            differs
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-1.5 text-caption text-muted">
+              Saving replaces the shop copy with your refined values — the draft column is what{' '}
+              {form.draft.rep_name ? `${form.draft.rep_name} ` : 'the rep '}
+              {form.draft.branch_name ? `submitted for ${form.draft.branch_name}` : 'submitted'}.
+            </p>
           </div>
         )}
 
@@ -545,6 +724,10 @@ function ItemsImportContent() {
     const saved = section === 'general' || row.saved
     const price = row.price ?? row.draft?.draft_price ?? null
     const img = row.image_url || ''
+    const draftDiff =
+      section === 'outsourced' && row.saved && row.draft
+        ? draftDiffs(row, row.draft).filter((r) => r.changed).length
+        : 0
 
     return (
       <div key={key} className={`rounded-lg border bg-surface p-3 ${expanded ? 'border-brand/50' : 'border-line-subtle'}`}>
@@ -587,6 +770,14 @@ function ItemsImportContent() {
               {!img && (
                 <span className="rounded-full bg-subtle px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-muted">
                   No bank image
+                </span>
+              )}
+              {draftDiff > 0 && (
+                <span
+                  className="rounded-full bg-warning-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-warning-fg"
+                  title="The rep's draft differs from the saved item — open Edit to compare"
+                >
+                  draft differs ({draftDiff})
                 </span>
               )}
             </div>
@@ -882,7 +1073,14 @@ function ItemsImportContent() {
                   : 'Nothing matches your search.'}
               </p>
             ) : (
-              filteredGeneral.map((r) => rowCard('general', r))
+              <>
+                {pagedGeneral.map((r) => rowCard('general', r))}
+                <p className="pt-1 text-center text-caption text-muted">
+                  Showing {genStart + 1}–{Math.min(genStart + ROWS_PER_PAGE, filteredGeneral.length)} of{' '}
+                  {filteredGeneral.length} items · {ROWS_PER_PAGE} items per page
+                </p>
+                <ListPager page={genPageClamped} totalPages={genTotalPages} onChange={setGenPage} />
+              </>
             )}
           </div>
         </div>
@@ -913,6 +1111,15 @@ function ItemsImportContent() {
                   className="w-44 pl-9"
                 />
               </div>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setReportOpen((v) => !v)}
+                leftIcon={BarChart3}
+              >
+                {reportOpen ? 'Hide report' : 'Submission report'}
+                {branchReport ? ` · ${branchReport.submitted}/${branchReport.total}` : ''}
+              </Button>
             </div>
           </div>
 
@@ -924,6 +1131,92 @@ function ItemsImportContent() {
             </Link>{' '}
             (or use “Add image” inside the picker) and it becomes reusable for every future cycle.
           </div>
+
+          {/* Submission report — who filed the survey this cycle, who hasn't */}
+          {reportOpen && (
+            <div className="mt-3 rounded-lg border border-line bg-subtle/40 p-3">
+              {!branchReport ? (
+                <p className="text-body text-muted">
+                  No report data for this cycle — press Refresh above, or check that reps can submit surveys.
+                </p>
+              ) : (
+                <>
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <p className="text-body font-semibold text-fg">
+                      {branchReport.submitted} of {branchReport.total} branches submitted
+                    </p>
+                    <span className="rounded-full bg-info-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-info-fg">
+                      {branchReport.draft_count} drafts
+                    </span>
+                    {reportMissing.length > 0 ? (
+                      <span className="rounded-full bg-warning-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-warning-fg">
+                        {reportMissing.length} not submitted
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-success-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-success-fg">
+                        All in
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <div>
+                      <p className="mb-1.5 text-caption font-semibold uppercase tracking-wide text-success-fg">
+                        Submitted ({reportSubmitted.length})
+                      </p>
+                      {reportSubmitted.length === 0 ? (
+                        <p className="text-body text-muted">No submissions yet for this cycle.</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {reportSubmitted.map((b) => (
+                            <button
+                              key={b.branch_id}
+                              type="button"
+                              onClick={() => setOutSearch(b.name)}
+                              title={`${b.entries} draft${b.entries === 1 ? '' : 's'}${
+                                b.reps?.length ? ` · ${b.reps.join(', ')}` : ''
+                              }${b.last_at ? ` · last at ${new Date(b.last_at).toLocaleString()}` : ''} — click to filter the list`}
+                              className="rounded-full border border-success-border bg-success-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-success-fg transition-opacity hover:opacity-75"
+                            >
+                              {b.name}
+                              {b.code ? ` (${b.code})` : ''} · {b.entries}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="mb-1.5 text-caption font-semibold uppercase tracking-wide text-warning-fg">
+                        Not yet submitted ({reportMissing.length})
+                      </p>
+                      {reportMissing.length === 0 ? (
+                        <p className="text-body text-success-fg">Every branch has submitted — nothing outstanding.</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {reportMissing.map((b) => (
+                            <span
+                              key={b.branch_id}
+                              className="rounded-full border border-warning-border bg-warning-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-warning-fg"
+                            >
+                              {b.name}
+                              {b.code ? ` (${b.code})` : ''}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <p className="mt-2 text-caption text-muted">
+                    Counts the drafts that appear in this list for {cycle?.name || 'the selected cycle'} — click a
+                    submitted branch to filter the list below. Branches are flagged missing as soon as a new cycle
+                    starts, so chasing submissions is a glance, not a query.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="mt-3 space-y-2">
             {sectionsLoading && !outRows.length ? (
@@ -965,9 +1258,13 @@ function ItemsImportContent() {
                   </div>
                 </div>
 
-                {branchGroups.map((g) => {
+                {pagedBranchGroups.map((g) => {
                   const collapsed = collapsedBranches.has(g.key)
                   const savedCount = g.rows.filter((r) => r.saved).length
+                  const rowsTotal = Math.ceil(g.rows.length / ROWS_PER_PAGE) || 1
+                  const rowsPage = clampPage(outRowPages[g.key] ?? 1, rowsTotal)
+                  const rowsStart = (rowsPage - 1) * ROWS_PER_PAGE
+                  const pagedRows = g.rows.slice(rowsStart, rowsStart + ROWS_PER_PAGE)
                   return (
                     <div key={g.key} className="overflow-hidden rounded-lg border border-line-subtle bg-subtle/40">
                       <button
@@ -993,12 +1290,33 @@ function ItemsImportContent() {
                       </button>
                       {!collapsed && (
                         <div className="space-y-2 border-t border-line-subtle p-2">
-                          {g.rows.map((r) => rowCard('outsourced', r))}
+                          {pagedRows.map((r) => rowCard('outsourced', r))}
+                          {rowsTotal > 1 && (
+                            <>
+                              <p className="text-center text-caption text-muted">
+                                Showing {rowsStart + 1}–
+                                {Math.min(rowsStart + ROWS_PER_PAGE, g.rows.length)} of {g.rows.length} items in{' '}
+                                {g.label}
+                              </p>
+                              <ListPager
+                                page={rowsPage}
+                                totalPages={rowsTotal}
+                                onChange={(p) => setOutRowPages((prev) => ({ ...prev, [g.key]: p }))}
+                              />
+                            </>
+                          )}
                         </div>
                       )}
                     </div>
                   )
                 })}
+
+                <p className="text-center text-caption text-muted">
+                  Branches {outGroupsStart + 1}–
+                  {Math.min(outGroupsStart + GROUPS_PER_PAGE, branchGroups.length)} of {branchGroups.length} ·{' '}
+                  {GROUPS_PER_PAGE} branches per page
+                </p>
+                <ListPager page={outGroupPageClamped} totalPages={outGroupTotalPages} onChange={setOutGroupPage} />
               </>
             )}
           </div>

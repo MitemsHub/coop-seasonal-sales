@@ -1,10 +1,12 @@
 // app/api/admin/items/route.js
 // Items Management API — General + Outsourced items, and the image bank list.
 //
-//   GET  ?section=general|outsourced|images&cycle_id=
-//        general    → items saved as "general" with this cycle's price/markup
-//        outsourced → rep survey drafts for the cycle + their saved shop state
-//        images     → the shared image bank (every item with a refined image)
+//   GET  ?section=general|outsourced|images|submission_report&cycle_id=
+//        general          → items saved as "general" with this cycle's price/markup
+//        outsourced       → rep survey drafts for the cycle + their saved shop state
+//        images           → the shared image bank (every item with a refined image)
+//        submission_report→ every branch vs. the survey: who submitted, how many
+//                           drafts, and who is still missing this cycle
 //
 //   POST { cycle_id, section, item_id?, sku?, name, category, unit, price,
 //          markup?, image_url? }
@@ -99,6 +101,55 @@ export async function GET(req) {
 
     const cycleId = await resolveCycleId(supabase, searchParams.get('cycle_id'))
     if (cycleId == null) return NextResponse.json({ ok: false, error: 'No cycle found' }, { status: 400 })
+
+    // ── Submission report: which branches have filed their survey ─────
+    // Branches with no submission still come back (submitted: false) so the
+    // admin can see exactly who is missing. Drafts tagged cycle_id NULL are
+    // counted too — the outsourced list shows them for every cycle.
+    if (section === 'submission_report') {
+      const { data: branches, error: bErr } = await supabase.from('branches').select('id, name, code').order('name')
+      if (bErr) return NextResponse.json({ ok: false, error: bErr.message }, { status: 500 })
+      const { data: subs, error: sErr } = await supabase
+        .from('food_survey_submissions')
+        .select('id, branch_id, rep_name, created_at, entries:food_survey_entries(id)')
+        .or(`cycle_id.eq.${Number(cycleId)},cycle_id.is.null`)
+      if (sErr) return NextResponse.json({ ok: false, error: sErr.message }, { status: 500 })
+
+      const byBranch = new Map()
+      for (const s of subs || []) {
+        if (!byBranch.has(s.branch_id)) {
+          byBranch.set(s.branch_id, { submissions: 0, entries: 0, reps: new Set(), last_at: null })
+        }
+        const acc = byBranch.get(s.branch_id)
+        acc.submissions += 1
+        acc.entries += (s.entries || []).length
+        if (s.rep_name) acc.reps.add(String(s.rep_name))
+        if (!acc.last_at || String(s.created_at || '') > String(acc.last_at)) acc.last_at = s.created_at || acc.last_at
+      }
+
+      const rows = (branches || []).map((b) => {
+        const acc = byBranch.get(b.id)
+        return {
+          branch_id: b.id,
+          name: b.name,
+          code: b.code || '',
+          submitted: !!acc,
+          submissions: acc?.submissions || 0,
+          entries: acc?.entries || 0,
+          reps: acc ? [...acc.reps] : [],
+          last_at: acc?.last_at || null,
+        }
+      })
+      return NextResponse.json({
+        ok: true,
+        cycle_id: cycleId,
+        section,
+        branches: rows,
+        total: rows.length,
+        submitted: rows.filter((r) => r.submitted).length,
+        draft_count: rows.reduce((n, r) => n + r.entries, 0),
+      })
+    }
 
     const sourceCol = (await ensureSourceColumn()) && (await hasColumn(supabase, 'items', 'source'))
     const pricesHasCycle = await hasColumn(supabase, 'branch_item_prices', 'cycle_id')
@@ -227,6 +278,35 @@ export async function GET(req) {
     return NextResponse.json({ ok: true, cycle_id: cycleId, section, rows })
   } catch (e) {
     console.error('Items management GET error:', e)
+    return NextResponse.json({ ok: false, error: e.message || 'Unknown error' }, { status: 500 })
+  }
+}
+
+// PATCH { item_ids: number[], image_url }
+// Bulk image assignment: point any number of items at ONE bank image in a
+// single UPDATE — the same items.image_url link the shop, branches and
+// imports already use, so every selected item shows it immediately.
+export async function PATCH(req) {
+  try {
+    const supabase = createClient()
+    const body = await req.json().catch(() => ({}))
+    const itemIds = [...new Set((Array.isArray(body.item_ids) ? body.item_ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0))]
+    const imageUrl = String(body.image_url || '').trim()
+
+    if (!imageUrl) return NextResponse.json({ ok: false, error: 'image_url is required — pick an image from the bank' }, { status: 400 })
+    if (!itemIds.length) return NextResponse.json({ ok: false, error: 'No items selected' }, { status: 400 })
+    if (itemIds.length > 500) return NextResponse.json({ ok: false, error: 'Select at most 500 items per batch' }, { status: 400 })
+
+    const { data, error } = await supabase
+      .from('items')
+      .update({ image_url: imageUrl })
+      .in('item_id', itemIds)
+      .select('item_id')
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+
+    return NextResponse.json({ ok: true, updated: (data || []).length, requested: itemIds.length })
+  } catch (e) {
+    console.error('Items management PATCH error:', e)
     return NextResponse.json({ ok: false, error: e.message || 'Unknown error' }, { status: 500 })
   }
 }
