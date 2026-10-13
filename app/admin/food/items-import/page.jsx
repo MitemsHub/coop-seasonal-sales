@@ -257,12 +257,15 @@ function ItemsImportContent() {
   }, [loadSections])
 
   // Paging restarts whenever the underlying list changes (new search, new cycle).
+  // Branches also reset to collapsed after a refresh so the admin always lands
+  // at the group headers instead of a fully-expanded list.
   useEffect(() => {
     setGenPage(1)
   }, [genSearch, selectedCycleId])
   useEffect(() => {
     setOutGroupPage(1)
     setOutRowPages({})
+    setCollapsedBranches(new Set())
   }, [outSearch, selectedCycleId])
 
   // Admin-managed pick lists (Categories & units panel) — loaded once.
