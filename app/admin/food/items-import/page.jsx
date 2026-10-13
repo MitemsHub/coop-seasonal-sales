@@ -813,7 +813,7 @@ function ItemsImportContent() {
           </div>
           <div>
             <Label htmlFor="edit-price">
-              Price (₦) — applied to every branch{form.price_varies ? ' (branches differ; saving unifies)' : ''}
+              Price (₦){form.draft ? ' — for ' + form.draft.branch_name : ' — applied to every branch'}{form.price_varies ? ' (varies by branch)' : ''}
             </Label>
             <Input
               id="edit-price"
@@ -826,7 +826,7 @@ function ItemsImportContent() {
           </div>
           <div>
             <Label htmlFor="edit-markup">
-              Markup (₦) — applied to every branch{form.markup_varies ? ' (branches differ; saving unifies)' : ''}
+              Markup (₦){form.draft ? ' — for ' + form.draft.branch_name : ' — applied to every branch'}{form.markup_varies ? ' (varies by branch)' : ''}
             </Label>
             <Input
               id="edit-markup"
@@ -861,8 +861,9 @@ function ItemsImportContent() {
             Cancel
           </Button>
           <p className="text-caption text-muted">
-            Saves the item once and writes its price to every branch of {cycle?.name || 'this cycle'} — no duplicate
-            uploads, no redundant rows.
+            {form.draft
+              ? `Saves the refined item into ${form.draft.branch_name}'s shop for this cycle — price and markup apply to that branch only, not the whole co-op.`
+              : `Saves the item once and writes its price to every branch of ${cycle?.name || 'this cycle'} — no duplicate uploads, no redundant rows.`}
           </p>
         </div>
       </div>
