@@ -275,7 +275,7 @@ export default function AdminLayout({ children }) {
       // Items Management children live inside Food Operations — keep ops open
       // and auto-expand the nested items group on navigation.
       const isItems = ['/admin/food/survey', '/admin/food/items-import',
-        '/admin/food/image-bank', '/admin/food/item-images', '/admin/food/import'].some((p) => pathname.startsWith(p))
+        '/admin/food/image-bank', '/admin/food/import'].some((p) => pathname.startsWith(p))
       if (isItems) setFoodItemsOpen(true)
       setFoodSub(isOps || isItems ? 'ops' : 'orders')
     } else if (pathname.startsWith('/admin/ram')) {
@@ -409,7 +409,7 @@ export default function AdminLayout({ children }) {
     if (pathname.startsWith('/admin/food/cart')) return 'food_cart'
     if (pathname.startsWith('/admin/food/survey')) return 'food_survey'
     if (pathname.startsWith('/admin/food/items-import')) return 'food_items_import'
-    if (pathname.startsWith('/admin/food/image-bank') || pathname.startsWith('/admin/food/item-images')) return 'food_item_images'
+    if (pathname.startsWith('/admin/food/image-bank')) return 'food_item_images'
     if (pathname.startsWith('/admin/ram/pending')) return 'ram_pending'
     if (pathname.startsWith('/admin/ram/cancelled')) return 'ram_cancelled'
     if (pathname.startsWith('/admin/ram/approved')) return 'ram_approved'
