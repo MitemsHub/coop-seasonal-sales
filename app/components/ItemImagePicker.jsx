@@ -1,7 +1,7 @@
 'use client'
 
 // app/components/ItemImagePicker.jsx
-// Searchable picker over the shared item-image bank (Items Image Mang).
+// Searchable picker over the shared item-image bank (the Image Bank).
 //
 // Why this exists: every image lives ONCE on the `items` row and is *linked*
 // to from General/Outsourced items, cycles and branches — never re-uploaded.
@@ -129,7 +129,7 @@ export default function ItemImagePicker({ value, onChange, name = '', sku = '', 
         <Link
           href="/admin/food/item-images"
           className="inline-flex items-center justify-center gap-1.5 rounded-md border border-line bg-surface px-2 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-subtle hover:text-fg"
-          title="Open Items Image Mang. in a new context"
+          title="Open the Image Bank in a new context"
         >
           <Images className="h-3.5 w-3.5" strokeWidth={2.2} />
           Bank

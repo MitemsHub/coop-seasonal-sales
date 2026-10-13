@@ -1,7 +1,7 @@
 'use client'
 
 // app/admin/food/item-images/page.jsx
-// Food Distribution · Items Management › Items Image Mang.
+// Food Distribution · Items Management › Image Bank.
 // The single image bank for every branch. Images uploaded here live on the
 // `items` row (items.image_url → item-images bucket), so branches, the shop
 // and the Items Import sections *link* to them instead of re-uploading the
@@ -121,7 +121,7 @@ function ItemImagesPageContent() {
     <div className="p-3 sm:p-6 max-w-7xl mx-auto">
       <div className="grid grid-cols-2 sm:flex sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-2">
         <div className="col-span-1">
-          <h1 className="text-h2 font-semibold tracking-tight text-fg">Admin · Items Image Mang.</h1>
+          <h1 className="text-h2 font-semibold tracking-tight text-fg">Admin · Image Bank</h1>
           <p className="mt-1 text-body text-muted">
             The shared image bank. Upload each item&apos;s refined photo once — every branch, the shop and both
             Items Import sections link to these images instead of uploading them again.

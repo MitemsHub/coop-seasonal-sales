@@ -7,6 +7,8 @@
 //        images           → the shared image bank (every item with a refined image)
 //        submission_report→ every branch vs. the survey: who submitted, how many
 //                           drafts, and who is still missing this cycle
+//        shop_preview     → one branch's shop exactly as members see it for the
+//                           cycle (items + branch markups, drafts flagged first)
 //
 //   POST { cycle_id, section, item_id?, sku?, name, category, unit, price,
 //          markup?, image_url? }
@@ -148,6 +150,131 @@ export async function GET(req) {
         total: rows.length,
         submitted: rows.filter((r) => r.submitted).length,
         draft_count: rows.reduce((n, r) => n + r.entries, 0),
+      })
+    }
+
+    // ── Shop preview: how one branch's shop looks for this cycle ────
+    // Mirrors the member shop exactly — v_inventory_status for this branch
+    // + cycle with price > 0 (falling back to branch_item_prices if the view
+    // is missing, same as the shop does), then the branch's active markups
+    // added on top. Items matching this branch's survey drafts are flagged
+    // and sorted first so the admin sees their refined work as members will.
+    if (section === 'shop_preview') {
+      const branchId = Number(searchParams.get('branch_id'))
+      if (!Number.isInteger(branchId) || branchId <= 0) {
+        return NextResponse.json({ ok: false, error: 'branch_id is required' }, { status: 400 })
+      }
+      const { data: branch, error: brErr } = await supabase
+        .from('branches')
+        .select('id, name, code')
+        .eq('id', branchId)
+        .maybeSingle()
+      if (brErr) return NextResponse.json({ ok: false, error: brErr.message }, { status: 500 })
+      if (!branch) return NextResponse.json({ ok: false, error: 'Branch not found' }, { status: 404 })
+
+      // 1. Items priced for this branch (same queries the member shop runs)
+      let rows = []
+      let invErr = null
+      const runInventory = async (withCycle) => {
+        let q = supabase
+          .from('v_inventory_status')
+          .select('item_id, sku, item_name, unit, category, image_url, price')
+          .eq('branch_code', branch.code)
+          .gt('price', 0)
+        if (withCycle) q = q.eq('cycle_id', cycleId)
+        return await q.order('item_name')
+      }
+      ;({ data: rows, error: invErr } = await runInventory(true))
+      if (invErr && String(invErr.message || '').includes('cycle_id')) {
+        ;({ data: rows, error: invErr } = await runInventory(false))
+      }
+      if (invErr && String(invErr.message || '').toLowerCase().includes('does not exist')) {
+        // View missing → the shop's own fallback: branch_item_prices + items
+        const runFallback = async (withCycle) => {
+          let q = supabase
+            .from('branch_item_prices')
+            .select('price, items:item_id(item_id, name, sku, unit, category, image_url)')
+            .eq('branch_id', branchId)
+            .gt('price', 0)
+          if (withCycle) q = q.eq('cycle_id', cycleId)
+          return await q.order('name', { foreignTable: 'items' })
+        }
+        let fbRows = null
+        ;({ data: fbRows, error: invErr } = await runFallback(true))
+        if (invErr && String(invErr.message || '').includes('cycle_id')) {
+          ;({ data: fbRows, error: invErr } = await runFallback(false))
+        }
+        rows = (fbRows || []).filter((r) => r.items).map((r) => ({
+          item_id: r.items.item_id,
+          sku: r.items.sku,
+          item_name: r.items.name,
+          unit: r.items.unit,
+          category: r.items.category,
+          image_url: r.items.image_url,
+          price: r.price,
+        }))
+      }
+      if (invErr) return NextResponse.json({ ok: false, error: invErr.message }, { status: 500 })
+
+      // 2. This branch's active markups — displayed price = price + markup
+      let mkData = null
+      const runMarkups = async (withCycle) => {
+        let q = supabase.from('branch_item_markups').select('item_id, amount, active').eq('branch_id', branchId)
+        if (withCycle) q = q.eq('cycle_id', cycleId)
+        return await q
+      }
+      ;({ data: mkData } = await runMarkups(true))
+      if (!mkData) {
+        const retry = await runMarkups(false)
+        mkData = retry.data
+      }
+      const markupByItem = new Map(
+        (mkData || []).filter((m) => m.active !== false).map((m) => [m.item_id, Number(m.amount || 0)])
+      )
+
+      // 3. This branch's survey drafts — same cycle rule as the outsourced list
+      const { data: subs } = await supabase
+        .from('food_survey_submissions')
+        .select('id')
+        .eq('branch_id', branchId)
+        .or(`cycle_id.eq.${Number(cycleId)},cycle_id.is.null`)
+      const subIds = (subs || []).map((s) => s.id)
+      const draftNames = new Set()
+      if (subIds.length) {
+        const { data: ents } = await supabase.from('food_survey_entries').select('item_name').in('submission_id', subIds)
+        for (const e of ents || []) {
+          const key = norm(e.item_name)
+          if (key) draftNames.add(key)
+        }
+      }
+
+      // 4. Compose exactly what the member shop shows for this branch
+      const items = (rows || []).map((r) => {
+        const markup = markupByItem.get(r.item_id) || 0
+        const base = Number(r.price || 0)
+        return {
+          item_id: r.item_id,
+          sku: r.sku || '',
+          name: r.item_name || '',
+          unit: r.unit || '',
+          category: r.category || '',
+          image_url: r.image_url || '',
+          base_price: base,
+          markup,
+          price: base + markup,
+          from_draft: draftNames.has(norm(r.item_name)),
+        }
+      })
+      items.sort((a, b) => Number(b.from_draft) - Number(a.from_draft) || String(a.name).localeCompare(String(b.name)))
+
+      return NextResponse.json({
+        ok: true,
+        cycle_id: cycleId,
+        section,
+        branch: { id: branch.id, name: branch.name, code: branch.code || '' },
+        items,
+        total: items.length,
+        draft_hits: items.filter((i) => i.from_draft).length,
       })
     }
 

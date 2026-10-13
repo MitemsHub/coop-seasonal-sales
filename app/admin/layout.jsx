@@ -585,7 +585,7 @@ export default function AdminLayout({ children }) {
                       <div className="mt-0.5 space-y-0.5 pl-4">
                         <NavLink href="/admin/food/survey" label="Items Survey" icon={ClipboardList} active={activeKey === 'food_survey'} collapsed={false} onNavigate={navOnClick} />
                         <NavLink href="/admin/food/items-import" label="Items Import" icon={FileDown} active={activeKey === 'food_items_import'} collapsed={false} onNavigate={navOnClick} />
-                        <NavLink href="/admin/food/item-images" label="Items Image Mang." icon={ImageIcon} active={activeKey === 'food_item_images'} collapsed={false} onNavigate={navOnClick} />
+                        <NavLink href="/admin/food/item-images" label="Image Bank" icon={ImageIcon} active={activeKey === 'food_item_images'} collapsed={false} onNavigate={navOnClick} />
                       </div>
                     )}
                   </div>

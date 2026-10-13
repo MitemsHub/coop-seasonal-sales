@@ -16,7 +16,7 @@
 //
 // Saving writes the item once (items row) + a price for every branch of the
 // selected cycle, so it appears in every branch's shop immediately. Images are
-// picked from the shared bank (Items Image Mang.) — never re-uploaded.
+// picked from the shared Image Bank — never re-uploaded.
 //
 // Typography follows the design system: text-h2 page title, text-h3 section
 // headings, text-body copy, text-caption helper text, text-chips pills, and
@@ -162,6 +162,10 @@ function ItemsImportContent() {
   const [genPage, setGenPage] = useState(1)
   const [outGroupPage, setOutGroupPage] = useState(1)
   const [outRowPages, setOutRowPages] = useState({}) // groupKey → page
+
+  /* ── Shop preview (one branch, as members see it) ─────────────── */
+  const [preview, setPreview] = useState(null) // { branchId, branchName, loading, error, data }
+  const [previewLimit, setPreviewLimit] = useState(24)
 
   const [editKey, setEditKey] = useState(null) // 'general:<id>' | 'outsourced:<key>' | null
   const [form, setForm] = useState(null)
@@ -535,6 +539,28 @@ function ItemsImportContent() {
     [branchReport]
   )
 
+  const openShopPreview = async (branchId, branchName) => {
+    setPreviewLimit(24)
+    setPreview({ branchId, branchName, loading: true, error: null, data: null })
+    try {
+      const res = await fetch(
+        `/api/admin/items?section=shop_preview&cycle_id=${encodeURIComponent(String(selectedCycleId))}&branch_id=${branchId}`,
+        { cache: 'no-store', credentials: 'same-origin' }
+      )
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load the shop preview')
+      setPreview({ branchId, branchName, loading: false, error: null, data: json })
+    } catch (e) {
+      setPreview({
+        branchId,
+        branchName,
+        loading: false,
+        error: e.message || 'Failed to load the shop preview',
+        data: null,
+      })
+    }
+  }
+
   /* ── Row editor (shared by both sections) ────────────────────────── */
   const editor = () => {
     if (!form) return null
@@ -692,7 +718,7 @@ function ItemsImportContent() {
               onChange={(url) => setField('image_url', url)}
               name={form.name}
               sku={form.sku}
-              label="Refined image (linked from Items Image Mang.)"
+              label="Refined image (linked from the Image Bank)"
             />
           </div>
         </div>
@@ -798,11 +824,11 @@ function ItemsImportContent() {
               </p>
             </div>
             <Button
-              variant={expanded ? 'secondary' : 'ghost'}
+              variant="secondary"
               size="sm"
               onClick={() => (expanded ? cancelEdit() : startEdit(section, row))}
             >
-              {expanded ? 'Close' : saved ? 'Edit' : 'Refine & save'}
+              {expanded ? 'Close' : saved ? 'Edit' : 'Edit & save'}
             </Button>
           </div>
         </div>
@@ -1044,7 +1070,7 @@ function ItemsImportContent() {
                     onChange={(url) => setNewForm((f) => ({ ...f, image_url: url }))}
                     name={newForm.name}
                     sku={newForm.sku}
-                    label="Refined image (linked from Items Image Mang.)"
+                    label="Refined image (linked from the Image Bank)"
                   />
                 </div>
               </div>
@@ -1127,7 +1153,7 @@ function ItemsImportContent() {
             <Link2 className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
             Images come from the shared bank — if a refined photo is missing, add it in{' '}
             <Link href="/admin/food/item-images" className="font-semibold underline">
-              Items Image Mang.
+              Image Bank
             </Link>{' '}
             (or use “Add image” inside the picker) and it becomes reusable for every future cycle.
           </div>
@@ -1265,29 +1291,43 @@ function ItemsImportContent() {
                   const rowsPage = clampPage(outRowPages[g.key] ?? 1, rowsTotal)
                   const rowsStart = (rowsPage - 1) * ROWS_PER_PAGE
                   const pagedRows = g.rows.slice(rowsStart, rowsStart + ROWS_PER_PAGE)
+                  const branchDraft = g.rows.find((r) => r.draft?.branch_id != null)?.draft || null
                   return (
                     <div key={g.key} className="overflow-hidden rounded-lg border border-line-subtle bg-subtle/40">
-                      <button
-                        type="button"
-                        onClick={() => toggleBranch(g.key)}
-                        aria-expanded={!collapsed}
-                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-subtle"
-                      >
-                        <ChevronDown
-                          className={`h-4 w-4 shrink-0 text-subtext transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`}
-                          strokeWidth={2}
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-semibold text-fg">{g.label}</span>
-                          <span className="block truncate text-caption text-muted">
-                            {g.rows.length} item{g.rows.length === 1 ? '' : 's'}
-                            {savedCount ? ` · ${savedCount} saved to shop` : ''}
+                      <div className="flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-subtle">
+                        <button
+                          type="button"
+                          onClick={() => toggleBranch(g.key)}
+                          aria-expanded={!collapsed}
+                          className="flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                        >
+                          <ChevronDown
+                            className={`h-4 w-4 shrink-0 text-subtext transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`}
+                            strokeWidth={2}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold text-fg">{g.label}</span>
+                            <span className="block truncate text-caption text-muted">
+                              {g.rows.length} item{g.rows.length === 1 ? '' : 's'}
+                              {savedCount ? ` · ${savedCount} saved to shop` : ''}
+                            </span>
                           </span>
-                        </span>
-                        <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-muted">
-                          {g.rows.length}
-                        </span>
-                      </button>
+                          <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-muted">
+                            {g.rows.length}
+                          </span>
+                        </button>
+                        {branchDraft && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            leftIcon={Store}
+                            className="shrink-0"
+                            onClick={() => openShopPreview(branchDraft.branch_id, branchDraft.branch_name)}
+                          >
+                            Shop preview
+                          </Button>
+                        )}
+                      </div>
                       {!collapsed && (
                         <div className="space-y-2 border-t border-line-subtle p-2">
                           {pagedRows.map((r) => rowCard('outsourced', r))}
@@ -1322,6 +1362,112 @@ function ItemsImportContent() {
           </div>
         </div>
       </div>
+
+      {/* Shop preview — one branch's shop exactly as members see it */}
+      {preview && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setPreview(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Shop preview — ${preview.branchName}`}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
+              <div className="min-w-0">
+                <h3 className="text-h3 font-semibold text-fg">🛒 {preview.branchName} — shop preview</h3>
+                <p className="mt-0.5 text-caption text-muted">
+                  {cycle?.name || 'This cycle'}
+                  {preview.data
+                    ? ` · ${preview.data.total} items live${
+                        preview.data.draft_hits ? ` · ${preview.data.draft_hits} from this branch's drafts` : ''
+                      }`
+                    : ''}
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setPreview(null)}>
+                Close
+              </Button>
+            </div>
+
+            <div className="overflow-y-auto p-4">
+              {preview.loading ? (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="sakani-skeleton h-32 w-full rounded-lg" />
+                  ))}
+                </div>
+              ) : preview.error ? (
+                <p className="rounded-lg border border-danger-border bg-danger-bg p-4 text-body text-danger-fg">
+                  {preview.error}
+                </p>
+              ) : !preview.data || preview.data.items.length === 0 ? (
+                <p className="rounded-lg border border-line-subtle bg-subtle/40 p-6 text-center text-body text-muted">
+                  Nothing is priced for this branch in {cycle?.name || 'this cycle'} yet — save an item and it shows
+                  up here immediately.
+                </p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {preview.data.items.slice(0, previewLimit).map((it) => (
+                      <div
+                        key={it.item_id}
+                        className={`rounded-lg border p-2 ${
+                          it.from_draft ? 'border-brand/50 bg-subtle/40' : 'border-line-subtle bg-surface'
+                        }`}
+                      >
+                        <div className="relative mb-2 h-20 w-full overflow-hidden rounded-md bg-canvas">
+                          {it.image_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={it.image_url}
+                              alt={it.name}
+                              loading="lazy"
+                              className="h-full w-full object-contain"
+                            />
+                          ) : (
+                            <span className="flex h-full w-full items-center justify-center text-muted">
+                              <ImageIcon className="h-5 w-5" strokeWidth={1.8} />
+                            </span>
+                          )}
+                          {it.from_draft && (
+                            <span className="absolute left-1 top-1 rounded-full bg-brand px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-on-accent">
+                              Draft
+                            </span>
+                          )}
+                        </div>
+                        <p className="truncate text-xs font-semibold text-fg" title={it.name}>
+                          {it.name}
+                        </p>
+                        <p className="text-[11px] text-muted">
+                          {it.unit}
+                          {it.category ? ` · ${it.category}` : ''}
+                        </p>
+                        <p className="text-sm font-bold text-fg">₦{fmtPrice(it.price)}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-3 text-center text-caption text-muted">
+                    Showing {Math.min(previewLimit, preview.data.items.length)} of {preview.data.items.length} items —
+                    exactly what members see in {preview.branchName}&apos;s shop (price includes this branch&apos;s
+                    markup).
+                  </p>
+                  {preview.data.items.length > previewLimit && (
+                    <div className="mt-2 text-center">
+                      <Button variant="secondary" size="sm" onClick={() => setPreviewLimit((l) => l + 24)}>
+                        Show more
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Shared datalists for category/unit inputs */}
       <datalist id="item-categories">
