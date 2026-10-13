@@ -163,7 +163,10 @@ function ItemsImportContent() {
   const [sectionsError, setSectionsError] = useState(null)
   const [genSearch, setGenSearch] = useState('')
   const [outSearch, setOutSearch] = useState('')
-  const [collapsedBranches, setCollapsedBranches] = useState(() => new Set())
+  // Expanded branches keyed by branch group key — empty means all collapsed.
+  // Kept expanded for the current cycle/state only; resets on refresh so the
+  // admin always lands on the group headers instead of a fully-open list.
+  const [expandedBranches, setExpandedBranches] = useState(() => new Set())
   const [branchReport, setBranchReport] = useState(null) // submission report for the cycle
   const [reportOpen, setReportOpen] = useState(false)
 
@@ -626,7 +629,7 @@ function ItemsImportContent() {
   }, [filteredOutsourced])
 
   const toggleBranch = (key) =>
-    setCollapsedBranches((prev) => {
+    setExpandedBranches((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
@@ -634,7 +637,7 @@ function ItemsImportContent() {
     })
 
   const setAllBranches = (collapsed) =>
-    setCollapsedBranches(collapsed ? new Set(branchGroups.map((g) => g.key)) : new Set())
+    setExpandedBranches(collapsed ? new Set() : new Set(branchGroups.map((g) => g.key)))
 
   const outGroupTotalPages = Math.ceil(branchGroups.length / GROUPS_PER_PAGE) || 1
   const outGroupPageClamped = clampPage(outGroupPage, outGroupTotalPages)
@@ -1505,7 +1508,7 @@ function ItemsImportContent() {
                 </div>
 
                 {pagedBranchGroups.map((g) => {
-                  const collapsed = collapsedBranches.has(g.key)
+                  const collapsed = !expandedBranches.has(g.key)
                   const savedCount = g.rows.filter((r) => r.saved).length
                   const rowsTotal = Math.ceil(g.rows.length / ROWS_PER_PAGE) || 1
                   const rowsPage = clampPage(outRowPages[g.key] ?? 1, rowsTotal)
