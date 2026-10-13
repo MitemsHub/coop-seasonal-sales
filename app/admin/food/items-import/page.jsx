@@ -1013,9 +1013,8 @@ function ItemsImportContent() {
                 ))
               )}
             </Select>
-          </div>
-          <p className="text-caption text-muted sm:pb-2">
-            Repricer, uploads and every Save below target this cycle.
+          </div>            <p className="text-caption text-muted sm:pb-2">
+            Everything on this page targets the cycle you selected above.
           </p>
         </div>
         <div className="flex items-center gap-2">
