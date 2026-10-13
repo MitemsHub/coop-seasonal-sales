@@ -995,13 +995,14 @@ function ItemsImportContent() {
       {/* Target cycle bar */}
       <div className="mb-4 rounded-xl border border-line bg-surface p-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-          <div className="sm:w-72">
+          <div className="w-full">
             <Label htmlFor="items-cycle">Target cycle</Label>
             <Select
               id="items-cycle"
               value={selectedCycleId ?? ''}
               onChange={(e) => setSelectedCycleId(e.target.value ? Number(e.target.value) : null)}
               disabled={loadingCycles || cycles.length === 0}
+              className="w-full"
             >
               {cycles.length === 0 ? (
                 <option value="">{loadingCycles ? 'Loading…' : 'No cycles found'}</option>
