@@ -1013,9 +1013,7 @@ function ItemsImportContent() {
                 ))
               )}
             </Select>
-          </div>            <p className="text-caption text-muted sm:pb-2">
-            Everything on this page targets the cycle you selected above.
-          </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="sm" onClick={() => setTaxPanel((v) => !v)} leftIcon={Plus}>
