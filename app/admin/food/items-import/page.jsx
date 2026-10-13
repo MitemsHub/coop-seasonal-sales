@@ -9,21 +9,30 @@
 //   2. Items / Prices Import          (moved from Data)
 //   3. General Items                  (new — add once, priced in EVERY branch
 //                                       for the active cycle, markup editable)
-//   4. Outsourced Items               (new — rep survey drafts, refined and
+//   4. Outsourced Items               (new — rep survey drafts, grouped by the
+//                                       branch that submitted them, refined and
 //                                       saved into the shop; images always
 //                                       linked from the image bank)
 //
 // Saving writes the item once (items row) + a price for every branch of the
 // selected cycle, so it appears in every branch's shop immediately. Images are
 // picked from the shared bank (Items Image Mang.) — never re-uploaded.
+//
+// Typography follows the design system: text-h2 page title, text-h3 section
+// headings, text-body copy, text-caption helper text, text-chips pills, and
+// the shared Input/Select/Label field components.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
+import Input from '../../../components/ui/Input'
+import Select from '../../../components/ui/Select'
+import Label from '../../../components/ui/Label'
 import ItemImagePicker from '../../../components/ItemImagePicker'
 import {
   CheckCircle2,
+  ChevronDown,
   FileSpreadsheet,
   Image as ImageIcon,
   Link2,
@@ -72,6 +81,7 @@ function ItemsImportContent() {
   const [sectionsError, setSectionsError] = useState(null)
   const [genSearch, setGenSearch] = useState('')
   const [outSearch, setOutSearch] = useState('')
+  const [collapsedBranches, setCollapsedBranches] = useState(() => new Set())
 
   const [editKey, setEditKey] = useState(null) // 'general:<id>' | 'outsourced:<key>' | null
   const [form, setForm] = useState(null)
@@ -351,7 +361,7 @@ function ItemsImportContent() {
     }
   }
 
-  /* ── Filtering ───────────────────────────────────────────────────── */
+  /* ── Filtering + branch grouping ─────────────────────────────────── */
   const filteredGeneral = useMemo(() => {
     const q = genSearch.trim().toLowerCase()
     if (!q) return generalRows
@@ -362,12 +372,44 @@ function ItemsImportContent() {
     const q = outSearch.trim().toLowerCase()
     if (!q) return outRows
     return outRows.filter((r) =>
-      `${r.draft?.draft_name || r.name} ${r.draft?.draft_category || r.category} ${r.sku}`.toLowerCase().includes(q)
+      `${r.draft?.draft_name || r.name} ${r.draft?.draft_category || r.category} ${r.sku} ${r.draft?.branch_name || ''} ${r.draft?.branch_code || ''}`.toLowerCase().includes(q)
     )
   }, [outRows, outSearch])
 
+  // One card per submitting branch so the admin works through submissions
+  // branch by branch instead of one long mixed list. Saved items whose survey
+  // draft disappeared land in their own trailing group so they stay editable.
+  const branchGroups = useMemo(() => {
+    const map = new Map()
+    for (const r of filteredOutsourced) {
+      const key = r.draft ? String(r.draft.branch_id ?? 'none') : 'saved'
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          label: r.draft
+            ? `${r.draft.branch_name || 'Unknown branch'}${r.draft.branch_code ? ` (${r.draft.branch_code})` : ''}`
+            : 'Saved items — no survey draft',
+          rows: [],
+        })
+      }
+      map.get(key).rows.push(r)
+    }
+    return [...map.values()]
+  }, [filteredOutsourced])
+
+  const toggleBranch = (key) =>
+    setCollapsedBranches((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+
+  const setAllBranches = (collapsed) =>
+    setCollapsedBranches(collapsed ? new Set(branchGroups.map((g) => g.key)) : new Set())
+
   /* ── Row editor (shared by both sections) ────────────────────────── */
-  const editor = (row) => {
+  const editor = () => {
     if (!form) return null
     const isOut = form.section === 'outsourced'
     return (
@@ -379,18 +421,19 @@ function ItemsImportContent() {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={form.draft.rep_photo} alt="Rep photo (reference)" className="h-full w-full object-cover" />
               ) : (
-                <span className="flex h-full w-full items-center justify-center text-[10px] text-muted">No photo</span>
+                <span className="flex h-full w-full items-center justify-center text-caption text-muted">No photo</span>
               )}
             </div>
-            <div className="min-w-0 flex-1 text-xs">
+            <div className="min-w-0 flex-1 text-body">
               <p className="font-semibold text-fg">Rep draft — reference only</p>
               <p className="text-muted">
                 {form.draft.draft_name}
                 {form.draft.draft_category ? ` · ${form.draft.draft_category}` : ''}
                 {form.draft.draft_price ? ` · ₦${fmtPrice(form.draft.draft_price)}` : ''}
+                {form.draft.branch_name ? ` · ${form.draft.branch_name}` : ''}
                 {form.draft.rep_name ? ` · submitted by ${form.draft.rep_name}` : ''}
               </p>
-              <p className="mt-0.5 text-[11px] text-warning-fg">
+              <p className="mt-0.5 text-caption text-warning-fg">
                 Rep photos are raw and not used in the shop — pick the refined image from the bank below.
               </p>
             </div>
@@ -399,69 +442,69 @@ function ItemsImportContent() {
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="block text-xs text-muted mb-1">Item name</label>
-            <input
+            <Label htmlFor="edit-name">Item name</Label>
+            <Input
+              id="edit-name"
               value={form.name}
               onChange={(e) => setField('name', e.target.value)}
-              className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm text-fg"
               maxLength={255}
             />
           </div>
           <div>
-            <label className="block text-xs text-muted mb-1">SKU</label>
-            <input
+            <Label htmlFor="edit-sku">SKU</Label>
+            <Input
+              id="edit-sku"
               value={form.sku}
               onChange={(e) => setField('sku', e.target.value.toUpperCase())}
               placeholder="Generated from the name if blank"
-              className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm text-fg"
               maxLength={100}
             />
           </div>
           <div>
-            <label className="block text-xs text-muted mb-1">Category</label>
-            <input
+            <Label htmlFor="edit-category">Category</Label>
+            <Input
+              id="edit-category"
               value={form.category}
               onChange={(e) => setField('category', e.target.value)}
               list="item-categories"
-              className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm text-fg"
               maxLength={100}
             />
           </div>
           <div>
-            <label className="block text-xs text-muted mb-1">Unit</label>
-            <input
+            <Label htmlFor="edit-unit">Unit</Label>
+            <Input
+              id="edit-unit"
               value={form.unit}
               onChange={(e) => setField('unit', e.target.value)}
               list="item-units"
-              className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm text-fg"
               maxLength={50}
             />
           </div>
           <div>
-            <label className="block text-xs text-muted mb-1">
+            <Label htmlFor="edit-price">
               Price (₦) — applied to every branch{form.price_varies ? ' (branches differ; saving unifies)' : ''}
-            </label>
-            <input
+            </Label>
+            <Input
+              id="edit-price"
               type="number"
               min="0"
               step="0.01"
               value={form.price}
               onChange={(e) => setField('price', e.target.value)}
-              className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm text-fg"
             />
           </div>
           <div>
-            <label className="block text-xs text-muted mb-1">
+            <Label htmlFor="edit-markup">
               Markup (₦) — applied to every branch{form.markup_varies ? ' (branches differ; saving unifies)' : ''}
-            </label>
-            <input
+            </Label>
+            <Input
+              id="edit-markup"
               type="number"
               min="0"
               step="0.01"
               value={form.markup}
               onChange={(e) => setField('markup', e.target.value)}
               placeholder="Blank keeps current markups"
-              className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm text-fg"
             />
           </div>
           <div className="sm:col-span-2">
@@ -476,7 +519,7 @@ function ItemsImportContent() {
         </div>
 
         {saveErr && (
-          <p className="mt-2 rounded-md border border-danger-border bg-danger-bg px-2.5 py-1.5 text-xs text-danger-fg">{saveErr}</p>
+          <p className="mt-2 rounded-md border border-danger-border bg-danger-bg px-2.5 py-1.5 text-caption text-danger-fg">{saveErr}</p>
         )}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -486,7 +529,7 @@ function ItemsImportContent() {
           <Button variant="secondary" onClick={cancelEdit} disabled={saving}>
             Cancel
           </Button>
-          <p className="text-[11px] text-muted">
+          <p className="text-caption text-muted">
             Saves the item once and writes its price to every branch of {cycle?.name || 'this cycle'} — no duplicate
             uploads, no redundant rows.
           </p>
@@ -529,25 +572,25 @@ function ItemsImportContent() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="truncate text-sm font-semibold text-fg">{title}</span>
               {saved && row.in_shop ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-success-bg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-success-fg">
+                <span className="inline-flex items-center gap-1 rounded-full bg-success-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-success-fg">
                   <CheckCircle2 className="h-3 w-3" strokeWidth={2.5} /> In shop
                 </span>
               ) : saved ? (
-                <span className="rounded-full bg-warning-bg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-warning-fg">
+                <span className="rounded-full bg-warning-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-warning-fg">
                   Not in shop yet
                 </span>
               ) : (
-                <span className="rounded-full bg-info-bg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-info-fg">
+                <span className="rounded-full bg-info-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-info-fg">
                   Survey draft
                 </span>
               )}
               {!img && (
-                <span className="rounded-full bg-subtle px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted">
+                <span className="rounded-full bg-subtle px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-muted">
                   No bank image
                 </span>
               )}
             </div>
-            <p className="mt-0.5 truncate text-xs text-muted">
+            <p className="mt-0.5 truncate text-caption text-muted">
               {[row.category || row.draft?.draft_category, row.unit || row.draft?.draft_unit, row.sku]
                 .filter(Boolean)
                 .join(' · ') || '—'}
@@ -559,7 +602,7 @@ function ItemsImportContent() {
           <div className="flex items-center gap-3">
             <div className="text-right">
               <p className="text-sm font-bold text-fg">₦{fmtPrice(price)}</p>
-              <p className="text-[10px] text-muted">
+              <p className="text-caption text-muted">
                 {row.markup != null ? `markup ₦${fmtPrice(row.markup)}${row.markup_varies ? ' (varies)' : ''}` : 'no markup'}
               </p>
             </div>
@@ -572,7 +615,7 @@ function ItemsImportContent() {
             </Button>
           </div>
         </div>
-        {expanded && editor(row)}
+        {expanded && editor()}
       </div>
     )
   }
@@ -582,8 +625,8 @@ function ItemsImportContent() {
     <div className="p-3 sm:p-6 max-w-7xl mx-auto">
       <div className="grid grid-cols-2 sm:flex sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-2">
         <div className="col-span-1">
-          <h1 className="text-h2 font-semibold">Admin · Items Import</h1>
-          <p className="mt-1 text-sm text-muted">
+          <h1 className="text-h2 font-semibold tracking-tight text-fg">Admin · Items Import</h1>
+          <p className="mt-1 text-body text-muted">
             Bulk uploads, the repricer, General Items and Outsourced Items — everything that puts items into the
             shop for a cycle.
           </p>
@@ -595,7 +638,7 @@ function ItemsImportContent() {
 
       {msg && (
         <div
-          className={`p-4 rounded-lg mb-6 ${
+          className={`p-4 rounded-lg mb-6 text-body ${
             msgType === 'error'
               ? 'bg-danger-bg text-danger-fg border border-danger-border'
               : msgType === 'info'
@@ -608,31 +651,30 @@ function ItemsImportContent() {
       )}
 
       {/* Target cycle bar */}
-      <div className="mb-4 rounded-xl border border-line bg-surface p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <label htmlFor="items-cycle" className="text-xs font-medium text-muted">
-            Target cycle
-          </label>
-          <select
-            id="items-cycle"
-            value={selectedCycleId ?? ''}
-            onChange={(e) => setSelectedCycleId(e.target.value ? Number(e.target.value) : null)}
-            className="px-3 py-2 text-sm border border-line rounded-lg bg-surface"
-            disabled={loadingCycles || cycles.length === 0}
-          >
-            {cycles.length === 0 ? (
-              <option value="">{loadingCycles ? 'Loading…' : 'No cycles found'}</option>
-            ) : (
-              cycles.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.code}){c.is_active ? ' · Active' : ''}
-                </option>
-              ))
-            )}
-          </select>
-          <span className="text-xs text-muted">
+      <div className="mb-4 rounded-xl border border-line bg-surface p-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="sm:w-72">
+            <Label htmlFor="items-cycle">Target cycle</Label>
+            <Select
+              id="items-cycle"
+              value={selectedCycleId ?? ''}
+              onChange={(e) => setSelectedCycleId(e.target.value ? Number(e.target.value) : null)}
+              disabled={loadingCycles || cycles.length === 0}
+            >
+              {cycles.length === 0 ? (
+                <option value="">{loadingCycles ? 'Loading…' : 'No cycles found'}</option>
+              ) : (
+                cycles.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.code}){c.is_active ? ' · Active' : ''}
+                  </option>
+                ))
+              )}
+            </Select>
+          </div>
+          <p className="text-caption text-muted sm:pb-2">
             Repricer, uploads and every Save below target this cycle.
-          </span>
+          </p>
         </div>
         <Button variant="secondary" size="sm" onClick={() => { loadCycles(); loadSections() }} loading={loadingCycles || sectionsLoading} leftIcon={RefreshCw}>
           Refresh
@@ -643,23 +685,23 @@ function ItemsImportContent() {
         {/* ── 1. Repricer + 2. Items/Prices Import (moved from Data) ── */}
         <div className="grid gap-3 lg:grid-cols-3">
           <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
-            <h2 className="text-sm font-semibold text-fg mb-1">💱 Food Price Repricer</h2>
-            <p className="text-xs text-muted mb-3">
+            <h2 className="text-h3 font-semibold text-fg mb-1">💱 Food Price Repricer</h2>
+            <p className="text-body text-muted mb-3">
               Recomputes order line prices and order totals using the latest branch prices and markups.
             </p>
             {cycle && (
-              <div className="mb-3 px-2 py-1.5 rounded-lg bg-info-bg border border-info-border text-xs text-info-fg">
+              <div className="mb-3 px-2 py-1.5 rounded-lg bg-info-bg border border-info-border text-caption text-info-fg">
                 Targeting cycle: <strong>{cycle.name}</strong>
                 {cycle.is_active ? ' (Active)' : ''}
               </div>
             )}
             <div className="flex flex-col gap-2">
-              <input
+              <Input
                 value={confirmReprice}
                 onChange={(e) => setConfirmReprice(e.target.value)}
                 placeholder='Type "REPRICE ORDERS"'
-                className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
                 disabled={repricing}
+                aria-label='Type "REPRICE ORDERS" to confirm'
               />
               <Button onClick={repriceFoodOrders} loading={repricing} disabled={repricing}>
                 {repricing ? 'Repricing…' : 'Reprice Orders'}
@@ -668,8 +710,8 @@ function ItemsImportContent() {
           </div>
 
           <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4 lg:col-span-2">
-            <h2 className="text-sm font-semibold text-fg mb-1">📥 Items / Prices Import</h2>
-            <p className="text-xs text-muted mb-3">
+            <h2 className="text-h3 font-semibold text-fg mb-1">📥 Items / Prices Import</h2>
+            <p className="text-body text-muted mb-3">
               {loadingMode ? (
                 <span className="inline-block h-3 w-64 animate-pulse rounded bg-muted" />
               ) : (
@@ -677,7 +719,7 @@ function ItemsImportContent() {
               )}
             </p>
             {cycle && (
-              <div className="mb-3 px-2 py-1.5 rounded-lg bg-info-bg border border-info-border text-xs text-info-fg">
+              <div className="mb-3 px-2 py-1.5 rounded-lg bg-info-bg border border-info-border text-caption text-info-fg">
                 Prices will be saved to cycle: <strong>{cycle.name}</strong>
                 {cycle.is_active ? ' (Active)' : ''}
               </div>
@@ -687,7 +729,7 @@ function ItemsImportContent() {
                 type="file"
                 accept=".xlsx,.xls"
                 onChange={(e) => setPricesFile(e.target.files?.[0] || null)}
-                className="w-full sm:flex-1 sm:min-w-0 text-[11px] sm:text-sm p-2 border border-line-subtle rounded-lg"
+                className="w-full sm:flex-1 sm:min-w-0 text-sm p-2 border border-line-subtle rounded-lg bg-surface text-fg"
               />
               <Button onClick={uploadPrices} loading={pricesBusy} disabled={!pricesFile || loadingMode} className="min-w-[170px]">
                 {pricesBusy ? 'Uploading…' : isDemandTrackingMode ? 'Upload Items/Prices' : 'Upload Items/Prices/Stock'}
@@ -703,7 +745,7 @@ function ItemsImportContent() {
               </Button>
             </div>
             {pricesLog && (
-              <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-subtle p-3 text-xs text-fg overflow-x-auto">{pricesLog}</pre>
+              <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-subtle p-3 text-caption text-fg overflow-x-auto">{pricesLog}</pre>
             )}
           </div>
         </div>
@@ -712,8 +754,8 @@ function ItemsImportContent() {
         <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-fg mb-1">🧾 General Items</h2>
-              <p className="text-xs text-muted">
+              <h2 className="text-h3 font-semibold text-fg mb-1">🧾 General Items</h2>
+              <p className="text-body text-muted">
                 Added once — priced in <strong>every branch</strong> for the selected cycle and visible in the shop
                 immediately. Edit name, category, unit, price, <strong>markup</strong> and image; the image is always
                 linked from the bank, never re-uploaded.
@@ -721,13 +763,13 @@ function ItemsImportContent() {
             </div>
             <div className="flex items-center gap-2">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtext" />
-                <input
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtext" />
+                <Input
                   value={genSearch}
                   onChange={(e) => setGenSearch(e.target.value)}
                   placeholder="Search general items…"
                   aria-label="Search general items"
-                  className="w-44 rounded-md border border-line bg-surface py-1.5 pl-8 pr-2 text-xs text-fg"
+                  className="w-44 pl-9"
                 />
               </div>
               <Button size="sm" leftIcon={Plus} onClick={() => { setShowNew((v) => !v); cancelEdit() }}>
@@ -738,71 +780,71 @@ function ItemsImportContent() {
 
           {showNew && (
             <form onSubmit={addGeneral} className="mt-3 rounded-lg border border-brand/40 bg-subtle/50 p-3">
-              <p className="mb-2 text-xs font-semibold text-fg">New general item → all branches, {cycle?.name || 'this cycle'}</p>
+              <p className="mb-2 text-sm font-semibold text-fg">New general item → all branches, {cycle?.name || 'this cycle'}</p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="block text-xs text-muted mb-1">Item name</label>
-                  <input
+                  <Label htmlFor="new-name">Item name</Label>
+                  <Input
+                    id="new-name"
                     required
                     minLength={2}
                     value={newForm.name}
                     onChange={(e) => setNewForm((f) => ({ ...f, name: e.target.value }))}
-                    className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm text-fg"
                     maxLength={255}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-muted mb-1">SKU (optional)</label>
-                  <input
+                  <Label htmlFor="new-sku">SKU (optional)</Label>
+                  <Input
+                    id="new-sku"
                     value={newForm.sku}
                     onChange={(e) => setNewForm((f) => ({ ...f, sku: e.target.value.toUpperCase() }))}
                     placeholder="Generated from the name if blank"
-                    className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm text-fg"
                     maxLength={100}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-muted mb-1">Category</label>
-                  <input
+                  <Label htmlFor="new-category">Category</Label>
+                  <Input
+                    id="new-category"
                     value={newForm.category}
                     onChange={(e) => setNewForm((f) => ({ ...f, category: e.target.value }))}
                     list="item-categories"
-                    className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm text-fg"
                     maxLength={100}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-muted mb-1">Unit</label>
-                  <input
+                  <Label htmlFor="new-unit">Unit</Label>
+                  <Input
+                    id="new-unit"
                     value={newForm.unit}
                     onChange={(e) => setNewForm((f) => ({ ...f, unit: e.target.value }))}
                     list="item-units"
-                    className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm text-fg"
                     maxLength={50}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-muted mb-1">Price (₦) — every branch</label>
-                  <input
+                  <Label htmlFor="new-price">Price (₦) — every branch</Label>
+                  <Input
+                    id="new-price"
                     required
                     type="number"
                     min="0.01"
                     step="0.01"
                     value={newForm.price}
                     onChange={(e) => setNewForm((f) => ({ ...f, price: e.target.value }))}
-                    className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm text-fg"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-muted mb-1">Markup (₦) — every branch</label>
-                  <input
+                  <Label htmlFor="new-markup">Markup (₦) — every branch</Label>
+                  <Input
+                    id="new-markup"
                     type="number"
                     min="0"
                     step="0.01"
                     value={newForm.markup}
                     onChange={(e) => setNewForm((f) => ({ ...f, markup: e.target.value }))}
                     placeholder="Optional"
-                    className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm text-fg"
                   />
                 </div>
                 <div className="sm:col-span-2">
@@ -816,7 +858,7 @@ function ItemsImportContent() {
                 </div>
               </div>
               {newErr && (
-                <p className="mt-2 rounded-md border border-danger-border bg-danger-bg px-2.5 py-1.5 text-xs text-danger-fg">{newErr}</p>
+                <p className="mt-2 rounded-md border border-danger-border bg-danger-bg px-2.5 py-1.5 text-caption text-danger-fg">{newErr}</p>
               )}
               <div className="mt-3">
                 <Button type="submit" loading={newBusy} leftIcon={Store}>
@@ -834,7 +876,7 @@ function ItemsImportContent() {
                 ))}
               </div>
             ) : filteredGeneral.length === 0 ? (
-              <p className="rounded-lg border border-line-subtle bg-subtle/40 p-4 text-center text-sm text-muted">
+              <p className="rounded-lg border border-line-subtle bg-subtle/40 p-4 text-center text-body text-muted">
                 {generalRows.length === 0
                   ? 'No general items priced in this cycle yet — add the first one above.'
                   : 'Nothing matches your search.'}
@@ -845,33 +887,36 @@ function ItemsImportContent() {
           </div>
         </div>
 
-        {/* ── 4. Outsourced Items (from the reps' survey) ──────────── */}
+        {/* ── 4. Outsourced Items (from the reps' survey, by branch) ── */}
         <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-fg mb-1">🌍 Outsourced Items</h2>
-              <p className="text-xs text-muted">
+              <h2 className="text-h3 font-semibold text-fg mb-1">🌍 Outsourced Items</h2>
+              <p className="text-body text-muted">
                 The drafts reps filled in the{' '}
                 <Link href="/admin/food/survey" className="font-semibold underline">
                   Items Survey
                 </Link>
-                . Refine name, category, unit and price, then attach the <strong>refined</strong> image from the bank
-                (rep photos are never used). Save once → it appears in every branch&apos;s shop for this cycle.
+                , grouped by branch. Refine name, category, unit and price, then attach the{' '}
+                <strong>refined</strong> image from the bank (rep photos are never used). Save once → it appears in
+                every branch&apos;s shop for this cycle.
               </p>
             </div>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-subtext" />
-              <input
-                value={outSearch}
-                onChange={(e) => setOutSearch(e.target.value)}
-                placeholder="Search survey drafts…"
-                aria-label="Search outsourced items"
-                className="w-44 rounded-md border border-line bg-surface py-1.5 pl-8 pr-2 text-xs text-fg"
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtext" />
+                <Input
+                  value={outSearch}
+                  onChange={(e) => setOutSearch(e.target.value)}
+                  placeholder="Search survey drafts…"
+                  aria-label="Search outsourced items"
+                  className="w-44 pl-9"
+                />
+              </div>
             </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-info-border bg-info-bg px-3 py-2 text-xs text-info-fg">
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-info-border bg-info-bg px-3 py-2 text-caption text-info-fg">
             <Link2 className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
             Images come from the shared bank — if a refined photo is missing, add it in{' '}
             <Link href="/admin/food/item-images" className="font-semibold underline">
@@ -888,15 +933,73 @@ function ItemsImportContent() {
                 ))}
               </div>
             ) : sectionsError ? (
-              <p className="rounded-lg border border-danger-border bg-danger-bg p-4 text-sm text-danger-fg">{sectionsError}</p>
+              <p className="rounded-lg border border-danger-border bg-danger-bg p-4 text-body text-danger-fg">{sectionsError}</p>
             ) : filteredOutsourced.length === 0 ? (
-              <p className="rounded-lg border border-line-subtle bg-subtle/40 p-4 text-center text-sm text-muted">
+              <p className="rounded-lg border border-line-subtle bg-subtle/40 p-4 text-center text-body text-muted">
                 {outRows.length === 0
                   ? 'No survey submissions for this cycle yet — rep drafts will land here automatically.'
                   : 'Nothing matches your search.'}
               </p>
             ) : (
-              filteredOutsourced.map((r) => rowCard('outsourced', r))
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-caption text-muted">
+                    {branchGroups.length} branch{branchGroups.length === 1 ? '' : 'es'} · {filteredOutsourced.length}{' '}
+                    item{filteredOutsourced.length === 1 ? '' : 's'}
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setAllBranches(false)}
+                      className="text-caption font-semibold text-brand underline"
+                    >
+                      Expand all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAllBranches(true)}
+                      className="text-caption font-semibold text-brand underline"
+                    >
+                      Collapse all
+                    </button>
+                  </div>
+                </div>
+
+                {branchGroups.map((g) => {
+                  const collapsed = collapsedBranches.has(g.key)
+                  const savedCount = g.rows.filter((r) => r.saved).length
+                  return (
+                    <div key={g.key} className="overflow-hidden rounded-lg border border-line-subtle bg-subtle/40">
+                      <button
+                        type="button"
+                        onClick={() => toggleBranch(g.key)}
+                        aria-expanded={!collapsed}
+                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-subtle"
+                      >
+                        <ChevronDown
+                          className={`h-4 w-4 shrink-0 text-subtext transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`}
+                          strokeWidth={2}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-fg">{g.label}</span>
+                          <span className="block truncate text-caption text-muted">
+                            {g.rows.length} item{g.rows.length === 1 ? '' : 's'}
+                            {savedCount ? ` · ${savedCount} saved to shop` : ''}
+                          </span>
+                        </span>
+                        <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-muted">
+                          {g.rows.length}
+                        </span>
+                      </button>
+                      {!collapsed && (
+                        <div className="space-y-2 border-t border-line-subtle p-2">
+                          {g.rows.map((r) => rowCard('outsourced', r))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </>
             )}
           </div>
         </div>

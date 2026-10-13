@@ -160,35 +160,51 @@ export async function GET(req) {
     // ── Outsourced: rep survey drafts, refined into shop items ──────────
     const { data: entries, error: eErr } = await supabase
       .from('food_survey_entries')
-      .select('id, catalog_id, item_name, category, price, photo_url, submission:food_survey_submissions(cycle_id, rep_name)')
+      .select('id, catalog_id, item_name, category, price, photo_url, submission:food_survey_submissions(cycle_id, rep_name, branch_id)')
     if (eErr) return NextResponse.json({ ok: false, error: eErr.message }, { status: 500 })
 
-    const { data: catalog } = await supabase.from('food_survey_catalog').select('id, name, unit')
+    const [{ data: catalog }, { data: branches }] = await Promise.all([
+      supabase.from('food_survey_catalog').select('id, name, unit'),
+      supabase.from('branches').select('id, name, code').order('name'),
+    ])
 
     const catalogById = new Map((catalog || []).map((c) => [c.id, c]))
+    const branchById = new Map((branches || []).map((b) => [b.id, b]))
     const itemByName = new Map()
     for (const it of items || []) if (!itemByName.has(norm(it.name))) itemByName.set(norm(it.name), it)
 
-    const drafts = new Map() // norm(name) → draft
+    // Drafts are keyed per branch + item — the same item submitted by two
+    // branches appears under each branch so the admin works branch by branch.
+    const drafts = new Map() // `${branch_id}::${norm(name)}` → draft
     for (const e of entries || []) {
       if (e.submission && e.submission.cycle_id != null && Number(e.submission.cycle_id) !== Number(cycleId)) continue
-      const key = norm(e.item_name)
-      if (!key || drafts.has(key)) continue
+      const nameKey = norm(e.item_name)
+      if (!nameKey) continue
+      const branchId = e.submission?.branch_id ?? null
+      const draftKey = `${branchId ?? 'none'}::${nameKey}`
+      if (drafts.has(draftKey)) continue
       const cat = e.catalog_id ? catalogById.get(e.catalog_id) : null
-      drafts.set(key, {
-        key,
+      const br = branchId != null ? branchById.get(branchId) : null
+      drafts.set(draftKey, {
+        key: draftKey,
+        norm_name: nameKey,
         draft_name: String(e.item_name || '').trim(),
         draft_category: e.category || cat?.name || '',
         draft_unit: cat?.unit || '',
         draft_price: num(e.price),
         rep_photo: e.photo_url || '',
         rep_name: e.submission?.rep_name || '',
+        branch_id: branchId,
+        branch_name: br?.name || '',
+        branch_code: br?.code || '',
       })
     }
 
     const rows = []
+    const draftedNames = new Set()
     for (const d of drafts.values()) {
-      const saved = itemByName.get(d.key)
+      draftedNames.add(d.norm_name)
+      const saved = itemByName.get(d.norm_name)
       rows.push({ ...decorate(saved || {}), saved: !!saved, draft: d })
     }
     // Keep already-saved outsourced items editable even if the survey entry
@@ -197,11 +213,16 @@ export async function GET(req) {
       for (const it of items || []) {
         if ((it.source || '') !== 'outsourced') continue
         if (itemByName.get(norm(it.name)) !== it) continue
-        if (drafts.has(norm(it.name))) continue
+        if (draftedNames.has(norm(it.name))) continue
         rows.push({ ...decorate(it), saved: true, draft: null })
       }
     }
-    rows.sort((a, b) => String(a.draft?.draft_name || a.name || '').localeCompare(String(b.draft?.draft_name || b.name || '')))
+    // Group-friendly order: branch name, then item name; drafts first.
+    rows.sort((a, b) => {
+      const br = String(a.draft?.branch_name || 'zzz').localeCompare(String(b.draft?.branch_name || 'zzz'))
+      if (br !== 0) return br
+      return String(a.draft?.draft_name || a.name || '').localeCompare(String(b.draft?.draft_name || b.name || ''))
+    })
 
     return NextResponse.json({ ok: true, cycle_id: cycleId, section, rows })
   } catch (e) {

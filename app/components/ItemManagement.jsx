@@ -14,7 +14,22 @@ export default function ItemManagement({ cycleId, cycles }) {
   const [message, setMessage] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 8
+  // Large screens (xl+) show 5-6 cards per row, so 10 per page fills two clean
+  // rows instead of the old fixed 8; smaller screens stay at 8.
+  const [itemsPerPage, setItemsPerPage] = useState(8)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1280px)')
+    const apply = () => setItemsPerPage(mq.matches ? 10 : 8)
+    apply()
+    mq.addEventListener('change', apply)
+    return () => mq.removeEventListener('change', apply)
+  }, [])
+
+  // Back to page 1 whenever the page size changes with the viewport.
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [itemsPerPage])
 
   const activeCycleName = cycles?.find(c => c.id === cycleId)?.name || null
   const activeCycleCode = cycles?.find(c => c.id === cycleId)?.code || null

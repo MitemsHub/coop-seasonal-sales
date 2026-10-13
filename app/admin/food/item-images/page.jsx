@@ -11,6 +11,8 @@ import { useRouter } from 'next/navigation'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import ItemManagement from '../../../components/ItemManagement'
 import Button from '../../../components/ui/Button'
+import Select from '../../../components/ui/Select'
+import Label from '../../../components/ui/Label'
 import { Images, Link2 } from 'lucide-react'
 
 function ItemImagesPageContent() {
@@ -47,8 +49,8 @@ function ItemImagesPageContent() {
     <div className="p-3 sm:p-6 max-w-7xl mx-auto">
       <div className="grid grid-cols-2 sm:flex sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-2">
         <div className="col-span-1">
-          <h1 className="text-h2 font-semibold">Admin · Items Image Mang.</h1>
-          <p className="mt-1 text-sm text-muted">
+          <h1 className="text-h2 font-semibold tracking-tight text-fg">Admin · Items Image Mang.</h1>
+          <p className="mt-1 text-body text-muted">
             The shared image bank. Upload each item&apos;s refined photo once — every branch, the shop and both
             Items Import sections link to these images instead of uploading them again.
           </p>
@@ -61,23 +63,20 @@ function ItemImagesPageContent() {
       <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4 mb-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-fg mb-1 flex items-center gap-2">
+            <h2 className="text-h3 font-semibold text-fg mb-1 flex items-center gap-2">
               <Images className="h-4 w-4" strokeWidth={2} /> Item Image Management
             </h2>
-            <p className="text-xs text-muted">
+            <p className="text-body text-muted">
               Pick a cycle to see the items priced in it — the images themselves are stored once per item and
               reused across every cycle and branch.
             </p>
           </div>
           <div className="sm:w-72">
-            <label htmlFor="image-cycle" className="block text-xs text-muted mb-1">
-              Cycle filter
-            </label>
-            <select
+            <Label htmlFor="image-cycle">Cycle filter</Label>
+            <Select
               id="image-cycle"
               value={selectedCycleId ?? ''}
               onChange={(e) => setSelectedCycleId(e.target.value ? Number(e.target.value) : null)}
-              className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
               disabled={loadingCycles || cycles.length === 0}
             >
               {cycles.length === 0 ? (
@@ -89,11 +88,11 @@ function ItemImagesPageContent() {
                   </option>
                 ))
               )}
-            </select>
+            </Select>
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-info-border bg-info-bg px-3 py-2 text-xs text-info-fg">
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-info-border bg-info-bg px-3 py-2 text-caption text-info-fg">
           <Link2 className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
           Images chosen in <strong>Items Import</strong> (General / Outsourced Items) come from this bank — add a
           new one here whenever a refined photo is missing.
