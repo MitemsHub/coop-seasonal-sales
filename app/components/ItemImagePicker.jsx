@@ -28,6 +28,8 @@ export default function ItemImagePicker({ value, onChange, name = '', sku = '', 
   // Inline "new bank item" form: name + SKU + photo, saved as a real item.
   const [upName, setUpName] = useState('')
   const [upSku, setUpSku] = useState('')
+  // Once the admin types their own SKU, the live name-derived one stops.
+  const [upSkuTouched, setUpSkuTouched] = useState(false)
   const [upUrl, setUpUrl] = useState('')
   const [upBusy, setUpBusy] = useState(false)
   const [upErr, setUpErr] = useState(null)
@@ -85,6 +87,9 @@ export default function ItemImagePicker({ value, onChange, name = '', sku = '', 
   const openUpload = () => {
     setUpName(name || '')
     setUpSku(sku || '')
+    // A SKU seeded from the item being edited is the admin's, not the
+    // preview's — typing a name must not overwrite it.
+    setUpSkuTouched(Boolean(sku))
     setUpUrl('')
     setUpErr(null)
     setOpen(false)
@@ -281,7 +286,12 @@ export default function ItemImagePicker({ value, onChange, name = '', sku = '', 
           <div className="mb-2 grid gap-2 sm:grid-cols-2">
             <input
               value={upName}
-              onChange={(e) => setUpName(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value
+                setUpName(value)
+                // The SKU follows the name until edited by hand.
+                if (!upSkuTouched) setUpSku(value.trim() ? skuFromName(value) : '')
+              }}
               placeholder="Item name (required)"
               aria-label="New bank item name"
               maxLength={255}
@@ -289,8 +299,11 @@ export default function ItemImagePicker({ value, onChange, name = '', sku = '', 
             />
             <input
               value={upSku}
-              onChange={(e) => setUpSku(e.target.value.toUpperCase())}
-              placeholder="SKU (generated from the name if blank)"
+              onChange={(e) => {
+                setUpSkuTouched(true)
+                setUpSku(e.target.value.toUpperCase())
+              }}
+              placeholder="SKU (auto-generated from the name as you type)"
               aria-label="New bank item SKU"
               maxLength={100}
               className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext"

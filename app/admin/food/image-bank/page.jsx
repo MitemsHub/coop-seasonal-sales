@@ -22,6 +22,10 @@ const skuFromName = (name) => {
   return base || `ITEM${Date.now().toString(36).toUpperCase()}`
 }
 
+// Live SKU preview while typing the name — same rule as the server, but
+// stays blank while the name is blank (no placeholder codes in the field).
+const skuPreview = (name) => String(name || '').trim() ? skuFromName(name) : ''
+
 function ItemImagesPageContent() {
   const router = useRouter()
 
@@ -40,6 +44,8 @@ function ItemImagesPageContent() {
   const [createUrl, setCreateUrl] = useState('')
   const [createBusy, setCreateBusy] = useState(false)
   const [createErr, setCreateErr] = useState(null)
+  // Stops the live name-derived SKU once the admin types their own.
+  const [createSkuTouched, setCreateSkuTouched] = useState(false)
   const [tax, setTax] = useState({ categories: [], units: [] })
 
   // Pick lists for the create form's category/unit fields.
@@ -111,6 +117,7 @@ function ItemImagesPageContent() {
         text: `“${json.item.name}” is in the bank${createUrl ? ' with its photo' : ''} — every branch can use it now. Price it in Items Import when it should appear in shops.`,
       })
       setCreateForm({ name: '', sku: '', category: '', unit: '' })
+      setCreateSkuTouched(false)
       setCreateUrl('')
       setAddMode('search')
       loadItems()
@@ -239,7 +246,15 @@ function ItemImagesPageContent() {
                       id="bank-new-name"
                       autoFocus
                       value={createForm.name}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, name: e.target.value }))}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        setCreateForm((f) => ({
+                          ...f,
+                          name: value,
+                          // The SKU follows the name until edited by hand.
+                          sku: createSkuTouched ? f.sku : skuPreview(value),
+                        }))
+                      }}
                       placeholder="e.g. Mama Gold Rice 5kg"
                       maxLength={255}
                     />
@@ -249,10 +264,18 @@ function ItemImagesPageContent() {
                     <Input
                       id="bank-new-sku"
                       value={createForm.sku}
-                      onChange={(e) => setCreateForm((f) => ({ ...f, sku: e.target.value.toUpperCase() }))}
-                      placeholder="Generated from the name if blank"
+                      onChange={(e) => {
+                        setCreateSkuTouched(true)
+                        setCreateForm((f) => ({ ...f, sku: e.target.value.toUpperCase() }))
+                      }}
+                      placeholder="Generated from the name as you type"
                       maxLength={100}
                     />
+                    <p className="mt-1 text-caption text-muted">
+                      {createSkuTouched
+                        ? 'Your own SKU — clear the field to make it follow the name again.'
+                        : 'Derived from the item name — type in the field to set your own.'}
+                    </p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>

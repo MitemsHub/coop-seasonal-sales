@@ -47,6 +47,12 @@ const fmtPrice = (v) => Number(v || 0).toLocaleString('en-NG', { maximumFraction
 
 const norm = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, ' ')
 
+// Live SKU preview — the exact rule the server applies when the field is
+// left blank: name → uppercase, letters and digits only, capped at 32
+// chars ("Abakaliki Rice 25Kg" → "ABAKALIKIRICE25KG"). Shown while typing
+// and fully editable the moment the admin types in the SKU field.
+const skuPreview = (name) => String(name || '').toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 32)
+
 // Field-by-field comparison of the SAVED shop item vs the rep's draft.
 // The editor shows the full table so refining is an informed decision; the
 // collapsed card just shows how many fields differ.
@@ -189,6 +195,9 @@ function ItemsImportContent() {
   const [newForm, setNewForm] = useState(emptyNew)
   const [newBusy, setNewBusy] = useState(false)
   const [newErr, setNewErr] = useState(null)
+  // Once the admin types in the SKU field themselves, the live
+  // name-derived preview stops — their value wins from then on.
+  const [newSkuTouched, setNewSkuTouched] = useState(false)
 
   /* ── Loaders ─────────────────────────────────────────────────────── */
   const loadCycles = useCallback(async () => {
@@ -426,11 +435,14 @@ function ItemsImportContent() {
       const match = allItems.find((it) => norm(it.name) === norm(value))
       if (match) {
         // Reuse the existing bank item — fill only blank fields, never clobber.
-        if (!next.sku) next.sku = match.sku || ''
         if (!next.category) next.category = match.category || ''
         if (!next.unit) next.unit = match.unit || ''
         if (!next.image_url) next.image_url = match.image_url || ''
       }
+      // The SKU follows the name until the admin edits it by hand: an
+      // existing item contributes its real SKU, otherwise it is derived
+      // from the name exactly like the server would.
+      if (!newSkuTouched) next.sku = match?.sku ? String(match.sku).toUpperCase() : skuPreview(value)
       return next
     })
   }
@@ -558,6 +570,7 @@ function ItemsImportContent() {
       })
       flash(`Added — “${json.item.name}” is live in all ${json.branches_priced} branches for this cycle.`)
       setNewForm(emptyNew)
+      setNewSkuTouched(false)
       setShowNew(false)
       loadSections()
       loadAllItems()
@@ -753,7 +766,12 @@ function ItemsImportContent() {
             <Input
               id="edit-name"
               value={form.name}
-              onChange={(e) => setField('name', e.target.value)}
+              onChange={(e) => {
+                setField('name', e.target.value)
+                // An edit row with no SKU yet grows one from the name, same
+                // as the new-item form; an existing SKU is never touched.
+                if (!form.sku) setField('sku', skuPreview(e.target.value))
+              }}
               maxLength={255}
             />
           </div>
@@ -1169,7 +1187,7 @@ function ItemsImportContent() {
                   className="w-44 pl-9"
                 />
               </div>
-              <Button size="sm" leftIcon={Plus} onClick={() => { setShowNew((v) => !v); cancelEdit() }}>
+              <Button size="sm" leftIcon={Plus} onClick={() => { setShowNew((v) => !v); setNewSkuTouched(false); cancelEdit() }}>
                 {showNew ? 'Close form' : 'Add general item'}
               </Button>
             </div>
@@ -1208,10 +1226,18 @@ function ItemsImportContent() {
                   <Input
                     id="new-sku"
                     value={newForm.sku}
-                    onChange={(e) => setNewForm((f) => ({ ...f, sku: e.target.value.toUpperCase() }))}
-                    placeholder="Generated from the name if blank"
+                    onChange={(e) => {
+                      setNewSkuTouched(true)
+                      setNewForm((f) => ({ ...f, sku: e.target.value.toUpperCase() }))
+                    }}
+                    placeholder="Generated from the name as you type"
                     maxLength={100}
                   />
+                  <p className="mt-1 text-caption text-muted">
+                    {newSkuTouched
+                      ? 'Your own SKU — clear the field to make it follow the name again.'
+                      : 'Derived from the item name — type in the field to set your own.'}
+                  </p>
                 </div>
                 <div>
                   <Label htmlFor="new-category">Category</Label>
