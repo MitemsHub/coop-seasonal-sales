@@ -11,13 +11,17 @@
 //                           cycle (items + branch markups, drafts flagged first)
 //
 //   POST { cycle_id, section, item_id?, sku?, name, category, unit, price,
-//          markup?, image_url? }
+//          markup?, image_url?, bank_only? }
 //        Writes the item ONCE (items row) and a price row for EVERY branch for
 //        the target cycle (branch_item_prices), so it appears in every branch's
 //        shop immediately. Markup (when provided) is written for every branch
 //        too, so editing markup here behaves like a one-shot version of the
 //        Markups module. Images are always a link to the bank (items.image_url)
 //        — never a new upload.
+//        bank_only: true → creates/updates the items row ONLY (no price, no
+//        cycle needed). That is how a new photo joins the Image Bank before
+//        the item is priced anywhere; it shows in shops once it is priced in
+//        Items Import for a cycle.
 import { NextResponse } from 'next/server'
 import { createClient } from '../../../../lib/supabaseServer'
 import { queryDirect, transactionalQuery } from '../../../../lib/directDb'
@@ -99,6 +103,18 @@ export async function GET(req) {
         return true
       })
       return NextResponse.json({ ok: true, images })
+    }
+
+    // The full catalog (image or not) — powers the "pick an existing item"
+    // name dropdown on Items Import so admins reuse rows instead of
+    // duplicating them.
+    if (section === 'all') {
+      const { data, error } = await supabase
+        .from('items')
+        .select('item_id, sku, name, category, unit, image_url')
+        .order('name')
+      if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+      return NextResponse.json({ ok: true, items: data || [] })
     }
 
     const cycleId = await resolveCycleId(supabase, searchParams.get('cycle_id'))
@@ -451,22 +467,39 @@ export async function POST(req) {
     const image_url = String(body.image_url || '').trim()
     const itemId = body.item_id != null && body.item_id !== '' ? Number(body.item_id) : null
 
+    // bank_only → a bank entry: the items row (name/SKU/category/unit/image)
+    // with no price, no cycle and no branches. It joins the Image Bank right
+    // away and only shows in shops once it is priced for a cycle in Items Import.
+    const bankOnly = body.bank_only === true
     if (name.length < 2) return NextResponse.json({ ok: false, error: 'Item name is required (min 2 characters)' }, { status: 400 })
-    if (!(price > 0)) return NextResponse.json({ ok: false, error: 'Price must be greater than 0 for the item to show in the shop' }, { status: 400 })
+    if (!bankOnly && !(price > 0)) return NextResponse.json({ ok: false, error: 'Price must be greater than 0 for the item to show in the shop' }, { status: 400 })
 
-    const cycleId = await resolveCycleId(supabase, body.cycle_id)
-    if (cycleId == null) return NextResponse.json({ ok: false, error: 'No cycle found' }, { status: 400 })
+    let cycleId = null
+    if (!bankOnly) {
+      cycleId = await resolveCycleId(supabase, body.cycle_id)
+      if (cycleId == null) return NextResponse.json({ ok: false, error: 'No cycle found' }, { status: 400 })
+    }
 
     await ensureSourceColumn()
     const sourceCol = await hasColumn(supabase, 'items', 'source')
 
-    const { data: branches, error: bErr } = await supabase.from('branches').select('id, code').order('id')
-    if (bErr) return NextResponse.json({ ok: false, error: bErr.message }, { status: 500 })
-    if (!branches?.length) return NextResponse.json({ ok: false, error: 'No branches found' }, { status: 400 })
+    let branches = []
+    if (!bankOnly) {
+      const { data: branchRows, error: bErr } = await supabase.from('branches').select('id, code').order('id')
+      if (bErr) return NextResponse.json({ ok: false, error: bErr.message }, { status: 500 })
+      if (!branchRows?.length) return NextResponse.json({ ok: false, error: 'No branches found' }, { status: 400 })
+      branches = branchRows
+    }
 
     // ── 1. Upsert the item row (the shared catalog entry) ────────────────
     const sku = String(body.sku || '').trim().toUpperCase() || skuFromName(name)
-    const patch = { name, sku, category, unit, image_url }
+    const patch = { name, sku }
+    // A bank-only save may carry just a photo (or just a name) — it must not
+    // blank out fields it was not given, especially on an existing row. A
+    // full save writes them all, exactly as the form sent them.
+    if (category || !bankOnly) patch.category = category
+    if (unit || !bankOnly) patch.unit = unit
+    if (image_url || !bankOnly) patch.image_url = image_url
     if (sourceCol) patch.source = section // fall back to a plain catalog item if the column is missing
     let itemRow = null
 
@@ -492,6 +525,17 @@ export async function POST(req) {
         if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
         itemRow = data
       }
+    }
+
+    // Bank-only save stops here: the item (and its image) is in the bank.
+    if (bankOnly) {
+      return NextResponse.json({
+        ok: true,
+        bank_only: true,
+        item: { item_id: itemRow.item_id, sku: itemRow.sku, name: itemRow.name },
+        branches_priced: 0,
+        markup_branches: 0,
+      })
     }
 
     // ── 2. Price for EVERY branch in this cycle → visible in every shop ──

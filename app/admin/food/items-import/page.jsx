@@ -72,6 +72,9 @@ const draftDiffs = (saved, draft) => {
 const ROWS_PER_PAGE = 10
 const GROUPS_PER_PAGE = 5
 
+// Fallback unit list — the server's taxonomy GET supersedes it when loaded.
+const DEFAULT_UNITS = ['Bag', 'Carton', 'Gallon', 'Bucket', 'Crate', 'Piece', 'Kg', 'Log', 'Tin', 'Bale']
+
 const clampPage = (p, total) => Math.max(1, Math.min(p, Math.max(1, total)))
 
 function ListPager({ page, totalPages, onChange }) {
@@ -167,6 +170,16 @@ function ItemsImportContent() {
   const [preview, setPreview] = useState(null) // { branchId, branchName, loading, error, data }
   const [previewLimit, setPreviewLimit] = useState(24)
 
+  /* ── Category / unit pick lists (admin-managed) ───────────────── */
+  const [tax, setTax] = useState({ categories: [], units: [] })
+  const [taxPanel, setTaxPanel] = useState(false)
+  const [newCat, setNewCat] = useState('')
+  const [newUnit, setNewUnit] = useState('')
+  const [taxBusy, setTaxBusy] = useState(false)
+
+  /* ── Full catalog (for the "pick an existing item" name dropdown) ─ */
+  const [allItems, setAllItems] = useState([])
+
   const [editKey, setEditKey] = useState(null) // 'general:<id>' | 'outsourced:<key>' | null
   const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -242,6 +255,34 @@ function ItemsImportContent() {
     setOutGroupPage(1)
     setOutRowPages({})
   }, [outSearch, selectedCycleId])
+
+  // Admin-managed pick lists (Categories & units panel) — loaded once.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/admin/items/taxonomy', { cache: 'no-store', credentials: 'same-origin' })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!cancelled && j.ok) setTax({ categories: j.categories || [], units: j.units || [] })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Full catalog for the "pick an existing item" name dropdown, so admins
+  // reuse bank rows (and their images) instead of duplicating items.
+  const loadAllItems = useCallback(() => {
+    fetch('/api/admin/items?section=all', { cache: 'no-store', credentials: 'same-origin' })
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.ok) setAllItems(j.items || [])
+      })
+      .catch(() => {})
+  }, [])
+  useEffect(() => {
+    loadAllItems()
+  }, [loadAllItems])
 
   // Demand tracking mode — when on, the items upload needs no stock column.
   useEffect(() => {
@@ -359,6 +400,41 @@ function ItemsImportContent() {
     return [...set].sort()
   }, [generalRows, outRows])
 
+  // Pick lists merge admin-added entries with whatever is already in use,
+  // so the choices only ever grow (and still work if the fetch failed).
+  const categoryOptions = useMemo(
+    () => [...new Set([...categories, ...tax.categories])].sort((a, b) => a.localeCompare(b)),
+    [categories, tax.categories]
+  )
+  const unitOptions = useMemo(
+    () => [...new Set([...tax.units, ...DEFAULT_UNITS])].sort((a, b) => a.localeCompare(b)),
+    [tax.units]
+  )
+
+  // ── "Item name" behaves like a search box over the whole catalog ─────
+  // Typing an existing item's name (exact match) fills the blank fields with
+  // its SKU / category / unit / image and warns that saving UPDATES that row
+  // instead of creating a duplicate.
+  const existingName = useMemo(
+    () => allItems.find((it) => norm(it.name) === norm(newForm.name)) || null,
+    [allItems, newForm.name]
+  )
+
+  const onNewNameChange = (value) => {
+    setNewForm((f) => {
+      const next = { ...f, name: value }
+      const match = allItems.find((it) => norm(it.name) === norm(value))
+      if (match) {
+        // Reuse the existing bank item — fill only blank fields, never clobber.
+        if (!next.sku) next.sku = match.sku || ''
+        if (!next.category) next.category = match.category || ''
+        if (!next.unit) next.unit = match.unit || ''
+        if (!next.image_url) next.image_url = match.image_url || ''
+      }
+      return next
+    })
+  }
+
   const startEdit = (section, row) => {
     setEditKey(`${section}:${section === 'general' ? row.item_id : row.draft?.key || row.item_id}`)
     setSaveErr(null)
@@ -438,6 +514,31 @@ function ItemsImportContent() {
     }
   }
 
+  const addTaxonomy = async (kind) => {
+    const value = (kind === 'category' ? newCat : newUnit).trim()
+    if (!value || taxBusy) return
+    setTaxBusy(true)
+    try {
+      const res = await fetch('/api/admin/items/taxonomy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ kind, value }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) throw new Error(json.error || `Could not add the ${kind}`)
+      const key = kind === 'category' ? 'categories' : 'units'
+      setTax((t) => ({ ...t, [key]: [...new Set([...t[key], json.value])].sort((a, b) => a.localeCompare(b)) }))
+      if (kind === 'category') setNewCat('')
+      else setNewUnit('')
+      flash(`Added “${json.value}” to the ${kind} list`)
+    } catch (e) {
+      flash(e.message, 'error')
+    } finally {
+      setTaxBusy(false)
+    }
+  }
+
   const addGeneral = async (e) => {
     e.preventDefault()
     if (newBusy) return
@@ -459,6 +560,7 @@ function ItemsImportContent() {
       setNewForm(emptyNew)
       setShowNew(false)
       loadSections()
+      loadAllItems()
     } catch (err) {
       setNewErr(err.message)
     } finally {
@@ -756,7 +858,7 @@ function ItemsImportContent() {
         : 0
 
     return (
-      <div key={key} className={`rounded-lg border bg-surface p-3 ${expanded ? 'border-brand/50' : 'border-line-subtle'}`}>
+      <div key={key} className={`rounded-lg border bg-surface p-3 ${expanded ? 'border-brand/50' : section === 'outsourced' && saved ? 'border-success-border' : 'border-line-subtle'}`}>
         <div className="flex flex-wrap items-center gap-3">
           <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md border border-line bg-canvas">
             {img ? (
@@ -782,15 +884,20 @@ function ItemsImportContent() {
               <span className="truncate text-sm font-semibold text-fg">{title}</span>
               {saved && row.in_shop ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-success-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-success-fg">
-                  <CheckCircle2 className="h-3 w-3" strokeWidth={2.5} /> In shop
+                  <CheckCircle2 className="h-3 w-3" strokeWidth={2.5} />
+                  {section === 'outsourced' ? '✓ Worked on · in shop' : 'In shop'}
                 </span>
               ) : saved ? (
                 <span className="rounded-full bg-warning-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-warning-fg">
-                  Not in shop yet
+                  {section === 'outsourced' ? '✓ Worked on · not in shop' : 'Not in shop yet'}
                 </span>
               ) : (
-                <span className="rounded-full bg-info-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-info-fg">
-                  Survey draft
+                <span
+                  className={`rounded-full px-2 py-0.5 text-chips font-bold uppercase tracking-wide ${
+                    section === 'outsourced' ? 'bg-warning-bg text-warning-fg' : 'bg-info-bg text-info-fg'
+                  }`}
+                >
+                  {section === 'outsourced' ? 'Not worked on yet' : 'Survey draft'}
                 </span>
               )}
               {!img && (
@@ -893,10 +1000,83 @@ function ItemsImportContent() {
             Repricer, uploads and every Save below target this cycle.
           </p>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => { loadCycles(); loadSections() }} loading={loadingCycles || sectionsLoading} leftIcon={RefreshCw}>
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setTaxPanel((v) => !v)} leftIcon={Plus}>
+            {taxPanel ? 'Hide lists' : 'Categories & units'}
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => { loadCycles(); loadSections() }} loading={loadingCycles || sectionsLoading} leftIcon={RefreshCw}>
+            Refresh
+          </Button>
+        </div>
       </div>
+
+      {/* Category & unit pick lists — add once, usable everywhere below */}
+      {taxPanel && (
+        <div className="mb-4 rounded-xl border border-line bg-surface p-4">
+          <h2 className="text-h3 font-semibold text-fg mb-1">Categories & units</h2>
+          <p className="text-body text-muted mb-3">
+            Add a name once and it becomes a choice in every category/unit field on this page. An item only carries
+            the category you save on it — saving writes the shared item, so the shop, reports and previews pick the
+            change up immediately.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="tax-new-category">Add a category</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="tax-new-category"
+                  value={newCat}
+                  onChange={(e) => setNewCat(e.target.value)}
+                  placeholder="e.g. Instant Noodles"
+                  maxLength={60}
+                />
+                <Button onClick={() => addTaxonomy('category')} loading={taxBusy} disabled={taxBusy || !newCat.trim()}>
+                  Add
+                </Button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {categoryOptions.length === 0 ? (
+                  <span className="text-caption text-muted">No categories yet.</span>
+                ) : (
+                  categoryOptions.map((c) => (
+                    <span
+                      key={c}
+                      className="rounded-full border border-line-subtle bg-subtle px-2 py-0.5 text-chips text-muted"
+                    >
+                      {c}
+                    </span>
+                  ))
+                )}
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="tax-new-unit">Add a unit</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="tax-new-unit"
+                  value={newUnit}
+                  onChange={(e) => setNewUnit(e.target.value)}
+                  placeholder="e.g. Pallet"
+                  maxLength={60}
+                />
+                <Button onClick={() => addTaxonomy('unit')} loading={taxBusy} disabled={taxBusy || !newUnit.trim()}>
+                  Add
+                </Button>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {unitOptions.map((u) => (
+                  <span
+                    key={u}
+                    className="rounded-full border border-line-subtle bg-subtle px-2 py-0.5 text-chips text-muted"
+                  >
+                    {u}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-3">
         {/* ── 1. Repricer + 2. Items/Prices Import (moved from Data) ── */}
@@ -1006,9 +1186,22 @@ function ItemsImportContent() {
                     required
                     minLength={2}
                     value={newForm.name}
-                    onChange={(e) => setNewForm((f) => ({ ...f, name: e.target.value }))}
+                    onChange={(e) => onNewNameChange(e.target.value)}
+                    list="existing-item-names"
+                    placeholder="Type to search the item bank, or enter a new name"
                     maxLength={255}
                   />
+                  {existingName ? (
+                    <p className="mt-1 text-caption text-success-fg">
+                      Existing item found — saving updates it everywhere (SKU {existingName.sku}) instead of creating a
+                      duplicate.
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-caption text-muted">
+                      Pick an existing item to reuse its SKU, category, unit and image — or type a new name to create
+                      one.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="new-sku">SKU (optional)</Label>
@@ -1152,7 +1345,7 @@ function ItemsImportContent() {
           <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-info-border bg-info-bg px-3 py-2 text-caption text-info-fg">
             <Link2 className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
             Images come from the shared bank — if a refined photo is missing, add it in{' '}
-            <Link href="/admin/food/item-images" className="font-semibold underline">
+            <Link href="/admin/food/image-bank" className="font-semibold underline">
               Image Bank
             </Link>{' '}
             (or use “Add image” inside the picker) and it becomes reusable for every future cycle.
@@ -1471,13 +1664,21 @@ function ItemsImportContent() {
 
       {/* Shared datalists for category/unit inputs */}
       <datalist id="item-categories">
-        {categories.map((c) => (
+        {categoryOptions.map((c) => (
           <option key={c} value={c} />
         ))}
       </datalist>
       <datalist id="item-units">
-        {['Bag', 'Carton', 'Gallon', 'Bucket', 'Crate', 'Piece', 'Kg', 'Log', 'Tin', 'Bale'].map((u) => (
+        {unitOptions.map((u) => (
           <option key={u} value={u} />
+        ))}
+      </datalist>
+      <datalist id="existing-item-names">
+        {allItems.slice(0, 400).map((it) => (
+          <option key={it.item_id} value={it.name}>
+            {it.sku}
+            {it.category ? ` · ${it.category}` : ''}
+          </option>
         ))}
       </datalist>
     </div>

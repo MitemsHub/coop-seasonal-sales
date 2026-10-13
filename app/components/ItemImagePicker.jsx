@@ -25,6 +25,12 @@ export default function ItemImagePicker({ value, onChange, name = '', sku = '', 
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
+  // Inline "new bank item" form: name + SKU + photo, saved as a real item.
+  const [upName, setUpName] = useState('')
+  const [upSku, setUpSku] = useState('')
+  const [upUrl, setUpUrl] = useState('')
+  const [upBusy, setUpBusy] = useState(false)
+  const [upErr, setUpErr] = useState(null)
   const wrapRef = useRef(null)
 
   const loadBank = async () => {
@@ -74,9 +80,45 @@ export default function ItemImagePicker({ value, onChange, name = '', sku = '', 
     setShowUpload(false)
   }
 
+  // Seed the inline form from the item being edited so the admin usually
+  // only has to press Save.
+  const openUpload = () => {
+    setUpName(name || '')
+    setUpSku(sku || '')
+    setUpUrl('')
+    setUpErr(null)
+    setOpen(false)
+    setShowUpload(true)
+  }
+
+  // Save the name/SKU (+ photo) as a real item in the bank, so every branch
+  // can use it right away — no price needed yet.
+  const saveToBank = async () => {
+    const n = upName.trim()
+    if (n.length < 2 || upBusy) return
+    setUpBusy(true)
+    setUpErr(null)
+    try {
+      const res = await fetch('/api/admin/items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ bank_only: true, name: n, sku: upSku.trim(), image_url: upUrl || value || '' }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Could not add to the bank')
+      setShowUpload(false)
+      loadBank()
+    } catch (e) {
+      setUpErr(e.message || 'Failed to save to the bank')
+    } finally {
+      setUpBusy(false)
+    }
+  }
+
   return (
     <div ref={wrapRef} className="relative">
-      <label className="block text-xs text-muted mb-1">{label}</label>
+      <label className="block text-sm text-muted mb-1">{label}</label>
 
       {/* Current selection */}
       <div className="flex items-center gap-2 rounded-lg border border-line bg-subtle/50 p-2">
@@ -107,31 +149,33 @@ export default function ItemImagePicker({ value, onChange, name = '', sku = '', 
         )}
       </div>
 
-      <div className="mt-1.5 flex gap-2">
+      <div className="mt-1.5 flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-line bg-surface px-2 py-1.5 text-xs font-medium text-fg transition-colors hover:bg-subtle"
+          className="inline-flex h-9 min-w-40 flex-1 items-center justify-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-sm font-medium text-fg transition-colors hover:bg-subtle"
         >
-          <Search className="h-3.5 w-3.5" strokeWidth={2.2} />
+          <Search className="h-4 w-4" strokeWidth={2.2} />
           {open ? 'Hide bank' : 'Search image bank'}
-          <span className="text-[10px] text-muted">({bank.length})</span>
+          <span className="text-caption text-muted">({bank.length})</span>
         </button>
         <button
           type="button"
-          onClick={() => setShowUpload((v) => !v)}
-          className="inline-flex items-center justify-center gap-1.5 rounded-md border border-line bg-surface px-2 py-1.5 text-xs font-medium text-fg transition-colors hover:bg-subtle"
-          title="Upload a new refined image into the bank"
+          onClick={() => (showUpload ? setShowUpload(false) : openUpload())}
+          className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border px-3 text-sm font-medium transition-colors ${
+            showUpload ? 'border-brand bg-brand text-on-accent' : 'border-line bg-surface text-fg hover:bg-subtle'
+          }`}
+          title="Add a new item (name + SKU) with its photo to the bank"
         >
-          <Plus className="h-3.5 w-3.5" strokeWidth={2.2} />
+          <Plus className="h-4 w-4" strokeWidth={2.2} />
           Add image
         </button>
         <Link
-          href="/admin/food/item-images"
-          className="inline-flex items-center justify-center gap-1.5 rounded-md border border-line bg-surface px-2 py-1.5 text-xs font-medium text-muted transition-colors hover:bg-subtle hover:text-fg"
-          title="Open the Image Bank in a new context"
+          href="/admin/food/image-bank"
+          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-line bg-surface px-3 text-sm font-medium text-muted transition-colors hover:bg-subtle hover:text-fg"
+          title="Open the Image Bank"
         >
-          <Images className="h-3.5 w-3.5" strokeWidth={2.2} />
+          <Images className="h-4 w-4" strokeWidth={2.2} />
           Bank
         </Link>
       </div>
@@ -173,8 +217,7 @@ export default function ItemImagePicker({ value, onChange, name = '', sku = '', 
                     type="button"
                     onClick={() => {
                       setSearch('')
-                      setShowUpload(true)
-                      setOpen(false)
+                      openUpload()
                     }}
                     className="mt-2 text-xs font-semibold text-brand underline"
                   >
@@ -218,12 +261,13 @@ export default function ItemImagePicker({ value, onChange, name = '', sku = '', 
         </div>
       )}
 
-      {/* Inline upload — feeds the bank directly */}
+      {/* Inline "new bank item" — name + SKU + photo, saved as a real item */}
       {showUpload && (
         <div className="mt-2 rounded-lg border border-line bg-subtle/40 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <p className="text-xs font-medium text-fg">
-              Add to the image bank <span className="font-normal text-muted">(uploading as SKU {sku || skuFromName(name)})</span>
+            <p className="text-sm font-medium text-fg">
+              Add a new item to the bank{' '}
+              <span className="font-normal text-muted">(photo uploads as SKU {upSku || skuFromName(upName)})</span>
             </p>
             <button
               type="button"
@@ -234,16 +278,49 @@ export default function ItemImagePicker({ value, onChange, name = '', sku = '', 
               <X className="h-3.5 w-3.5" strokeWidth={2.2} />
             </button>
           </div>
+          <div className="mb-2 grid gap-2 sm:grid-cols-2">
+            <input
+              value={upName}
+              onChange={(e) => setUpName(e.target.value)}
+              placeholder="Item name (required)"
+              aria-label="New bank item name"
+              maxLength={255}
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext"
+            />
+            <input
+              value={upSku}
+              onChange={(e) => setUpSku(e.target.value.toUpperCase())}
+              placeholder="SKU (generated from the name if blank)"
+              aria-label="New bank item SKU"
+              maxLength={100}
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext"
+            />
+          </div>
           <ImageUpload
-            itemSku={sku || skuFromName(name)}
-            currentImageUrl={value || null}
+            itemSku={upSku || skuFromName(upName)}
+            currentImageUrl={upUrl || value || null}
             onImageUploaded={(url) => {
               if (url) {
+                setUpUrl(url)
                 onChange && onChange(url)
-                loadBank() // the new file becomes a bank entry once some item references it
               }
             }}
           />
+          {upErr && <p className="mt-2 text-xs text-danger-fg">{upErr}</p>}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={saveToBank}
+              disabled={upBusy || upName.trim().length < 2}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-semibold text-on-accent transition-colors hover:bg-brand-hover disabled:opacity-50"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2.2} />
+              {upBusy ? 'Saving…' : 'Save to bank'}
+            </button>
+            <span className="text-[11px] text-muted">
+              Saved once for every branch — price it in Items Import to show it in shops.
+            </span>
+          </div>
         </div>
       )}
     </div>

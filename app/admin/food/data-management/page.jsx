@@ -556,7 +556,7 @@ function DataManagementPageContent() {
             Items tools moved: Food Price Repricer &amp; Items/Prices Import →{' '}
             <Link href="/admin/food/items-import" className="font-semibold underline">Items Import</Link>, and Item
             Image Management →{' '}
-            <Link href="/admin/food/item-images" className="font-semibold underline">Image Bank</Link>
+            <Link href="/admin/food/image-bank" className="font-semibold underline">Image Bank</Link>
           </span>
         </div>
 
