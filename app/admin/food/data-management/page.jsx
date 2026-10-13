@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import ProtectedRoute from '../../../components/ProtectedRoute'
-import ItemManagement from '../../../components/ItemManagement'
 import DatabaseMigration from '../../../components/DatabaseMigration'
 import Button from '../../../components/ui/Button'
-import { Archive, FileSpreadsheet } from 'lucide-react'
+import Link from 'next/link'
+import { Archive, Link2 } from 'lucide-react'
 
 function DataManagementPageContent() {
   const [loading, setLoading] = useState(false)
@@ -14,7 +14,6 @@ function DataManagementPageContent() {
   const [confirmClearAll, setConfirmClearAll] = useState('')
   const [confirmClearDelivered, setConfirmClearDelivered] = useState('')
   const [confirmResetInventory, setConfirmResetInventory] = useState('')
-  const [confirmRepriceOrders, setConfirmRepriceOrders] = useState('')
   const [processingAction, setProcessingAction] = useState(null)
   const router = useRouter()
 
@@ -488,43 +487,6 @@ function DataManagementPageContent() {
     setProcessingAction(null)
   }
 
-  const repriceFoodOrders = async (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-
-    if (loading || processingAction) return
-    if (confirmRepriceOrders !== 'REPRICE ORDERS') {
-      setMessage('Please type "REPRICE ORDERS" to confirm')
-      return
-    }
-
-    setLoading(true)
-    setProcessingAction('repriceOrders')
-    setMessage('Repricing orders using current prices...')
-
-    try {
-      const response = await fetch('/api/admin/data-management/reprice-orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: selectedCycleId != null ? JSON.stringify({ cycle_id: selectedCycleId }) : JSON.stringify({})
-      })
-      const result = await response.json()
-      if (!response.ok || !result.ok) {
-        setMessage(`Error: ${result.error || 'Failed to reprice orders'}`)
-      } else {
-        const cycleLabel = result.cycle_id != null ? ` (cycle_id=${result.cycle_id})` : ''
-        setMessage(`Repriced ${result.updated_lines} order lines and ${result.updated_orders} orders${cycleLabel}`)
-        setConfirmRepriceOrders('')
-      }
-    } catch (error) {
-      setMessage(`Error: ${error.message}`)
-    }
-
-    setLoading(false)
-    setProcessingAction(null)
-  }
-
   const exportBackup = async (e) => {
     e.preventDefault()
     e.stopPropagation()
@@ -565,81 +527,6 @@ function DataManagementPageContent() {
     setProcessingAction(null)
   }
 
-  // Items / Prices import state (moved from the food Import page — the Data
-  // page now hosts the items upload, right above Item Image Management).
-  const [pricesFile, setPricesFile] = useState(null)
-  const [pricesLog, setPricesLog] = useState('')
-  const [pricesLoading, setPricesLoading] = useState(false)
-  const [isDemandTrackingMode, setIsDemandTrackingMode] = useState(false)
-  const [loadingMode, setLoadingMode] = useState(true)
-
-  const uploadPrices = async () => {
-    if (!pricesFile) {
-      setPricesLog('Please choose a file first.')
-      return
-    }
-    setPricesLoading(true)
-    setPricesLog('')
-    try {
-      const fd = new FormData()
-      fd.append('file', pricesFile)
-      const res = await fetch('/api/admin/import/prices', { method: 'POST', body: fd })
-      const json = await res.json()
-      if (!res.ok || !json.ok) throw new Error(json.error || `Upload failed with status ${res.status}`)
-      setPricesLog(JSON.stringify(json, null, 2))
-    } catch (e) {
-      setPricesLog(`Error: ${e.message}`)
-      console.error('Upload error:', e)
-    } finally {
-      setPricesLoading(false)
-    }
-  }
-
-  const downloadPricesTemplate = async () => {
-    const ExcelJSMod = await import('exceljs')
-    const ExcelJS = ExcelJSMod?.default ?? ExcelJSMod
-    const wb = new ExcelJS.Workbook()
-    const ws = wb.addWorksheet('Items_Prices')
-    const templateData = {
-      sku: 'RICE50KG',
-      item_name: 'Rice (50kg)',
-      unit: 'bag',
-      category: 'Food',
-      branch_code: 'DUTSE',
-      price: 49500
-    }
-    ws.addRow(Object.keys(templateData))
-    ws.addRow(Object.values(templateData))
-    const buffer = await wb.xlsx.writeBuffer()
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'Items_Prices_Template.xlsx'
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
-  // Demand tracking mode — when on, the items upload needs no initial stock column.
-  useEffect(() => {
-    let cancelled = false
-    const check = async () => {
-      try {
-        const res = await fetch('/api/admin/system/mode')
-        if (res.ok) {
-          const data = await res.json()
-          if (!cancelled) setIsDemandTrackingMode(!!data.isDemandTrackingMode)
-        }
-      } catch {
-        setIsDemandTrackingMode(false)
-      } finally {
-        if (!cancelled) setLoadingMode(false)
-      }
-    }
-    check()
-    return () => { cancelled = true }
-  }, [])
-
   return (
     <div className="p-3 sm:p-6 max-w-7xl mx-auto">
       <div className="grid grid-cols-2 sm:flex sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6 gap-2">
@@ -662,74 +549,15 @@ function DataManagementPageContent() {
       <div className="grid gap-2 lg:gap-3 xl:gap-4">
         <DatabaseMigration />
 
-        <div className="grid gap-2 lg:grid-cols-3 lg:gap-3 xl:gap-4">
-        <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
-          <h2 className="text-sm font-semibold text-fg mb-1">💱 Food Price Repricer</h2>
-            <p className="text-xs text-muted mb-3">
-              Recomputes order line prices and order totals using the latest branch prices and markups.
-            </p>
-            {selectedCycleId && (
-              <div className="mb-3 px-2 py-1.5 rounded-lg bg-info-bg border border-info-border text-xs text-info-fg">
-                Targeting cycle: <strong>{cycles.find(c => c.id === selectedCycleId)?.name || selectedCycleId}</strong>{cycles.find(c => c.id === selectedCycleId)?.is_active ? ' (Active)' : ''}
-              </div>
-            )}
-            <div className="flex flex-col gap-2">
-              <input
-                value={confirmRepriceOrders}
-                onChange={(e) => setConfirmRepriceOrders(e.target.value)}
-                placeholder='Type "REPRICE ORDERS"'
-                className="w-full px-3 py-2 text-sm border border-line rounded-lg bg-surface"
-                disabled={loading || !!processingAction}
-              />
-              <Button onClick={repriceFoodOrders} loading={processingAction === 'repriceOrders'} disabled={loading || !!processingAction}>
-                {processingAction === 'repriceOrders' ? 'Repricing…' : 'Reprice Orders'}
-              </Button>
-            </div>
-          </div>
-
-        {/* Items / Prices Import — moved here from the food Import page */}
-        <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4 lg:col-span-2">
-          <h2 className="text-sm font-semibold text-fg mb-1">📥 Items / Prices Import</h2>
-          <p className="text-xs text-muted mb-3">
-            {loadingMode ? <span className="inline-block h-3 w-64 animate-pulse rounded bg-muted" /> : 'Expected columns: sku, item_name, unit, category, branch_code, price'}
-          </p>
-          {selectedCycleId && (
-            <div className="mb-3 px-2 py-1.5 rounded-lg bg-info-bg border border-info-border text-xs text-info-fg">
-              Prices will be saved to cycle: <strong>{cycles.find(c => c.id === selectedCycleId)?.name || selectedCycleId}</strong>{cycles.find(c => c.id === selectedCycleId)?.is_active ? ' (Active)' : ''}
-            </div>
-          )}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={(e) => setPricesFile(e.target.files?.[0] || null)}
-              className="w-full sm:flex-1 sm:min-w-0 text-[11px] sm:text-sm p-2 border border-line-subtle rounded-lg"
-            />
-            <Button
-              onClick={uploadPrices}
-              loading={pricesLoading}
-              disabled={!pricesFile || loadingMode}
-              className="min-w-[170px]"
-            >
-              {pricesLoading ? 'Uploading…' : isDemandTrackingMode ? 'Upload Items/Prices' : 'Upload Items/Prices/Stock'}
-            </Button>
-            <Button variant="secondary" leftIcon={FileSpreadsheet} onClick={downloadPricesTemplate} disabled={loadingMode} className="min-w-[170px]">
-              Download Excel Template
-            </Button>
-          </div>
-          {pricesLog && (
-            <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-subtle p-3 text-xs text-fg overflow-x-auto">{pricesLog}</pre>
-          )}
-        </div>
-        </div>
-
-        {/* Item Image Management */}
-        <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
-          <h2 className="text-sm font-semibold text-fg mb-1">🖼️ Item Image Management</h2>
-          <p className="text-xs text-muted mb-3">
-            Upload and manage images for inventory items to improve the shopping experience.
-          </p>
-          <ItemManagement cycleId={selectedCycleId} cycles={cycles} />
+        {/* Items tools moved to Items Management — pointers so old muscle memory still lands somewhere */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-info-border bg-info-bg px-3.5 py-2.5 text-xs text-info-fg">
+          <Link2 className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
+          <span>
+            Items tools moved: Food Price Repricer &amp; Items/Prices Import →{' '}
+            <Link href="/admin/food/items-import" className="font-semibold underline">Items Import</Link>, and Item
+            Image Management →{' '}
+            <Link href="/admin/food/item-images" className="font-semibold underline">Items Image Mang.</Link>
+          </span>
         </div>
 
         <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">

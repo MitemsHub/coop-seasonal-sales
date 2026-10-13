@@ -20,7 +20,9 @@ import {
   ChevronDown,
   Clock,
   Database,
+  FileDown,
   History,
+  Image as ImageIcon,
   Landmark,
   LayoutDashboard,
   LogOut,
@@ -206,6 +208,7 @@ export default function AdminLayout({ children }) {
   const [foodSub, setFoodSub] = useState('orders')
   const foodOrdersOpen = foodSub === 'orders'
   const foodOpsOpen = foodSub === 'ops'
+  const foodItemsOpen = foodSub === 'items'
   const toggleFoodSub = (key) => setFoodSub((cur) => (cur === key ? null : key))
   const [ramSub, setRamSub] = useState('orders')
   const ramOrdersOpen = ramSub === 'orders'
@@ -241,7 +244,7 @@ export default function AdminLayout({ children }) {
       // default — this was why clicking a page seemed to "close" Operations
       // and reopen Orders after a remount.
       const sub = window.localStorage.getItem('admin_sidebar_subgroup')
-      if (sub === 'food:orders' || sub === 'food:ops') setFoodSub(sub === 'food:ops' ? 'ops' : 'orders')
+      if (sub === 'food:orders' || sub === 'food:ops' || sub === 'food:items') setFoodSub(sub.slice(5))
       if (sub === 'ram:orders' || sub === 'ram:ops') setRamSub(sub === 'ram:ops' ? 'ops' : 'orders')
       if (sub === 'exh:orders' || sub === 'exh:ops') setExhSub(sub === 'exh:ops' ? 'ops' : 'orders')
     } catch {}
@@ -255,8 +258,11 @@ export default function AdminLayout({ children }) {
       setOpenModule('food')
       const isOps = ['/admin/food/banks', '/admin/food/inventory', '/admin/food/markups',
         '/admin/food/reports', '/admin/food/audit', '/admin/food/data-management',
-        '/admin/food/cart', '/admin/food/import', '/admin/food/survey'].some((p) => pathname.startsWith(p))
-      setFoodSub(isOps ? 'ops' : 'orders')
+        '/admin/food/cart'].some((p) => pathname.startsWith(p))
+      // Items Management children auto-expand their own subgroup on navigation.
+      const isItems = ['/admin/food/survey', '/admin/food/items-import',
+        '/admin/food/item-images', '/admin/food/import'].some((p) => pathname.startsWith(p))
+      setFoodSub(isItems ? 'items' : isOps ? 'ops' : 'orders')
     } else if (pathname.startsWith('/admin/ram')) {
       setOpenModule('ram')
       const isOps = ['/admin/ram/banks', '/admin/ram/reports', '/admin/ram/audit',
@@ -378,6 +384,8 @@ export default function AdminLayout({ children }) {
     if (pathname.startsWith('/admin/food/data-management')) return 'food_data'
     if (pathname.startsWith('/admin/food/cart')) return 'food_cart'
     if (pathname.startsWith('/admin/food/survey')) return 'food_survey'
+    if (pathname.startsWith('/admin/food/items-import')) return 'food_items_import'
+    if (pathname.startsWith('/admin/food/item-images')) return 'food_item_images'
     if (pathname.startsWith('/admin/ram/pending')) return 'ram_pending'
     if (pathname.startsWith('/admin/ram/cancelled')) return 'ram_cancelled'
     if (pathname.startsWith('/admin/ram/approved')) return 'ram_approved'
@@ -539,11 +547,18 @@ export default function AdminLayout({ children }) {
                   <div className="mt-0.5 space-y-0.5 pl-4">
                     <NavLink href="/admin/food/banks" label="Banks" icon={Landmark} active={activeKey === 'food_banks'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/food/inventory" label="Inventory" icon={Boxes} active={activeKey === 'food_inventory'} collapsed={false} onNavigate={navOnClick} />
-                    <NavLink href="/admin/food/survey" label="Item Survey" icon={ClipboardList} active={activeKey === 'food_survey'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/food/markups" label="Markups" icon={Percent} active={activeKey === 'food_markups'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/food/reports" label="Report" icon={BarChart3} active={activeKey === 'food_reports'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/food/audit" label="Audit Log" icon={History} active={activeKey === 'food_audit'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/food/data-management" label="Data" icon={Database} active={activeKey === 'food_data'} collapsed={false} onNavigate={navOnClick} />
+                  </div>
+                )}
+                <SubGroupToggle open={foodItemsOpen} onToggle={() => toggleFoodSub('items')} label="Items Management" />
+                {foodItemsOpen && (
+                  <div className="mt-0.5 space-y-0.5 pl-4">
+                    <NavLink href="/admin/food/survey" label="Items Survey" icon={ClipboardList} active={activeKey === 'food_survey'} collapsed={false} onNavigate={navOnClick} />
+                    <NavLink href="/admin/food/items-import" label="Items Import" icon={FileDown} active={activeKey === 'food_items_import'} collapsed={false} onNavigate={navOnClick} />
+                    <NavLink href="/admin/food/item-images" label="Items Image Mang." icon={ImageIcon} active={activeKey === 'food_item_images'} collapsed={false} onNavigate={navOnClick} />
                   </div>
                 )}
               </div>
