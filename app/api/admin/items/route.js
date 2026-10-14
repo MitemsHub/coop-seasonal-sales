@@ -626,6 +626,9 @@ export async function POST(req) {
 
     let branches = []
     let targetBranchId = null
+    // The food_survey_entries id (from draft.draft_id) — declared here so the
+    // pin-the-draft step below (outside the outsourced block) can read it.
+    let surveyEntryId = null
 
     // Outsourced edits are branch-scoped: the price/markup are written only
     // for the draft's branch, not broadcast to every branch in the cycle.
@@ -635,7 +638,8 @@ export async function POST(req) {
       // Other clients (for example a future "add outsourced item" flow) may
       // post branch_id directly on the payload instead.
       const draft = body.draft
-      const surveyEntryId = Number(draft?.draft_id ?? NaN)
+      const entryId = Number(draft?.draft_id ?? NaN)
+      if (Number.isFinite(entryId) && entryId > 0) surveyEntryId = entryId
       const bodyBranchId = body.branch_id != null && body.branch_id !== '' ? Number(body.branch_id) : null
 
       if (draft?.branch_id != null) {

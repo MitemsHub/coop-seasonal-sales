@@ -13,7 +13,7 @@ vi.mock('@/lib/directDb', () => ({
   transactionalQuery: vi.fn(),
 }))
 
-import { GET } from './route'
+import { GET, POST } from './route'
 import { createClient } from '@/lib/supabaseServer'
 import { queryDirect } from '@/lib/directDb'
 
@@ -93,6 +93,69 @@ const GET_OUTSOURCED = new Request(new URL('http://x/api/admin/items?section=out
 beforeEach(() => {
   queryDirect.mockReset()
   queryDirect.mockResolvedValue({ rows: [], rowCount: 0 })
+})
+
+describe('POST outsourced save — draft pinning', () => {
+  it('pins the survey entry via queryDirect and does NOT crash on scope error (ReferenceError regression)', async () => {
+    const items = [
+      { item_id: 1, sku: 'KELLOGGSCOPOPSACHET400G', name: "Kellogg's Coco Pops Sachet 400g", category: 'Cereals', unit: 'Carton', image_url: 'x.png', source: 'outsourced' },
+    ]
+    const priceItemRow = { item_id: 1, sku: 'KELLOGGSCOPOPSACHET400G', name: "Kellogg's Coco Pops Sachet 400g" }
+    const supa = {
+      from(table) {
+        const upsertOk = () => Promise.resolve({ data: null, error: null, count: 1 })
+        // covers: branches list/probe, items update, maybeSingle lookups
+        return {
+          select: () => ({
+            order: () => ({
+              maybeSingle: () => Promise.resolve({ data: { id: 1, code: 'ABEOKUTA', name: 'Abeokuta' }, error: null }),
+              eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 1, code: 'ABEOKUTA' }, error: null }) }),
+            }),
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: { id: 1, code: 'ABEOKUTA' }, error: null }),
+              single: () => Promise.resolve({ data: priceItemRow, error: null }),
+            }),
+            maybeSingle: () => Promise.resolve({ data: { id: 1, code: 'ABEOKUTA' }, error: null }),
+            single: () => Promise.resolve({ data: priceItemRow, error: null }),
+            limit: () => Promise.resolve({ data: [], error: null }),
+          }),
+          update: () => ({
+            eq: () => ({
+              select: () => ({
+                single: () => Promise.resolve({ data: priceItemRow, error: null }),
+              }),
+            }),
+          }),
+          upsert: () => upsertOk(),
+        }
+      },
+    }
+    createClient.mockReturnValue(supa)
+
+    const body = {
+      section: 'outsourced',
+      item_id: 1,
+      name: "Kellogg's Coco Pops Sachet 400g",
+      sku: 'KELLOGGSCOPOPSACHET400G',
+      category: 'Cereals',
+      unit: 'Carton',
+      price: 2660,
+      image_url: 'x.png',
+      draft: { branch_id: 1, branch_name: 'Abeokuta', branch_code: 'ABEOKUTA', draft_id: 11, draft_name: 'Coco pop', draft_category: 'Cereals', draft_unit: 'Carton', draft_price: 2500, saved: false, key: 'b1::coco pop' },
+    }
+    const req = new Request('http://x/api/admin/items', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+
+    const res = await POST(req)
+    const json = await res.json()
+    // Before the fix this crashed with 500 “surveyEntryId is not defined”.
+    expect(res.status).toBe(200)
+    expect(json.ok).toBe(true)
+    // The pin step ran with the right ids (entry 11 → item 1).
+    expect(queryDirect).toHaveBeenCalledWith(
+      expect.stringContaining('SET saved_item_id = $1 WHERE id = $2'),
+      [1, 11]
+    )
+  })
 })
 
 describe('outsourced drafts — link recovery and repair', () => {
