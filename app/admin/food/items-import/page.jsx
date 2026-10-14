@@ -528,6 +528,7 @@ function ItemsImportContent() {
                       branch_code: form.draft.branch_code,
                       rep_name: form.draft.rep_name,
                       rep_photo: form.draft.rep_photo,
+                      draft_id: form.draft.entry_id ?? null,
                       draft_name: form.draft.draft_name,
                       draft_category: form.draft.draft_category,
                       draft_unit: form.draft.draft_unit,

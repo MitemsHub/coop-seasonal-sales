@@ -61,6 +61,22 @@ const ensureSourceColumn = async () => {
   }
 }
 
+// food_survey_entries.saved_item_id pins a rep's survey draft to the exact
+// item row the admin saved it as. The name alone is NOT reliable — the admin
+// routinely refines "Coco pop" into "Kellogg's Coco Pops Sachet 400g", and a
+// name-only match would then show the branch's draft as "Not worked on yet"
+// even though the item (price, image, markup) is live in that branch's shop.
+// Created on demand with the same lazy-DDL pattern as items.source.
+const ensureSurveyLinkColumn = async () => {
+  try {
+    await queryDirect(`ALTER TABLE public.food_survey_entries ADD COLUMN IF NOT EXISTS saved_item_id BIGINT`)
+    return true
+  } catch (e) {
+    console.warn('food_survey_entries.saved_item_id column ensure skipped:', e?.message || e)
+    return false
+  }
+}
+
 const resolveCycleId = async (supabase, requested) => {
   if (requested != null && requested !== '') return Number(requested)
   const { data, error } = await supabase.from('cycles').select('id').eq('is_active', true).maybeSingle()
@@ -304,11 +320,16 @@ export async function GET(req) {
 
     let priceQ = supabase.from('branch_item_prices').select('branch_id, item_id, price')
     if (pricesHasCycle) priceQ = priceQ.eq('cycle_id', cycleId)
+    // A cycle can hold thousands of priced rows (24 branches × hundreds of
+    // items); without an explicit range PostgREST silently returns the first
+    // 1000 and the list would miss items (ghost "Not worked on yet" cards).
+    priceQ = priceQ.range(0, 99999)
     const { data: prices, error: pErr } = await priceQ
     if (pErr) return NextResponse.json({ ok: false, error: pErr.message }, { status: 500 })
 
     let markupQ = supabase.from('branch_item_markups').select('branch_id, item_id, amount, active')
     if (markupsHasCycle) markupQ = markupQ.eq('cycle_id', cycleId)
+    markupQ = markupQ.range(0, 99999)
     const { data: markups } = await markupQ // markup table may predate markups — ignore errors
 
     const pricesByItem = new Map()
@@ -352,9 +373,11 @@ export async function GET(req) {
     }
 
     // ── Outsourced: rep survey drafts, refined into shop items ──────────
-    const { data: entries, error: eErr } = await supabase
-      .from('food_survey_entries')
-      .select('id, catalog_id, item_name, category, price, photo_url, submission:food_survey_submissions(cycle_id, rep_name, branch_id)')
+    const surveyLinkCol = await ensureSurveyLinkColumn()
+    const entriesSelect = surveyLinkCol
+      ? 'id, catalog_id, item_name, category, price, photo_url, saved_item_id, submission:food_survey_submissions(cycle_id, rep_name, branch_id)'
+      : 'id, catalog_id, item_name, category, price, photo_url, submission:food_survey_submissions(cycle_id, rep_name, branch_id)'
+    const { data: entries, error: eErr } = await supabase.from('food_survey_entries').select(entriesSelect)
     if (eErr) return NextResponse.json({ ok: false, error: eErr.message }, { status: 500 })
 
     const [{ data: catalog }, { data: branches }] = await Promise.all([
@@ -382,6 +405,8 @@ export async function GET(req) {
       drafts.set(draftKey, {
         key: draftKey,
         norm_name: nameKey,
+        entry_id: e.id,
+        entry_id_link: surveyLinkCol ? e.saved_item_id ?? null : null,
         draft_name: String(e.item_name || '').trim(),
         draft_category: e.category || cat?.name || '',
         draft_unit: cat?.unit || '',
@@ -396,9 +421,65 @@ export async function GET(req) {
 
     const rows = []
     const draftedNames = new Set()
+    // A draft resolves its saved item through the persistent survey link
+    // (saved_item_id) FIRST — surviving renames — and falls back to the
+    // name match only when the link is missing (legacy data).
+    const itemById = new Map((items || []).map((it) => [it.item_id, it]))
+    // Legacy backfill: drafts saved before the link existed are recovered via
+    // the branch-scoped price row (an outsourced item priced in THIS cycle at
+    // the draft's own branch can only be that draft's save). The recovered
+    // link is persisted so every later load resolves it directly.
+    const recoveredLinks = new Map() // entry_id → item_id
+    if (surveyLinkCol) {
+      const pendingDrafts = []
+      for (const d of drafts.values()) {
+        const link = d.entry_id_link
+        if (link == null || !itemById.has(link)) pendingDrafts.push(d)
+        else recoveredLinks.set(d.entry_id, link)
+      }
+      for (const d of pendingDrafts) {
+        if (d.branch_id == null) continue
+        const matches = (items || []).filter((it) => {
+          if ((sourceCol ? it.source || 'general' : it.source) !== 'outsourced') return false
+          const priced = (pricesByItem.get(it.item_id) || []).some(
+            (p) => Number(p.branch_id) === Number(d.branch_id) && Number(p.price || 0) > 0
+          )
+          return priced
+        })
+        // Exactly one candidate → confident recovery. With several, break
+        // the tie with the rep's own draft price (the form pre-fills it, so
+        // unadministrated saves keep it); still ambiguous → leave the
+        // name-match fallback in charge rather than guess.
+        let chosen = null
+        if (matches.length === 1) {
+          chosen = matches[0]
+        } else if (matches.length > 1 && d.draft_price > 0) {
+          const byPrice = matches.filter((m) => {
+            const pr = (pricesByItem.get(m.item_id) || []).find((p) => Number(p.branch_id) === Number(d.branch_id))
+            return pr != null && Math.abs(Number(pr.price) - d.draft_price) < 0.01
+          })
+          if (byPrice.length === 1) chosen = byPrice[0]
+        }
+        if (chosen) {
+          recoveredLinks.set(d.entry_id, chosen.item_id)
+          d.entry_id_link = chosen.item_id
+          try {
+            await queryDirect(`UPDATE public.food_survey_entries SET saved_item_id = $1 WHERE id = $2 AND saved_item_id IS NULL`, [chosen.item_id, d.entry_id])
+          } catch {}
+        }
+      }
+    }
     for (const d of drafts.values()) {
       draftedNames.add(d.norm_name)
-      const saved = itemByName.get(d.norm_name)
+      let saved = null
+      const linkedId = surveyLinkCol ? recoveredLinks.get(d.entry_id) ?? d.entry_id_link ?? null : null
+      if (linkedId != null && itemById.has(linkedId)) {
+        saved = itemById.get(linkedId)
+      } else {
+        // No persistent link (legacy rows) or the linked item was deleted —
+        // fall back to the old name-only match.
+        saved = itemByName.get(d.norm_name)
+      }
       rows.push({ ...decorate(saved || {}), saved: !!saved, draft: d })
     }
     // Keep already-saved outsourced items editable even if the survey entry
@@ -505,10 +586,12 @@ export async function POST(req) {
     // Outsourced edits are branch-scoped: the price/markup are written only
     // for the draft's branch, not broadcast to every branch in the cycle.
     if (section === 'outsourced') {
-      // The Items Import editor sends draft.branch_id. Other clients (for
-      // example a future "add outsourced item" flow) may post branch_id
-      // directly on the payload instead.
+      // The Items Import editor sends draft.branch_id (plus draft_id, the
+      // food_survey_entries id, so this save can pin the draft to the item.
+      // Other clients (for example a future "add outsourced item" flow) may
+      // post branch_id directly on the payload instead.
       const draft = body.draft
+      const surveyEntryId = Number(draft?.draft_id ?? NaN)
       const bodyBranchId = body.branch_id != null && body.branch_id !== '' ? Number(body.branch_id) : null
 
       if (draft?.branch_id != null) {
@@ -584,6 +667,17 @@ export async function POST(req) {
         branches_priced: 0,
         markup_branches: 0,
       })
+    }
+
+    // ── 1b. Pin the rep's survey draft to this item row (outsourced saves)
+    // The link is what lets the Outsourced list keep showing "Worked on"
+    // after the admin renames the item during refinement.
+    if (section === 'outsourced' && Number.isFinite(surveyEntryId) && surveyEntryId > 0) {
+      try {
+        await queryDirect(`UPDATE public.food_survey_entries SET saved_item_id = $1 WHERE id = $2`, [itemRow.item_id, surveyEntryId])
+      } catch (e) {
+        console.warn('Survey entry link update skipped:', e?.message || e)
+      }
     }
 
     // ── 2. Write price + markup only for the relevant branch(es) ─────────

@@ -32,6 +32,9 @@ export async function POST(request) {
 
     const supabase = createClient()
 
+    // order_lines uses qty/amount (not quantity/line_total) — these names are
+    // what echo through the recalc and the response payload below.
+
     // 1. Resolve branch id from code
     const { data: branch, error: bErr } = await supabase
       .from('branches')
@@ -57,9 +60,16 @@ export async function POST(request) {
     }
 
     // 3. Find all orders at this delivery branch (Pending/Posted/Delivered — don't touch Cancelled)
+    const { error: cycleColErr } = await supabase.from('orders').select('cycle_id').limit(1)
+    const ordersHasCycle = !cycleColErr
+
     let ordersQuery = supabase
       .from('orders')
-      .select('order_id, status, total_amount, payment_option')
+      .select(
+        ordersHasCycle
+          ? 'order_id, status, total_amount, payment_option, cycle_id'
+          : 'order_id, status, total_amount, payment_option'
+      )
       .eq('delivery_branch_id', branchId)
       .in('status', ['Pending', 'Posted', 'Delivered'])
 
@@ -83,9 +93,10 @@ export async function POST(request) {
     const orderIds = orders.map((o) => o.order_id)
 
     // 4. Find order_lines that match the SKUs in those orders
+    // (qty/amount are the table's real column names)
     const { data: linesToRemove, error: lErr } = await supabase
       .from('order_lines')
-      .select('id, order_id, item_id, quantity, unit_price, line_total')
+      .select('id, order_id, item_id, qty, unit_price, amount')
       .in('order_id', orderIds)
       .in('item_id', itemIds)
 
@@ -110,18 +121,46 @@ export async function POST(request) {
 
     if (delErr) return NextResponse.json({ ok: false, error: delErr.message }, { status: 500 })
 
-    // 6. Recalculate totals for affected orders
+    // 6. Recalculate totals for affected orders.
+    // order_lines.amount already includes the branch markup (same convention
+    // as the repricer), so the base total is the SUM of the remaining lines.
+    // Loan orders keep their interest: base + ROUND(base × rate%), with the
+    // rate from the cycle (default 13% — same fallback the repricer uses).
     const affectedOrderIds = [...new Set(linesToRemove.map((l) => l.order_id))]
     const errors = []
 
+    let ratePct = 13
+    const anyLoan = orders.some((o) => o.payment_option === 'Loan')
+    const loanRatePctByCycle = new Map()
+    if (anyLoan) {
+      for (const o of orders.filter((x) => x.payment_option === 'Loan')) {
+        const cid = ordersHasCycle ? o.cycle_id ?? cycleId : cycleId
+        if (cid != null && !loanRatePctByCycle.has(cid)) loanRatePctByCycle.set(cid, null)
+      }
+      for (const cid of loanRatePctByCycle.keys()) {
+        try {
+          const { data: rRow, error: rErr } = await supabase
+            .from('cycles')
+            .select('food_loan_interest_rate_pct')
+            .eq('id', cid)
+            .maybeSingle()
+          if (!rErr && rRow && rRow.food_loan_interest_rate_pct != null) {
+            loanRatePctByCycle.set(cid, Math.max(0, Number(rRow.food_loan_interest_rate_pct || 0)))
+          }
+        } catch {}
+      }
+    }
+
     for (const orderId of affectedOrderIds) {
+      const orderRow = orders.find((o) => o.order_id === orderId)
+
       // Get remaining lines for this order
       const { data: remainingLines } = await supabase
         .from('order_lines')
-        .select('line_total')
+        .select('amount')
         .eq('order_id', orderId)
 
-      const newTotal = (remainingLines || []).reduce((sum, l) => sum + Number(l.line_total || 0), 0)
+      const baseTotal = (remainingLines || []).reduce((sum, l) => sum + Number(l.amount || 0), 0)
 
       if (!remainingLines || remainingLines.length === 0) {
         // Order has no more items — cancel it
@@ -131,6 +170,14 @@ export async function POST(request) {
           .eq('order_id', orderId)
         if (cancelErr) errors.push({ order_id: orderId, error: cancelErr.message })
       } else {
+        const isLoan = orderRow?.payment_option === 'Loan'
+        let newTotal = baseTotal
+        if (isLoan) {
+          const cid = ordersHasCycle ? orderRow?.cycle_id ?? cycleId : cycleId
+          const pct = (cid != null && loanRatePctByCycle.get(cid) != null ? loanRatePctByCycle.get(cid) : ratePct)
+          ratePct = Math.max(0, Number(pct || 0))
+          newTotal = baseTotal + Math.round(baseTotal * (ratePct / 100))
+        }
         // Update the order total
         const { error: updateErr } = await supabase
           .from('orders')
@@ -148,8 +195,8 @@ export async function POST(request) {
       removed_details: linesToRemove.map((l) => ({
         order_id: l.order_id,
         item_id: l.item_id,
-        quantity: l.quantity,
-        line_total: l.line_total,
+        quantity: l.qty,
+        line_total: l.amount,
       })),
       missing_skus: missingSkus,
       errors,
