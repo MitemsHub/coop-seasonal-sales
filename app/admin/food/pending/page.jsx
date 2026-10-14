@@ -10,7 +10,7 @@ import { announceRepFoodStats } from '../../../lib/repFoodStatsSync'
 import Button from '../../../components/ui/Button'
 import { CheckSquare, ChevronLeft, ChevronRight, Inbox, RefreshCw, RotateCcw, Search, Send, Truck, XCircle, Zap } from 'lucide-react'
 
-export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
+function FoodOrdersAdminPageContent({ status = 'Pending' }) {
   const [orders, setOrders] = useState([])
   const [branches, setBranches] = useState([])
   const [term, setTerm] = useState('')

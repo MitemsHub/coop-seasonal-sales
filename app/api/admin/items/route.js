@@ -436,15 +436,20 @@ export async function PATCH(req) {
     const itemIds = [...new Set((Array.isArray(body.item_ids) ? body.item_ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0))]
     const imageUrl = String(body.image_url || '').trim()
 
-    if (!imageUrl) return NextResponse.json({ ok: false, error: 'image_url is required — pick an image from the bank' }, { status: 400 })
+    // A single-item patch carrying only name/SKU is a field edit (the Image
+    // Bank inline rename) — it must not be gated on an image_url.
+    const isFieldEdit = itemIds.length === 1 && (body.name !== undefined || body.sku !== undefined)
+
+    if (!imageUrl && !isFieldEdit) return NextResponse.json({ ok: false, error: 'image_url is required — pick an image from the bank' }, { status: 400 })
     if (!itemIds.length) return NextResponse.json({ ok: false, error: 'No items selected' }, { status: 400 })
     if (itemIds.length > 500) return NextResponse.json({ ok: false, error: 'Select at most 500 items per batch' }, { status: 400 })
 
     const { data, error } = await supabase
       .from('items')
-      .update({ image_url: imageUrl })
+      .update(isFieldEdit ? {} : { image_url: imageUrl })
       .in('item_id', itemIds)
       .select('item_id')
+
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
     return NextResponse.json({ ok: true, updated: (data || []).length, requested: itemIds.length })
@@ -483,8 +488,39 @@ export async function POST(req) {
     await ensureSourceColumn()
     const sourceCol = await hasColumn(supabase, 'items', 'source')
 
-    let branches = []
-    if (!bankOnly) {
+    let targetBranchId = null
+
+    // Outsourced edits are branch-scoped: the price/markup are written only
+    // for the draft's branch, not broadcast to every branch in the cycle.
+    if (section === 'outsourced') {
+      // The Items Import editor sends draft.branch_id. Other clients (for
+      // example a future "add outsourced item" flow) may post branch_id
+      // directly on the payload instead.
+      const draft = body.draft
+      const bodyBranchId = body.branch_id != null && body.branch_id !== '' ? Number(body.branch_id) : null
+
+      if (draft?.branch_id != null) {
+        targetBranchId = Number(draft.branch_id)
+      } else if (Number.isFinite(bodyBranchId) && bodyBranchId > 0) {
+        targetBranchId = bodyBranchId
+      } else {
+        return NextResponse.json(
+          { ok: false, error: 'An outsourced item needs a draft.branch_id or branch_id so price and markup are written for the right branch.' },
+          { status: 400 }
+        )
+      }
+
+      if (!Number.isFinite(targetBranchId) || targetBranchId <= 0) {
+        return NextResponse.json({ ok: false, error: 'branch id must be a valid branch' }, { status: 400 })
+      }
+      const { data: branchRow, error: brErr } = await supabase
+        .from('branches')
+        .select('id, code')
+        .eq('id', targetBranchId)
+        .maybeSingle()
+      if (brErr) return NextResponse.json({ ok: false, error: brErr.message }, { status: 500 })
+      if (!branchRow) return NextResponse.json({ ok: false, error: 'Branch not found' }, { status: 404 })
+    } else {
       const { data: branchRows, error: bErr } = await supabase.from('branches').select('id, code').order('id')
       if (bErr) return NextResponse.json({ ok: false, error: bErr.message }, { status: 500 })
       if (!branchRows?.length) return NextResponse.json({ ok: false, error: 'No branches found' }, { status: 400 })
@@ -538,56 +574,66 @@ export async function POST(req) {
       })
     }
 
-    // ── 2. Price for EVERY branch in this cycle → visible in every shop ──
+    // ── 2. Write price + markup only for the relevant branch(es) ─────────
     const pricesHasCycle = await hasColumn(supabase, 'branch_item_prices', 'cycle_id')
-    try {
-      await queryDirect(
-        pricesHasCycle
-          ? `CREATE UNIQUE INDEX IF NOT EXISTS idx_branch_item_prices_branch_item_cycle ON public.branch_item_prices(branch_id, item_id, cycle_id);`
-          : `CREATE UNIQUE INDEX IF NOT EXISTS idx_branch_item_prices_branch_item ON public.branch_item_prices(branch_id, item_id);`
-      )
-    } catch {}
+    const markupsHasCycle = await hasColumn(supabase, 'branch_item_markups', 'cycle_id')
 
-    const priceRows = branches.map((b) => {
-      const row = { branch_id: b.id, item_id: itemRow.item_id, price }
-      if (pricesHasCycle) row.cycle_id = cycleId
-      return row
-    })
+    const priceRows = section === 'outsourced'
+      ? [{ branch_id: targetBranchId, item_id: itemRow.item_id, price }]
+      : branches.map((b) => {
+          const row = { branch_id: b.id, item_id: itemRow.item_id, price }
+          if (pricesHasCycle) row.cycle_id = cycleId
+          return row
+        })
 
-    const upsertPrices = async (part) => {
-      const { error, count } = await supabase
-        .from('branch_item_prices')
-        .upsert(part, { onConflict: pricesHasCycle ? 'branch_id,item_id,cycle_id' : 'branch_id,item_id', ignoreDuplicates: false, count: 'exact' })
-      return { error, count }
-    }
-
-    let { error: pErr } = await upsertPrices(priceRows)
-    if (pErr && String(pErr.message || '').includes('duplicate key value') && String(pErr.message || '').includes('branch_item_prices_pkey')) {
+    let branches_priced = 0
+    const writePrices = async (rows) => {
+      if (!rows.length) return 0
       try {
-        await queryDirect(`SELECT setval(pg_get_serial_sequence('public.branch_item_prices','id'), (SELECT COALESCE(MAX(id), 0) FROM public.branch_item_prices));`)
+        await queryDirect(
+          pricesHasCycle
+            ? `CREATE UNIQUE INDEX IF NOT EXISTS idx_branch_item_prices_branch_item_cycle ON public.branch_item_prices(branch_id, item_id, cycle_id);`
+            : `CREATE UNIQUE INDEX IF NOT EXISTS idx_branch_item_prices_branch_item ON public.branch_item_prices(branch_id, item_id);`
+        )
       } catch {}
-      ;({ error: pErr } = await upsertPrices(priceRows))
-    }
-    if (pErr && String(pErr.message || '').toLowerCase().includes('no unique or exclusion constraint matching the on conflict specification')) {
-      // Missing unique index — fall back to manual update/insert under a lock.
-      await transactionalQuery(7201, async (q) => {
-        for (const r of priceRows) {
-          if (pricesHasCycle) {
-            const { rows } = await q('SELECT id FROM branch_item_prices WHERE branch_id = $1 AND item_id = $2 AND cycle_id = $3 LIMIT 1', [r.branch_id, r.item_id, r.cycle_id])
-            if (rows.length) await q('UPDATE branch_item_prices SET price = $1 WHERE id = $2', [r.price, rows[0].id])
-            else await q('INSERT INTO branch_item_prices (branch_id, item_id, cycle_id, price) VALUES ($1, $2, $3, $4)', [r.branch_id, r.item_id, r.cycle_id, r.price])
-          } else {
-            const { rows } = await q('SELECT id FROM branch_item_prices WHERE branch_id = $1 AND item_id = $2 LIMIT 1', [r.branch_id, r.item_id])
-            if (rows.length) await q('UPDATE branch_item_prices SET price = $1 WHERE id = $2', [r.price, rows[0].id])
-            else await q('INSERT INTO branch_item_prices (branch_id, item_id, price) VALUES ($1, $2, $3)', [r.branch_id, r.item_id, r.price])
-          }
-        }
-      })
-      pErr = null
-    }
-    if (pErr) return NextResponse.json({ ok: false, error: pErr.message }, { status: 500 })
 
-    // ── 3. Markup for EVERY branch (same power as the Markups module) ────
+      const upsertPrices = async (part) => {
+        const { error, count } = await supabase
+          .from('branch_item_prices')
+          .upsert(part, { onConflict: pricesHasCycle ? 'branch_id,item_id,cycle_id' : 'branch_id,item_id', ignoreDuplicates: false, count: 'exact' })
+        return { error, count }
+      }
+
+      let { error: pErr } = await upsertPrices(rows)
+      if (pErr && String(pErr.message || '').includes('duplicate key value') && String(pErr.message || '').includes('branch_item_prices_pkey')) {
+        try {
+          await queryDirect(`SELECT setval(pg_get_serial_sequence('public.branch_item_prices','id'), (SELECT COALESCE(MAX(id), 0) FROM public.branch_item_prices));`)
+        } catch {}
+        ;({ error: pErr } = await upsertPrices(rows))
+      }
+      if (pErr && String(pErr.message || '').toLowerCase().includes('no unique or exclusion constraint matching the on conflict specification')) {
+        await transactionalQuery(7201, async (q) => {
+          for (const r of rows) {
+            if (pricesHasCycle) {
+              const { rows: qRows } = await q('SELECT id FROM branch_item_prices WHERE branch_id = $1 AND item_id = $2 AND cycle_id = $3 LIMIT 1', [r.branch_id, r.item_id, r.cycle_id])
+              if (qRows.length) await q('UPDATE branch_item_prices SET price = $1 WHERE id = $2', [r.price, qRows[0].id])
+              else await q('INSERT INTO branch_item_prices (branch_id, item_id, cycle_id, price) VALUES ($1, $2, $3, $4)', [r.branch_id, r.item_id, r.cycle_id, r.price])
+            } else {
+              const { rows: qRows } = await q('SELECT id FROM branch_item_prices WHERE branch_id = $1 AND item_id = $2 LIMIT 1', [r.branch_id, r.item_id])
+              if (qRows.length) await q('UPDATE branch_item_prices SET price = $1 WHERE id = $2', [r.price, qRows[0].id])
+              else await q('INSERT INTO branch_item_prices (branch_id, item_id, price) VALUES ($1, $2, $3)', [r.branch_id, r.item_id, r.price])
+            }
+          }
+        })
+        pErr = null
+      }
+      if (pErr) return NextResponse.json({ ok: false, error: pErr.message }, { status: 500 })
+      return rows.length
+    }
+
+    branches_priced = await writePrices(priceRows)
+
+    // ── 3. Markup for the relevant branch(es) (same power as the Markups module) ────
     let markupBranches = 0
     if (markup != null) {
       const markupsHasCycle = await hasColumn(supabase, 'branch_item_markups', 'cycle_id')
@@ -599,11 +645,17 @@ export async function POST(req) {
         )
       } catch {}
 
-      const markupRows = branches.map((b) => {
-        const row = { branch_id: b.id, item_id: itemRow.item_id, amount: markup, active: true }
-        if (markupsHasCycle) row.cycle_id = cycleId
-        return row
-      })
+      let markupRows
+      if (section === 'outsourced') {
+        markupRows = [{ branch_id: targetBranchId, item_id: itemRow.item_id, amount: markup, active: true }]
+        if (markupsHasCycle) markupRows[0].cycle_id = cycleId
+      } else {
+        markupRows = branches.map((b) => {
+          const row = { branch_id: b.id, item_id: itemRow.item_id, amount: markup, active: true }
+          if (markupsHasCycle) row.cycle_id = cycleId
+          return row
+        })
+      }
 
       const upsertMarkups = async (part) => {
         const { error, count } = await supabase

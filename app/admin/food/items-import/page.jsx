@@ -507,22 +507,57 @@ function ItemsImportContent() {
     setSaving(true)
     setSaveErr(null)
     try {
-      const json = await postItem({
-        section: form.section,
-        item_id: form.item_id,
-        sku: form.sku,
-        name: form.name,
-        category: form.category,
-        unit: form.unit,
-        price: form.price,
-        markup: form.markup,
-        image_url: form.image_url,
-      })
-      flash(
-        `Saved — “${json.item.name}” now has a price in ${json.branches_priced} branch${json.branches_priced === 1 ? '' : 'es'} for this cycle${
-          json.markup_branches ? ` and markup in ${json.markup_branches}` : ''
-        }. It shows in the shop immediately.`
+      const json = await postItem(
+        JSON.parse(
+          JSON.stringify({
+            section: form.section,
+            item_id: form.item_id,
+            sku: form.sku,
+            name: form.name,
+            category: form.category,
+            unit: form.unit,
+            price: form.price,
+            markup: form.markup,
+            image_url: form.image_url,
+            ...(form.draft
+              ? {
+                  draft: JSON.parse(
+                    JSON.stringify({
+                      branch_id: form.draft.branch_id,
+                      branch_name: form.draft.branch_name,
+                      branch_code: form.draft.branch_code,
+                      rep_name: form.draft.rep_name,
+                      rep_photo: form.draft.rep_photo,
+                      draft_name: form.draft.draft_name,
+                      draft_category: form.draft.draft_category,
+                      draft_unit: form.draft.draft_unit,
+                      draft_price: form.draft.draft_price,
+                      saved: form.draft.saved,
+                      key: form.draft.key,
+                    })
+                  ),
+                }
+              : {}),
+          })
+        )
       )
+
+      flash(
+        (() => {
+          const branchLabel =
+            form.section === 'outsourced' && form.draft?.branch_name
+              ? ` for ${form.draft.branch_name}`
+              : ''
+          const branchSufix = json.branches_priced === 1 ? '' : 'es'
+          return (
+            'Saved — “' + json.item.name + '” is live' + branchLabel +
+            ' in ' + json.branches_priced + ' branch' + branchSufix + ' for this cycle' +
+            (json.markup_branches ? ' with markup in ' + json.markup_branches + ' branch' + branchSufix : '') +
+            '. It shows in the shop immediately.'
+          )
+        })()
+      )
+
       cancelEdit()
       loadSections()
     } catch (e) {
@@ -574,7 +609,9 @@ function ItemsImportContent() {
         markup: newForm.markup,
         image_url: newForm.image_url,
       })
-      flash(`Added — “${json.item.name}” is live in all ${json.branches_priced} branches for this cycle.`)
+      flash(
+        `Added — “${json.item.name}” is live in all ${json.branches_priced} branches for this cycle.`
+      )
       setNewForm(emptyNew)
       setNewSkuTouched(false)
       setShowNew(false)

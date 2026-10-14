@@ -30,7 +30,7 @@ const toastMotion = {
   transition: { duration: 0.18, ease: 'easeOut' },
 }
 
-export function RamOrdersAdminPageContent({ status = 'Pending' }) {
+function RamOrdersAdminPageContent({ status = 'Pending' }) {
   const [orders, setOrders] = useState([])
   const [totalCount, setTotalCount] = useState(0)
   const [locations, setLocations] = useState([])

@@ -32,7 +32,7 @@ function fmtDate(iso) {
   }
 }
 
-export function ExhibitionCyclesContent() {
+function ExhibitionCyclesContent() {
   const [cycles, setCycles] = useState([])
   const [branches, setBranches] = useState([])
   const [loading, setLoading] = useState(true)
