@@ -499,6 +499,10 @@ export async function GET(req) {
           if (!keep.has(d.entry_id)) {
             unlinks.add(d.entry_id)
             d.entry_id_link = null
+            // The recovery pass may have recorded this link before the
+            // repair saw the conflict — drop it so this same load already
+            // resolves the draft as unsaved (no second refresh needed).
+            recoveredLinks.delete(d.entry_id)
           }
         }
       }
