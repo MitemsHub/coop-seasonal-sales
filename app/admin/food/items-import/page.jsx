@@ -810,10 +810,14 @@ function ItemsImportContent() {
               id="edit-name"
               value={form.name}
               onChange={(e) => {
-                setField('name', e.target.value)
-                // An edit row with no SKU yet grows one from the name, same
-                // as the new-item form; an existing SKU is never touched.
-                if (!form.sku) setField('sku', skuPreview(e.target.value))
+                const value = e.target.value
+                setField('name', value)
+                // SKU follows the name whenever the SKU field is empty or
+                // holds the stale auto-generated value of the OLD name (so
+                // a full rename produces a matching SKU) — but a SKU the
+                // admin typed deliberately is never overwritten.
+                const stale = form.sku && form.sku === skuPreview(form.name)
+                if (!form.sku || stale) setField('sku', skuPreview(value))
               }}
               maxLength={255}
             />
@@ -878,7 +882,19 @@ function ItemsImportContent() {
           <div className="sm:col-span-2">
             <ItemImagePicker
               value={form.image_url}
-              onChange={(url) => setField('image_url', url)}
+              onChange={(url, bankRow) => {
+                setField('image_url', url)
+                // Picking a bank item adopts its identity — the rep's draft
+                // name ("Kings Oil 5 Litres") becomes the bank's refined
+                // name ("Kings Oil 5Ltrs") with the bank's real SKU, so the
+                // item joins the catalog instead of duplicating it.
+                if (bankRow) {
+                  setField('name', bankRow.name || '')
+                  setField('sku', String(bankRow.sku || '').toUpperCase())
+                  if (bankRow.category && !form.category) setField('category', bankRow.category)
+                  if (bankRow.unit && !form.unit) setField('unit', bankRow.unit)
+                }
+              }}
               name={form.name}
               sku={form.sku}
               label="Refined image (linked from the Image Bank)"
@@ -1269,8 +1285,12 @@ function ItemsImportContent() {
                     id="new-sku"
                     value={newForm.sku}
                     onChange={(e) => {
-                      setNewSkuTouched(true)
-                      setNewForm((f) => ({ ...f, sku: e.target.value.toUpperCase() }))
+                      const v = e.target.value.toUpperCase()
+                      setNewForm((f) => ({ ...f, sku: v }))
+                      // Clearing the field hands SKU control back to the
+                      // name — otherwise a single touch disables the
+                      // auto-generated SKU for the rest of the form's life.
+                      setNewSkuTouched(v.trim().length > 0)
                     }}
                     placeholder="Generated from the name as you type"
                     maxLength={100}
@@ -1328,7 +1348,22 @@ function ItemsImportContent() {
                 <div className="sm:col-span-2">
                   <ItemImagePicker
                     value={newForm.image_url}
-                    onChange={(url) => setNewForm((f) => ({ ...f, image_url: url }))}
+                    onChange={(url, bankRow) => {
+                      setNewForm((f) => ({
+                        ...f,
+                        image_url: url,
+                        // Adopting a bank item fills every blank field from
+                        // the bank row — name, SKU, category, unit.
+                        ...(bankRow
+                          ? {
+                              name: bankRow.name || f.name,
+                              sku: String(bankRow.sku || '').toUpperCase() || f.sku,
+                              category: f.category || bankRow.category || '',
+                              unit: f.unit || bankRow.unit || '',
+                            }
+                          : {}),
+                      }))
+                    }}
                     name={newForm.name}
                     sku={newForm.sku}
                     label="Refined image (linked from the Image Bank)"

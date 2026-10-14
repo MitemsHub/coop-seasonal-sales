@@ -265,8 +265,10 @@ function ItemImagesPageContent() {
                       id="bank-new-sku"
                       value={createForm.sku}
                       onChange={(e) => {
-                        setCreateSkuTouched(true)
-                        setCreateForm((f) => ({ ...f, sku: e.target.value.toUpperCase() }))
+                        const v = e.target.value.toUpperCase()
+                        setCreateForm((f) => ({ ...f, sku: v }))
+                        // Clearing the field hands SKU control back to the name.
+                        setCreateSkuTouched(v.trim().length > 0)
                       }}
                       placeholder="Generated from the name as you type"
                       maxLength={100}

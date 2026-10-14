@@ -75,8 +75,12 @@ export default function ItemImagePicker({ value, onChange, name = '', sku = '', 
 
   const selected = bank.find((r) => String(r.image_url) === String(value || '')) || null
 
-  const pick = (url) => {
-    onChange && onChange(url)
+  const pick = (row) => {
+    const url = String(row.image_url)
+    // Second argument = the full bank row, so the host form can adopt the
+    // bank item's name/SKU along with its image (outsourced items reuse the
+    // bank identity instead of inventing a new one).
+    onChange && onChange(url, row)
     setOpen(false)
     setSearch('')
     setShowUpload(false)
@@ -239,7 +243,7 @@ export default function ItemImagePicker({ value, onChange, name = '', sku = '', 
                     <li key={`${r.item_id}-${url}`}>
                       <button
                         type="button"
-                        onClick={() => pick(url)}
+                        onClick={() => pick(r)}
                         className={`flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors ${
                           isSel ? 'bg-accent-subtle' : 'hover:bg-subtle'
                         }`}

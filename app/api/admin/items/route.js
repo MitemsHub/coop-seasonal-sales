@@ -444,9 +444,20 @@ export async function PATCH(req) {
     if (!itemIds.length) return NextResponse.json({ ok: false, error: 'No items selected' }, { status: 400 })
     if (itemIds.length > 500) return NextResponse.json({ ok: false, error: 'Select at most 500 items per batch' }, { status: 400 })
 
+    // Field edits write exactly the field(s) the client sent; image
+    // assignments write image_url. Mixing them is not supported.
+    const updatePatch = isFieldEdit
+      ? Object.fromEntries(
+          [
+            ['name', body.name !== undefined ? String(body.name).trim() : undefined],
+            ['sku', body.sku !== undefined ? String(body.sku).trim().toUpperCase() : undefined],
+          ].filter(([, v]) => v !== undefined)
+        )
+      : { image_url: imageUrl }
+
     const { data, error } = await supabase
       .from('items')
-      .update(isFieldEdit ? {} : { image_url: imageUrl })
+      .update(updatePatch)
       .in('item_id', itemIds)
       .select('item_id')
 
@@ -488,6 +499,7 @@ export async function POST(req) {
     await ensureSourceColumn()
     const sourceCol = await hasColumn(supabase, 'items', 'source')
 
+    let branches = []
     let targetBranchId = null
 
     // Outsourced edits are branch-scoped: the price/markup are written only
