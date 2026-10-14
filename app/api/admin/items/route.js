@@ -425,10 +425,10 @@ export async function GET(req) {
     // (saved_item_id) FIRST — surviving renames — and falls back to the
     // name match only when the link is missing (legacy data).
     const itemById = new Map((items || []).map((it) => [it.item_id, it]))
-    // Legacy backfill: drafts saved before the link existed are recovered via
-    // the branch-scoped price row (an outsourced item priced in THIS cycle at
-    // the draft's own branch can only be that draft's save). The recovered
-    // link is persisted so every later load resolves it directly.
+    // Legacy backfill: drafts saved before the link existed are recovered
+    // via a price-verified signature (see below) — NEVER by "only item
+    // priced at the branch", which force-links different products together.
+    // The recovered link is persisted so every later load resolves it directly.
     const recoveredLinks = new Map() // entry_id → item_id
     if (surveyLinkCol) {
       const pendingDrafts = []
@@ -439,27 +439,24 @@ export async function GET(req) {
       }
       for (const d of pendingDrafts) {
         if (d.branch_id == null) continue
-        const matches = (items || []).filter((it) => {
+        // Recovery is price-verified ONLY. "The only outsourced item priced
+        // at this branch" is NOT evidence — a branch can legitimately have
+        // one saved product while its drafts are for several different
+        // products, and blind recovery force-links drafts of different
+        // products to the same item (five drafts once resolved to one
+        // cereal). The form pre-fills the draft's own price, so an untouched
+        // save keeps that price on the item: a unique branch price equal to
+        // the draft price is a checkable signature of the right save.
+        if (!(d.draft_price > 0)) continue // no price to verify against → name-match fallback in charge
+        const byPrice = (items || []).filter((it) => {
           if ((sourceCol ? it.source || 'general' : it.source) !== 'outsourced') return false
-          const priced = (pricesByItem.get(it.item_id) || []).some(
+          const pr = (pricesByItem.get(it.item_id) || []).find(
             (p) => Number(p.branch_id) === Number(d.branch_id) && Number(p.price || 0) > 0
           )
-          return priced
+          return pr != null && Math.abs(Number(pr.price) - d.draft_price) < 0.01
         })
-        // Exactly one candidate → confident recovery. With several, break
-        // the tie with the rep's own draft price (the form pre-fills it, so
-        // unadministrated saves keep it); still ambiguous → leave the
-        // name-match fallback in charge rather than guess.
-        let chosen = null
-        if (matches.length === 1) {
-          chosen = matches[0]
-        } else if (matches.length > 1 && d.draft_price > 0) {
-          const byPrice = matches.filter((m) => {
-            const pr = (pricesByItem.get(m.item_id) || []).find((p) => Number(p.branch_id) === Number(d.branch_id))
-            return pr != null && Math.abs(Number(pr.price) - d.draft_price) < 0.01
-          })
-          if (byPrice.length === 1) chosen = byPrice[0]
-        }
+        if (byPrice.length !== 1) continue // none or ambiguous → never guess
+        const chosen = byPrice[0]
         if (chosen) {
           recoveredLinks.set(d.entry_id, chosen.item_id)
           d.entry_id_link = chosen.item_id
@@ -469,6 +466,49 @@ export async function GET(req) {
         }
       }
     }
+    // Repair pass: clear links written by the old over-eager recovery.
+    // A saved outsourced item is ONE product, so within a (branch, item)
+    // link group every draft with the SAME draft name is a legit
+    // resubmission — but drafts of DIFFERENT names sharing one item can
+    // only mean at most one of them is real. Keep a candidate only when
+    // its draft price matches the item's current branch price; otherwise
+    // clear the group so the name-match fallback (or a re-Edit + Save) can
+    // re-link each draft correctly.
+    if (surveyLinkCol) {
+      const linkGroups = new Map() // `${branch}::${item}` → drafts
+      for (const d of drafts.values()) {
+        const link = d.entry_id_link
+        if (link == null || !itemById.has(link)) continue
+        const gk = `${d.branch_id ?? 'none'}::${link}`
+        if (!linkGroups.has(gk)) linkGroups.set(gk, [])
+        linkGroups.get(gk).push(d)
+      }
+      const unlinks = new Set() // entry ids whose link must be cleared
+      for (const [, group] of linkGroups.entries()) {
+        if (group.length < 2) continue
+        if (new Set(group.map((d) => d.norm_name)).size < 2) continue // same product name → legit resubmissions
+        const winners = group.filter((d) => {
+          if (!(d.draft_price > 0)) return false
+          const pr = (pricesByItem.get(itemById.get(d.entry_id_link).item_id) || []).find(
+            (p) => Number(p.branch_id) === Number(d.branch_id)
+          )
+          return pr != null && Math.abs(Number(pr.price || 0) - d.draft_price) < 0.01
+        })
+        const keep = winners.length === 1 ? new Set([winners[0].entry_id]) : new Set()
+        for (const d of group) {
+          if (!keep.has(d.entry_id)) {
+            unlinks.add(d.entry_id)
+            d.entry_id_link = null
+          }
+        }
+      }
+      if (unlinks.size) {
+        try {
+          await queryDirect(`UPDATE public.food_survey_entries SET saved_item_id = NULL WHERE id = ANY($1::int[])`, [[...unlinks]])
+        } catch {}
+      }
+    }
+
     for (const d of drafts.values()) {
       draftedNames.add(d.norm_name)
       let saved = null

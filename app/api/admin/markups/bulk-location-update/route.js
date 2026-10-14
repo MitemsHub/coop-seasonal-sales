@@ -3,7 +3,7 @@
 // branch.  Used when a product becomes unavailable after orders were placed —
 // instead of cancelling entire orders, the admin removes only the affected items.
 //
-// POST { branch_code, skus: string[], cycle_id?: number }
+// POST { branch_code, skus: string[], cycle_id: number }
 //
 // Returns { ok, affected_orders, removed_lines, errors }
 import { NextResponse } from 'next/server'
@@ -21,7 +21,12 @@ export async function POST(request) {
     const body = await request.json().catch(() => ({}))
     const branchCode = String(body.branch_code || '').trim()
     const skus = Array.isArray(body.skus) ? body.skus.map((s) => String(s || '').trim()).filter(Boolean) : []
+    // Cycle is mandatory: orders belong to a cycle, so removal must be scoped
+    // to one cycle — unscoped removals would strip lines from other seasons' orders.
     const cycleId = body.cycle_id != null ? Number(body.cycle_id) : null
+    if (cycleId == null || !Number.isFinite(cycleId) || cycleId <= 0) {
+      return NextResponse.json({ ok: false, error: 'cycle_id is required' }, { status: 400 })
+    }
 
     if (!branchCode) {
       return NextResponse.json({ ok: false, error: 'branch_code is required' }, { status: 400 })
@@ -59,23 +64,19 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: `No items found for SKUs: ${skus.join(', ')}` }, { status: 404 })
     }
 
-    // 3. Find all orders at this delivery branch (Pending/Posted/Delivered — don't touch Cancelled)
+    // 3. Find all orders at this delivery branch in the given cycle
+    // (Pending/Posted/Delivered — don't touch Cancelled)
     const { error: cycleColErr } = await supabase.from('orders').select('cycle_id').limit(1)
-    const ordersHasCycle = !cycleColErr
-
-    let ordersQuery = supabase
-      .from('orders')
-      .select(
-        ordersHasCycle
-          ? 'order_id, status, total_amount, payment_option, cycle_id'
-          : 'order_id, status, total_amount, payment_option'
-      )
-      .eq('delivery_branch_id', branchId)
-      .in('status', ['Pending', 'Posted', 'Delivered'])
-
-    if (cycleId != null) {
-      ordersQuery = ordersQuery.eq('cycle_id', cycleId)
+    if (cycleColErr) {
+      return NextResponse.json({ ok: false, error: 'Cycle scoping is required but the orders table has no cycle_id column: ' + cycleColErr.message }, { status: 400 })
     }
+
+    const ordersQuery = supabase
+      .from('orders')
+      .select('order_id, status, total_amount, payment_option, cycle_id')
+      .eq('delivery_branch_id', branchId)
+      .eq('cycle_id', cycleId)
+      .in('status', ['Pending', 'Posted', 'Delivered'])
 
     const { data: orders, error: oErr } = await ordersQuery
     if (oErr) return NextResponse.json({ ok: false, error: oErr.message }, { status: 500 })
@@ -134,7 +135,7 @@ export async function POST(request) {
     const loanRatePctByCycle = new Map()
     if (anyLoan) {
       for (const o of orders.filter((x) => x.payment_option === 'Loan')) {
-        const cid = ordersHasCycle ? o.cycle_id ?? cycleId : cycleId
+        const cid = o.cycle_id ?? cycleId
         if (cid != null && !loanRatePctByCycle.has(cid)) loanRatePctByCycle.set(cid, null)
       }
       for (const cid of loanRatePctByCycle.keys()) {
@@ -173,7 +174,7 @@ export async function POST(request) {
         const isLoan = orderRow?.payment_option === 'Loan'
         let newTotal = baseTotal
         if (isLoan) {
-          const cid = ordersHasCycle ? orderRow?.cycle_id ?? cycleId : cycleId
+          const cid = orderRow?.cycle_id ?? cycleId
           const pct = (cid != null && loanRatePctByCycle.get(cid) != null ? loanRatePctByCycle.get(cid) : ratePct)
           ratePct = Math.max(0, Number(pct || 0))
           newTotal = baseTotal + Math.round(baseTotal * (ratePct / 100))

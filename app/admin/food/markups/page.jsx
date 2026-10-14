@@ -387,11 +387,15 @@ export default function AdminMarkupsPage() {
         setBulkResult({ ok: false, error: 'Please select a branch and enter at least one SKU' })
         return
       }
+      if (!bulkCycleId) {
+        setBulkResult({ ok: false, error: 'Please select a cycle — removal is scoped to one cycle, so it cannot run across all cycles' })
+        return
+      }
       const payload = {
         branch_code: bulkBranchCode,
         skus: skusArray,
+        cycle_id: Number(bulkCycleId),
       }
-      if (bulkCycleId) payload.cycle_id = Number(bulkCycleId)
 
       const res = await fetch('/api/admin/markups/bulk-location-update', {
         method: 'POST',
@@ -839,7 +843,7 @@ export default function AdminMarkupsPage() {
       <div className="mb-4 bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
         <h2 className="text-[15px] font-semibold mb-2">Bulk Remove Items from Orders</h2>
         <p className="text-sm text-muted mb-3">
-          Remove specific items from all Pending/Posted/Delivered orders at a delivery branch. Useful when a product becomes unavailable after orders were placed —
+          Remove specific items from all Pending/Posted/Delivered orders of the selected cycle at a delivery branch. Useful when a product becomes unavailable after orders were placed —
           affected orders will have those items removed and totals recalculated. Orders with no remaining items will be automatically cancelled.
         </p>
         <div className="flex gap-4 items-end flex-wrap">
@@ -868,13 +872,13 @@ export default function AdminMarkupsPage() {
             />
           </div>
           <div className="w-full sm:w-48">
-            <Label htmlFor="bulk-cycle">Cycle (optional)</Label>
+            <Label htmlFor="bulk-cycle">Cycle</Label>
             <Select
               id="bulk-cycle"
               value={bulkCycleId}
               onChange={(e) => setBulkCycleId(e.target.value)}
             >
-              <option value="">All cycles</option>
+              <option value="">Select cycle</option>
               {cycles.map((c) => (
                 <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
               ))}
@@ -884,7 +888,7 @@ export default function AdminMarkupsPage() {
             variant="danger"
             onClick={bulkUpdateDelivery}
             loading={bulkProcessing}
-            disabled={!bulkBranchCode || !bulkSkus.trim()}
+            disabled={!bulkBranchCode || !bulkCycleId || !bulkSkus.trim()}
           >
             {bulkProcessing ? 'Processing…' : 'Remove Items'}
           </Button>
