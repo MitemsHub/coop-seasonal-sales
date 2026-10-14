@@ -461,7 +461,10 @@ function ItemsImportContent() {
       section,
       item_id: row.item_id || null,
       sku: row.sku || '',
-      name: (section === 'outsourced' && row.draft ? row.draft.draft_name : row.name) || '',
+      // Prefill from what is in the shop: a saved item opens with its
+      // refined name (the admin's), not the rep's raw draft name — editing
+      // then adjusting price/markup must not quietly revert the rename.
+      name: (section === 'outsourced' && row.draft && !row.saved ? row.draft.draft_name : row.name) || '',
       category: (section === 'outsourced' && row.draft && !row.saved ? row.draft.draft_category : row.category) || '',
       unit: (section === 'outsourced' && row.draft && !row.saved ? row.draft.draft_unit : row.unit) || '',
       price: String(row.price ?? row.draft?.draft_price ?? ''),
@@ -641,7 +644,9 @@ function ItemsImportContent() {
     const q = outSearch.trim().toLowerCase()
     if (!q) return outRows
     return outRows.filter((r) =>
-      `${r.draft?.draft_name || r.name} ${r.draft?.draft_category || r.category} ${r.sku} ${r.draft?.branch_name || ''} ${r.draft?.branch_code || ''}`.toLowerCase().includes(q)
+      // Both names are matchable — the rep's original phrasing AND the
+      // refined shop name — so renamed products stay findable.
+      `${r.name || ''} ${r.draft?.draft_name || ''} ${r.draft?.draft_category || r.category} ${r.sku} ${r.draft?.branch_name || ''} ${r.draft?.branch_code || ''}`.toLowerCase().includes(q)
     )
   }, [outRows, outSearch])
 
@@ -927,7 +932,14 @@ function ItemsImportContent() {
   const rowCard = (section, row) => {
     const key = `${section}:${section === 'general' ? row.item_id : row.draft?.key || row.item_id}`
     const expanded = editKey === key
-    const title = section === 'outsourced' && row.draft ? row.draft.draft_name : row.name
+    // Card title: a refined (saved) item leads with the shop name — the
+    // admin's rename IS the product identity once saved. The raw draft name
+    // stays visible where it belongs: the editor's "Rep draft — reference
+    // only" panel and the draft-vs-saved diff table. Unsaved drafts keep
+    // the draft name (there is no shop name yet).
+    const title = section === 'outsourced' && row.draft && !row.saved
+      ? row.draft.draft_name || row.name || ''
+      : row.name || row.draft?.draft_name || ''
     const saved = section === 'general' || row.saved
     const price = row.price ?? row.draft?.draft_price ?? null
     const img = row.image_url || ''
