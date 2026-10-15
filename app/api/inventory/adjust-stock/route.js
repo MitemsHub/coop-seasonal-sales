@@ -19,7 +19,7 @@ export async function POST(req) {
     // Get branch, item, and active cycle
     const [{ data: branch }, { data: item }, { data: cycle }] = await Promise.all([
       supabase.from('branches').select('id,code').eq('code', branchCode).single(),
-      supabase.from('items').select('item_id,sku').eq('sku', sku).single(),
+      supabase.from('items').select('item_id,sku').eq('sku', sku).eq('is_active', true).single(),
       supabase.from('cycles').select('id').eq('is_active', true).single()
     ])
 

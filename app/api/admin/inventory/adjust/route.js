@@ -15,7 +15,7 @@ export async function POST(req) {
 
     const [{ data: br }, { data: it }] = await Promise.all([
       supabase.from('branches').select('id,code').eq('code', branchCode).single(),
-      supabase.from('items').select('item_id,sku').eq('sku', sku).single()
+      supabase.from('items').select('item_id,sku').eq('sku', sku).eq('is_active', true).single()
     ])
     if (!br) return NextResponse.json({ ok:false, error:'Branch not found' }, { status:404 })
     if (!it) return NextResponse.json({ ok:false, error:'Item not found' }, { status:404 })

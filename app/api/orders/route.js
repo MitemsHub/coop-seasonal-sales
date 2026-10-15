@@ -122,7 +122,9 @@ export async function POST(req) {
       const qty = Number(l?.qty || 0)
       if (!sku || qty <= 0) return NextResponse.json({ ok:false, error:'Invalid line item' }, { status:400 })
 
-      const { data: item, error: iErr } = await supabase.from('items').select('item_id, sku').eq('sku', sku).single()
+      // Retired duplicates (is_active=false) must not satisfy a member's
+      // order — the active twin owns the price relationship now.
+      const { data: item, error: iErr } = await supabase.from('items').select('item_id, sku').eq('sku', sku).eq('is_active', true).single()
       if (iErr || !item) return NextResponse.json({ ok:false, error:`Item not found: ${sku}` }, { status:400 })
 
       let priceQuery = supabase

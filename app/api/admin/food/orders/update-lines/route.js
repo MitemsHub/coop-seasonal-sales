@@ -50,7 +50,10 @@ export async function POST(req) {
 
     const manualUpdate = async () => {
       const skus = validatedLines.map((l) => l.sku)
-      const { data: items, error: itemsErr } = await supabase.from('items').select('item_id, sku').in('sku', skus)
+      // Retired twins can't take orders: only active items resolve here, so
+      // a stale twin SKU surfaces as "Items not found" instead of silently
+      // routing the admin's edit to the retired row.
+      const { data: items, error: itemsErr } = await supabase.from('items').select('item_id, sku').in('sku', skus).eq('is_active', true)
       if (itemsErr) throw new Error(itemsErr.message)
       const skuToItem = new Map(items.map((i) => [i.sku, i.item_id]))
 

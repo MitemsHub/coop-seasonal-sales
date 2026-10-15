@@ -104,9 +104,16 @@ export async function GET(req) {
     // The image bank is cycle-independent (that's the whole point — one bank,
     // reused every cycle), so it answers before any cycle lookup.
     if (section === 'images') {
-      const { data, error } = await supabase
+      // Retired twins (is_active=false) stay in the bank's history but must
+      // not offer themselves for new items — they'd mint new duplicates.
+      const imagesHasActive = await hasColumn(supabase, 'items', 'is_active')
+      let imagesQ = supabase
         .from('items')
         .select('item_id, sku, name, category, image_url')
+        .not('image_url', 'is', null)
+        .neq('image_url', '')
+      if (imagesHasActive) imagesQ = imagesQ.eq('is_active', true)
+      const { data, error } = await imagesQ
         .not('image_url', 'is', null)
         .neq('image_url', '')
         .order('name')
@@ -125,10 +132,14 @@ export async function GET(req) {
     // name dropdown on Items Import so admins reuse rows instead of
     // duplicating them.
     if (section === 'all') {
-      const { data, error } = await supabase
+      // Same rule as the image bank: a retired item must not be offered
+      // again in "pick an existing item" — that's how twins reappear.
+      const allHasActive = await hasColumn(supabase, 'items', 'is_active')
+      let allQ = supabase
         .from('items')
         .select('item_id, sku, name, category, unit, image_url')
-        .order('name')
+      if (allHasActive) allQ = allQ.eq('is_active', true)
+      const { data, error } = await allQ.order('name')
       if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
       return NextResponse.json({ ok: true, items: data || [] })
     }

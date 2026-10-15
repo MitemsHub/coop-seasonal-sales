@@ -15,6 +15,7 @@ export async function POST(req) {
       .from('items')
       .select('item_id, sku, name, department')
       .in('sku', skus)
+      .eq('is_active', true)
 
     if (error) {
       console.error('Batch items fetch error:', error)
