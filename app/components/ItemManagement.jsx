@@ -44,7 +44,9 @@ export default function ItemManagement({ reloadToken }) {
 
   const fetchItems = async () => {
     try {
-      const { data, error } = await supabase.from('items').select('*').order('name')
+      // Only active catalogue items belong on the authority cards — retired
+      // consolidation twins should not offer name/SKU/image edits.
+      const { data, error } = await supabase.from('items').select('*').eq('is_active', true).order('name')
       if (error) throw error
       setItems(data || [])
     } catch (error) {
