@@ -513,6 +513,7 @@ export async function GET(req) {
       }
     }
 
+    const savedItemIdsClaimed = new Set() // items already shown inside a draft row
     for (const d of drafts.values()) {
       draftedNames.add(d.norm_name)
       let saved = null
@@ -524,15 +525,20 @@ export async function GET(req) {
         // fall back to the old name-only match.
         saved = itemByName.get(d.norm_name)
       }
+      if (saved) savedItemIdsClaimed.add(saved.item_id)
       rows.push({ ...decorate(saved || {}), saved: !!saved, draft: d })
     }
     // Keep already-saved outsourced items editable even if the survey entry
-    // was deleted or renamed away.
+    // was deleted or renamed away. Skips items that already resolved to a
+    // draft above (any name) — otherwise a refined/renamed item appeared a
+    // SECOND time as a nameless "Saved items — no survey draft" row on the
+    // last page, which is where the surprise jump came from.
     if (sourceCol) {
       for (const it of items || []) {
         if ((it.source || '') !== 'outsourced') continue
         if (itemByName.get(norm(it.name)) !== it) continue
         if (draftedNames.has(norm(it.name))) continue
+        if (savedItemIdsClaimed.has(it.item_id)) continue
         rows.push({ ...decorate(it), saved: true, draft: null })
       }
     }

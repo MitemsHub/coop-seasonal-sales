@@ -248,6 +248,38 @@ describe('outsourced drafts — link recovery and repair', () => {
       }
     }
   })
+})
+
+// Regression: after the admin REFACTORS a draft name into a refined shop name
+// ("Coco pop" → "Kellogg's Coco Pops Sachet 400g"), the item must stay in its
+// OWN branch group (recovered via saved_item_id) and must NOT show a second
+// unconditional copy in the trailing "Saved items — no survey draft" group —
+// which sorted last and made the list jump to the final page after every save.
+describe('outsourced rows — renamed item has no duplicate trailing row', () => {
+  it('links a renamed item to its draft AND does not emit a draft:null duplicate', async () => {
+    const s = scenario()
+    // Legacy link already persisted: "Coco pop" draft → Kellogg's item 1.
+    s.entries = [ENTRY(11, 'Coco pop', 1, 2660, 1)]
+    createClient.mockReturnValue(makeSupabase(s))
+
+    const res = await GET(GET_OUTSOURCED.clone())
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(body.ok).toBe(true)
+
+    const draftRow = body.rows.find((r) => r.draft?.draft_name === 'Coco pop')
+    expect(draftRow).toBeDefined()
+    expect(draftRow.saved).toBe(true)
+    expect(draftRow.item_id).toBe(1)
+    expect(draftRow.name).toBe("Kellogg's Coco Pops Sachet 400g")
+
+    // The renamed item must appear EXACTLY ONCE — the trailing kept-items
+    // pass (draft: null) must not re-add it just because its refined name
+    // no longer matches any draft name.
+    const kelloggRows = body.rows.filter((r) => r.item_id === 1)
+    expect(kelloggRows.length).toBe(1)
+    expect(kelloggRows[0].draft).toBe(draftRow.draft)
+  })
 
   it('KEEPS legit links: same product name re-submitted at a branch is not a conflict', async () => {
     const s = scenario()
