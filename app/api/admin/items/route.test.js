@@ -48,7 +48,7 @@ function scenario() {
   return { items, prices, entries }
 }
 
-function makeSupabase({ items, prices, entries, markups = [] }) {
+function makeSupabase({ items, prices, entries, markups = [], branches } = {}) {
   const replies = {
     items: { data: items, error: null },
     branch_item_prices: { data: prices, error: null },
@@ -56,7 +56,7 @@ function makeSupabase({ items, prices, entries, markups = [] }) {
     branch_item_markups_probe: { error: null },
     food_survey_entries: { data: entries, error: null },
     food_survey_catalog: { data: [], error: null },
-    branches: { data: [{ id: 1, name: 'Abeokuta', code: 'ABEOKUTA' }], error: null },
+    branches: { data: branches || [{ id: 1, name: 'Abeokuta', code: 'ABEOKUTA' }], error: null },
     cycles: { data: [{ id: 9 }], error: null },
   }
   // hasColumn(table, column) probes select the column directly and expect
@@ -303,19 +303,51 @@ describe('outsourced rows — renamed item has no duplicate trailing row', () =>
   })
 })
 
-// Regression: TWO different products at the SAME branch were both submitted
-// under the generic draft name "Noodles" — exactly Abeokuta in production
-// (entry #279 → Super Pack Noodles item #12, entry #512 → Indomitable
-// Noodles item #11). The old per-(branch, name) dedup kept only the FIRST
-// entry, so the Indomitable item lost its claiming draft and dropped into
-// the trailing "Saved items — no survey draft" group on the LAST page after
-// the admin edited it (category/unit/price). A linked entry must never be
-// shadowed by a same-name sibling at the same branch.
+// Regression (2026-10-15, Abeokuta): the admin refined Samvita into "Golden
+// Penny Semovita 1Kg" — an item ALREADY saved earlier from Kano's Samvita
+// draft. The cycle-wide claim set then hid Abeokuta's card entirely (item
+// visible only via Kano + shop preview). One saved item legitimately serves
+// MANY branches, each with its own branch price — claims must be scoped to
+// (item, branch), and every branch's draft keeps its own card.
+describe('outsourced rows — one item claimed from two branches', () => {
+  it('does not hide an item claimed from a DIFFERENT branch (Samvita→Semovita regression)', async () => {
+    const s = scenario()
+    s.items = [
+      { item_id: 1, sku: 'GPSEMOVITA1KG', name: 'Golden Penny Semovita 1Kg', category: 'Staples', unit: 'Bag', image_url: 'x.png', source: 'outsourced' },
+    ]
+    s.prices = [
+      { branch_id: 1, item_id: 1, price: 20500 },
+      { branch_id: 2, item_id: 1, price: 16600 },
+    ]
+    s.branches = [
+      { id: 1, name: 'Abeokuta', code: 'ABEOKUTA' },
+      { id: 2, name: 'Kano Branch', code: 'KANO' },
+    ]
+    // Production state: Kano's Samvita draft (#132) points at item 1 long
+    // ago; Abeokuta's Samvita draft (#509) was then refined and saved to the
+    // SAME bank item. The cycle-wide claim set hid Abeokuta's card entirely
+    // (item only visible via Kano + shop preview).
+    s.entries = [
+      ENTRY(132, 'Samvita', 2, 16600, 1), // Kano Branch — claims item 1
+      ENTRY(509, 'Samvita', 1, 20500, 1), // Abeokuta — same item, own branch price
+    ]
+    createClient.mockReturnValue(makeSupabase(s))
+
+    const res = await GET(GET_OUTSOURCED.clone())
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+
+    const semovitaRows = body.rows.filter((r) => r.name?.includes('Golden Penny Semovita 1Kg'))
+    expect(semovitaRows.length).toBe(2) // one card per branch
+    expect(semovitaRows.map((r) => r.draft?.branch_name).sort()).toEqual(['Abeokuta', 'Kano Branch'])
+    // And no trailing draft:null copy.
+    expect(body.rows.filter((r) => !r.draft).length).toBe(0)
+  })
+})
+
 describe('outsourced rows — two same-name drafts at one branch stay separate', () => {
   it('keeps a linked draft row even when another draft with the same name was seen first', async () => {
     const s = scenario()
-    // Realistic production state: two items, each linked from a "Noodles"
-    // draft at branch 1. Entry 279 comes FIRST (older submission).
     s.items = [
       { item_id: 1, sku: 'INDOMITABLESNOODLES', name: 'Indomitable Noodles', category: 'Noodles', unit: 'Carton', image_url: 'x.png', source: 'outsourced' },
       { item_id: 2, sku: 'SUPERPACKNOODLES', name: 'Super Pack Noodles', category: 'Noodles', unit: 'Carton', image_url: 'x.png', source: 'outsourced' },

@@ -523,14 +523,18 @@ export async function GET(req) {
       }
     }
 
-    const savedItemIdsClaimed = new Set() // items already shown inside a draft row
+    const savedItemIdsClaimed = new Set() // `${item_id}::${branch}` — cards already shown IN that branch
+    const itemsShownSomewhere = new Set() // items claimed by ANY draft row (guards the trailing pass)
     for (const d of drafts.values()) {
-      // Collapse to one row PER RESOLVED PRODUCT, not per draft name: the
-      // same product resubmitted twice at a branch (exact same "Rice", plus
-      // its price signature matches the already-saved item) renders once —
-      // pointing at its item — while a genuinely different product (no
-      // link, distinct price) keeps its own card. See the drafts-loop
-      // comment above for why every entry starts visible.
+      // Collapse to one row PER RESOLVED PRODUCT PER BRANCH, not per draft
+      // name: the same product resubmitted twice at the SAME branch (price
+      // signature matches) renders once, while a genuinely different product
+      // keeps its own card. But ONE saved item legitimately serves MANY
+      // branches — the same bank item refined from Abeokuta's Samvita is
+      // also Kano's Semovita card, each with its own branch price. A cycle-
+      // wide claim set would silently HIDE the second branch's card (the
+      // "Samvita disappeared after saving" regression), so the claim is
+      // scoped to (item, branch).
       let saved = null
       const linkedId = surveyLinkCol ? recoveredLinks.get(d.entry_id) ?? d.entry_id_link ?? null : null
       if (linkedId != null && itemById.has(linkedId)) {
@@ -541,8 +545,10 @@ export async function GET(req) {
         saved = itemByName.get(d.norm_name)
       }
       if (saved) {
-        if (savedItemIdsClaimed.has(saved.item_id)) continue // same product, already shown
-        savedItemIdsClaimed.add(saved.item_id)
+        const claimKey = `${saved.item_id}::${d.branch_id ?? 'none'}`
+        if (savedItemIdsClaimed.has(claimKey)) continue // same product, already shown IN THIS BRANCH
+        savedItemIdsClaimed.add(claimKey)
+        itemsShownSomewhere.add(saved.item_id)
       }
       rows.push({ ...decorate(saved || {}), saved: !!saved, draft: d })
     }
@@ -556,7 +562,7 @@ export async function GET(req) {
         if ((it.source || '') !== 'outsourced') continue
         if (itemByName.get(norm(it.name)) !== it) continue
         if (draftedNames.has(norm(it.name))) continue
-        if (savedItemIdsClaimed.has(it.item_id)) continue
+        if (savedItemIdsClaimed.has(it.item_id) || itemsShownSomewhere.has(it.item_id)) continue
         rows.push({ ...decorate(it), saved: true, draft: null })
       }
     }
