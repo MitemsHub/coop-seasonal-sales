@@ -302,3 +302,67 @@ describe('outsourced rows — renamed item has no duplicate trailing row', () =>
     }
   })
 })
+
+// Regression: TWO different products at the SAME branch were both submitted
+// under the generic draft name "Noodles" — exactly Abeokuta in production
+// (entry #279 → Super Pack Noodles item #12, entry #512 → Indomitable
+// Noodles item #11). The old per-(branch, name) dedup kept only the FIRST
+// entry, so the Indomitable item lost its claiming draft and dropped into
+// the trailing "Saved items — no survey draft" group on the LAST page after
+// the admin edited it (category/unit/price). A linked entry must never be
+// shadowed by a same-name sibling at the same branch.
+describe('outsourced rows — two same-name drafts at one branch stay separate', () => {
+  it('keeps a linked draft row even when another draft with the same name was seen first', async () => {
+    const s = scenario()
+    // Realistic production state: two items, each linked from a "Noodles"
+    // draft at branch 1. Entry 279 comes FIRST (older submission).
+    s.items = [
+      { item_id: 1, sku: 'INDOMITABLESNOODLES', name: 'Indomitable Noodles', category: 'Noodles', unit: 'Carton', image_url: 'x.png', source: 'outsourced' },
+      { item_id: 2, sku: 'SUPERPACKNOODLES', name: 'Super Pack Noodles', category: 'Noodles', unit: 'Carton', image_url: 'x.png', source: 'outsourced' },
+    ]
+    s.prices = [
+      { branch_id: 1, item_id: 1, price: 9900 },
+      { branch_id: 1, item_id: 2, price: 15580 },
+    ]
+    s.entries = [
+      ENTRY(279, 'Noodles', 1, 15580, 2), // Super Pack — seen first
+      ENTRY(512, 'Noodles', 1, 9900, 1), // Indomitable — same name, same branch
+    ]
+    createClient.mockReturnValue(makeSupabase(s))
+
+    const res = await GET(GET_OUTSOURCED.clone())
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(body.ok).toBe(true)
+
+    // BOTH products resolve to their own saved row via their links.
+    const byName = Object.fromEntries(body.rows.filter((r) => r.saved).map((r) => [r.name, r]))
+    expect(Object.keys(byName).sort()).toEqual(['Indomitable Noodles', 'Super Pack Noodles'])
+    expect(byName['Indomitable Noodles'].item_id).toBe(1)
+    expect(byName['Indomitable Noodles'].draft?.entry_id).toBe(512)
+    expect(byName['Super Pack Noodles'].item_id).toBe(2)
+    expect(byName['Super Pack Noodles'].draft?.entry_id).toBe(279)
+
+    // And neither lands in the trailing "Saved items — no survey draft"
+    // group (draft: null rows) — that is exactly the last-page jump.
+    expect(body.rows.filter((r) => !r.draft).length).toBe(0)
+  })
+
+  it('does not surface a stale unlinked duplicate of an already-saved draft name', async () => {
+    const s = scenario()
+    s.entries = [
+      ENTRY(11, 'Coco pop', 1, 2660, 1), // linked (saved)
+      ENTRY(99, 'Coco pop', 1, 2660), // stale unlinked resubmission
+    ]
+    createClient.mockReturnValue(makeSupabase(s))
+
+    const res = await GET(GET_OUTSOURCED.clone())
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+
+    const cocoRows = body.rows.filter((r) => r.draft?.draft_name === 'Coco pop')
+    expect(cocoRows.length).toBe(1)
+    expect(cocoRows[0].saved).toBe(true)
+    expect(cocoRows[0].item_id).toBe(1)
+  })
+})

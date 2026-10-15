@@ -392,21 +392,44 @@ export async function GET(req) {
 
     // Drafts are keyed per branch + item — the same item submitted by two
     // branches appears under each branch so the admin works branch by branch.
-    const drafts = new Map() // `${branch_id}::${norm(name)}` → draft
+    // SAME-branch, same-name duplicates (two reps or resubmissions) collapse
+    // into one draft — but a row that carries a persist link (saved_item_id)
+    // must NEVER be shadowed: generic names like "Noodles" mean TWO products
+    // at the same branch (e.g. Indomitable vs Super Pack), both refined and
+    // saved under different shop names. If the second save's draft row is
+    // shadowed by the first, its item loses its claiming draft and drops
+    // into the trailing "Saved items — no survey draft" group on the last
+    // page (the "jump" regression the user saw with Indomitable Noodles).
+    // So: keep at least one unlinked draft per (branch, name) AND every
+    // distinct linked entry gets its own row.
+    const drafts = new Map() // draftKey `${branch}::${name}::${link|none}` → draft
+    const baseByKey = new Map() // `${branch_id}::${norm_name}` → the linked/first draft
     for (const e of entries || []) {
       if (e.submission && e.submission.cycle_id != null && Number(e.submission.cycle_id) !== Number(cycleId)) continue
       const nameKey = norm(e.item_name)
       if (!nameKey) continue
       const branchId = e.submission?.branch_id ?? null
-      const draftKey = `${branchId ?? 'none'}::${nameKey}`
+      const linkId = surveyLinkCol ? e.saved_item_id ?? null : null
+      const draftKey = `${branchId ?? 'none'}::${nameKey}::${linkId ?? 'none'}`
       if (drafts.has(draftKey)) continue
+      const baseKey = `${branchId ?? 'none'}::${nameKey}`
+      const existingBase = baseByKey.get(baseKey)
+      if (linkId != null) {
+        // Linked rows always render — never shadowed by another copy of the
+        // same generic draft name (see comment above).
+      } else if (existingBase) {
+        // Only ONE unlinked draft per (branch, name), even if the kept copy is
+        // linked: a linkless duplicate of an already-saved product is stale
+        // (and shows "Not worked on yet" for a card that is already live).
+        continue
+      }
       const cat = e.catalog_id ? catalogById.get(e.catalog_id) : null
       const br = branchId != null ? branchById.get(branchId) : null
-      drafts.set(draftKey, {
+      const draft = {
         key: draftKey,
         norm_name: nameKey,
         entry_id: e.id,
-        entry_id_link: surveyLinkCol ? e.saved_item_id ?? null : null,
+        entry_id_link: linkId,
         draft_name: String(e.item_name || '').trim(),
         draft_category: e.category || cat?.name || '',
         draft_unit: cat?.unit || '',
@@ -416,7 +439,9 @@ export async function GET(req) {
         branch_id: branchId,
         branch_name: br?.name || '',
         branch_code: br?.code || '',
-      })
+      }
+      drafts.set(draftKey, draft)
+      if (linkId != null || !baseByKey.has(baseKey)) baseByKey.set(baseKey, draft)
     }
 
     const rows = []
