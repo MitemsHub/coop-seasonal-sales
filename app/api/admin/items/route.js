@@ -458,6 +458,7 @@ export async function GET(req) {
         if (link == null || !itemById.has(link)) pendingDrafts.push(d)
         else recoveredLinks.set(d.entry_id, link)
       }
+      const claimedItemsByBranch = new Map() // branch_id → Map(item_id → norm_name of the claiming draft)
       for (const d of pendingDrafts) {
         if (d.branch_id == null) continue
         // Recovery is price-verified ONLY. "The only outsourced item priced
@@ -478,13 +479,27 @@ export async function GET(req) {
         })
         if (byPrice.length !== 1) continue // none or ambiguous → never guess
         const chosen = byPrice[0]
-        if (chosen) {
-          recoveredLinks.set(d.entry_id, chosen.item_id)
-          d.entry_id_link = chosen.item_id
-          try {
-            await queryDirect(`UPDATE public.food_survey_entries SET saved_item_id = $1 WHERE id = $2 AND saved_item_id IS NULL`, [chosen.item_id, d.entry_id])
-          } catch {}
-        }
+        // Two DIFFERENT products can share one draft price at a branch
+        // (Ado-Ekiti's "Rice" and "Bow Oil" both ₦60,000): once one of them
+        // is linked to the priced item, the price signature alone stops being
+        // evidence for the other. Letting the second claim the same item made
+        // the repair pass see "two different names on one item": it kept no
+        // winner and UNLINKED BOTH — erasing the admin's genuine save pin.
+        // So: an already-claimed item may only serve another draft of the
+        // SAME name (a legit resubmission of the same product).
+        const claimed = claimedItemsByBranch.get(d.branch_id)
+        const chosenClaim = claimed?.get(chosen.item_id)
+        if (chosenClaim != null && chosenClaim !== d.norm_name) continue
+        // The skip happens before persistence and before recovery tracking;
+        // the genuine price match keeps its claim and the same-name variant
+        // still collapses onto the saved card afterwards.
+        recoveredLinks.set(d.entry_id, chosen.item_id)
+        d.entry_id_link = chosen.item_id
+        if (!claimed) claimedItemsByBranch.set(d.branch_id, new Map())
+        claimedItemsByBranch.get(d.branch_id).set(chosen.item_id, d.norm_name)
+        try {
+          await queryDirect(`UPDATE public.food_survey_entries SET saved_item_id = $1 WHERE id = $2 AND saved_item_id IS NULL`, [chosen.item_id, d.entry_id])
+        } catch {}
       }
     }
     // Repair pass: clear links written by the old over-eager recovery.
