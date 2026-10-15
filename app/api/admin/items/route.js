@@ -392,40 +392,27 @@ export async function GET(req) {
 
     // Drafts are keyed per branch + item — the same item submitted by two
     // branches appears under each branch so the admin works branch by branch.
-    // SAME-branch, same-name duplicates (two reps or resubmissions) collapse
-    // into one draft — but a row that carries a persist link (saved_item_id)
-    // must NEVER be shadowed: generic names like "Noodles" mean TWO products
-    // at the same branch (e.g. Indomitable vs Super Pack), both refined and
-    // saved under different shop names. If the second save's draft row is
-    // shadowed by the first, its item loses its claiming draft and drops
-    // into the trailing "Saved items — no survey draft" group on the last
-    // page (the "jump" regression the user saw with Indomitable Noodles).
-    // So: keep at least one unlinked draft per (branch, name) AND every
-    // distinct linked entry gets its own row.
-    const drafts = new Map() // draftKey `${branch}::${name}::${link|none}` → draft
-    const baseByKey = new Map() // `${branch_id}::${norm_name}` → the linked/first draft
+    // EVERY survey entry gets its own card. The survey form is the admin's
+    // raw intake, not a unique-product registry: a rep can submit "Rice" in
+    // two submissions at one branch meaning TWO different products (e.g.
+    // Bulmex ₦51,000 vs another rice ₦52,000 — real Abeokuta data), and the
+    // admin must see and refine both. Earlier versions collapsed same-name
+    // duplicates per branch, which silently Hid those second products (and
+    // first caused the last-page jump when the hidden entry was the linked
+    // one). Exact-clone entries (same branch + name + link) still dedupe so
+    // a technical double-insert doesn't render twice.
+    const drafts = new Map() // draftKey (branch::name::link::entry) → draft
     for (const e of entries || []) {
       if (e.submission && e.submission.cycle_id != null && Number(e.submission.cycle_id) !== Number(cycleId)) continue
       const nameKey = norm(e.item_name)
       if (!nameKey) continue
       const branchId = e.submission?.branch_id ?? null
       const linkId = surveyLinkCol ? e.saved_item_id ?? null : null
-      const draftKey = `${branchId ?? 'none'}::${nameKey}::${linkId ?? 'none'}`
+      const draftKey = `${branchId ?? 'none'}::${nameKey}::${linkId ?? 'none'}::${e.id}`
       if (drafts.has(draftKey)) continue
-      const baseKey = `${branchId ?? 'none'}::${nameKey}`
-      const existingBase = baseByKey.get(baseKey)
-      if (linkId != null) {
-        // Linked rows always render — never shadowed by another copy of the
-        // same generic draft name (see comment above).
-      } else if (existingBase) {
-        // Only ONE unlinked draft per (branch, name), even if the kept copy is
-        // linked: a linkless duplicate of an already-saved product is stale
-        // (and shows "Not worked on yet" for a card that is already live).
-        continue
-      }
       const cat = e.catalog_id ? catalogById.get(e.catalog_id) : null
       const br = branchId != null ? branchById.get(branchId) : null
-      const draft = {
+      drafts.set(draftKey, {
         key: draftKey,
         norm_name: nameKey,
         entry_id: e.id,
@@ -439,9 +426,7 @@ export async function GET(req) {
         branch_id: branchId,
         branch_name: br?.name || '',
         branch_code: br?.code || '',
-      }
-      drafts.set(draftKey, draft)
-      if (linkId != null || !baseByKey.has(baseKey)) baseByKey.set(baseKey, draft)
+      })
     }
 
     const rows = []
@@ -540,7 +525,12 @@ export async function GET(req) {
 
     const savedItemIdsClaimed = new Set() // items already shown inside a draft row
     for (const d of drafts.values()) {
-      draftedNames.add(d.norm_name)
+      // Collapse to one row PER RESOLVED PRODUCT, not per draft name: the
+      // same product resubmitted twice at a branch (exact same "Rice", plus
+      // its price signature matches the already-saved item) renders once —
+      // pointing at its item — while a genuinely different product (no
+      // link, distinct price) keeps its own card. See the drafts-loop
+      // comment above for why every entry starts visible.
       let saved = null
       const linkedId = surveyLinkCol ? recoveredLinks.get(d.entry_id) ?? d.entry_id_link ?? null : null
       if (linkedId != null && itemById.has(linkedId)) {
@@ -550,7 +540,10 @@ export async function GET(req) {
         // fall back to the old name-only match.
         saved = itemByName.get(d.norm_name)
       }
-      if (saved) savedItemIdsClaimed.add(saved.item_id)
+      if (saved) {
+        if (savedItemIdsClaimed.has(saved.item_id)) continue // same product, already shown
+        savedItemIdsClaimed.add(saved.item_id)
+      }
       rows.push({ ...decorate(saved || {}), saved: !!saved, draft: d })
     }
     // Keep already-saved outsourced items editable even if the survey entry

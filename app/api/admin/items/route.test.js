@@ -348,11 +348,12 @@ describe('outsourced rows — two same-name drafts at one branch stay separate',
     expect(body.rows.filter((r) => !r.draft).length).toBe(0)
   })
 
-  it('does not surface a stale unlinked duplicate of an already-saved draft name', async () => {
+  it('collapses a same-product resubmission but keeps a DIFFERENT product visible', async () => {
     const s = scenario()
     s.entries = [
       ENTRY(11, 'Coco pop', 1, 2660, 1), // linked (saved)
-      ENTRY(99, 'Coco pop', 1, 2660), // stale unlinked resubmission
+      ENTRY(99, 'Coco pop', 1, 2660), // same product resubmitted (price signature matches item 1)
+      ENTRY(199, 'Coco pop', 1, 2700), // genuinely different product (different price)
     ]
     createClient.mockReturnValue(makeSupabase(s))
 
@@ -361,8 +362,45 @@ describe('outsourced rows — two same-name drafts at one branch stay separate',
     expect(body.ok).toBe(true)
 
     const cocoRows = body.rows.filter((r) => r.draft?.draft_name === 'Coco pop')
-    expect(cocoRows.length).toBe(1)
-    expect(cocoRows[0].saved).toBe(true)
-    expect(cocoRows[0].item_id).toBe(1)
+    // The resubmission collapses onto the saved card (one card per product);
+    // the differently-priced entry is a different product and stays visible.
+    expect(cocoRows.length).toBe(2)
+    const linked = cocoRows.find((r) => r.saved)
+    expect(linked.item_id).toBe(1)
+    const distinct = cocoRows.find((r) => !r.saved)
+    expect(distinct.draft.entry_id).toBe(199)
+    expect(distinct.draft.draft_price).toBe(2700)
+    // And neither may appear a SECOND time in the trailing draft:null group.
+    expect(body.rows.filter((r) => !r.draft).length).toBe(0)
+  })
+
+  it('SHows both same-name rice drafts at one branch when they are different products (Abeokuta regression)', async () => {
+    const s = scenario()
+    s.items = [
+      { item_id: 1, sku: 'BULMEXRICE50KG', name: 'Bulmex Rice 50Kg', category: 'Staples', unit: 'Bag', image_url: 'x.png', source: 'outsourced' },
+    ]
+    s.prices = [{ branch_id: 1, item_id: 1, price: 51000 }]
+    // The exact production state: entry #274 (linked to Bulmex) came after
+    // entry #505 (an UNlinked second "Rice" — a different product).
+    s.entries = [
+      ENTRY(505, 'Rice', 1, 52000), // first entry, no link yet
+      ENTRY(274, 'Rice', 1, 51000, 1), // second, saved as Bulmex Rice
+    ]
+    createClient.mockReturnValue(makeSupabase(s))
+
+    const res = await GET(GET_OUTSOURCED.clone())
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+
+    const riceRows = body.rows.filter((r) => r.draft?.draft_name === 'Rice')
+    expect(riceRows.length).toBe(2)
+    const savedRow = riceRows.find((r) => r.saved)
+    expect(savedRow?.item_id).toBe(1)
+    expect(savedRow?.name).toBe('Bulmex Rice 50Kg')
+    const unsavedRow = riceRows.find((r) => !r.saved)
+    expect(unsavedRow?.draft.entry_id).toBe(505)
+    expect(unsavedRow?.draft.draft_price).toBe(52000)
+    // No trailing draft:null duplicate rows.
+    expect(body.rows.filter((r) => !r.draft).length).toBe(0)
   })
 })
