@@ -470,15 +470,35 @@ export async function GET(req) {
         // save keeps that price on the item: a unique branch price equal to
         // the draft price is a checkable signature of the right save.
         if (!(d.draft_price > 0)) continue // no price to verify against → name-match fallback in charge
-        const byPrice = (items || []).filter((it) => {
+        const pricedAtBranch = (items || []).filter((it) => {
           if ((sourceCol ? it.source || 'general' : it.source) !== 'outsourced') return false
           const pr = (pricesByItem.get(it.item_id) || []).find(
             (p) => Number(p.branch_id) === Number(d.branch_id) && Number(p.price || 0) > 0
           )
           return pr != null && Math.abs(Number(pr.price) - d.draft_price) < 0.01
         })
-        if (byPrice.length !== 1) continue // none or ambiguous → never guess
-        const chosen = byPrice[0]
+        if (pricedAtBranch.length !== 1) continue // none or ambiguous → never guess
+        const chosen = pricedAtBranch[0]
+        // Price alone is a hint, not a verdict. Before a price-only recovery
+        // is trusted, the other drafts at this branch must not be waiting to
+        // contradict it — if any differently-named draft carries the SAME
+        // price, that price identifies no product (Ado-Ekiti's "Rice" and
+        // "Bow Oil" both ₦60,000). The item is only claimed when the draft
+        // ALSO names it: the draft being a leading, contained version of the
+        // saved name ("Coco pop" → "Kellogg's Coco Pops Sachet 400g", a real
+        // legacy rename) or the saved name containing the draft name keeps
+        // the original recovery useful while refusing the indistinguishable
+        // collision case that erased the admin's genuine pin.
+        const priceSharedByOtherName = [...drafts.values()].some(
+          (o) =>
+            o.entry_id !== d.entry_id &&
+            o.branch_id === d.branch_id &&
+            o.norm_name !== d.norm_name &&
+            Math.abs(Number(o.draft_price || 0) - d.draft_price) < 0.01
+        )
+        const chosenNorm = norm(chosen.name)
+        const namesAgree = d.norm_name.includes(chosenNorm) || chosenNorm.includes(d.norm_name)
+        if (priceSharedByOtherName && !namesAgree) continue
         // Two DIFFERENT products can share one draft price at a branch
         // (Ado-Ekiti's "Rice" and "Bow Oil" both ₦60,000): once one of them
         // is linked to the priced item, the price signature alone stops being

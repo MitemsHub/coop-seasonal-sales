@@ -209,6 +209,44 @@ describe('outsourced drafts — link recovery and repair', () => {
     }
   })
 
+  it('Links a name-contained draft but NOT its different-priced-name twin (Ado Rice/Bow Oil regression)', async () => {
+    const s = scenario()
+    s.items = [
+      { item_id: 300, sku: 'BELLALUNARICE50KG', name: 'Bella Luna Rice 50Kg', category: 'Staples', unit: 'Bag', image_url: 'x.png', source: 'outsourced' },
+    ]
+    s.prices = [{ branch_id: 1, item_id: 300, price: 60000 }]
+    // The exact production collision: two different products, SAME price.
+    s.entries = [
+      ENTRY(11, 'Rice', 1, 60000), // genuinely the Bella Luna product (legacy draft name)
+      ENTRY(12, 'Bow Oil', 1, 60000), // an entirely different product
+    ]
+    createClient.mockReturnValue(makeSupabase(s))
+
+    const res = await GET(GET_OUTSOURCED.clone())
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+
+    // "Rice" is name-contained in "Bella Luna Rice 50Kg" → recovered link.
+    const rice = body.rows.find((r) => r.draft?.draft_name === 'Rice')
+    expect(rice.saved).toBe(true)
+    expect(rice.item_id).toBe(300)
+    expect(queryDirect).toHaveBeenCalledWith(
+      expect.stringContaining('SET saved_item_id = $1'),
+      [300, 11]
+    )
+
+    // "Bow Oil" shares the price but shares no name → price alone must NOT
+    // claim the item; it stays an unsaved card of its own.
+    const bow = body.rows.find((r) => r.draft?.draft_name === 'Bow Oil')
+    expect(bow.saved).toBe(false)
+    expect(bow.item_id).not.toBe(300)
+    // And Bow Oil never persistently claimed it either.
+    expect(queryDirect).not.toHaveBeenCalledWith(
+      expect.stringContaining('SET saved_item_id = $1'),
+      [300, 12]
+    )
+  })
+
   it('persists a recovered link via queryDirect with the right ids', async () => {
     const s = scenario()
     s.entries = s.entries.map((e) => (e.id === 12 ? ENTRY(12, 'Cornflakes', 1, 2660) : e))
