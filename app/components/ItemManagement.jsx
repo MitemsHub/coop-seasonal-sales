@@ -93,7 +93,10 @@ export default function ItemManagement({ reloadToken }) {
 
   const startEdit = (item, field) => {
     if (!item) return
-    const currentValue = field === 'sku' ? item.sku ?? '' : item.name ?? ''
+    // sku/name/category/unit are all inline-editable on the card. The value
+    // handed to the editor mirrors what saveFieldEdit will persist.
+    const currentValue =
+      field === 'sku' ? item.sku ?? '' : field === 'category' ? item.category ?? '' : field === 'unit' ? item.unit ?? '' : item.name ?? ''
     setEditingItem({ item_id: item.item_id, field, value: currentValue })
     setEditMessage(null)
   }
@@ -106,9 +109,19 @@ export default function ItemManagement({ reloadToken }) {
   const saveFieldEdit = async ({ item_id, field, value }) => {
     setEditMessage(null)
     const trimmed = String(value ?? '').trim()
-    if (!item_id || !field || !trimmed) {
-      setEditMessage({ type: 'error', text: 'Nothing to save.' })
-      setEditingItem(null)
+    // category/unit may be cleared on purpose (the server allows an empty
+    // string so an admin can strip a wrong label and redo it); name/sku
+    // must stay non-empty because the card has nothing to display without
+    // them.
+    const canBeEmpty = field === 'category' || field === 'unit'
+    if (!item_id || !field || (!trimmed && !canBeEmpty)) {
+      if (!canBeEmpty) {
+        setEditMessage({ type: 'error', text: 'Nothing to save.' })
+        setEditingItem(null)
+      } else if (!item_id || !field) {
+        setEditMessage({ type: 'error', text: 'Nothing to save.' })
+        setEditingItem(null)
+      }
       return
     }
 
@@ -127,6 +140,14 @@ export default function ItemManagement({ reloadToken }) {
     }
     if (field === 'name' && normalized.length > 255) {
       setEditMessage({ type: 'error', text: 'Item name is too long.' })
+      return
+    }
+    if (field === 'category' && normalized.length > 100) {
+      setEditMessage({ type: 'error', text: 'Category is too long.' })
+      return
+    }
+    if (field === 'unit' && normalized.length > 50) {
+      setEditMessage({ type: 'error', text: 'Unit is too long.' })
       return
     }
 
@@ -149,7 +170,17 @@ export default function ItemManagement({ reloadToken }) {
       )
       setEditMessage({
         type: 'success',
-        text: `“${normalized}” saved for ${field === 'name' ? 'the name' : 'the SKU'}.`,
+        text: normalized
+          ? `“${normalized}” saved for ${
+              field === 'name'
+                ? 'the name'
+                : field === 'sku'
+                  ? 'the SKU'
+                  : field === 'category'
+                    ? 'the category'
+                    : 'the unit'
+            }.`
+          : `The ${field} was cleared.`,
       })
       setEditingItem(null)
     } catch (error) {
@@ -296,8 +327,68 @@ export default function ItemManagement({ reloadToken }) {
               </div>
 
               <div className="text-xs text-subtext">SKU: {item.sku}</div>
+              {/* Unit + category are inline-editable: clicking either label
+                  opens its editor on this card (same pattern as Edit name /
+                  Edit SKU). Suggestions come from the shared datalists the
+                  page renders (item-categories / item-units). */}
               <div className="text-xs text-subtext">
-                {item.unit} · {item.category}
+                {editingItem?.item_id === item.item_id && editingItem.field === 'unit' ? (
+                  <input
+                    type="text"
+                    value={editingItem.value}
+                    onChange={(e) => setEditingItem((prev) => (prev ? { ...prev, value: e.target.value } : null))}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        saveFieldEdit(editingItem)
+                      } else if (e.key === 'Escape') {
+                        cancelEdit()
+                      }
+                    }}
+                    list="item-units"
+                    maxLength={50}
+                    className="w-full rounded border border-line bg-surface px-1.5 py-0.5 text-xs text-fg font-mono"
+                    autoFocus
+                  />
+                ) : editingItem?.item_id === item.item_id && editingItem.field === 'category' ? (
+                  <input
+                    type="text"
+                    value={editingItem.value}
+                    onChange={(e) => setEditingItem((prev) => (prev ? { ...prev, value: e.target.value } : null))}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        saveFieldEdit(editingItem)
+                      } else if (e.key === 'Escape') {
+                        cancelEdit()
+                      }
+                    }}
+                    list="item-categories"
+                    maxLength={100}
+                    className="w-full rounded border border-line bg-surface px-1.5 py-0.5 text-xs text-fg font-mono"
+                    autoFocus
+                  />
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => startEdit(item, 'unit')}
+                      className="underline decoration-dotted underline-offset-2 hover:text-fg cursor-pointer"
+                      title="Edit unit"
+                    >
+                      {item.unit || '—'}
+                    </button>
+                    {' · '}
+                    <button
+                      type="button"
+                      onClick={() => startEdit(item, 'category')}
+                      className="underline decoration-dotted underline-offset-2 hover:text-fg cursor-pointer"
+                      title="Edit category"
+                    >
+                      {item.category || '—'}
+                    </button>
+                  </>
+                )}
               </div>
 
               <div className="mt-2 flex flex-col gap-2">

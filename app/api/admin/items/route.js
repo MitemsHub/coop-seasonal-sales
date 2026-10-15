@@ -637,9 +637,12 @@ export async function PATCH(req) {
     const itemIds = [...new Set((Array.isArray(body.item_ids) ? body.item_ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0))]
     const imageUrl = String(body.image_url || '').trim()
 
-    // A single-item patch carrying only name/SKU is a field edit (the Image
-    // Bank inline rename) — it must not be gated on an image_url.
-    const isFieldEdit = itemIds.length === 1 && (body.name !== undefined || body.sku !== undefined)
+    // A single-item patch carrying only name/SKU/category/unit is a field
+    // edit (the Image Bank inline rename / reclassify) — it must not be
+    // gated on an image_url.
+    const isFieldEdit =
+      itemIds.length === 1 &&
+      (body.name !== undefined || body.sku !== undefined || body.category !== undefined || body.unit !== undefined)
 
     if (!imageUrl && !isFieldEdit) return NextResponse.json({ ok: false, error: 'image_url is required — pick an image from the bank' }, { status: 400 })
     if (!itemIds.length) return NextResponse.json({ ok: false, error: 'No items selected' }, { status: 400 })
@@ -647,14 +650,23 @@ export async function PATCH(req) {
 
     // Field edits write exactly the field(s) the client sent; image
     // assignments write image_url. Mixing them is not supported.
+    // category/unit: empty string clears the value — the shop/reports read
+    // these, so blanking is allowed deliberately (an admin can land an item
+    // back in "no category" to redo it), while name/sku stay non-empty
+    // because the card needs something to display.
     const updatePatch = isFieldEdit
       ? Object.fromEntries(
           [
             ['name', body.name !== undefined ? String(body.name).trim() : undefined],
             ['sku', body.sku !== undefined ? String(body.sku).trim().toUpperCase() : undefined],
+            ['category', body.category !== undefined ? String(body.category).trim() : undefined],
+            ['unit', body.unit !== undefined ? String(body.unit).trim() : undefined],
           ].filter(([, v]) => v !== undefined)
         )
       : { image_url: imageUrl }
+
+    if (updatePatch.name === '') return NextResponse.json({ ok: false, error: 'Item name cannot be empty' }, { status: 400 })
+    if (updatePatch.sku === '') return NextResponse.json({ ok: false, error: 'SKU cannot be empty' }, { status: 400 })
 
     const { data, error } = await supabase
       .from('items')
