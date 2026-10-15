@@ -52,6 +52,7 @@ export async function GET(req) {
       member_branch_name,
       department_name,
       item_name,
+      sku,
       unit_price,
       qty,
       amount
@@ -94,6 +95,7 @@ export async function GET(req) {
         Department: r.department_name || '',
         Payment: r.payment_option,
         Item: r.item_name,
+        Sku: r.sku || '',
         Price: Number(r.unit_price),
         Qty: Number(r.qty),
         Amount: Number(r.amount),
@@ -151,14 +153,14 @@ export async function GET(req) {
 
     // Fetch markups joined with items to resolve by item name; paginate to avoid 1000-row cap
     const norm = s => String(s || '').toLowerCase().trim()
-    const markupByBranchAndName = new Map()
+    const markupByBranchItem = new Map()
     {
       const batchSize = 1000
       let start = 0
       while (true) {
         let mq = supabase
           .from('branch_item_markups')
-          .select(markupsHasCycle ? 'branch_id, cycle_id, amount, active, items(name)' : 'branch_id, amount, active, items(name)')
+          .select(markupsHasCycle ? 'branch_id, cycle_id, amount, active, item_id' : 'branch_id, amount, active, item_id')
           .in('branch_id', branchIds)
         if (markupsHasCycle && cycleIds.length) mq = mq.in('cycle_id', cycleIds)
         const { data: page, error: pageErr } = await mq
@@ -168,11 +170,27 @@ export async function GET(req) {
         if (!page || page.length === 0) break
         for (const m of page) {
           if (!m.active) continue
-          const key = markupsHasCycle ? `${m.branch_id}:${m.cycle_id}:${norm(m.items?.name)}` : `${m.branch_id}:${norm(m.items?.name)}`
-          markupByBranchAndName.set(key, Number(m.amount) || 0)
+          if (!m.item_id) continue
+          const key = markupsHasCycle ? `${m.branch_id}:${m.cycle_id}:${m.item_id}` : `${m.branch_id}:${m.item_id}`
+          markupByBranchItem.set(key, Number(m.amount) || 0)
         }
         if (page.length < batchSize) break
         start += batchSize
+      }
+    }
+
+    // Identify each catalogue item by its unique (name, sku) pair so markups
+    // resolve by item_id instead of item name — duplicate names exist in the
+    // catalogue (same product imported across cycles), so name-based matching
+    // would mix markups between distinct SKUs.
+    const itemIdByNameSku = new Map()
+    {
+      const { data: itemsData, error: itemsErr } = await supabase.from('items').select('item_id, name, sku')
+      if (!itemsErr && Array.isArray(itemsData)) {
+        for (const it of itemsData) {
+          const key = `${norm(it.name)}|${norm(it.sku)}`
+          if (!itemIdByNameSku.has(key)) itemIdByNameSku.set(key, it.item_id)
+        }
       }
     }
 
@@ -197,10 +215,11 @@ export async function GET(req) {
       const cycleId = masterHasCycle ? raw.cycle_id : effectiveCycleId
       const itemName = r.Item
       const branchId = branchIdByCode.get(code)
-      const key2 = branchId
-        ? (markupsHasCycle ? `${branchId}:${cycleId}:${norm(itemName)}` : `${branchId}:${norm(itemName)}`)
+      const itemId = itemIdByNameSku.get(`${norm(itemName)}|${norm(raw.sku)}`)
+      const key2 = branchId && itemId
+        ? (markupsHasCycle ? `${branchId}:${cycleId}:${itemId}` : `${branchId}:${itemId}`)
         : null
-      const markup = key2 ? (markupByBranchAndName.get(key2) || 0) : 0
+      const markup = key2 ? (markupByBranchItem.get(key2) || 0) : 0
       const basePrice = Number(r.Price) - Number(markup)
       const ratePct = rateByCycleId.size ? (rateByCycleId.get(Number(cycleId)) ?? 13) : 13
       const interest = r.Payment === 'Loan' ? Math.round(Number(r.Amount || 0) * (Math.max(0, Number(ratePct || 0)) / 100)) : 0
