@@ -1894,6 +1894,22 @@ function ItemsImportContent() {
                               Draft
                             </span>
                           )}
+                          {/* Origin badge — General vs Outsourced, so look-alike
+                              twins are tellable apart before cancelling. */}
+                          <span
+                            title={
+                              (it.origin || 'general') === 'outsourced'
+                                ? 'Outsourced — refined from a branch survey'
+                                : 'General catalog item'
+                            }
+                            className={`absolute right-1 top-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                              (it.origin || 'general') === 'outsourced'
+                                ? 'bg-brand/15 text-brand'
+                                : 'bg-surface text-muted shadow-sm'
+                            }`}
+                          >
+                            {(it.origin || 'general') === 'outsourced' ? 'Outsourced' : 'General'}
+                          </span>
                         </div>
                         <p className="truncate text-xs font-semibold text-fg" title={it.name}>
                           {it.name}

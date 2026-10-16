@@ -474,3 +474,103 @@ describe('outsourced rows — two same-name drafts at one branch stay separate',
     expect(body.rows.filter((r) => !r.draft).length).toBe(0)
   })
 })
+
+// ── Branch-cancel × shop preview ────────────────────────────────────────
+// The rule that closed the Akure twin-colour incident: cancelling an
+// outsourced draft hides only OUTSOURCED products from that branch's
+// shop. A cancelled draft whose save twinned a GENERAL item must leave
+// the General item selling untouched — the cancel only retires the rep's
+// mistaken duplicate copy.
+describe('shop preview — branch cancel respects item origin', () => {
+  function previewSupabase({ viewRows, items, entries, subs, markups = [], branchId = 33, branchCode = 'AKURE', branchName = 'Akure' }) {
+    const replies = {
+      branches: { data: { id: branchId, name: branchName, code: branchCode }, error: null },
+      v_inventory_status: { data: viewRows, error: null },
+      branch_item_markups: { data: markups, error: null },
+      food_survey_submissions: { data: subs, error: null },
+      food_survey_entries: { data: entries, error: null },
+      items: { data: items, error: null },
+      cycles: { data: [{ id: 9 }], error: null },
+    }
+    const chain = (table) => {
+      const r = replies[table] || { data: [], error: null }
+      const node = {
+        data: r.data,
+        error: r.error,
+        select: () => node,
+        eq: () => node,
+        gt: () => node,
+        lt: () => node,
+        neq: () => node,
+        not: () => node,
+        or: () => node,
+        in: () => node,
+        order: () => node,
+        range: () => node,
+        limit: () => node,
+        maybeSingle: () => Promise.resolve({ data: r.data, error: r.error }),
+        single: () => Promise.resolve({ data: r.data, error: r.error }),
+        then(onF, onJ) { return Promise.resolve({ data: r.data, error: r.error }).then(onF, onJ) },
+      }
+      return node
+    }
+    return { from: chain }
+  }
+
+  const VIEW_ROWS = [
+    { item_id: 7, sku: 'REP-SEM-1', item_name: 'Rep Duplicate Semovita', unit: 'Bag', category: 'Cereals', image_url: '', price: 15000 },
+    { item_id: 3, sku: 'GPN-SEM-1', item_name: 'Golden Penny Semovita 1Kg', unit: 'Bag', category: 'Cereals', image_url: '', price: 15000 },
+  ]
+  const ITEMS = [
+    { item_id: 7, source: 'outsourced' },
+    { item_id: 3, source: 'general' },
+  ]
+  const ENTRIES = [
+    { id: 900, item_name: 'Semovita 1kg (outsourced twin)', cancelled: true, saved_item_id: 7 },
+    { id: 328, item_name: 'Semovita 1kg', cancelled: true, saved_item_id: 3 },
+    { id: 902, item_name: 'Rice', cancelled: false, saved_item_id: null },
+  ]
+  const SUBS = [{ id: 21 }]
+  const GET_PREVIEW = new Request(
+    new URL('http://x/api/admin/items?section=shop_preview&cycle_id=9&branch_id=33')
+  )
+
+  it('hides the OUTSOURCED product only — a cancelled outsourced-only draft leaves the branch shop', async () => {
+    // Just the outsourced product priced, just its draft cancelled.
+    const s = { viewRows: [VIEW_ROWS[0]], items: [ITEMS[0]], entries: [ENTRIES[0]], subs: SUBS }
+    createClient.mockReturnValue(previewSupabase(s))
+
+    const res = await GET(GET_PREVIEW.clone())
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(body.items.map((i) => i.item_id)).not.toContain(7)
+    expect(body.cancelled_hidden).toBe(1)
+  })
+
+  it('keeps the GENERAL item selling — cancelling an outsourced twin never pulls the General item', async () => {
+    // The Akure case: the rep's outsourced "Semovita 1kg" twinned the
+    // General "Golden Penny Semovita 1Kg"; cancelling the rep's copy must
+    // NOT remove the General product from the shop.
+    const s = { viewRows: [VIEW_ROWS[1]], items: [ITEMS[1]], entries: [ENTRIES[1]], subs: SUBS }
+    createClient.mockReturnValue(previewSupabase(s))
+
+    const res = await GET(GET_PREVIEW.clone())
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+    expect(body.items.map((i) => i.item_id)).toContain(3)
+    expect(body.items.find((i) => i.item_id === 3)).toMatchObject({ name: 'Golden Penny Semovita 1Kg', origin: 'general' })
+  })
+
+  it('badges each preview item with its origin so twins are tellable apart', async () => {
+    const s = { viewRows: VIEW_ROWS, items: ITEMS, entries: [ENTRIES[2]], subs: SUBS }
+    createClient.mockReturnValue(previewSupabase(s))
+
+    const res = await GET(GET_PREVIEW.clone())
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+    const byId = Object.fromEntries(body.items.map((i) => [i.item_id, i]))
+    expect(byId[3].origin).toBe('general')
+    expect(byId[7].origin).toBe('outsourced')
+  })
+})

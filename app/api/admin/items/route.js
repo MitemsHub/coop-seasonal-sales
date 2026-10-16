@@ -359,6 +359,18 @@ export async function GET(req) {
         }
       }
 
+      // 3b. Origin per item so twins are identifiable at a glance — when two
+      // cards look alike (one General, one Outsourced duplicate), the admin
+      // must know which is which before cancelling.
+      const previewIds = (rows || []).map((r) => r.item_id)
+      const originByItem = new Map()
+      if (previewIds.length) {
+        const oRes = await supabase.from('items').select('item_id, source').in('item_id', previewIds)
+        for (const o of oRes.data || []) {
+          originByItem.set(o.item_id, (o.source || 'general') === 'outsourced' ? 'outsourced' : 'general')
+        }
+      }
+
       // 4. Compose exactly what the member shop shows for this branch
       const items = (rows || [])
         .filter((r) => !cancelledItemIds.has(r.item_id))
@@ -376,6 +388,7 @@ export async function GET(req) {
           markup,
           price: base + markup,
           from_draft: draftNames.has(norm(r.item_name)),
+          origin: originByItem.get(r.item_id) || 'general',
         }
       })
       items.sort((a, b) => Number(b.from_draft) - Number(a.from_draft) || String(a.name).localeCompare(String(b.name)))
