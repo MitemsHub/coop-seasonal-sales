@@ -1,8 +1,8 @@
 // app/api/admin/items/taxonomy/route.js
 // The category + unit pick lists used across Items Import.
-//   GET  → merged lists: everything already in use (items, survey catalog)
-//          plus admin-added entries from item_taxonomy, plus the default
-//          unit set.
+//   GET  → merged lists: every category actually saved on an item,
+//          every unit in use (items + survey catalog + defaults), plus
+//          admin-added entries from item_taxonomy.
 //   POST { kind: 'category' | 'unit', value } → add a list entry (idempotent).
 //
 // item_taxonomy is created on demand (same lazy-DDL pattern the items API
@@ -62,9 +62,13 @@ export async function GET() {
       const c = norm(it.category)
       if (c) categories.add(c)
     }
+    // The survey catalog only contributes UNITS. Its rows hold PRODUCT
+    // names ("King's Oil", pre-dating the Vegetable Oil cleanup) and
+    // category-like labels alike — merging names here regenerated stale
+    // product names as fake category chips, even after every King's Oil
+    // item was properly re-categorised to Vegetable Oil. Real categories
+    // come from saved items; admins extend the list through this panel.
     for (const c of catalog || []) {
-      const n = norm(c.name)
-      if (n) categories.add(n)
       const u = norm(c.unit)
       if (u) units.add(u)
     }
