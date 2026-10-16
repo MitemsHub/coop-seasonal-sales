@@ -94,8 +94,40 @@ export async function GET(req) {
       }
       const markupByItemId = new Map((markups || []).filter(m => m.active).map(m => [m.item_id, Number(m.amount || 0)]))
       
+      // Branch-cancelled survey entries hide their linked products from this
+      // branch's shop — the same rule the admin's shop preview applies, so
+      // a "Cancel for <branch>" actually takes the product off this
+      // branch's shelf. Cycle-scoped: only submissions tagged with the
+      // active cycle (or untagged legacy ones) count, like the preview uses.
+      let cancelledItemIds = new Set()
+      {
+        const subsFilter =
+          activeCycleId != null
+            ? 'cycle_id.eq.' + Number(activeCycleId) + ',cycle_id.is.null'
+            : 'cycle_id.is.null'
+        const { data: subs } = await supabase
+          .from('food_survey_submissions')
+          .select('id')
+          .eq('branch_id', branch.id)
+          .or(subsFilter)
+        const subIds = (subs || []).map((s) => s.id)
+        if (subIds.length) {
+          const { data: ents } = await supabase
+            .from('food_survey_entries')
+            .select('cancelled, saved_item_id')
+            .in('submission_id', subIds)
+          for (const e of ents || []) {
+            if (e.cancelled === true && e.saved_item_id != null) {
+              cancelledItemIds.add(Number(e.saved_item_id))
+            }
+          }
+        }
+      }
+
       // Transform data to expected format for demand tracking
-      return (itemsWithPrices || []).map(row => {
+      return (itemsWithPrices || [])
+        .filter((row) => !cancelledItemIds.has(row.item_id))
+        .map(row => {
         const base = Number(row.price || 0)
         const mk = markupByItemId.get(row.item_id) || 0
         return {
