@@ -32,6 +32,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '../../../../lib/supabaseServer'
 import { queryDirect, transactionalQuery } from '../../../../lib/directDb'
+import { invalidateCache } from '../../../../lib/cache'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -318,6 +319,7 @@ export async function GET(req) {
       const subIds = (subs || []).map((s) => s.id)
       const draftNames = new Set()
       const cancelledItemIds = new Set()
+      const cancelledLinks = new Set()
       if (subIds.length) {
         let ents = null
         let entsErr = null
@@ -333,11 +335,27 @@ export async function GET(req) {
         for (const e of ents || []) {
           if (e.cancelled === true) {
             const linkId = e.saved_item_id != null ? Number(e.saved_item_id) : null
-            if (linkId) cancelledItemIds.add(linkId) // linked product hidden for this branch+cycle
+            if (linkId) cancelledLinks.add(linkId) // candidate linked product hidden for this branch+cycle
             continue // cancelled entries never rank a product as "refined work"
           }
           const key = norm(e.item_name)
           if (key) draftNames.add(key)
+        }
+      }
+      // Only OUTSOURCED products leave the shop when cancelled. A cancelled
+      // draft whose save landed on (or twinned with) a GENERAL item stands in
+      // for the rep's mistaken duplicate submission — the General item keeps
+      // selling in every branch, exactly as before the cancel.
+      if (cancelledLinks.size) {
+        let linkItems = null
+        const srcRes = await supabase.from('items').select('item_id, source').in('item_id', [...cancelledLinks])
+        linkItems = srcRes.data
+        if (srcRes.error || !linkItems) {
+          // source column unknown → treat every link as outsourced (old behavior)
+          for (const li of srcRes.error ? [] : linkItems || []) cancelledItemIds.add(li.item_id)
+        }
+        for (const li of linkItems || []) {
+          if ((li.source || 'general') === 'outsourced') cancelledItemIds.add(li.item_id)
         }
       }
 
@@ -827,6 +845,25 @@ export async function DELETE(req) {
       )
       const row = res?.rows?.[0]
       if (!row) return NextResponse.json({ ok: false, error: 'Survey entry not found' }, { status: 404 })
+
+      // Bust the member shop's price cache for this branch right away — the
+      // prices route caches for 60s per branch+cycle, so without this the
+      // shop keeps selling a cancelled product for up to a minute.
+      try {
+        const subRes = await queryDirect(
+          `SELECT b.code
+             FROM public.food_survey_entries e
+             JOIN public.food_survey_submissions s ON s.id = e.submission_id
+             JOIN public.branches b ON b.id = s.branch_id
+            WHERE e.id = $1 LIMIT 1`,
+          [entryId]
+        )
+        const branchCode = subRes?.rows?.[0]?.code
+        if (branchCode) invalidateCache(`items-prices:${branchCode}`)
+      } catch (e) {
+        console.warn('items cache bust skipped:', e?.message)
+      }
+
       return NextResponse.json({ ok: true, entry_id: row.id, item_name: row.item_name, cancelled: cancel, draft_cancelled: cancel })
     }
 

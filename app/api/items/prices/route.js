@@ -116,9 +116,27 @@ export async function GET(req) {
             .from('food_survey_entries')
             .select('cancelled, saved_item_id')
             .in('submission_id', subIds)
+          const rawLinks = new Set()
           for (const e of ents || []) {
             if (e.cancelled === true && e.saved_item_id != null) {
-              cancelledItemIds.add(Number(e.saved_item_id))
+              rawLinks.add(Number(e.saved_item_id))
+            }
+          }
+          // Cancelled hides only OUTSOURCED products. A rep's mistaken
+          // duplicate of a GENERAL item keeps selling from the General item —
+          // cancelling the outsourced copy never pulls the General twin.
+          if (rawLinks.size) {
+            const { data: linkItems } = await supabase
+              .from('items')
+              .select('item_id, source')
+              .in('item_id', [...rawLinks])
+            if (linkItems && linkItems.length) {
+              for (const li of linkItems) {
+                if ((li.source || 'general') === 'outsourced') cancelledItemIds.add(li.item_id)
+              }
+            } else {
+              // source column unknown → keep the old behavior (hide the link)
+              for (const id of rawLinks) cancelledItemIds.add(id)
             }
           }
         }
