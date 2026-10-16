@@ -6,6 +6,8 @@ import { supabase } from '@/lib/supabaseClient'
 import ImageUpload from './ImageUpload'
 import Button from './ui/Button'
 import Input from './ui/Input'
+import ConfirmDialog from './ui/ConfirmDialog'
+import { Trash2, RotateCcw } from 'lucide-react'
 
 export default function ItemManagement({ reloadToken }) {
   const [items, setItems] = useState([])
@@ -18,6 +20,16 @@ export default function ItemManagement({ reloadToken }) {
   const [refreshKey, setRefreshKey] = useState(0)
   const [currentPage, setCurrentPage] = useState(1)
   const [itemsPerPage, setItemsPerPage] = useState(8)
+  // Deleted (retired) items — collapsed panel listing is_active=false rows
+  // with restore actions. Load on demand: the icon in the header hides the
+  // fetch until the admin asks for it.
+  const [showDeleted, setShowDeleted] = useState(false)
+  const [deletedItems, setDeletedItems] = useState([])
+  const [deletedLoaded, setDeletedLoaded] = useState(false)
+  const [deletedLoading, setDeletedLoading] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState(null) // item card being removed
+  const [deleting, setDeleting] = useState(false)
+  const [restoringId, setRestoringId] = useState(null)
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1280px)')
@@ -35,6 +47,72 @@ export default function ItemManagement({ reloadToken }) {
     fetchItems()
   }, [])
 
+  // ── Deleted (retired) items panel ───────────────────────────────────
+  // Retire = items.is_active=false (keeps order history intact, hides the
+  // item from the shop and every picker). Restore flips the flag back.
+  // Hard-delete is offered ONLY for items never priced in any branch —
+  // the server refuses the rest with 409 so order history can't break.
+  const loadDeleted = async () => {
+    setDeletedLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('items')
+        .select('item_id, sku, name, category, image_url, is_active')
+        .eq('is_active', false)
+        .order('name')
+      if (error) throw error
+      setDeletedItems(data || [])
+      setDeletedLoaded(true)
+    } catch (e) {
+      console.error('Error fetching deleted items:', e)
+      setMessage({ type: 'error', text: e?.message || 'Failed to load deleted items' })
+    } finally {
+      setDeletedLoading(false)
+    }
+  }
+
+  const toggleDeleted = () => {
+    const next = !showDeleted
+    setShowDeleted(next)
+    if (next && !deletedLoaded) loadDeleted()
+  }
+
+  const restoreItem = async (item) => {
+    setRestoringId(item.item_id)
+    setMessage(null)
+    try {
+      const res = await fetch(`/api/admin/items?item_id=${item.item_id}&mode=restore`, { method: 'DELETE', credentials: 'same-origin' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Could not restore the item')
+      setDeletedItems((prev) => prev.filter((it) => it.item_id !== item.item_id))
+      await fetchItems()
+      setMessage({ type: 'success', text: `“${item.name}” is restored — it shows in the bank and can be priced for a cycle again.` })
+    } catch (e) {
+      setMessage({ type: 'error', text: e.message })
+    } finally {
+      setRestoringId(null)
+    }
+  }
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/admin/items?item_id=${pendingDelete.item_id}`, { method: 'DELETE', credentials: 'same-origin' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Could not cancel the item')
+      // The card leaves the active list immediately; if the deleted panel
+      // is open its list refreshes too.
+      setItems((prev) => prev.filter((it) => it.item_id !== pendingDelete.item_id))
+      if (deletedLoaded) loadDeleted()
+      setMessage({ type: 'success', text: `“${pendingDelete.name}” cancelled — find it under Deleted items to bring it back.` })
+      setPendingDelete(null)
+    } catch (e) {
+      setMessage({ type: 'error', text: e.message })
+    } finally {
+      setDeleting(false)
+    }
+  }
   useEffect(() => {
     if (!reloadToken) return
     fetchItems()
@@ -44,8 +122,8 @@ export default function ItemManagement({ reloadToken }) {
 
   const fetchItems = async () => {
     try {
-      // Only active catalogue items belong on the authority cards — retired
-      // consolidation twins should not offer name/SKU/image edits.
+      // Only active catalogue items belong on the authority cards —
+      // cancelled items live in the Deleted-items panel below.
       const { data, error } = await supabase.from('items').select('*').eq('is_active', true).order('name')
       if (error) throw error
       setItems(data || [])
@@ -223,6 +301,22 @@ export default function ItemManagement({ reloadToken }) {
   return (
     <div className="space-y-6 w-full max-w-full overflow-x-hidden p-3 sm:p-6">
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={toggleDeleted}
+            aria-expanded={showDeleted}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+              deletedItems.length
+                ? 'border-danger-border bg-danger-bg text-danger-fg'
+                : 'border-line-subtle text-muted hover:bg-subtle hover:text-fg'
+            }`}
+            title="Items you cancelled — restore them here"
+          >
+            <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+            Deleted items{deletedItems.length ? ` (${deletedItems.length})` : ''}
+          </button>
+        </div>
         <div className="min-w-0">
           <p className="text-sm text-muted">
             Stored once per item — used by every branch, cycle and import section.
@@ -446,6 +540,16 @@ export default function ItemManagement({ reloadToken }) {
                 >
                   {item.image_url ? 'Change Image' : 'Add Image'}
                 </Button>
+
+                <button
+                  type="button"
+                  onClick={() => setPendingDelete(item)}
+                  className="mt-1 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-line-subtle px-2 py-1.5 text-xs font-medium text-muted transition-colors hover:border-danger-border hover:bg-danger-bg hover:text-danger-fg"
+                  title="Cancel this item — it leaves the bank and every shop; restorable under Deleted items"
+                >
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                  Cancel item
+                </button>
               </div>
             </div>
           </div>
@@ -463,6 +567,65 @@ export default function ItemManagement({ reloadToken }) {
           {editMessage.text}
         </div>
       )}
+
+      {/* Deleted (cancelled) items — restore them back into circulation */}
+      {showDeleted && (
+        <div className="rounded-lg border border-line bg-subtle/40 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium text-fg">
+              Cancelled items{deletedItems.length ? ` — ${deletedItems.length}` : ''}
+            </p>
+            <Button variant="ghost" size="sm" onClick={toggleDeleted}>
+              Hide
+            </Button>
+          </div>
+          {deletedLoading ? (
+            <div className="space-y-2 pt-2">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="sakani-skeleton h-10 w-full rounded-lg" />
+              ))}
+            </div>
+          ) : deletedItems.length === 0 ? (
+            <p className="pt-2 text-sm text-muted">Nothing cancelled yet — every item in the bank is live.</p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {deletedItems.map((it) => (
+                <li key={it.item_id} className="flex items-center gap-3 py-2">
+                  <span className="h-9 w-9 shrink-0 overflow-hidden rounded-md border border-line bg-canvas">
+                    {it.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={it.image_url} alt={it.name} className="h-full w-full object-contain" loading="lazy" />
+                    ) : null}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-fg">{it.name}</span>
+                    <span className="block truncate text-caption text-muted">{it.sku}</span>
+                  </span>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    leftIcon={RotateCcw}
+                    loading={restoringId === it.item_id}
+                    onClick={() => restoreItem(it)}
+                  >
+                    Restore
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+        loading={deleting}
+        title="Cancel this item?"
+        message={`“${pendingDelete?.name}” leaves the bank, the shop and every picker immediately. Nothing is deleted outright — order history is kept, the Survey entry stays with a Cancelled badge, and you can restore from Deleted items at any time.`}
+        confirmLabel="Cancel item"
+      />
 
       {items.length === 0 && (
         <div className="text-center py-8">

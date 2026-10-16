@@ -694,10 +694,11 @@ function SurveyStatusPanel({ cycles, togglingId, onToggle }) {
 
 /* ── Submission card ───────────────────────────────────────────────────── */
 
-function SubmissionCard({ sub, onEdit, onDelete, onPhotoDeleted }) {
+function SubmissionCard({ sub, onEdit, onDelete, onPhotoDeleted, onEntryRestored }) {
   const [open, setOpen] = useState(false)
   const [expandedPhoto, setExpandedPhoto] = useState(null)
   const [photoBusy, setPhotoBusy] = useState(false)
+  const [restoreBusyId, setRestoreBusyId] = useState(null)
 
   const itemCount = sub.entries?.length || 0
 
@@ -717,6 +718,25 @@ function SubmissionCard({ sub, onEdit, onDelete, onPhotoDeleted }) {
     } catch {
       // Cross-origin fallback — open it so the user can save it.
       window.open(entry.photo_url, '_blank', 'noopener')
+    }
+  }
+
+  const restoreEntry = async (entry) => {
+    setRestoreBusyId(entry.id)
+    try {
+      const res = await fetch('/api/admin/food-survey', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'restore-entry', entry_id: entry.id }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json?.error || 'Failed to restore')
+      onEntryRestored(sub.id, entry.id)
+      setExpandedPhoto((cur) => (cur && cur.id === entry.id ? { ...cur, cancelled: false } : cur))
+    } catch (e) {
+      alert(e.message)
+    } finally {
+      setRestoreBusyId(null)
     }
   }
 
@@ -816,6 +836,23 @@ function SubmissionCard({ sub, onEdit, onDelete, onPhotoDeleted }) {
                   </button>
                   <div className="p-2.5">
                     <p className="truncate text-xs font-medium text-fg">{e.item_name}</p>
+                    {e.cancelled === true && (
+                      <span
+                        className="mt-1 inline-flex items-center gap-1 rounded-full bg-danger-bg px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-danger-fg"
+                        title="The admin cancelled this product — it will not be refined into the shop."
+                      >
+                        Cancelled
+                        <button
+                          type="button"
+                          onClick={() => restoreEntry(e)}
+                          disabled={restoreBusyId === e.id}
+                          className="rounded-full px-1 underline decoration-dotted underline-offset-1 hover:opacity-80 disabled:opacity-40"
+                          title="Restore — put this item back into the survey and Items Import"
+                        >
+                          restore
+                        </button>
+                      </span>
+                    )}
                     <div className="mt-1 flex items-center justify-between gap-2">
                       <span className="truncate text-[11px] text-muted">{e.category}</span>
                       <span className="shrink-0 text-xs font-semibold text-fg">₦{fmtPrice(e.price)}</span>
@@ -876,7 +913,9 @@ function SubmissionCard({ sub, onEdit, onDelete, onPhotoDeleted }) {
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-fg">{expandedPhoto.item_name}</p>
-                  <p className="text-xs text-muted">{expandedPhoto.category}</p>
+                  <p className="text-xs text-muted">
+                    {expandedPhoto.cancelled === true ? 'Cancelled · ' : ''}{expandedPhoto.category}
+                  </p>
                 </div>
                 <span className="text-base font-bold text-fg">₦{fmtPrice(expandedPhoto.price)}</span>
               </div>
@@ -900,6 +939,16 @@ function SubmissionCard({ sub, onEdit, onDelete, onPhotoDeleted }) {
                 >
                   Delete image
                 </Button>
+                {expandedPhoto.cancelled === true && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    loading={restoreBusyId === expandedPhoto.id}
+                    onClick={() => restoreEntry(expandedPhoto)}
+                  >
+                    Restore
+                  </Button>
+                )}
                 <Button variant="ghost" size="sm" onClick={() => setExpandedPhoto(null)}>
                   Close
                 </Button>
@@ -1167,6 +1216,21 @@ export default function AdminFoodSurveyPage() {
     )
   }
 
+  const onEntryRestored = (submissionId, entryId) => {
+    setSubmissions((prev) =>
+      prev.map((s) =>
+        s.id === submissionId
+          ? { ...s, entries: s.entries.map((e) => (e.id === entryId ? { ...e, cancelled: false } : e)) }
+          : s
+      )
+    )
+    setEditingSub((cur) =>
+      cur && cur.id === submissionId
+        ? { ...cur, entries: cur.entries.map((e) => (e.id === entryId ? { ...e, cancelled: false } : e)) }
+        : cur
+    )
+  }
+
   return (
     <ProtectedRoute allowedRoles={['admin']}>
       <div className="mx-auto max-w-7xl p-3 sm:p-4 md:p-6">
@@ -1348,6 +1412,7 @@ export default function AdminFoodSurveyPage() {
                 onEdit={startEdit}
                 onDelete={setPendingDelete}
                 onPhotoDeleted={onPhotoDeleted}
+                onEntryRestored={onEntryRestored}
               />
             ))}
           </div>

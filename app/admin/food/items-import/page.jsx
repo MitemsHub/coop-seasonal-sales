@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import ProtectedRoute from '../../../components/ProtectedRoute'
+import ConfirmDialog from '../../../components/ui/ConfirmDialog'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
 import Select from '../../../components/ui/Select'
@@ -41,6 +42,7 @@ import {
   RefreshCw,
   Search,
   Store,
+  Trash2,
 } from 'lucide-react'
 
 const fmtPrice = (v) => Number(v || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 })
@@ -193,6 +195,37 @@ function ItemsImportContent() {
   const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saveErr, setSaveErr] = useState(null)
+
+  /* ── Item removal (retire) ───────────────────────────────────────── */
+  const [pendingDelete, setPendingDelete] = useState(null) // { item_id, name, section }
+  const [deleting, setDeleting] = useState(false)
+
+  const confirmDelete = async () => {
+    if (!pendingDelete || deleting) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/admin/items?item_id=${pendingDelete.item_id}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Could not remove the item')
+      // The row (retired) detaches from both lists on the next load; remove
+      // it locally right away so the card disappears without a refresh.
+      setGeneralRows((prev) => prev.filter((r) => r.item_id !== pendingDelete.item_id))
+      setOutRows((prev) => prev.filter((r) => r.item_id !== pendingDelete.item_id))
+      flash(
+        `“${pendingDelete.name}” removed. Order history is intact and the item stays in the bank's Deleted items — restore it there if it should come back.`,
+        'success'
+      )
+      loadAllItems() // "pick an existing item" must not offer a retired product
+      setPendingDelete(null)
+    } catch (e) {
+      flash(e.message, 'error')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const [showNew, setShowNew] = useState(false)
   const [newForm, setNewForm] = useState(emptyNew)
@@ -982,6 +1015,10 @@ function ItemsImportContent() {
                 <span className="rounded-full bg-warning-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-warning-fg">
                   {section === 'outsourced' ? '✓ Worked on · not in shop' : 'Not in shop yet'}
                 </span>
+              ) : row.draft?.cancelled ? (
+                <span className="rounded-full bg-danger-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-danger-fg">
+                  {section === 'outsourced' ? 'Cancelled' : 'Cancelled draft'}
+                </span>
               ) : (
                 <span
                   className={`rounded-full px-2 py-0.5 text-chips font-bold uppercase tracking-wide ${
@@ -994,6 +1031,14 @@ function ItemsImportContent() {
               {!img && (
                 <span className="rounded-full bg-subtle px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-muted">
                   No bank image
+                </span>
+              )}
+              {row.draft?.cancelled && (
+                <span
+                  className="rounded-full bg-danger-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-danger-fg"
+                  title="The admin cancelled this product — it never enters the shop. Restore the item from Image Bank › Deleted items to undo."
+                >
+                  Cancelled
                 </span>
               )}
               {draftDiff > 0 && (
@@ -1021,12 +1066,32 @@ function ItemsImportContent() {
                 {row.markup != null ? `markup ₦${fmtPrice(row.markup)}${row.markup_varies ? ' (varies)' : ''}` : 'no markup'}
               </p>
             </div>
+            {saved && row.item_id ? (
+              <button
+                type="button"
+                onClick={() =>
+                  setPendingDelete({
+                    item_id: row.item_id,
+                    name: title || row.draft?.draft_name || 'this item',
+                    section,
+                  })
+                }
+                disabled={deleting}
+                aria-label={`Cancel ${title}`}
+                title="Cancel this item — it leaves the bank, the shop and this list; order history is kept and you can restore it in Image Bank › Deleted items"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-line-subtle text-muted transition-colors hover:border-danger-border hover:bg-danger-bg hover:text-danger-fg disabled:opacity-40"
+              >
+                <Trash2 className="h-4 w-4" strokeWidth={2} />
+              </button>
+            ) : null}
             <Button
               variant="secondary"
               size="sm"
               onClick={() => (expanded ? cancelEdit() : startEdit(section, row))}
+              disabled={row.draft?.cancelled && !saved}
+              title={row.draft?.cancelled && !saved ? 'This product was cancelled — restore it first (Image Bank › Deleted items)' : undefined}
             >
-              {expanded ? 'Close' : saved ? 'Edit' : 'Edit & save'}
+              {expanded ? 'Close' : saved ? 'Edit' : row.draft?.cancelled ? 'Cancelled' : 'Edit & save'}
             </Button>
           </div>
         </div>
@@ -1777,6 +1842,17 @@ function ItemsImportContent() {
           </div>
         </div>
       )}
+
+      {/* Cancel confirmation — retire the item everywhere but keep its history */}
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={confirmDelete}
+        loading={deleting}
+        title="Cancel this item?"
+        message={`“${pendingDelete?.name}” leaves this list, the shop and the Image Bank immediately. Order history is kept, the survey entry stays, and you can bring the item back from Image Bank › Deleted items.`}
+        confirmLabel="Cancel item"
+      />
 
       {/* Shared datalists for category/unit inputs */}
       <datalist id="item-categories">

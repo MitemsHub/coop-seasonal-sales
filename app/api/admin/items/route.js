@@ -22,6 +22,13 @@
 //        cycle needed). That is how a new photo joins the Image Bank before
 //        the item is priced anywhere; it shows in shops once it is priced in
 //        Items Import for a cycle.
+//
+//   DELETE ?item_id= — CANCEL an item (the admin's deliberate removal).
+//        Not a hard row delete: items.is_active flips to false, the shop, the
+//        pickers and every priced list hide it immediately, order history
+//        stays intact, and the row (with its SKU tombstoned to RETIRED-…)
+//        remains visible in the Image Bank's Deleted items so the admin can
+//        restore it. mode=restore activates it again.
 import { NextResponse } from 'next/server'
 import { createClient } from '../../../../lib/supabaseServer'
 import { queryDirect, transactionalQuery } from '../../../../lib/directDb'
@@ -61,6 +68,16 @@ const ensureSourceColumn = async () => {
   }
 }
 
+const ensureItemActiveColumn = async () => {
+  try {
+    await queryDirect(`ALTER TABLE public.items ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE`)
+    return true
+  } catch (e) {
+    console.warn('items.is_active column ensure skipped:', e?.message || e)
+    return false
+  }
+}
+
 // food_survey_entries.saved_item_id pins a rep's survey draft to the exact
 // item row the admin saved it as. The name alone is NOT reliable — the admin
 // routinely refines "Coco pop" into "Kellogg's Coco Pops Sachet 400g", and a
@@ -73,6 +90,20 @@ const ensureSurveyLinkColumn = async () => {
     return true
   } catch (e) {
     console.warn('food_survey_entries.saved_item_id column ensure skipped:', e?.message || e)
+    return false
+  }
+}
+
+// Per-entry cancelled flag — set by the admin's Cancel action on an item.
+// The entry itself stays in the Survey (the rep's submission is history),
+// but it renders with a Cancelled badge and the Items Import resolver skips
+// it. Cleared again by the restore handler should the item come back.
+const ensureEntryCancelledColumn = async () => {
+  try {
+    await queryDirect(`ALTER TABLE public.food_survey_entries ADD COLUMN IF NOT EXISTS cancelled BOOLEAN NOT NULL DEFAULT FALSE`)
+    return true
+  } catch (e) {
+    console.warn('food_survey_entries.cancelled column ensure skipped:', e?.message || e)
     return false
   }
 }
@@ -104,15 +135,15 @@ export async function GET(req) {
     // The image bank is cycle-independent (that's the whole point — one bank,
     // reused every cycle), so it answers before any cycle lookup.
     if (section === 'images') {
-      // Retired twins (is_active=false) stay in the bank's history but must
-      // not offer themselves for new items — they'd mint new duplicates.
+      // Retired items (is_active=false) STAY in the bank so the admin can
+      // restore them from Image Bank › Deleted items, but the item carries
+      // its is_active flag so the UI can badge them "Deleted".
       const imagesHasActive = await hasColumn(supabase, 'items', 'is_active')
       let imagesQ = supabase
         .from('items')
-        .select('item_id, sku, name, category, image_url')
+        .select(`item_id, sku, name, category, image_url${imagesHasActive ? ', is_active' : ''}`)
         .not('image_url', 'is', null)
         .neq('image_url', '')
-      if (imagesHasActive) imagesQ = imagesQ.eq('is_active', true)
       const { data, error } = await imagesQ
         .not('image_url', 'is', null)
         .neq('image_url', '')
@@ -132,8 +163,8 @@ export async function GET(req) {
     // name dropdown on Items Import so admins reuse rows instead of
     // duplicating them.
     if (section === 'all') {
-      // Same rule as the image bank: a retired item must not be offered
-      // again in "pick an existing item" — that's how twins reappear.
+      // A retired item must not be offered again in "pick an existing
+      // item" — that's how twins reappear. Active only.
       const allHasActive = await hasColumn(supabase, 'items', 'is_active')
       let allQ = supabase
         .from('items')
@@ -324,9 +355,20 @@ export async function GET(req) {
     const sourceCol = (await ensureSourceColumn()) && (await hasColumn(supabase, 'items', 'source'))
     const pricesHasCycle = await hasColumn(supabase, 'branch_item_prices', 'cycle_id')
     const markupsHasCycle = await hasColumn(supabase, 'branch_item_markups', 'cycle_id')
+    const itemsHasActive = await hasColumn(supabase, 'items', 'is_active')
 
-    const itemFields = sourceCol ? 'item_id, sku, name, category, unit, image_url, source' : 'item_id, sku, name, category, unit, image_url'
-    const { data: items, error: iErr } = await supabase.from('items').select(itemFields).order('name')
+    // is_active rides along on every item row so the Outsourced resolver can
+    // drop cancelled items (the admin removed them deliberately) and the
+    // General list can exclude them too.
+    const itemFields = [
+      'item_id, sku, name, category, unit, image_url',
+      sourceCol ? 'source' : null,
+      itemsHasActive ? 'is_active' : null,
+    ].filter(Boolean).join(', ')
+    let itemsQ = supabase.from('items').select(itemFields)
+    if (itemsHasActive) itemsQ = itemsQ.eq('is_active', true)
+    itemsQ = itemsQ.order('name')
+    const { data: items, error: iErr } = await itemsQ
     if (iErr) return NextResponse.json({ ok: false, error: iErr.message }, { status: 500 })
 
     let priceQ = supabase.from('branch_item_prices').select('branch_id, item_id, price')
@@ -385,9 +427,15 @@ export async function GET(req) {
 
     // ── Outsourced: rep survey drafts, refined into shop items ──────────
     const surveyLinkCol = await ensureSurveyLinkColumn()
-    const entriesSelect = surveyLinkCol
-      ? 'id, catalog_id, item_name, category, price, photo_url, saved_item_id, submission:food_survey_submissions(cycle_id, rep_name, branch_id)'
-      : 'id, catalog_id, item_name, category, price, photo_url, submission:food_survey_submissions(cycle_id, rep_name, branch_id)'
+    const cancelledCol = await ensureEntryCancelledColumn()
+    const surveyLinkField = surveyLinkCol
+      ? (cancelledCol ? 'saved_item_id, cancelled' : 'saved_item_id')
+      : (cancelledCol ? 'cancelled' : null)
+    const entriesSelect = [
+      'id, catalog_id, item_name, category, price, photo_url',
+      surveyLinkField,
+      'submission:food_survey_submissions(cycle_id, rep_name, branch_id)',
+    ].filter(Boolean).join(', ')
     const { data: entries, error: eErr } = await supabase.from('food_survey_entries').select(entriesSelect)
     if (eErr) return NextResponse.json({ ok: false, error: eErr.message }, { status: 500 })
 
@@ -437,6 +485,7 @@ export async function GET(req) {
         branch_id: branchId,
         branch_name: br?.name || '',
         branch_code: br?.code || '',
+        cancelled: cancelledCol ? e.cancelled === true : false,
       })
     }
 
@@ -590,6 +639,16 @@ export async function GET(req) {
         // fall back to the old name-only match.
         saved = itemByName.get(d.norm_name)
       }
+      // A CANCELLED item must not surface in the Outsourced list even when a
+      // name-only match still finds it — the admin deliberately removed it,
+      // so the draft renders as "Not worked on yet" instead of linking back.
+      if (saved && saved.is_active === false) saved = null
+      if (saved && d.cancelled) {
+        // The admin cancelled this product: the draft row still shows (per the
+        // Survey requirement) but as a Cancelled card of its own — no saved
+        // resolution, no shop price, no Edit & save flow.
+        saved = null
+      }
       if (saved) {
         const claimKey = `${saved.item_id}::${d.branch_id ?? 'none'}`
         if (savedItemIdsClaimed.has(claimKey)) continue // same product, already shown IN THIS BRANCH
@@ -606,6 +665,7 @@ export async function GET(req) {
     if (sourceCol) {
       for (const it of items || []) {
         if ((it.source || '') !== 'outsourced') continue
+        if (itemsHasActive && it.is_active === false) continue // cancelled items stay out of the list
         if (itemByName.get(norm(it.name)) !== it) continue
         if (draftedNames.has(norm(it.name))) continue
         if (savedItemIdsClaimed.has(it.item_id) || itemsShownSomewhere.has(it.item_id)) continue
@@ -679,6 +739,140 @@ export async function PATCH(req) {
     return NextResponse.json({ ok: true, updated: (data || []).length, requested: itemIds.length })
   } catch (e) {
     console.error('Items management PATCH error:', e)
+    return NextResponse.json({ ok: false, error: e.message || 'Unknown error' }, { status: 500 })
+  }
+}
+
+// DELETE ?item_id= — CANCEL an item (not a hard row delete).
+//
+// The admin's removal request: is_active → false. Effects:
+//   • the shop (v_inventory_status + member queries), the price importers,
+//     the "pick an existing item" list and the Image Bank's active cards all
+//     read is_active — the item disappears from every one of them at once;
+//   • branch_item_prices, markups and order history stay untouched, so past
+//     orders keep their receipts and a future cycle can still re-add it;
+//   • the SKUS uniqueness constraint needs a free code for the NEXT item
+//     with that name — retiring moves this row's SKU to RETIRED-<old SKU>
+//     (the restore handler reclaims it), so creating a new "Knorr Cubes"
+//     after cancelling an old one cannot collide;
+//   • the Image Bank's Deleted items panel lists the row with a Restore
+//     button (and, if the admin changed their mind, one click is all it
+//     takes to bring the item back).
+export async function DELETE(req) {
+  try {
+    const supabase = createClient()
+    const { searchParams } = new URL(req.url)
+    const itemId = Number(searchParams.get('item_id'))
+    if (!Number.isInteger(itemId) || itemId <= 0) {
+      return NextResponse.json({ ok: false, error: 'item_id is required' }, { status: 400 })
+    }
+
+    const mode = String(searchParams.get('mode') || '')
+
+    // is_active must exist before any cancel/restore write — the lazy-DDL
+    // fallback for deployments that have not run the migration file yet.
+    await ensureItemActiveColumn()
+
+    // Restore: bring an earlier-cancelled item back into circulation. The
+    // SKU was re-homed to a RETIRED- tombstone while cancelled (see the
+    // cancel path) — reclaim it first unless another active item took the
+    // code in the meantime (then keep the tombstone so uniqueness holds).
+    if (mode === 'restore') {
+      const { data: item } = await supabase
+        .from('items')
+        .select('item_id, sku, name, is_active')
+        .eq('item_id', itemId)
+        .maybeSingle()
+      if (!item) return NextResponse.json({ ok: false, error: 'Item not found' }, { status: 404 })
+      if (item.is_active !== false) {
+        return NextResponse.json({ ok: true, item_id: item.item_id, restored: false })
+      }
+      const baseSku = String(item.sku || '').startsWith('RETIRED-')
+        ? String(item.sku).slice('RETIRED-'.length)
+        : String(item.sku || '')
+      if (baseSku) {
+        try {
+          const { data: skuOwner } = await supabase.from('items').select('item_id').eq('sku', baseSku).maybeSingle()
+          if (!skuOwner || Number(skuOwner?.item_id) === item.item_id) {
+            await supabase.from('items').update({ sku: baseSku }).eq('item_id', item.item_id)
+          }
+        } catch {}
+      }
+      const { error } = await supabase.from('items').update({ is_active: true }).eq('item_id', item.item_id)
+      if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+      // Undo the Cancelled badges the cancel pass stamped on the survey entries.
+      try {
+        if (await ensureEntryCancelledColumn()) {
+          await queryDirect(`UPDATE public.food_survey_entries SET cancelled = FALSE WHERE saved_item_id = $1 AND cancelled IS TRUE`, [item.item_id])
+        }
+      } catch {}
+      return NextResponse.json({ ok: true, item_id: item.item_id, restored: true, sku: baseSku || item.sku })
+    }
+
+    // Common first step: fetch the item.
+    const { data: item, error: fetchErr } = await supabase
+      .from('items')
+      .select('item_id, sku, name, image_url, is_active')
+      .eq('item_id', itemId)
+      .maybeSingle()
+    if (fetchErr) return NextResponse.json({ ok: false, error: fetchErr.message }, { status: 500 })
+    if (!item) return NextResponse.json({ ok: false, error: 'Item not found' }, { status: 404 })
+    if (item.is_active === false) {
+      return NextResponse.json({ ok: true, item_id: item.item_id, cancelled: true, already: true })
+    }
+
+    // How many branch/cycle price rows reference this item? Diagnostic only —
+    // cancel keeps them (order history), it never deletes them.
+    let pricedCount = 0
+    try {
+      const priced = await queryDirect(
+        `SELECT COUNT(*)::int AS n FROM public.branch_item_prices WHERE item_id = $1`,
+        [item.item_id]
+      )
+      pricedCount = Number(priced?.rows?.[0]?.n ?? 0)
+    } catch {}
+
+    // ── CANCEL (is_active=false) ──────────────────────────────────────
+    const cancelPatch = { is_active: false }
+    // Tombstone the SKU so the unique index frees the code for the next
+    // item with the same name, and so POST's sku-matching upsert can never
+    // resurrect the cancelled twin. The restore handler strips it back.
+    if (item.sku && !String(item.sku).startsWith('RETIRED-')) {
+      cancelPatch.sku = `RETIRED-${item.sku}`.slice(0, 100)
+    }
+
+    const { error } = await supabase
+      .from('items')
+      .update(cancelPatch)
+      .eq('item_id', item.item_id)
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+
+    // Flag every survey entry that resolves to this item — each submission
+    // card in the Survey keeps its entry but now shows a Cancelled badge.
+    let cancelledEntries = 0
+    try {
+      if (await ensureEntryCancelledColumn()) {
+        await queryDirect(
+          `UPDATE public.food_survey_entries SET cancelled = TRUE WHERE saved_item_id = $1 AND cancelled IS NOT TRUE`,
+          [item.item_id]
+        )
+        const cnt = await queryDirect(
+          `SELECT COUNT(*)::int AS n FROM public.food_survey_entries WHERE saved_item_id = $1 AND cancelled IS TRUE`,
+          [item.item_id]
+        )
+        cancelledEntries = Number(cnt?.rows?.[0]?.n ?? 0)
+      }
+    } catch {}
+
+    return NextResponse.json({
+      ok: true,
+      item_id: item.item_id,
+      cancelled: true,
+      priced_branches: pricedCount,
+      cancelled_survey_entries: cancelledEntries,
+    })
+  } catch (e) {
+    console.error('Items management DELETE error:', e)
     return NextResponse.json({ ok: false, error: e.message || 'Unknown error' }, { status: 500 })
   }
 }
@@ -771,10 +965,34 @@ export async function POST(req) {
     let itemRow = null
 
     if (itemId) {
-      const { data, error } = await supabase.from('items').update(patch).eq('item_id', itemId).select('item_id, sku, name').single()
+      // The admin may rename/re-SKU the item; if the target code already
+      // belongs to a DIFFERENT item (the usual "Knorr Cubes → Knorr Chicken
+      // Cubes" rename: the old name's derived SKU is taken), suffix the SKU
+      // (-2, -3, …) instead of failing the whole save with a Postgres
+      // duplicate-key error the admin cannot act on.
+      let effPatch = patch
+      if (patch.sku) {
+        const { data: owner } = await supabase.from('items').select('item_id').eq('sku', patch.sku).maybeSingle()
+        if (owner && Number(owner.item_id) !== itemId) {
+          let candidate = ''
+          // Cap the probe so a pathological catalog can't loop forever.
+          for (let n = 2; n < 100; n++) {
+            candidate = `${patch.sku}-${n}`
+            const { data: cOwner } = await supabase.from('items').select('item_id').eq('sku', candidate).maybeSingle()
+            if (!cOwner || Number(cOwner.item_id) === itemId) break
+            candidate = ''
+          }
+          effPatch = { ...patch, sku: candidate || `${patch.sku}-${Date.now().toString(36).toUpperCase()}` }
+        }
+      }
+      const { data, error } = await supabase.from('items').update(effPatch).eq('item_id', itemId).select('item_id, sku, name').single()
       if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
       itemRow = data
     } else {
+      // A retired item hides its SKU behind the RETIRED- tombstone (see the
+      // DELETE handler), so the base-SKU lookup only ever finds an ACTIVE
+      // item — creating a new product can never silently resurrect the
+      // retired one.
       const { data: existing } = await supabase.from('items').select('item_id').eq('sku', sku).maybeSingle()
       if (existing) {
         const { data, error } = await supabase.from('items').update(patch).eq('item_id', existing.item_id).select('item_id, sku, name').single()

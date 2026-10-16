@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic'
 const ENTRY_SELECT =
   'id, rep_name, branch_id, cycle_id, source, notes, edit_token, created_at, ' +
   'branch:branch_id(id, code, name), cycle:cycle_id(id, name), ' +
-  'entries:food_survey_entries(id, catalog_id, item_name, category, price, photo_url, created_at)'
+  'entries:food_survey_entries(id, catalog_id, item_name, category, price, photo_url, cancelled, created_at)'
 
 // phone only exists after migrations/cycle-survey-open.sql — probe once.
 const entrySelect = async (supabase) =>
@@ -65,11 +65,55 @@ export async function GET(req) {
   }
 }
 
-// POST — admin creates a submission directly (same shape the form posts).
+// POST — admin creates a submission directly (same shape the form posts),
+// or performs a sub-action ({ action: 'restore-entry', entry_id }).
 export async function POST(req) {
   try {
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ ok: false, error: 'Invalid request body' }, { status: 400 })
+
+    // Restore-entry: clear the cancelled flag on one survey entry. If the
+    // linked item (saved_item_id) is also cancelled, restore it first so the
+    // entry becomes workable in Items Import again.
+    if (body.action === 'restore-entry') {
+      const entryId = Number(body.entry_id)
+      if (!Number.isInteger(entryId) || entryId <= 0) {
+        return NextResponse.json({ ok: false, error: 'Missing or invalid entry id' }, { status: 400 })
+      }
+      const supabase = createClient()
+      const { data: entry, error: fErr } = await supabase
+        .from('food_survey_entries')
+        .select('id, cancelled, saved_item_id')
+        .eq('id', entryId)
+        .maybeSingle()
+      if (fErr) {
+        console.error('Admin food survey entry lookup error:', fErr)
+        return NextResponse.json({ ok: false, error: 'Failed to load entry' }, { status: 500 })
+      }
+      if (!entry) return NextResponse.json({ ok: false, error: 'Entry not found' }, { status: 404 })
+
+      let restoredItem = false
+      if (entry.saved_item_id != null) {
+        try {
+          const res = await fetch(new URL('/api/admin/items?id=' + entry.saved_item_id + '&mode=restore', req.url), {
+            method: 'DELETE',
+            headers: { cookie: req.headers.get('cookie') || '' },
+          })
+          const json = await res.json().catch(() => ({}))
+          restoredItem = res.ok && json?.ok === true && json?.restored === true
+        } catch {}
+      }
+
+      const { error: uErr } = await supabase
+        .from('food_survey_entries')
+        .update({ cancelled: false })
+        .eq('id', entryId)
+      if (uErr) {
+        console.error('Admin food survey entry restore error:', uErr)
+        return NextResponse.json({ ok: false, error: 'Failed to restore entry' }, { status: 500 })
+      }
+      return NextResponse.json({ ok: true, entry_id: entryId, item_restored: restoredItem })
+    }
 
     const repName = clean(body.rep_name, 100)
     const branchId = Number(body.branch_id)
