@@ -196,34 +196,83 @@ function ItemsImportContent() {
   const [saving, setSaving] = useState(false)
   const [saveErr, setSaveErr] = useState(null)
 
-  /* ── Item removal (retire) ───────────────────────────────────────── */
-  const [pendingDelete, setPendingDelete] = useState(null) // { item_id, name, section }
+  /* ── Item removal (retire / branch-scoped draft cancel) ──────────── */
+  // section 'outsourced' → cancel is BRANCH-SCOPED: only that branch's
+  // survey entry is flagged cancelled. The item, its Image Bank picture,
+  // its prices in other branches and the General list are untouched.
+  // section 'general' → cancel retires the catalog item everywhere.
+  const [pendingDelete, setPendingDelete] = useState(null) // { item_id, name, section, entry_id? }
   const [deleting, setDeleting] = useState(false)
+  const [restoreDraft, setRestoreDraft] = useState(null) // { entry_id, name }
+  const [restoringDraft, setRestoringDraft] = useState(false)
 
   const confirmDelete = async () => {
     if (!pendingDelete || deleting) return
     setDeleting(true)
     try {
-      const res = await fetch(`/api/admin/items?item_id=${pendingDelete.item_id}`, {
-        method: 'DELETE',
-        credentials: 'same-origin',
-      })
+      const branchScoped = pendingDelete.section === 'outsourced' && pendingDelete.entry_id != null
+      const url = branchScoped
+        ? `/api/admin/items?item_id=${pendingDelete.item_id ?? 0}&mode=cancel-draft&entry_id=${pendingDelete.entry_id}`
+        : `/api/admin/items?item_id=${pendingDelete.item_id}`
+      const res = await fetch(url, { method: 'DELETE', credentials: 'same-origin' })
       const json = await res.json().catch(() => ({}))
       if (!res.ok || !json.ok) throw new Error(json.error || 'Could not remove the item')
-      // The row (retired) detaches from both lists on the next load; remove
-      // it locally right away so the card disappears without a refresh.
-      setGeneralRows((prev) => prev.filter((r) => r.item_id !== pendingDelete.item_id))
-      setOutRows((prev) => prev.filter((r) => r.item_id !== pendingDelete.item_id))
-      flash(
-        `“${pendingDelete.name}” removed. Order history is intact and the item stays in the bank's Deleted items — restore it there if it should come back.`,
-        'success'
-      )
-      loadAllItems() // "pick an existing item" must not offer a retired product
+      if (branchScoped) {
+        // Branch-scoped: mark this draft cancelled locally — the card stays
+        // visible as a Cancelled row (with Restore) and nothing else moves.
+        setOutRows((prev) =>
+          prev.map((r) =>
+            r.draft?.entry_id === pendingDelete.entry_id
+              ? { ...r, saved: false, draft: { ...r.draft, cancelled: true } }
+              : r
+          )
+        )
+        flash(
+          `“${pendingDelete.name}” cancelled for ${pendingDelete.branch_name || 'this branch'} only. It still shows in ${pendingDelete.branch_name || 'the'} survey as Cancelled; other branches are untouched.`,
+          'success'
+        )
+      } else {
+        // The row (retired) detaches from both lists on the next load; remove
+        // it locally right away so the card disappears without a refresh.
+        setGeneralRows((prev) => prev.filter((r) => r.item_id !== pendingDelete.item_id))
+        setOutRows((prev) => prev.filter((r) => r.item_id !== pendingDelete.item_id))
+        flash(
+          `“${pendingDelete.name}” removed. Order history is intact and the item stays in the bank's Deleted items — restore it there if it should come back.`,
+          'success'
+        )
+        loadAllItems() // "pick an existing item" must not offer a retired product
+      }
       setPendingDelete(null)
     } catch (e) {
       flash(e.message, 'error')
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const confirmRestoreDraft = async () => {
+    if (!restoreDraft || restoringDraft) return
+    setRestoringDraft(true)
+    try {
+      const res = await fetch(`/api/admin/items?item_id=0&mode=restore-draft&entry_id=${restoreDraft.entry_id}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Could not restore the item')
+      setOutRows((prev) =>
+        prev.map((r) =>
+          r.draft?.entry_id === restoreDraft.entry_id
+            ? { ...r, draft: { ...r.draft, cancelled: false } }
+            : r
+        )
+      )
+      flash(`“${restoreDraft.name}” restored for ${restoreDraft.branch_name || 'this branch'}. You can Edit & save it again.`, 'success')
+      setRestoreDraft(null)
+    } catch (e) {
+      flash(e.message, 'error')
+    } finally {
+      setRestoringDraft(false)
     }
   }
 
@@ -1036,7 +1085,7 @@ function ItemsImportContent() {
               {row.draft?.cancelled && (
                 <span
                   className="rounded-full bg-danger-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-danger-fg"
-                  title="The admin cancelled this product — it never enters the shop. Restore the item from Image Bank › Deleted items to undo."
+                  title="Cancelled for this branch only — the item itself, its image and other branches are untouched. Use Restore to undo."
                 >
                   Cancelled
                 </span>
@@ -1066,19 +1115,25 @@ function ItemsImportContent() {
                 {row.markup != null ? `markup ₦${fmtPrice(row.markup)}${row.markup_varies ? ' (varies)' : ''}` : 'no markup'}
               </p>
             </div>
-            {saved && row.item_id ? (
+            {(saved && row.item_id) || (section === 'outsourced' && row.draft?.entry_id != null && !row.draft?.cancelled) ? (
               <button
                 type="button"
                 onClick={() =>
                   setPendingDelete({
                     item_id: row.item_id,
+                    entry_id: section === 'outsourced' ? row.draft?.entry_id : undefined,
+                    branch_name: row.draft?.branch_name || '',
                     name: title || row.draft?.draft_name || 'this item',
                     section,
                   })
                 }
                 disabled={deleting}
                 aria-label={`Cancel ${title}`}
-                title="Cancel this item — it leaves the bank, the shop and this list; order history is kept and you can restore it in Image Bank › Deleted items"
+                title={
+                  section === 'outsourced'
+                    ? `Cancel for ${row.draft?.branch_name || 'this branch'} only — this branch's survey entry is marked Cancelled; the item itself, its image and every other branch stay untouched.`
+                    : 'Cancel this item — it leaves the bank, the shop and this list; order history is kept and you can restore it in Image Bank › Deleted items'
+                }
                 className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-line-subtle text-muted transition-colors hover:border-danger-border hover:bg-danger-bg hover:text-danger-fg disabled:opacity-40"
               >
                 <Trash2 className="h-4 w-4" strokeWidth={2} />
@@ -1089,10 +1144,19 @@ function ItemsImportContent() {
               size="sm"
               onClick={() => (expanded ? cancelEdit() : startEdit(section, row))}
               disabled={row.draft?.cancelled && !saved}
-              title={row.draft?.cancelled && !saved ? 'This product was cancelled — restore it first (Image Bank › Deleted items)' : undefined}
+              title={row.draft?.cancelled && !saved ? 'Cancelled for this branch — use Restore to bring it back' : undefined}
             >
               {expanded ? 'Close' : saved ? 'Edit' : row.draft?.cancelled ? 'Cancelled' : 'Edit & save'}
             </Button>
+            {section === 'outsourced' && row.draft?.cancelled ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setRestoreDraft({ entry_id: row.draft.entry_id, name: title || row.draft.draft_name || 'this item', branch_name: row.draft.branch_name || '' })}
+              >
+                Restore
+              </Button>
+            ) : null}
           </div>
         </div>
         {expanded && editor()}
@@ -1843,15 +1907,31 @@ function ItemsImportContent() {
         </div>
       )}
 
-      {/* Cancel confirmation — retire the item everywhere but keep its history */}
+      {/* Cancel confirmation — branch-scoped for outsourced drafts, retire for general items */}
       <ConfirmDialog
         open={!!pendingDelete}
         onClose={() => setPendingDelete(null)}
         onConfirm={confirmDelete}
         loading={deleting}
-        title="Cancel this item?"
-        message={`“${pendingDelete?.name}” leaves this list, the shop and the Image Bank immediately. Order history is kept, the survey entry stays, and you can bring the item back from Image Bank › Deleted items.`}
-        confirmLabel="Cancel item"
+        title={pendingDelete?.section === 'outsourced' ? `Cancel for ${pendingDelete?.branch_name || 'this branch'} only?` : 'Cancel this item?'}
+        message={
+          pendingDelete?.section === 'outsourced'
+            ? `“${pendingDelete?.name}” is cancelled for ${pendingDelete?.branch_name || 'this branch'} only: this branch's survey entry shows as Cancelled and the card leaves the outsourced list. The item itself, its Image Bank picture, its prices and every other branch are NOT touched. You can restore it here any time.`
+            : `“${pendingDelete?.name}” leaves this list, the shop and the Image Bank immediately. Order history is kept, the survey entry stays, and you can bring the item back from Image Bank › Deleted items.`
+        }
+        confirmLabel={pendingDelete?.section === 'outsourced' ? `Cancel for ${pendingDelete?.branch_name || 'branch'}` : 'Cancel item'}
+      />
+
+      {/* Restore confirmation — undo a branch-scoped outsourced cancel */}
+      <ConfirmDialog
+        open={!!restoreDraft}
+        onClose={() => setRestoreDraft(null)}
+        onConfirm={confirmRestoreDraft}
+        loading={restoringDraft}
+        title={`Restore for ${restoreDraft?.branch_name || 'this branch'}?`}
+        message={`“${restoreDraft?.name}” comes back to ${restoreDraft?.branch_name || 'this branch'}'s outsourced list as a workable draft. Nothing else changes.`}
+        confirmLabel="Restore draft"
+        variant="brand"
       />
 
       {/* Shared datalists for category/unit inputs */}

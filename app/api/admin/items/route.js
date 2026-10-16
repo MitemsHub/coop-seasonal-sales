@@ -769,6 +769,32 @@ export async function DELETE(req) {
 
     const mode = String(searchParams.get('mode') || '')
 
+    // ── Branch-scoped cancel/restore (Outsourced items) ────────────────
+    // Cancelling an outsourced card is a decision about ONE branch's survey
+    // entry ("this product is not needed in Akure"), not about the shared
+    // catalog item other branches may price. It flags only that
+    // food_survey_entries row; the item, its Image Bank picture, its prices
+    // in other branches and the General list are untouched. The entry keeps
+    // showing in the branch's Survey with its Cancelled badge, and the
+    // Outsourced list renders it as a Cancelled card until restored.
+    if (mode === 'cancel-draft' || mode === 'restore-draft') {
+      const entryId = Number(searchParams.get('entry_id'))
+      if (!Number.isInteger(entryId) || entryId <= 0) {
+        return NextResponse.json({ ok: false, error: 'entry_id is required for a branch-scoped cancel' }, { status: 400 })
+      }
+      if (!(await ensureEntryCancelledColumn())) {
+        return NextResponse.json({ ok: false, error: 'cancelled column unavailable' }, { status: 500 })
+      }
+      const cancel = mode === 'cancel-draft'
+      const res = await queryDirect(
+        `UPDATE public.food_survey_entries SET cancelled = $1 WHERE id = $2 RETURNING id, item_name, saved_item_id`,
+        [cancel, entryId]
+      )
+      const row = res?.rows?.[0]
+      if (!row) return NextResponse.json({ ok: false, error: 'Survey entry not found' }, { status: 404 })
+      return NextResponse.json({ ok: true, entry_id: row.id, item_name: row.item_name, cancelled: cancel, draft_cancelled: cancel })
+    }
+
     // is_active must exist before any cancel/restore write — the lazy-DDL
     // fallback for deployments that have not run the migration file yet.
     await ensureItemActiveColumn()
