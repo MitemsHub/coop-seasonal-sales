@@ -250,6 +250,19 @@ function ItemsImportContent() {
     }
   }
 
+  // When the admin cancels an outsourced card whose product ALSO exists as
+  // a General/ catalog item, show the overlap notice + a scope choice in the
+  // confirm dialog ("just this branch" is pre-selected — the safe default).
+  // The full retire flow stays reachable on purpose but never by accident.
+  const overlapLabel = useMemo(() => {
+    if (!pendingDelete) return null
+    return (
+      allItems.find(
+        (it) => it.item_id !== pendingDelete.item_id && norm(it.name) === norm(pendingDelete.name)
+      ) || null
+    )
+  }, [pendingDelete, allItems])
+
   const confirmRestoreDraft = async () => {
     if (!restoreDraft || restoringDraft) return
     setRestoringDraft(true)
@@ -1087,7 +1100,7 @@ function ItemsImportContent() {
                   className="rounded-full bg-danger-bg px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-danger-fg"
                   title="Cancelled for this branch only — the item itself, its image and other branches are untouched. Use Restore to undo."
                 >
-                  Cancelled
+                  Cancelled{row.draft?.branch_name ? ` for ${row.draft.branch_name}` : ''}
                 </span>
               )}
               {draftDiff > 0 && (
@@ -1909,17 +1922,17 @@ function ItemsImportContent() {
 
       {/* Cancel confirmation — branch-scoped for outsourced drafts, retire for general items */}
       <ConfirmDialog
-        open={!!pendingDelete}
+        open={!!pendingDelete?.entry_id}
         onClose={() => setPendingDelete(null)}
         onConfirm={confirmDelete}
         loading={deleting}
-        title={pendingDelete?.section === 'outsourced' ? `Cancel for ${pendingDelete?.branch_name || 'this branch'} only?` : 'Cancel this item?'}
+        title={`Cancel for ${pendingDelete?.branch_name || 'this branch'} only?`}
         message={
-          pendingDelete?.section === 'outsourced'
-            ? `“${pendingDelete?.name}” is cancelled for ${pendingDelete?.branch_name || 'this branch'} only: this branch's survey entry shows as Cancelled and the card leaves the outsourced list. The item itself, its Image Bank picture, its prices and every other branch are NOT touched. You can restore it here any time.`
-            : `“${pendingDelete?.name}” leaves this list, the shop and the Image Bank immediately. Order history is kept, the survey entry stays, and you can bring the item back from Image Bank › Deleted items.`
+          overlapLabel
+            ? `Note: “${pendingDelete?.name}” also exists as a General Item. This cancel is scoped to ${pendingDelete?.branch_name || 'this branch'} only — the General/ catalog item, its Image Bank picture, its prices and every other branch are NOT touched. You can restore it here any time.`
+            : `“${pendingDelete?.name}” is cancelled for ${pendingDelete?.branch_name || 'this branch'} only: this branch's survey entry shows as Cancelled and the card leaves the outsourced list. The item itself, its Image Bank picture, its prices and every other branch are NOT touched. You can restore it here any time.`
         }
-        confirmLabel={pendingDelete?.section === 'outsourced' ? `Cancel for ${pendingDelete?.branch_name || 'branch'}` : 'Cancel item'}
+        confirmLabel={`Cancel for ${pendingDelete?.branch_name || 'branch'}`}
       />
 
       {/* Restore confirmation — undo a branch-scoped outsourced cancel */}

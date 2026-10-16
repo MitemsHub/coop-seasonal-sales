@@ -558,7 +558,7 @@ function CatalogManager({ open, onClose }) {
                       <button
                         type="button"
                         onClick={() => setPendingDelete(item)}
-                        aria-label={`Delete ${item.name}`}
+                        aria-label={`Cancel ${item.name}`}
                         className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-danger-bg hover:text-danger-fg"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -592,9 +592,9 @@ function CatalogManager({ open, onClose }) {
         onClose={() => setPendingDelete(null)}
         onConfirm={deleteItem}
         loading={saving}
-        title="Remove this item?"
+        title="Cancel this catalog item?"
         message={`"${pendingDelete?.name}" disappears from the survey form. Existing submissions keep their saved copy.`}
-        confirmLabel="Remove"
+        confirmLabel="Cancel item"
       />
     </div>
   )
@@ -786,7 +786,7 @@ function SubmissionCard({ sub, onEdit, onDelete, onPhotoDeleted, onEntryRestored
             Edit
           </Button>
           <Button variant="ghost" size="sm" onClick={() => onDelete(sub)} leftIcon={Trash2}>
-            Delete
+            Cancel
           </Button>
           <Button variant="secondary" size="sm" onClick={() => setOpen((v) => !v)} rightIcon={ChevronDown}>
             {open ? 'Hide' : `View ${itemCount}`}
@@ -1423,13 +1423,13 @@ export default function AdminFoodSurveyPage() {
           onClose={() => setPendingDelete(null)}
           onConfirm={confirmDelete}
           loading={deleting}
-          title="Delete this submission?"
+          title="Cancel this submission?"
           message={
             pendingDelete
-              ? `All ${pendingDelete.entries?.length || 0} item entries from ${pendingDelete.rep_name} will be removed (photos included). This cannot be undone.`
+              ? `${pendingDelete.rep_name}'s submission (${pendingDelete.entries?.length || 0} items, photos included) is removed from the survey. This cannot be undone.`
               : ''
           }
-          confirmLabel="Delete"
+          confirmLabel="Cancel submission"
         />
       </div>
     </ProtectedRoute>
