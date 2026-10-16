@@ -1767,7 +1767,7 @@ function ItemsImportContent() {
                             </span>
                           </span>
                           <span
-                            className={`shrink-0 rounded-full bg-surface px-2 py-0.5 text-chips font-bold uppercase tracking-wide ${cancelledCount ? 'text-muted' : 'text-muted'}`}
+                            className={`shrink-0 rounded-full bg-surface px-2 py-0.5 text-chips font-bold uppercase tracking-wide ${cancelledCount ? 'text-brand' : 'text-muted'}`}
                           >
                             {cancelledCount ? `${activeCount}/${g.rows.length}` : g.rows.length}
                           </span>
