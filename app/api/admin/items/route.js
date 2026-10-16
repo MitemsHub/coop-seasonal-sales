@@ -307,6 +307,9 @@ export async function GET(req) {
       )
 
       // 3. This branch's survey drafts — same cycle rule as the outsourced list
+      // Cancelled entries are read too so their linked products leave the
+      // branch's preview (the admin removed them for this branch; showing
+      // them would mean a cancel never affects what shoppers see).
       const { data: subs } = await supabase
         .from('food_survey_submissions')
         .select('id')
@@ -314,16 +317,34 @@ export async function GET(req) {
         .or(`cycle_id.eq.${Number(cycleId)},cycle_id.is.null`)
       const subIds = (subs || []).map((s) => s.id)
       const draftNames = new Set()
+      const cancelledItemIds = new Set()
       if (subIds.length) {
-        const { data: ents } = await supabase.from('food_survey_entries').select('item_name').in('submission_id', subIds)
+        let ents = null
+        let entsErr = null
+        const withCols = await supabase.from('food_survey_entries').select('item_name, cancelled, saved_item_id').in('submission_id', subIds)
+        ents = withCols.data
+        entsErr = withCols.error
+        if (entsErr) {
+          // Legacy deployment without saved_item_id/cancelled — fall back to
+          // names only so the preview still works.
+          const plain = await supabase.from('food_survey_entries').select('item_name').in('submission_id', subIds)
+          ents = plain.data
+        }
         for (const e of ents || []) {
+          if (e.cancelled === true) {
+            const linkId = e.saved_item_id != null ? Number(e.saved_item_id) : null
+            if (linkId) cancelledItemIds.add(linkId) // linked product hidden for this branch+cycle
+            continue // cancelled entries never rank a product as "refined work"
+          }
           const key = norm(e.item_name)
           if (key) draftNames.add(key)
         }
       }
 
       // 4. Compose exactly what the member shop shows for this branch
-      const items = (rows || []).map((r) => {
+      const items = (rows || [])
+        .filter((r) => !cancelledItemIds.has(r.item_id))
+        .map((r) => {
         const markup = markupByItem.get(r.item_id) || 0
         const base = Number(r.price || 0)
         return {
@@ -349,6 +370,7 @@ export async function GET(req) {
         items,
         total: items.length,
         draft_hits: items.filter((i) => i.from_draft).length,
+        cancelled_hidden: cancelledItemIds.size,
       })
     }
 
@@ -639,6 +661,10 @@ export async function GET(req) {
         // fall back to the old name-only match.
         saved = itemByName.get(d.norm_name)
       }
+      // Capture the resolution BEFORE the cancelled suppression — a cancelled
+      // draft that DID resolve to a product still identifies that product and
+      // must keep it from resurfacing below.
+      const resolvedItem = saved
       // A CANCELLED item must not surface in the Outsourced list even when a
       // name-only match still finds it — the admin deliberately removed it,
       // so the draft renders as "Not worked on yet" instead of linking back.
@@ -654,6 +680,15 @@ export async function GET(req) {
         if (savedItemIdsClaimed.has(claimKey)) continue // same product, already shown IN THIS BRANCH
         savedItemIdsClaimed.add(claimKey)
         itemsShownSomewhere.add(saved.item_id)
+      } else if (d.cancelled && resolvedItem) {
+        // Cancelled draft: claim the product it would have resolved to, so
+        // the saved-items pass can't resurrect the very same item as an
+        // un-cancelled row after a refresh. Without this, a cancelled entry
+        // reads back from the database as Cancelled on its own card yet ALSO
+        // resurfaces as a live “Saved items — no survey draft” card
+        // (the real Samvita "cancel → refresh → came back" report).
+        itemsShownSomewhere.add(resolvedItem.item_id)
+        savedItemIdsClaimed.add(`${resolvedItem.item_id}::${d.branch_id ?? 'none'}`)
       }
       rows.push({ ...decorate(saved || {}), saved: !!saved, draft: d })
     }

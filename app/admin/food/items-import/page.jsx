@@ -228,7 +228,7 @@ function ItemsImportContent() {
           )
         )
         flash(
-          `“${pendingDelete.name}” cancelled for ${pendingDelete.branch_name || 'this branch'} only. It still shows in ${pendingDelete.branch_name || 'the'} survey as Cancelled; other branches are untouched.`,
+          `“${pendingDelete.name}” cancelled for ${pendingDelete.branch_name || 'this branch'} only — it leaves ${pendingDelete.branch_name || 'the branch'}'s shop preview and still shows in the survey as Cancelled. Other branches are untouched.`,
           'success'
         )
       } else {
@@ -1737,6 +1737,8 @@ function ItemsImportContent() {
 
                 {pagedBranchGroups.map((g) => {
                   const collapsed = !expandedBranches.has(g.key)
+                  const cancelledCount = g.rows.filter((r) => r.draft?.cancelled).length
+                  const activeCount = g.rows.length - cancelledCount
                   const savedCount = g.rows.filter((r) => r.saved).length
                   const rowsTotal = Math.ceil(g.rows.length / ROWS_PER_PAGE) || 1
                   const rowsPage = clampPage(outRowPages[g.key] ?? 1, rowsTotal)
@@ -1759,12 +1761,15 @@ function ItemsImportContent() {
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-semibold text-fg">{g.label}</span>
                             <span className="block truncate text-caption text-muted">
-                              {g.rows.length} item{g.rows.length === 1 ? '' : 's'}
+                              {activeCount} item{activeCount === 1 ? '' : 's'}
+                              {cancelledCount ? ` · ${cancelledCount} cancelled` : ''}
                               {savedCount ? ` · ${savedCount} saved to shop` : ''}
                             </span>
                           </span>
-                          <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-chips font-bold uppercase tracking-wide text-muted">
-                            {g.rows.length}
+                          <span
+                            className={`shrink-0 rounded-full bg-surface px-2 py-0.5 text-chips font-bold uppercase tracking-wide ${cancelledCount ? 'text-muted' : 'text-muted'}`}
+                          >
+                            {cancelledCount ? `${activeCount}/${g.rows.length}` : g.rows.length}
                           </span>
                         </button>
                         {branchDraft && (
@@ -1930,7 +1935,7 @@ function ItemsImportContent() {
         message={
           overlapLabel
             ? `Note: “${pendingDelete?.name}” also exists as a General Item. This cancel is scoped to ${pendingDelete?.branch_name || 'this branch'} only — the General/ catalog item, its Image Bank picture, its prices and every other branch are NOT touched. You can restore it here any time.`
-            : `“${pendingDelete?.name}” is cancelled for ${pendingDelete?.branch_name || 'this branch'} only: this branch's survey entry shows as Cancelled and the card leaves the outsourced list. The item itself, its Image Bank picture, its prices and every other branch are NOT touched. You can restore it here any time.`
+            : `“${pendingDelete?.name}” is cancelled for ${pendingDelete?.branch_name || 'this branch'} only: this branch's survey entry shows as Cancelled, the card drops from the branch counter and the product disappears from ${pendingDelete?.branch_name || 'the branch'}'s shop preview. The item itself, its Image Bank picture, its prices and every other branch are NOT touched. You can restore it here any time.`
         }
         confirmLabel={`Cancel for ${pendingDelete?.branch_name || 'branch'}`}
       />
