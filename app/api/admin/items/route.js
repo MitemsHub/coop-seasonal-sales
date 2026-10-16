@@ -347,15 +347,15 @@ export async function GET(req) {
       // for the rep's mistaken duplicate submission — the General item keeps
       // selling in every branch, exactly as before the cancel.
       if (cancelledLinks.size) {
-        let linkItems = null
         const srcRes = await supabase.from('items').select('item_id, source').in('item_id', [...cancelledLinks])
-        linkItems = srcRes.data
-        if (srcRes.error || !linkItems) {
-          // source column unknown → treat every link as outsourced (old behavior)
-          for (const li of srcRes.error ? [] : linkItems || []) cancelledItemIds.add(li.item_id)
-        }
-        for (const li of linkItems || []) {
-          if ((li.source || 'general') === 'outsourced') cancelledItemIds.add(li.item_id)
+        const linkItems = srcRes.data
+        if (srcRes.error || linkItems === null) {
+          // source column unknown → keep the old behavior: hide every link.
+          for (const id of cancelledLinks) cancelledItemIds.add(id)
+        } else {
+          for (const li of linkItems) {
+            if ((li.source || 'general') === 'outsourced') cancelledItemIds.add(li.item_id)
+          }
         }
       }
 
