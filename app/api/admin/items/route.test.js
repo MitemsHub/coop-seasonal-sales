@@ -640,38 +640,80 @@ describe('image bank — retired rows carry is_active so the picker can hide the
     expect(active.is_active).toBe(true)
   })
 
-  it('picker-side rule: active-only results when actives match the search', async () => {
+  // The Gino regression (2026-10-17): a retired twin (RETIRED-GINOTIN…)
+  // shared the active row's image URL. Name-order dedupe let the retired row
+  // claim the URL first, so the picker's active list lost GINOTOMATOESSACHET
+  // entirely and every “Gino Tomatoes Sachet” search surfaced only RETIRED-
+  // flagged rows. Dedupe must prefer the ACTIVE row on a shared URL.
+  describe('image bank dedupe — the ACTIVE row wins a shared image URL', () => {
+    const dedupe = (rows) => {
+      const byUrl = new Map()
+      const images = []
+      for (const r of rows) {
+        const key = String(r.image_url).split('?')[0]
+        const prior = byUrl.get(key)
+        if (!prior) {
+          byUrl.set(key, r)
+          images.push(r)
+          continue
+        }
+        if (prior.is_active === false && r.is_active !== false) {
+          byUrl.set(key, r)
+          const idx = images.findIndex((p) => p === prior)
+          if (idx >= 0) images[idx] = r
+        }
+      }
+      return images
+    }
+
+    it('replaces a retired claimant with the active twin on the same URL (mirrors the endpoint)', async () => {
+      // Name order puts the RETIRED- tombstone first — the original trigger.
+      const rows = [
+        { item_id: 30, sku: 'RETIRED-GINOTINTOMATOESSACHET', name: 'Gino Tomatoes Sachet', category: 'Paste', image_url: 'bank/gino.png', is_active: false },
+        { item_id: 21, sku: 'GINOTOMATOESSACHET', name: 'Gino Tomatoes Sachet', category: 'Paste', image_url: 'bank/gino.png', is_active: true },
+      ]
+      const images = dedupe(rows)
+      expect(images).toHaveLength(1)
+      expect(images[0].item_id).toBe(21)
+      expect(images[0].is_active).toBe(true)
+    })
+
+    it('keeps the first claimant when both rows are active (plain dedupe unchanged)', async () => {
+      const rows = [
+        { item_id: 1, sku: 'A', name: 'Item A', image_url: 'x.png', is_active: true },
+        { item_id: 2, sku: 'B', name: 'Item B', image_url: 'x.png', is_active: true },
+      ]
+      const images = dedupe(rows)
+      expect(images).toHaveLength(1)
+      expect(images[0].item_id).toBe(1)
+    })
+  })
+
+  it('picker-side rule: results are ACTIVE-only — retired rows never surface', async () => {
     // Pins the ITEM picker behaviour (not the endpoint) so a future refactor
     // of ItemImagePicker cannot silently re-expose retired rows as ordinary
-    // options. Mirrors the filter logic used in the component.
+    // options — nor fall back to them when the active list is thin.
     const bank = [
       { item_id: 30, name: 'Indomietable Noodles', sku: 'INDOMIETABLESNOODLES', category: 'Noodles', is_active: false },
       { item_id: 31, name: 'Indomitable Noodles', sku: 'INDOMITABLESNOODLES', category: 'Noodles', is_active: true },
     ]
     const activeBank = bank.filter((r) => r.is_active !== false)
-    const retiredBank = bank.filter((r) => r.is_active === false)
     const q = 'indom'
     const matches = (r) => `${r.name} ${r.sku} ${r.category}`.toLowerCase().includes(q)
-    const active = activeBank.filter(matches)
-    const results = active.length ? active : retiredBank.filter(matches).slice(0, 40)
-    // Active twin still there…
+    const results = activeBank.filter(matches).slice(0, 40)
     expect(results.some((r) => r.item_id === 31)).toBe(true)
-    // …and the retired twin is NOT offered alongside it.
     expect(results.some((r) => r.item_id === 30)).toBe(false)
   })
 
-  it('picker-side rule: retired surface ONLY when nothing active matches', async () => {
+  it('picker-side rule: a search matching ONLY retired rows returns NOTHING (never the fallback)', async () => {
     const bank = [
       { item_id: 30, name: 'Indomietable Noodles', sku: 'INDOMIETABLESNOODLES', category: 'Noodles', is_active: false },
     ]
     const activeBank = bank.filter((r) => r.is_active !== false)
-    const retiredBank = bank.filter((r) => r.is_active === false)
     const q = 'indom'
     const matches = (r) => `${r.name} ${r.sku} ${r.category}`.toLowerCase().includes(q)
-    const active = activeBank.filter(matches)
-    const results = active.length ? active : retiredBank.filter(matches).slice(0, 40)
-    expect(results.length).toBe(1)
-    expect(results[0].is_active).toBe(false) // visible + flaggable, not pickable-looking
+    const results = activeBank.filter(matches).slice(0, 40)
+    expect(results).toEqual([])
   })
 })
 

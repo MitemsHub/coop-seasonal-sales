@@ -65,29 +65,23 @@ export default function ItemImagePicker({ value, onChange, name = '', sku = '', 
     return () => document.removeEventListener('mousedown', onDown)
   }, [open])
 
-  // Retired items (is_active=false) come back from the bank endpoint so the
-  // Image Bank's Deleted panel can list them, but they are NOT pickable here —
-  // picking one would re-link a product the admin deliberately removed and
-  // reintroduce "ghost" twins next to its active replacements. They stay
-  // visible in the active list's stead only when nothing else matches, so the
-  // admin still learns why a familiar name "disappeared".
+  // Only ACTIVE items are pickable here. Retired items (is_active=false)
+  // linger in the endpoint payload solely for the Image Bank's Deleted panel;
+  // surfacing them in the refined-image search led the admin to pick a
+  // product that was deliberately removed (ghost twins) and masked the real
+  // miss when the active sibling lost a dedupe race. Retired rows are now
+  // invisible to this picker — restore them from Image Bank › Deleted items
+  // if they should come back.
   const activeBank = useMemo(() => bank.filter((r) => r.is_active !== false), [bank])
-  const retiredBank = useMemo(() => bank.filter((r) => r.is_active === false), [bank])
   const matches = (r, q) => `${r.name || ''} ${r.sku || ''} ${r.category || ''}`.toLowerCase().includes(q)
   const results = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) {
-      // Default (empty search) list stays active-only: these are the rows the
-      // admin should be picking from.
+      // Default (empty search) list: the pickable rows, newest matching last.
       return activeBank.slice(0, 40)
     }
-    const active = activeBank.filter((r) => matches(r, q)).slice(0, 40)
-    if (active.length) return active
-    // No active match — surface retired rows under the same search so the
-    // admin can see they exist (and are retired) rather than think the bank
-    // lost the item.
-    return retiredBank.filter((r) => matches(r, q)).slice(0, 40)
-  }, [activeBank, retiredBank, search])
+    return activeBank.filter((r) => matches(r, q)).slice(0, 40)
+  }, [activeBank, search])
 
   const selected = bank.find((r) => String(r.image_url) === String(value || '')) || null
 
@@ -277,14 +271,6 @@ export default function ItemImagePicker({ value, onChange, name = '', sku = '', 
                             {r.category ? ` · ${r.category}` : ''}
                           </span>
                         </span>
-                        {r.is_active === false && (
-                          <span
-                            className="ml-1 shrink-0 rounded-full bg-danger-bg px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-danger-fg"
-                            title="This item is retired (deleted). You should not pick it — restore it in the Image Bank if you need it back."
-                          >
-                            Retired
-                          </span>
-                        )}
                         {isSel && <Check className="h-3.5 w-3.5 shrink-0 text-brand" strokeWidth={2.5} />}
                       </button>
                     </li>

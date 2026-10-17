@@ -150,13 +150,30 @@ export async function GET(req) {
         .neq('image_url', '')
         .order('name')
       if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
-      const seen = new Set()
-      const images = (data || []).filter((r) => {
+      // Same image = same bank entry (the image is stored once and linked,
+      // never re-uploaded). Dedupe on the URL path — but the ACTIVE row must
+      // win when a retired twin shares the image: the retired one is tomb-
+      // stoned to a RETIRED-… SKU, and letting it claim the URL first (name
+      // order puts "RETIRED-…" before the plain SKU sometimes) made the
+      // picker's active list lose the real item entirely, so searching
+      // e.g. "Gino Tomatoes Sachet" only ever surfaced the retired twins.
+      const byUrl = new Map()
+      const images = []
+      for (const r of data || []) {
         const key = String(r.image_url).split('?')[0]
-        if (seen.has(key)) return false
-        seen.add(key)
-        return true
-      })
+        const prior = byUrl.get(key)
+        if (!prior) {
+          byUrl.set(key, r)
+          images.push(r)
+          continue
+        }
+        // An active row displaces a retired one that already claimed the URL.
+        if (prior.is_active === false && r.is_active !== false) {
+          byUrl.set(key, r)
+          const idx = images.findIndex((p) => p === prior)
+          if (idx >= 0) images[idx] = r
+        }
+      }
       return NextResponse.json({ ok: true, images })
     }
 
