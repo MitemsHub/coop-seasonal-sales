@@ -11,5 +11,15 @@ export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     const { installVaryMerge } = await import('./lib/varyMerge.js')
     installVaryMerge()
+
+    // Boot-time warm-up of the member shop price cache (per branch) so the
+    // first shoppers of a cold server never pay the full round-trip price.
+    // Fire-and-forget — must never delay or crash boot.
+    try {
+      const { prewarmShopCache } = await import('./lib/shopPrewarm.js')
+      prewarmShopCache()
+    } catch (e) {
+      console.warn('[prewarm-shop] could not start:', e?.message || e)
+    }
   }
 }
