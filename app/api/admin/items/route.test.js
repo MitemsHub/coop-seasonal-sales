@@ -688,7 +688,7 @@ describe('image bank — retired rows carry is_active so the picker can hide the
 
     it('keeps BOTH active twins on a shared URL (the Knorr ghost-twin fix)', async () => {
       const rows = [
-        { item_id: 299, sku: 'KNORRCHICKENCUBES-2', name: 'Knorr Cubes', image_url: 'bank/KNORRCHICKENCUBES.png?v=1', is_active: true },
+        { item_id: 299, sku: 'KNORRCUBES', name: 'Knorr Cubes', image_url: 'bank/KNORRCHICKENCUBES.png?v=1', is_active: true },
         { item_id: 317, sku: 'KNORRCHICKENCUBES', name: 'Knorr Chicken Cubes', image_url: 'bank/KNORRCHICKENCUBES.png?v=1', is_active: true },
       ]
       const images = dedupe(rows)
