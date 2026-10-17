@@ -115,4 +115,23 @@ fmt(nameDupes, 'SAME NAME')
 fmt(urlDupes, 'SAME IMAGE URL')
 if (!nameDupes.length && !urlDupes.length) console.log('\nNo active-vs-retired duplicates by either key.')
 
+// scripts/order-held-check.js
+// Fragment appended to audit-retired-twins.mjs: flags every retired item
+// still referenced by order_lines — those can never be hard-deleted (FK
+// order_lines_item_id_fkey), so purge plans must remap history first.
+const orderHeld = (await pool.query(`
+  SELECT i.item_id, i.sku, i.name, count(*)::int AS n,
+         min(o.created_at)::date AS first_order, max(o.created_at)::date AS last_order
+  FROM public.items i
+  JOIN public.order_lines ol ON ol.item_id = i.item_id
+  LEFT JOIN public.orders o ON o.order_id = ol.order_id
+  WHERE i.is_active = false
+  GROUP BY i.item_id, i.sku, i.name
+  ORDER BY n DESC`)).rows
+console.log(`\n=== ORDER-HELD RETIRED ITEMS (${orderHeld.length}) — hard-delete blocked; remap history first ===`)
+for (const r of orderHeld) {
+  console.log(`   RETIRED #${r.item_id} "${r.name}" sku=${r.sku} | order_lines=${r.n} (${r.first_order} -> ${r.last_order})`)
+}
+if (!orderHeld.length) console.log('   none — every retired row is detached from order history.')
+
 await pool.end()

@@ -1,58 +1,33 @@
 # Retired-vs-Active Item Twins — Audit Report
 
-**Date:** 2026-10-17 · **Source:** read-only query on the production DB ([scripts/audit-retired-twins.mjs](scripts/audit-retired-twins.mjs), run with `node scripts/audit-retired-twins.mjs`)
-**Scale:** 214 active / 11 retired items. Of the 11 retired rows, **7 duplicate a still-active item** (2 overlap in both checks).
+**Last updated:** 2026-10-17 (after the R1 split purge and both history remaps) · **Source:** read-only query on the production DB ([scripts/audit-retired-twins.mjs](scripts/audit-retired-twins.mjs), run with `node scripts/audit-retired-twins.mjs`)
+**Current state: 214 active / 4 retired items. Only ONE twin pair remains (Auntie B).**
 
-## Why these matter
-- On a shared image URL they currently compete with the active row's entry for the same bank photo — the exact cause of last week's "Gino Tomatoes Sachet wouldn't show in the refined-image picker" bug (fixed in code, but the data is still there).
-- In the Image Bank's **Deleted items** panel they look like real deletable/restorable items, inviting accidental restores that create new twins.
-- They hold their own `branch_item_prices` rows (1–14 each) that keep surfacing in cycle / report queries that don't filter `is_active`.
+## What happened today (chronological)
 
-## 7. Retired items that duplicate an active item
+### 1. R1 split purge
+Of the R1 list, the FK check (`order_lines_item_id_fkey`, proven via a rolled-back dry-run DELETE) showed:
+- **#150 Viva Plus Gold 180G, #151 Mai Kwabo Macaroni, #166 Gino Tin Tomatoes 800G** — 0 order references → **hard-deleted** with their 3 `branch_item_prices` rows (one committed transaction).
+- **#32 Cap Rice (`RICECAP25KG`, 2 order lines) and #219 Gino Tomatoes Sachet (`TINTOMATOESSACHET`, 47 order lines)** — order-history-held → left retired pending remap.
 
-| # | Retired item | Retired ID | SKU | Priced branches | Active twin | Twin ID | Twin SKU |
+### 2. History remap + purge of #32 and #219 (49 order lines)
+All 49 lines (cycle #1 "2025 Q3 Distribution", Nov 4–24 2025) were remapped to the active twins — `item_id` **and** the NOT-NULL `branch_item_price_id` together, per-branch/cycle price rows matched or created at identical prices. Dry-run holding all invariants (order count 1,250, total ₦337,394,502, line count 6,872, line sum ₦303,497,775, 0 orphans) before a second identical run committed. Both rows purged after.
+
+### 3. History remap + purge of #59 (RETIRED-GINOTINTOMATOESSACHET) and #207 (RICECAPRICE25KG)
+Same dry-run-then-commit flow: **210 order lines moved** (198 on #59 across 12 price rows, branches 2/5/7/12/21/23/26/30/31/35/37/39; 12 on #207 branch 38), all in cycle #1. Invariants identical before/after. Both rows purged. (First dry-run exposed a bogus 569-orphan reading caused by a LEFT JOIN overwriting in the purge transaction — corrected to a `NOT EXISTS` check, which reported 0.)
+
+## Remaining twins (1)
+
+| Verdict | Retired item | Retired ID | SKU | Order lines | Active twin | Twin ID | Twin SKU |
 |---|---|---|---|---|---|---|---|
-| 1 | Auntie B Spaghetti | #62 | `SPAGHETTIAB` | 2 | Auntie B Spaghetti | #89 | `SPAGHETTIAUTIEB` |
-| 2 | Cap Rice 25Kg (RICECAP25KG) | #32 | `RICECAP25KG` | 1 | Cap Rice 25Kg | #134 | `CAPRICERICE25KG` |
-| 2b | Cap Rice 25Kg (RICECAPRICE25KG) | #207 | `RICECAPRICE25KG` | 1 | Cap Rice 25Kg | #134 | `CAPRICERICE25KG` |
-| 3 | Gino Tin Tomatoes 800G | #166 | `GINOTINTOMATOES800G` | 1 | Gino Tin Tomatoes 800G | #13 | `TINTOMATOES800G` |
-| 4 | Gino Tomatoes Sachet (tombstoned) | #59 | `RETIRED-GINOTINTOMATOESSACHET` | **14** | Gino Tomatoes Sachet | #14 | `GINOTOMATOESSACHET` |
-| 4b | Gino Tomatoes Sachet (TINTOM…) | #219 | `TINTOMATOESSACHET` | 1 | Gino Tomatoes Sachet | #14 | `GINOTOMATOESSACHET` |
-| 5 | Mai Kwabo Macaroni | #151 | `MACARONIMAIKWABO` | 1 | Mai Kwabo Macaroni | #10 | `MACARONIMK` |
-| 6 | Viva Plus Gold 180G | #150 | `VIVA180G` | 1 | Viva Plus Gold 180G | #145 | `VIVAPLUS180G` |
+| 🔴 Do NOT purge — order history held | Auntie B Spaghetti | **#62** | `SPAGHETTIAB` | **3** (Nov 6–14 2025) | Auntie B Spaghetti | #89 | `SPAGHETTIAUTIEB` |
 
-Note: retired **#219 is a special case — it's the ghost twin of #14's own history.** Its SKU (`TINTOMATOESSACHET`) collides with an image filename the ACTIVE #14 still uses (`items/TINTOMATOESSACHET.png`). It has only 1 priced branch, so it's the safest twin to drop outright (see recommendation R1 for the image side, which stays untouched either way).
+The `node scripts/audit-retired-twins.mjs` "ORDER-HELD RETIRED ITEMS" section now also flags two retired rows that duplicate nothing but are still unreachable for purge because they hold order history (remap them the same way if you want them gone):
+- **#128 Indomietable Noodles** `INDOMIETABLESNOODLES` — **100 order lines** (no active twin of that name exists; choose the correct live item before remap)
+- **#38 Gino Tin Tomatoes** `RETIRED-GINOTINTOMATOES` — **27 order lines**
 
-## One anomaly noticed on #59 (worth a look even outside the twin question)
-The retired #59 has a **tombstoned SKU dated before the retirement was standardized** — its SKU is `RETIRED-GINOTINTOMATOESSACHET` but the retirement logic expects the tombstone to also carry a prefix of the ORIGINAL sku. Right now the items table has NO visible trace of the ORIGINAL SKU (`GINOTINTOMATOESSACHET`) anywhere — it was overwritten entirely by the tombstone. If you ever want to restore #59 from Deleted items, it will restore under the tombstoned SKU unless you also carry the original SKU in a separate column/field before the tombstone run.
+## One anomaly from before, still standing
+The retire flow's `RETIRED-` SKU tombstone overwrites the original SKU with no preservation. If restoring #62/#128/#38 could ever matter, add an `original_sku` column first — otherwise the original SKU is unrecoverable once tombstoned.
 
-## Recommendations (in order of safety)
-
-### R1 — Safe to hard-delete now (no pricing history or only trivial 1-branch history)
-- `#219 Gino Tomatoes Sachet` — 1 branch. Its `TINTOMATOESSACHET` SKU also collides with the literal filename the ACTIVE #14 uses for its image; removing the item does NOT remove the image file (the bank image lives at items/TINTOMATOESSACHET.png and stays).
-- `#166 Gino Tin Tomatoes 800G` (1 branch) — benefits immediately: the active twin #13 will stop having a "RETIRED-first" dedupe competitor on a *different* URL (it doesn't share one — this one is purely a name twin).
-- `#151 Mai Kwabo Macaroni` (1 branch)
-- `#150 Viva Plus Gold 180G` (1 branch)
-- `#32 Cap Rice 25Kg (RICECAP25KG)` (1 branch) — this also removes the case-insensitive "RICECAPRICE25KG" collision the active #134 sits under.
-
-### R2 — Soft-retire then purge later (keep the rows for 1–2 cycles, they hold real pricing spread)
-- `#207 Cap Rice 25Kg (RICECAPRICE25KG)` (1 branch) — could also go into R1; it's only expensive by SKU-debt, not by shop impact.
-- `#62 Auntie B Spaghetti` (2 branches)
-- `#166 also fits here if R1 feels aggressive`
-
-### R3 — Do NOT purge yet, even though it's a "twin"
-- `#59 Gino Tomatoes Sachet` — **14 branches** priced with it. This isn't cruft — it was until recently the item your branch shops were actually running on. Purging it now would silently remove price rows for 14 branch cycles, which would **change historical report data**. If the goal is to stop it competing with active #14 for anything, the code fix already does that. Leave it retired but untouched, or (longer term) migrate its price rows to point at #14 before deleting.
-
-### R4 — Keep only ONE of the two DEDUPE-relevant retired rows under "Gino Tomatoes Sachet"
-- `#219` and `#59` are both retired with the same normalized name and the same active twin #14. Keeping both means the Deleted panel shows 2 confusing rows for the same product. R1 + R3 together resolve that: delete #219, keep #59 (history-carrying).
-
-## What to run if you want to act on R1 (draft; verify before executing)
-```sql
--- hard-delete only from R1's list. This will fail with FK errors if any
--- order/inventory/report row still references these items; fix that before running.
-DELETE FROM public.items WHERE item_id IN (219, 166, 151, 150, 32);
-```
-Then re-run `node scripts/audit-retired-twins.mjs` to confirm only R3 rows remain.
-
-## One suggested follow-up
-The current `is_active` snapshot means "retired" rows sit in `items` forever unless manually cleaned. Once you decide R1's deletions are OK, consider a periodic check (same script, run it after each cycle close) so new twins are caught while their price footprint is still tiny.
+## Suggested cadence
+Run `node scripts/audit-retired-twins.mjs` after each cycle close. Its output now answers both purge prerequisites: duplicates (same normalized name / shared image URL) **and** order-history entanglement — the two things that together decide whether a retired row is deletable or needs a remap first.
