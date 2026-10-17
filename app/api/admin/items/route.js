@@ -151,12 +151,16 @@ export async function GET(req) {
         .order('name')
       if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
       // Same image = same bank entry (the image is stored once and linked,
-      // never re-uploaded). Dedupe on the URL path — but the ACTIVE row must
-      // win when a retired twin shares the image: the retired one is tomb-
-      // stoned to a RETIRED-… SKU, and letting it claim the URL first (name
-      // order puts "RETIRED-…" before the plain SKU sometimes) made the
-      // picker's active list lose the real item entirely, so searching
-      // e.g. "Gino Tomatoes Sachet" only ever surfaced the retired twins.
+      // never re-uploaded). Dedupe on the URL path — but with the "active
+      // wins" rule below, because the retired one is tombstoned to a
+      // RETIRED-… SKU and letting it claim the URL first (name order puts
+      // "RETIRED-…" before the plain SKU sometimes) made the picker's active
+      // list lose the real item entirely.
+      // TWO ACTIVE rows on one URL are kept BOTH: they are two distinct
+      // products that share a photo (e.g. "Knorr Cubes" and "Knorr Chicken
+      // Cubes" on the same upload). Collapsing them to one made the second a
+      // ghost — present in the bank, unreachable in the refined-image
+      // picker — which is exactly the confusion this endpoint exists to end.
       const byUrl = new Map()
       const images = []
       for (const r of data || []) {
@@ -167,11 +171,19 @@ export async function GET(req) {
           images.push(r)
           continue
         }
-        // An active row displaces a retired one that already claimed the URL.
         if (prior.is_active === false && r.is_active !== false) {
+          // An active row displaces a retired one that already claimed the
+          // URL — one bank entry, represented by its live product.
           byUrl.set(key, r)
           const idx = images.findIndex((p) => p === prior)
           if (idx >= 0) images[idx] = r
+        } else if (prior.is_active !== false && r.is_active !== false) {
+          // Both active: keep each as its own picker entry under the shared
+          // image. Nothing to merge — the dedupe map now holds the last so
+          // a third row still resolves against an active for the retired
+          // displacement rule.
+          byUrl.set(key, r)
+          images.push(r)
         }
       }
       return NextResponse.json({ ok: true, images })

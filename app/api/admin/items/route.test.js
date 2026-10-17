@@ -645,7 +645,12 @@ describe('image bank — retired rows carry is_active so the picker can hide the
   // claim the URL first, so the picker's active list lost GINOTOMATOESSACHET
   // entirely and every “Gino Tomatoes Sachet” search surfaced only RETIRED-
   // flagged rows. Dedupe must prefer the ACTIVE row on a shared URL.
-  describe('image bank dedupe — the ACTIVE row wins a shared image URL', () => {
+  // The Knorr regression (2026-10-17, same evening): TWO ACTIVE rows shared
+  // one photo ("Knorr Cubes" + "Knorr Chicken Cubes" on the same upload) and
+  // the old first-claimant-wins dedupe collapsed them into one — the other
+  // product became a ghost, present in the bank but unreachable in the
+  // refined-image picker. Both active rows must survive.
+  describe('image bank dedupe — ACTIVE rows beat retired on a shared URL; active twins are kept BOTH', () => {
     const dedupe = (rows) => {
       const byUrl = new Map()
       const images = []
@@ -661,6 +666,9 @@ describe('image bank — retired rows carry is_active so the picker can hide the
           byUrl.set(key, r)
           const idx = images.findIndex((p) => p === prior)
           if (idx >= 0) images[idx] = r
+        } else if (prior.is_active !== false && r.is_active !== false) {
+          byUrl.set(key, r)
+          images.push(r)
         }
       }
       return images
@@ -678,14 +686,27 @@ describe('image bank — retired rows carry is_active so the picker can hide the
       expect(images[0].is_active).toBe(true)
     })
 
-    it('keeps the first claimant when both rows are active (plain dedupe unchanged)', async () => {
+    it('keeps BOTH active twins on a shared URL (the Knorr ghost-twin fix)', async () => {
       const rows = [
-        { item_id: 1, sku: 'A', name: 'Item A', image_url: 'x.png', is_active: true },
-        { item_id: 2, sku: 'B', name: 'Item B', image_url: 'x.png', is_active: true },
+        { item_id: 299, sku: 'KNORRCHICKENCUBES-2', name: 'Knorr Cubes', image_url: 'bank/KNORRCHICKENCUBES.png?v=1', is_active: true },
+        { item_id: 317, sku: 'KNORRCHICKENCUBES', name: 'Knorr Chicken Cubes', image_url: 'bank/KNORRCHICKENCUBES.png?v=1', is_active: true },
       ]
       const images = dedupe(rows)
-      expect(images).toHaveLength(1)
-      expect(images[0].item_id).toBe(1)
+      expect(images).toHaveLength(2)
+      expect(images.map((r) => r.item_id).sort()).toEqual([299, 317])
+    })
+
+    it('three rows on one URL — active displaces retired even after another active claimed it', async () => {
+      const rows = [
+        { item_id: 1, sku: 'A', name: 'Item A', image_url: 'x.png', is_active: true },
+        { item_id: 2, sku: 'RETIRED-B', name: 'Item B', image_url: 'x.png', is_active: false },
+        { item_id: 3, sku: 'C', name: 'Item C', image_url: 'x.png', is_active: true },
+      ]
+      const images = dedupe(rows)
+      expect(images).toHaveLength(2)
+      expect(images.some((r) => r.item_id === 1)).toBe(true)
+      expect(images.some((r) => r.item_id === 2)).toBe(false)
+      expect(images.some((r) => r.item_id === 3)).toBe(true)
     })
   })
 
