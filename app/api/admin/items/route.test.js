@@ -13,7 +13,7 @@ vi.mock('@/lib/directDb', () => ({
   transactionalQuery: vi.fn(),
 }))
 
-import { GET, POST } from './route'
+import { GET, POST, DELETE } from './route'
 import { createClient } from '@/lib/supabaseServer'
 import { queryDirect } from '@/lib/directDb'
 
@@ -672,5 +672,70 @@ describe('image bank — retired rows carry is_active so the picker can hide the
     const results = active.length ? active : retiredBank.filter(matches).slice(0, 40)
     expect(results.length).toBe(1)
     expect(results[0].is_active).toBe(false) // visible + flaggable, not pickable-looking
+  })
+})
+
+// ── Branch-scoped cancel: entry_id is the ONLY required id ─────────────
+// The Yenagoa regression (2026-10-17): cancelling “Samvita” in the
+// Outsourced section failed with “item_id is required”. A draft that has
+// never been edited & saved has NO items row, so the client sends
+// item_id=0 for the branch-scoped modes. The DELETE handler demanded a
+// positive item_id BEFORE reading the mode, so every unsaved-draft cancel
+// 400'd. mode=cancel-draft / restore-draft identify the entry via
+// entry_id alone; the item_id gate must apply only to item-scoped modes.
+describe('DELETE branch-scoped cancel-draft does not require item_id', () => {
+  it('cancels an UNSAVED draft (item_id=0) by entry_id and returns ok', async () => {
+    // Direct Postgres writes go through queryDirect — return success rows.
+    queryDirect.mockImplementation(async (sql, params) => {
+      if (/SET cancelled =/.test(sql)) {
+        return { rows: [{ id: params[1], item_name: 'Samvita', saved_item_id: null }], rowCount: 1 }
+      }
+      if (/JOIN public\.branches/.test(sql)) {
+        return { rows: [{ code: 'YENAGOA' }], rowCount: 1 }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+    createClient.mockReturnValue(makeSupabase(scenario()))
+
+    // Mirrors the client's exact URL for an unsaved draft (item_id ?? 0).
+    const res = await DELETE(
+      new Request('http://x/api/admin/items?item_id=0&mode=cancel-draft&entry_id=770')
+    )
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json.ok).toBe(true)
+    expect(json.entry_id).toBe(770)
+    expect(json.cancelled).toBe(true)
+    // The write flagged the right entry.
+    expect(queryDirect).toHaveBeenCalledWith(
+      'UPDATE public.food_survey_entries SET cancelled = $1 WHERE id = $2 RETURNING id, item_name, saved_item_id',
+      [true, 770]
+    )
+  })
+
+  it('restore-draft by entry_id also works without an item_id', async () => {
+    queryDirect.mockImplementation(async (sql, params) => {
+      if (/SET cancelled =/.test(sql)) {
+        return { rows: [{ id: params[1], item_name: 'Rice', saved_item_id: null }], rowCount: 1 }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+    createClient.mockReturnValue(makeSupabase(scenario()))
+
+    const res = await DELETE(
+      new Request('http://x/api/admin/items?item_id=0&mode=restore-draft&entry_id=770')
+    )
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json.ok).toBe(true)
+    expect(json.cancelled).toBe(false)
+  })
+
+  it('still requires item_id for the ITEM-scoped cancel (mode-less)', async () => {
+    createClient.mockReturnValue(makeSupabase(scenario()))
+    const res = await DELETE(new Request('http://x/api/admin/items?item_id=0'))
+    const json = await res.json()
+    expect(res.status).toBe(400)
+    expect(json.error).toBe('item_id is required')
   })
 })

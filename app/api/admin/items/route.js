@@ -828,11 +828,6 @@ export async function DELETE(req) {
   try {
     const supabase = createClient()
     const { searchParams } = new URL(req.url)
-    const itemId = Number(searchParams.get('item_id'))
-    if (!Number.isInteger(itemId) || itemId <= 0) {
-      return NextResponse.json({ ok: false, error: 'item_id is required' }, { status: 400 })
-    }
-
     const mode = String(searchParams.get('mode') || '')
 
     // ── Branch-scoped cancel/restore (Outsourced items) ────────────────
@@ -843,6 +838,10 @@ export async function DELETE(req) {
     // in other branches and the General list are untouched. The entry keeps
     // showing in the branch's Survey with its Cancelled badge, and the
     // Outsourced list renders it as a Cancelled card until restored.
+    // entry_id is the identifier here — the draft may not have been saved as
+    // an item yet (no items row exists), so item_id is NOT required for
+    // these modes (the Yenagoa "item_id is required" regression). The
+    // item_id check moves below, to the item-scoped modes only.
     if (mode === 'cancel-draft' || mode === 'restore-draft') {
       const entryId = Number(searchParams.get('entry_id'))
       if (!Number.isInteger(entryId) || entryId <= 0) {
@@ -878,6 +877,13 @@ export async function DELETE(req) {
       }
 
       return NextResponse.json({ ok: true, entry_id: row.id, item_name: row.item_name, cancelled: cancel, draft_cancelled: cancel })
+    }
+
+    // Item-scoped modes (cancel/restore) genuinely operate on an items row —
+    // there the id is required.
+    const itemId = Number(searchParams.get('item_id'))
+    if (!Number.isInteger(itemId) || itemId <= 0) {
+      return NextResponse.json({ ok: false, error: 'item_id is required' }, { status: 400 })
     }
 
     // is_active must exist before any cancel/restore write — the lazy-DDL
