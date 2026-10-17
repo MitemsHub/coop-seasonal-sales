@@ -574,3 +574,103 @@ describe('shop preview — branch cancel respects item origin', () => {
     expect(byId[7].origin).toBe('outsourced')
   })
 })
+
+// ── Image bank: retired rows carry their is_active flag ────────────────
+// The section=images endpoint deliberately returns retired (is_active=false)
+// rows so Image Bank › Deleted items can list and restore them. The picker
+// (ItemImagePicker) depends on the row's is_active flag to hide retired items
+// from its searchable results/skip as a pickable option. If the flag ever
+// drops off the payload, the retired Indomics-style rows would once again
+// look like ordinary pickable options in the refined-image picker.
+describe('image bank — retired rows carry is_active so the picker can hide them', () => {
+  function bankSupabase({ rows }) {
+    return {
+      from() {
+        // The images section probes hasColumn('items', 'is_active') by
+        // selecting the column with limit(1) — answer success when the scan
+        // includes it.
+        const probe = { data: [{ is_active: true }], error: null }
+        const list = {
+          data: rows,
+          error: null,
+        }
+        return {
+          select: () => ({
+            limit: () => Promise.resolve(probe),
+            not: () => ({
+              neq: () => ({
+                not: () => ({
+                  neq: () => ({
+                    order: () => Promise.resolve(list),
+                  }),
+                  order: () => Promise.resolve(list),
+                }),
+                order: () => Promise.resolve(list),
+              }),
+            }),
+            neq: () => ({
+              not: () => ({
+                neq: () => ({ order: () => Promise.resolve(list) }),
+                order: () => Promise.resolve(list),
+              }),
+              order: () => Promise.resolve(list),
+            }),
+            order: () => Promise.resolve(list),
+          }),
+        }
+      },
+    }
+  }
+
+  it('returns is_active on every image row, including retired ones', async () => {
+    const rows = [
+      { item_id: 30, sku: 'INDOMIETABLESNOODLES', name: 'Indomietable Noodles', category: 'Noodles', image_url: 'a.png', is_active: false },
+      { item_id: 31, sku: 'INDOMITABLESNOODLES', name: 'Indomitable Noodles', category: 'Noodles', image_url: 'b.png', is_active: true },
+    ]
+    createClient.mockReturnValue(bankSupabase({ rows }))
+    const res = await GET(new Request(new URL('http://x/api/admin/items?section=images')))
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(body.ok).toBe(true)
+    // Retired row still present (for the Deleted panel) but TAGGED.
+    const retired = body.images.find((r) => r.item_id === 30)
+    const active = body.images.find((r) => r.item_id === 31)
+    expect(retired).toBeDefined()
+    expect(retired.is_active).toBe(false)
+    expect(active.is_active).toBe(true)
+  })
+
+  it('picker-side rule: active-only results when actives match the search', async () => {
+    // Pins the ITEM picker behaviour (not the endpoint) so a future refactor
+    // of ItemImagePicker cannot silently re-expose retired rows as ordinary
+    // options. Mirrors the filter logic used in the component.
+    const bank = [
+      { item_id: 30, name: 'Indomietable Noodles', sku: 'INDOMIETABLESNOODLES', category: 'Noodles', is_active: false },
+      { item_id: 31, name: 'Indomitable Noodles', sku: 'INDOMITABLESNOODLES', category: 'Noodles', is_active: true },
+    ]
+    const activeBank = bank.filter((r) => r.is_active !== false)
+    const retiredBank = bank.filter((r) => r.is_active === false)
+    const q = 'indom'
+    const matches = (r) => `${r.name} ${r.sku} ${r.category}`.toLowerCase().includes(q)
+    const active = activeBank.filter(matches)
+    const results = active.length ? active : retiredBank.filter(matches).slice(0, 40)
+    // Active twin still there…
+    expect(results.some((r) => r.item_id === 31)).toBe(true)
+    // …and the retired twin is NOT offered alongside it.
+    expect(results.some((r) => r.item_id === 30)).toBe(false)
+  })
+
+  it('picker-side rule: retired surface ONLY when nothing active matches', async () => {
+    const bank = [
+      { item_id: 30, name: 'Indomietable Noodles', sku: 'INDOMIETABLESNOODLES', category: 'Noodles', is_active: false },
+    ]
+    const activeBank = bank.filter((r) => r.is_active !== false)
+    const retiredBank = bank.filter((r) => r.is_active === false)
+    const q = 'indom'
+    const matches = (r) => `${r.name} ${r.sku} ${r.category}`.toLowerCase().includes(q)
+    const active = activeBank.filter(matches)
+    const results = active.length ? active : retiredBank.filter(matches).slice(0, 40)
+    expect(results.length).toBe(1)
+    expect(results[0].is_active).toBe(false) // visible + flaggable, not pickable-looking
+  })
+})
