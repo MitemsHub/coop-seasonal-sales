@@ -83,7 +83,17 @@ export default function ItemImagePicker({ value, onChange, name = '', sku = '', 
     return activeBank.filter((r) => matches(r, q)).slice(0, 40)
   }, [activeBank, search])
 
-  const selected = bank.find((r) => String(r.image_url) === String(value || '')) || null
+  // Two active products may share one photo URL (the bank keeps both —
+  // "Knorr Cubes" and "Knorr Chicken Cubes" on the same upload used to be
+  // exactly this case). The caption must then resolve to the row the ADMIN
+  // is editing — same SKU — not alphabetically-first row that find() would
+  // return, which made the caption claim the other product's name.
+  const selected = (() => {
+    const sameUrl = bank.filter((r) => String(r.image_url) === String(value || ''))
+    if (!sameUrl.length) return null
+    const normalizedSku = String(sku || '').trim().toUpperCase()
+    return sameUrl.find((r) => String(r.sku || '').trim().toUpperCase() === normalizedSku) || sameUrl[0]
+  })()
 
   const pick = (row) => {
     const url = String(row.image_url)
