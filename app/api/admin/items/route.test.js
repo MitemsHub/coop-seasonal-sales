@@ -377,6 +377,14 @@ describe('outsourced rows — one item claimed from two branches', () => {
 
     const semovitaRows = body.rows.filter((r) => r.name?.includes('Golden Penny Semovita 1Kg'))
     expect(semovitaRows.length).toBe(2) // one card per branch
+    // Branch-scoped pricing (Akure-display regression): each card shows the
+    // DRAFT BRANCH's own price — Abeokuta ₦20,500, Kano ₦16,600 — never the
+    // cycle-wide minimum (₦16,600), which made Abeokuta's card claim Kano's
+    // number and the editor diff/save against the wrong branch.
+    const abeokuta = semovitaRows.find((r) => r.draft?.branch_name === 'Abeokuta')
+    const kano = semovitaRows.find((r) => r.draft?.branch_name === 'Kano Branch')
+    expect(abeokuta?.price).toBe(20500)
+    expect(kano?.price).toBe(16600)
     expect(semovitaRows.map((r) => r.draft?.branch_name).sort()).toEqual(['Abeokuta', 'Kano Branch'])
     // And no trailing draft:null copy.
     expect(body.rows.filter((r) => !r.draft).length).toBe(0)
@@ -472,6 +480,76 @@ describe('outsourced rows — two same-name drafts at one branch stay separate',
     expect(unsavedRow?.draft.draft_price).toBe(52000)
     // No trailing draft:null duplicate rows.
     expect(body.rows.filter((r) => !r.draft).length).toBe(0)
+  })
+})
+
+// Regression (2026-10-18, Akure display): a saved outsourced card must
+// decorate from the DRAFT BRANCH's own branch_item_prices / branch_item_markups
+// row — never the cycle-wide collapsed minimum. The bug made every branch's
+// card show the lowest price in the cycle (Akure's Indomitable Noodles
+// ₦9,500 while Akure really sells at ₦10,000), and the editor prefilled
+// that wrong number, so saving from the form REWROTE a branch's price with
+// another branch's value.
+describe('outsourced GET — branch-scoped price/markup on saved cards', () => {
+  it('returns the draft branch\'s own price/markup rows, not the cycle-wide minimum', async () => {
+    const s = scenario()
+    s.items = [
+      { item_id: 1, sku: 'INDOMITABLESNOODLES', name: 'Indomitable Noodles', category: 'Noodles', unit: 'Carton', image_url: 'x.png', source: 'outsourced' },
+    ]
+    // Cycle-wide minimum is Dutse's ₦9,600; Akure's real price is ₦10,000.
+    s.prices = [
+      { branch_id: 1, item_id: 1, price: 9600 }, // Dutse Branch
+      { branch_id: 12, item_id: 1, price: 9500 }, // Ado-Ekiti (cycle-wide min)
+      { branch_id: 33, item_id: 1, price: 10000 }, // Akure
+    ]
+    s.branches = [
+      { id: 1, name: 'Dutse Branch', code: 'DUTSE' },
+      { id: 12, name: 'Ado-Ekiti', code: 'ADOEKITI' },
+      { id: 33, name: 'Akure', code: 'AKURE' },
+    ]
+    s.entries = [
+      ENTRY(321, 'Indomitable', 33, 10000, 1), // Akure's draft — real price ₦10,000
+    ]
+    // The branch's OWN markup row (₦250) is the only one the card may show.
+    s.markups = [
+      { branch_id: 1, item_id: 1, amount: 100, active: true }, // Dutse
+      { branch_id: 33, item_id: 1, amount: 250, active: true }, // Akure
+    ]
+    createClient.mockReturnValue(makeSupabase(s))
+
+    const res = await GET(GET_OUTSOURCED.clone())
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+
+    const akureCard = body.rows.find((r) => r.saved && r.draft?.branch_name === 'Akure')
+    expect(akureCard).toBeTruthy()
+    expect(akureCard.price).toBe(10000) // NOT 9,500/9,600 (other branches / cycle min)
+    expect(akureCard.price_varies).toBe(false)
+    expect(akureCard.markup).toBe(250) // Akure's own markup, not Dutse's ₦100
+    expect(akureCard.markup_varies).toBe(false)
+    expect(akureCard.in_shop).toBe(true)
+  })
+
+  it('shows no branch price when the item has no price row at the draft branch', async () => {
+    const s = scenario()
+    s.items = [
+      { item_id: 1, sku: 'INDOMITABLESNOODLES', name: 'Indomitable Noodles', category: 'Noodles', unit: 'Carton', image_url: 'x.png', source: 'outsourced' },
+    ]
+    // Priced ONLY at Ado-Ekiti; the draft is from Akure (no price row there).
+    s.prices = [{ branch_id: 12, item_id: 1, price: 9500 }]
+    s.branches = [{ id: 33, name: 'Akure', code: 'AKURE' }]
+    s.entries = [ENTRY(321, 'Indomitable', 33, 10000, 1)]
+    createClient.mockReturnValue(makeSupabase(s))
+
+    const res = await GET(GET_OUTSOURCED.clone())
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+
+    const akureCard = body.rows.find((r) => r.saved && r.draft?.branch_name === 'Akure')
+    expect(akureCard).toBeTruthy()
+    // Must not claim Ado-Ekiti's ₦9,500 — the card has no branch price.
+    expect(akureCard.price).toBeNull()
+    expect(akureCard.in_shop).toBe(false)
   })
 })
 
