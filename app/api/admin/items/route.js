@@ -750,7 +750,43 @@ export async function GET(req) {
         itemsShownSomewhere.add(resolvedItem.item_id)
         savedItemIdsClaimed.add(`${resolvedItem.item_id}::${d.branch_id ?? 'none'}`)
       }
-      rows.push({ ...decorate(saved || {}), saved: !!saved, draft: d })
+      const deco = decorate(saved || {})
+      if (saved && d.branch_id != null) {
+        // BRANCH-SCOPED DISPLAY: this card represents ONE branch's saved
+        // product, so it shows THAT branch's own price/markup rows — never
+        // the cycle-wide minimum the General list collapses to. Showing the
+        // minimum here made Akure's card claim another branch's price
+        // ("Indomitable Noodles ₦9,500" while Akure's shop really sells it
+        // at ₦10,000), and worse, the editor's diff/prefill compared the
+        // rep's draft against the WRONG branch — saving from that form
+        // rewrote Akure's price with another branch's number.
+        const prRow = (pricesByItem.get(saved.item_id) || []).find(
+          (p) => Number(p.branch_id) === Number(d.branch_id)
+        )
+        const mkRow = (markupsByItem.get(saved.item_id) || []).find(
+          (m) => Number(m.branch_id) === Number(d.branch_id)
+        )
+        if (prRow) {
+          deco.price = Number(prRow.price || 0)
+          deco.price_varies = false // a single branch has exactly one price
+        } else {
+          // No price row at THIS branch: the product is not in this branch's
+          // shop yet. The card still works — the editor prefills the rep's
+          // draft and Save writes the branch row — but it must not claim
+          // another branch's number.
+          deco.price = null
+          deco.price_varies = false
+        }
+        if (mkRow) {
+          deco.markup = Number(mkRow.amount || 0)
+          deco.markup_varies = false
+        } else {
+          deco.markup = null
+          deco.markup_varies = false
+        }
+        deco.in_shop = prRow != null && deco.price > 0
+      }
+      rows.push({ ...deco, saved: !!saved, draft: d })
     }
     // Keep already-saved outsourced items editable even if the survey entry
     // was deleted or renamed away. Skips items that already resolved to a
