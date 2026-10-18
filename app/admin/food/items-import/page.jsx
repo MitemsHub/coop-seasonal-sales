@@ -989,11 +989,22 @@ function ItemsImportContent() {
                 // name ("Kings Oil 5 Litres") becomes the bank's refined
                 // name ("Kings Oil 5Ltrs") with the bank's real SKU, so the
                 // item joins the catalog instead of duplicating it.
-                if (bankRow) {
+                // ONLY for UNSAVED drafts (no item row yet). On an existing
+                // item the pick must be an image change and nothing else:
+                // identity adoption here renamed the item to the bank name,
+                // and when that name's SKU was taken ("Knorr Chicken
+                // Cubes" = KNORRCHICKENCUBES), the server's collision
+                // fallback auto-suffixed it (KNORRCHICKENCUBES-2) — the
+                // recurring -2 the admin kept seeing reappear on cards they
+                // never touched. An image link is not a rename.
+                if (bankRow && form.item_id == null) {
                   setField('name', bankRow.name || '')
                   setField('sku', String(bankRow.sku || '').toUpperCase())
                   if (bankRow.category && !form.category) setField('category', bankRow.category)
                   if (bankRow.unit && !form.unit) setField('unit', bankRow.unit)
+                } else if (bankRow) {
+                  if (!form.category) setField('category', bankRow.category)
+                  if (!form.unit) setField('unit', bankRow.unit)
                 }
               }}
               name={form.name}
