@@ -455,17 +455,59 @@ export async function GET(req) {
 
     let priceQ = supabase.from('branch_item_prices').select('branch_id, item_id, price')
     if (pricesHasCycle) priceQ = priceQ.eq('cycle_id', cycleId)
-    // A cycle can hold thousands of priced rows (24 branches × hundreds of
-    // items); without an explicit range PostgREST silently returns the first
-    // 1000 and the list would miss items (ghost "Not worked on yet" cards).
-    priceQ = priceQ.range(0, 99999)
-    const { data: prices, error: pErr } = await priceQ
-    if (pErr) return NextResponse.json({ ok: false, error: pErr.message }, { status: 500 })
+    // A cycle can hold thousands of priced rows (39 branches × hundreds of
+    // items); PostgREST hard-caps a single response at 1000 rows even when
+    // you ask for more — the .range(0, 99999) window silently truncates once
+    // the cycle grows past 1000 rows and the rest of the catalog "loses"
+    // its prices (the Semovita 1Kg 13-of-39-branches regression). Page
+    // through with explicit windows instead; a cycle cap of ~20k rows is
+    // far beyond real data (1026 today) and pages of 1000 keep the calls count tiny.
+    const priceRows = []
+    if (pricesHasCycle) {
+      for (let from = 0; ; from += 1000) {
+        const { data: chunk, error: pErr } = await supabase
+          .from('branch_item_prices')
+          .select('branch_id, item_id, price')
+          .eq('cycle_id', cycleId)
+          .range(from, from + 999)
+        if (pErr) return NextResponse.json({ ok: false, error: pErr.message }, { status: 500 })
+        priceRows.push(...(chunk || []))
+        if (!chunk || chunk.length < 1000) break
+      }
+    } else {
+      const { data: chunk, error: pErr } = await supabase
+        .from('branch_item_prices')
+        .select('branch_id, item_id, price')
+        .range(0, 999)
+      if (pErr) return NextResponse.json({ ok: false, error: pErr.message }, { status: 500 })
+      priceRows.push(...(chunk || []))
+      // Legacy non-cycled deployments predate the pagination shape; single
+      // page was the original behaviour and stays capped at 1000.
+      for (let from = 1000; ; from += 1000) {
+        const { data: more } = await supabase
+          .from('branch_item_prices')
+          .select('branch_id, item_id, price')
+          .range(from, from + 999)
+        if (!more || !more.length) break
+        priceRows.push(...more)
+        if (more.length < 1000) break
+      }
+    }
+    const prices = priceRows
 
-    let markupQ = supabase.from('branch_item_markups').select('branch_id, item_id, amount, active')
-    if (markupsHasCycle) markupQ = markupQ.eq('cycle_id', cycleId)
-    markupQ = markupQ.range(0, 99999)
-    const { data: markups } = await markupQ // markup table may predate markups — ignore errors
+    let markupRows = []
+    {
+      let markupQ = supabase.from('branch_item_markups').select('branch_id, item_id, amount, active')
+      if (markupsHasCycle) markupQ = markupQ.eq('cycle_id', cycleId)
+      // Same 1000-row REST cap as the prices table — page through.
+      for (let from = 0; ; from += 1000) {
+        const { data: chunk } = await markupQ.range(from, from + 999) // markup table may predate markups — ignore errors
+        if (!chunk || !chunk.length) break
+        markupRows.push(...chunk)
+        if (chunk.length < 1000) break
+      }
+    }
+    const markups = markupRows
 
     const pricesByItem = new Map()
     for (const p of prices || []) {
