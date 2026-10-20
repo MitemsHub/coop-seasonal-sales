@@ -220,6 +220,45 @@ function DataManagementPageContent() {
     }
   }
 
+  // ── Loan policy what-if preview ─────────────────────────────────────
+  // Live scenario table that recomputes a member's ACTUAL limits from the
+  // DRAFT form values (not the saved ones), so the admin sees the real
+  // consequence of a setting before saving it. Mirrors the exact maths of
+  // /api/orders + create_food_order_atomic:
+  //   loanEligible = min(baseEligible + grace, max(0, eligibleCap − used))
+  //   capAmount    = includeInterest ? principal×(1+rate) : principal
+  const policyNum = (v) => (v === '' ? 0 : Math.max(0, Number(v) || 0))
+  const ratePctNum = policyNum(loanInterestRatePct)
+  const scenarios = [
+    { label: 'Active staff · savings ₦50,000 · no loans', group: 'active', savings: 50000, outstanding: 0, cycleUsed: 0 },
+    { label: 'Active staff · savings ₦200,000 · owes ₦150,000 already this cycle', group: 'active', savings: 200000, outstanding: 150000, cycleUsed: 150000 },
+    { label: 'Active staff · big saver ₦250,000, owning loans on top', group: 'active', savings: 250000, outstanding: 0, cycleUsed: 0 },
+    { label: 'Active staff · NO savings (grace/facility path)', group: 'active', savings: 0, outstanding: 0, cycleUsed: 0 },
+    { label: 'Retiree · savings ₦150,000, no loans', group: 'retiree', savings: 150000, outstanding: 0, cycleUsed: 0 },
+    { label: 'Retiree · NO savings', group: 'retiree', savings: 0, outstanding: 0, cycleUsed: 0 },
+    { label: 'Pensioner · savings ₦80,000 · owes ₦50,000 this cycle', group: 'pensioner', savings: 80000, outstanding: 50000, cycleUsed: 50000 },
+    { label: 'Pensioner · NO savings', group: 'pensioner', savings: 0, outstanding: 0, cycleUsed: 0 },
+  ]
+  const previewRow = (s) => {
+    const eligibleCap = policyNum(
+      s.group === 'pensioner' ? eligibleLoanMaxPensioner : s.group === 'retiree' ? eligibleLoanMaxRetiree : eligibleLoanMaxActive
+    )
+    const graceCap = policyNum(
+      s.group === 'pensioner' ? graceLoanMaxPensioner : s.group === 'retiree' ? graceLoanMaxRetiree : graceLoanMaxActive
+    )
+    const base = Math.max(0, s.savings * 5 - s.outstanding + -0)
+    if (eligibleCap > 0) {
+      const totalBorrowable = base + graceCap
+      const ceiling = Math.max(0, eligibleCap - s.cycleUsed)
+      const loanEligible = Math.min(totalBorrowable, ceiling)
+      return { loanEligible, mode: base > 0 ? 'Eligible' : graceCap > 0 ? 'Facility' : 'No loan' }
+    }
+    if (base > 0) return { loanEligible: base + graceCap, mode: 'Eligible (uncapped)' }
+    if (graceCap > 0) return { loanEligible: graceCap, mode: 'Facility' }
+    return { loanEligible: 0, mode: 'No loan' }
+  }
+  const naira = (v) => '₦' + Number(v || 0).toLocaleString()
+
   const createCycle = async (e) => {
     e.preventDefault()
     e.stopPropagation()
@@ -869,6 +908,52 @@ function DataManagementPageContent() {
               </div>
             </div>
           </div>
+
+          {/* What-if preview: member limit outcomes under the CURRENT FORM VALUES (including unsaved edits). */}
+          {selectedCycleId != null && (
+            <details className="mt-3 border border-line-subtle rounded-xl bg-subtle/40">
+              <summary className="px-3 py-2 text-sm font-medium text-fg cursor-pointer select-none">
+                What-if preview — member limits under these settings
+                <span className="ml-2 text-xs text-muted">(live; includes unsaved edits)</span>
+              </summary>
+              <div className="px-3 pb-3">
+                <p className="text-xs text-muted mb-2">
+                  Maximum Loan per cycle each scenario member could reach: limit = min(savings×payment + facility pool, category cap − already used). With include-interest ON the cap counts principal + interest; OFF, principal only.
+                  {includeInterestInCap ? ' Currently ON.' : ' Currently OFF.'} Rate {ratePctNum}%
+                </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-left text-muted">
+                        <th className="py-1 pr-3 font-medium">Member scenario</th>
+                        <th className="py-1 pr-3 font-medium">Savings-based base</th>
+                        <th className="py-1 pr-3 font-medium">Max Loan this cycle</th>
+                        <th className="py-1 pr-3 font-medium">At {ratePctNum}% interest, borrowing the max costs</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scenarios.map((s) => {
+                        const { loanEligible, mode } = previewRow(s)
+                        const principal = loanEligible
+                        const withInterest = Math.round(principal * (1 + ratePctNum / 100))
+                        return (
+                          <tr key={s.label} className="border-t border-line-subtle/60 align-top">
+                            <td className="py-1.5 pr-3 text-fg">{s.label}</td>
+                            <td className="py-1.5 pr-3 text-muted">{naira(s.savings * 5 - s.outstanding)}</td>
+                            <td className={`py-1.5 pr-3 font-semibold ${loanEligible > 0 ? 'text-fg' : 'text-muted'}`}>{naira(loanEligible)}{loanEligible === 0 && <span className='ml-1 text-muted'>({mode})</span>}</td>
+                            <td className="py-1.5 pr-3 text-fg">{naira(withInterest)} <span className="text-muted">(repay), cap sees {naira(includeInterestInCap ? withInterest : principal)}</span></td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-2 text-xs text-muted">
+                  Cross-module caveat: exposure from Exhibition/RAM orders in the same calendar year additionally reduces these limits at order time, and a grace (facility) order is strictly once per cycle.
+                </p>
+              </div>
+            </details>
+          )}
 
           <div className="mt-3 flex gap-2 flex-wrap">
             <Button
