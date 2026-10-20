@@ -288,6 +288,122 @@ describe('outsourced drafts — link recovery and repair', () => {
   })
 })
 
+// ── General × Outsourced are INDEPENDENT worlds ───────────────────────
+// The Enugu 2026-10-20 regression: a rep's OUTSOURCED draft ("Fresh Red oil
+// 5 litres", ₦14,500) coincidentally shared a name/price with a GENERAL item
+// ("Golden Penny Semovita 1Kg", ₦14,500). Cross-section matching let the
+// general item hijack the draft's card, hid the GENERAL item from the
+// General list, and once saved an item to FRESHREDOIL5L-2 in 39 branches.
+// Sections must never link across:
+//  1. a GENERAL item NEVER resolves an outsourced draft (name OR price),
+//  2. a general item whose name collides with a linked draft STILL shows
+//     as its own saved-outsourced card in the trailing pass,
+//  3. price-based legacy recovery never claims a general item.
+describe('outsourced drafts — General and Outsourced stay independent', () => {
+  function independentSupabase({ items, prices, entries, markups = [], branches }) {
+    return makeSupabase({ items, prices, entries, markups, branches })
+  }
+
+  it('a GENERAL item NEVER resolves an outsourced draft, even with the same price', async () => {
+    const s = {} // straight into makeSupabase via helper below
+    const items = [
+      { item_id: 700, sku: 'GPSEMOVITA1KG', name: 'Golden Penny Semovita 1Kg', category: 'Flour', unit: 'Bag', image_url: 'x.png', source: 'general' },
+    ]
+    const prices = [
+      { branch_id: 1, item_id: 700, price: 14500 }, // the collision price (general item)
+    ]
+    // Enugu's draft, name AND price close to the general item — still nothing
+    // to do with it. Rep photos are raw; the photo URL is deliberate to also
+    // pin that rep_photo alone never links the sections.
+    const entries = [ENTRY(901, 'Fresh Red oil 5 litres', 1, 14500)]
+    createClient.mockReturnValue(independentSupabase({ items, prices, entries }))
+
+    const res = await GET(GET_OUTSOURCED.clone())
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+
+    const redOil = body.rows.find((r) => r.draft?.entry_id === 901)
+    expect(redOil).toBeTruthy()
+    // NOT resolved to the general item, in any way:
+    expect(redOil.saved).toBe(false)
+    expect(redOil.item_id).not.toBe(700)
+    // No link was persisted against the general item either.
+    expect(queryDirect).not.toHaveBeenCalledWith(
+      expect.stringContaining('SET saved_item_id = $1'),
+      expect.arrayContaining([700])
+    )
+  })
+
+  it('a general item whose name matches a LINKED draft STILL shows as its own saved card', async () => {
+    // Production shape of the regression: Enugu's draft was (wrongly) linked
+    // to item 700 in the legacy data. After the sections broke apart, that
+    // link must NOT hide the item from the trailing "saved items" pass.
+    const items = [
+      { item_id: 700, sku: 'GPSEMOVITA1KG', name: 'Golden Penny Semovita 1Kg', category: 'Flour', unit: 'Bag', image_url: 'x.png', source: "" + 'outsourced' },
+    ]
+    const prices = [{ branch_id: 1, item_id: 700, price: 14500 }]
+    const entries = [ENTRY(901, 'Golden Penny Semovita 1Kg', 1, 14500, 700)]
+    createClient.mockReturnValue(independentSupabase({ items, prices, entries }))
+
+    const res = await GET(GET_OUTSOURCED.clone())
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+
+    // One card, showing the LINKED item (the draft resolves through the
+    // persisted saved_item_id, which is fine — same section).
+    const card = body.rows.find((r) => r.item_id === 700)
+    expect(card).toBeTruthy()
+    expect(card.saved).toBe(true)
+    expect(card.draft?.entry_id).toBe(901)
+    // …and the trailing pass must NOT add a draft:null duplicate for it.
+    expect(body.rows.filter((r) => !r.draft).length).toBe(0)
+  })
+
+  it('price-based legacy recovery never adopts a GENERAL item', async () => {
+    // Only item priced at ₦14,500 in branch 1 is a GENERAL one; with no
+    // outsourced candidate, recovery must refuse — silently — not "adopt".
+    const items = [
+      { item_id: 700, sku: 'GPSEMOVITA1KG', name: 'Golden Penny Semovita 1Kg', category: 'Flour', unit: 'Bag', image_url: 'x.png', source: 'general' },
+    ]
+    const prices = [{ branch_id: 1, item_id: 700, price: 14500 }]
+    const entries = [
+      ENTRY(901, 'Semovita', 1, 14500), // no link, name does not match the saved name...
+    ]
+    createClient.mockReturnValue(independentSupabase({ items, prices, entries }))
+
+    const res = await GET(GET_OUTSOURCED.clone())
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+
+    const draftRow = body.rows.find((r) => r.draft?.entry_id === 901)
+    expect(draftRow.saved).toBe(false)
+    expect(queryDirect).not.toHaveBeenCalledWith(
+      expect.stringContaining('SET saved_item_id = $1'),
+      expect.arrayContaining([700])
+    )
+  })
+
+  it('an OUTSOURCED item with the SAME name still resolves (same-section matching unaffected)', async () => {
+    // The rule only breaks CROSS-section matching: a name/price collision
+    // between two OUTSOURCED/outsourced-only rows keeps working.
+    const items = [
+      { item_id: 701, sku: 'FRESHREDOIL5L', name: 'Fresh Red Oil 5L', category: 'Vegetable Oil', unit: 'Gallon', image_url: 'x.png', source: 'outsourced' },
+    ]
+    const prices = [{ branch_id: 1, item_id: 701, price: 14500 }]
+    const entries = [
+      ENTRY(902, 'Fresh Red Oil 5L', 1, 14500), // same name, no link (legacy)
+    ]
+    createClient.mockReturnValue(independentSupabase({ items, prices, entries }))
+
+    const res = await GET(GET_OUTSOURCED.clone())
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+
+    const card = body.rows.find((r) => r.item_id === 701)
+    expect(card?.saved).toBe(true)
+  })
+})
+
 // Regression: after the admin REFACTORS a draft name into a refined shop name
 // ("Coco pop" → "Kellogg's Coco Pops Sachet 400g"), the item must stay in its
 // OWN branch group (recovered via saved_item_id) and must NOT show a second

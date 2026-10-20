@@ -573,6 +573,7 @@ export async function GET(req) {
 
     const rows = []
     const draftedNames = new Set()
+    const draftedAll = new Set()
     // A draft resolves its saved item through the persistent survey link
     // (saved_item_id) FIRST — surviving renames — and falls back to the
     // name match only when the link is missing (legacy data).
@@ -718,8 +719,22 @@ export async function GET(req) {
         saved = itemById.get(linkedId)
       } else {
         // No persistent link (legacy rows) or the linked item was deleted —
-        // fall back to the old name-only match.
-        saved = itemByName.get(d.norm_name)
+        // fall back to the old name-only match. Names live in one shared
+        // catalog, so a GENERAL item may carry the same name as a rep's
+        // draft ("Golden Penny Semovita 1Kg" is both a General product and
+        // name-adjacent to Enugu's outsourced "Fresh Red oil 5 litres" —
+        // and unrelated drafts like "Samvita" to a general Semovita).
+        // GENERAL and OUTSOURCED are two independent worlds: the admin said
+        // explicitly they must never be linked. A GENERAL item can never be
+        // a draft's saved resolution — name or price mean nothing across
+        // sections — so only an OUTSOURCED item may resolve a draft here.
+        // An item with no source column (or source 'general') stays hidden
+        // from the matching; general items are controlled by the admin
+        // themselves in the General section.
+        const candidate = itemByName.get(d.norm_name)
+        if (candidate && sourceCol && (candidate.source || 'general') === 'outsourced') {
+          saved = candidate
+        }
       }
       // Capture the resolution BEFORE the cancelled suppression — a cancelled
       // draft that DID resolve to a product still identifies that product and
@@ -740,6 +755,7 @@ export async function GET(req) {
         if (savedItemIdsClaimed.has(claimKey)) continue // same product, already shown IN THIS BRANCH
         savedItemIdsClaimed.add(claimKey)
         itemsShownSomewhere.add(saved.item_id)
+        draftedNames.add(norm(saved.name))
       } else if (d.cancelled && resolvedItem) {
         // Cancelled draft: claim the product it would have resolved to, so
         // the saved-items pass can't resurrect the very same item as an

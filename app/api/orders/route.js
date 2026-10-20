@@ -214,12 +214,18 @@ export async function POST(req) {
     const loanInterest = paymentOption === 'Loan' ? Math.round(total * loanRate) : 0
     const totalWithInterest = total + loanInterest
 
+    // The amount compared against the cycle's loan cap — the cycle's
+    // "include interest in cap" choice decides whether the cap sees the
+    // principal or principal + interest. Passed down to the atomic DB
+    // function so the locked transaction enforces EXACTLY what the route
+    // checked (the stored order total is always the repayable amount).
+    const capAmount = paymentOption === 'Loan' ? (includeInterestInCap ? totalWithInterest : total) : total
+
     // Enforce limits
     if (paymentOption === 'Savings') {
       if (outstandingLoansTotal > 0) return NextResponse.json({ ok:false, error:'Savings not allowed while loans outstanding (incl. pending/posted loan apps)' }, { status:400 })
       if (total > savingsEligible)   return NextResponse.json({ ok:false, error:`Total ₦${total.toLocaleString()} exceeds Savings available ₦${savingsEligible.toLocaleString()}` }, { status:400 })
     } else if (paymentOption === 'Loan') {
-      const capAmount = includeInterestInCap ? totalWithInterest : total
       const cumulativeCapAmount = cycleLoanTotal + capAmount
 
       // Determine the effective ceiling for this member this cycle:
@@ -358,6 +364,7 @@ export async function POST(req) {
         amount: pl.amount,
       }))),
       p_grace_used: useGrace,
+      p_cap_amount: capAmount,
     })
     if (rpcErr) return NextResponse.json({ ok:false, error: rpcErr.message }, { status:500 })
     if (!rpcResult?.ok) return NextResponse.json({ ok:false, error: rpcResult?.error || 'Order creation failed' }, { status:400 })
