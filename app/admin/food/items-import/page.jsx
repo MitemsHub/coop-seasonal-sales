@@ -31,6 +31,7 @@ import Input from '../../../components/ui/Input'
 import Select from '../../../components/ui/Select'
 import Label from '../../../components/ui/Label'
 import ItemImagePicker from '../../../components/ItemImagePicker'
+import SearchableSelect from '../../../components/ui/SearchableSelect'
 import {
   BarChart3,
   CheckCircle2,
@@ -43,6 +44,7 @@ import {
   Search,
   Store,
   Trash2,
+  X,
 } from 'lucide-react'
 
 const fmtPrice = (v) => Number(v || 0).toLocaleString('en-NG', { maximumFractionDigits: 2 })
@@ -171,6 +173,14 @@ function ItemsImportContent() {
   const [expandedBranches, setExpandedBranches] = useState(() => new Set())
   const [branchReport, setBranchReport] = useState(null) // submission report for the cycle
   const [reportOpen, setReportOpen] = useState(false)
+
+  /* ── Copy items from another branch (branch replicate) ─────────── */
+  const [copyFrom, setCopyFrom] = useState('')
+  const [copyTos, setCopyTos] = useState([]) // array of branch ids (strings)
+  const [repBranches, setRepBranches] = useState([])
+  const [repBusy, setRepBusy] = useState(false)
+  const [repResult, setRepResult] = useState(null) // { dry_run, results: [...], from }
+  const [repErr, setRepErr] = useState(null)
 
   /* ── Pagination (rows are paged per list; branch cards too) ────── */
   const [genPage, setGenPage] = useState(1)
@@ -353,6 +363,69 @@ function ItemsImportContent() {
   useEffect(() => {
     loadSections()
   }, [loadSections])
+
+  /* ── Copy-from-branch loaders / actions ─────────────────────────── */
+  const loadRepBranches = useCallback(async () => {
+    try {
+      const res = await fetch('/api/branches/list', { cache: 'no-store', credentials: 'same-origin' })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load branches')
+      setRepBranches(json.branches || [])
+    } catch (e) {
+      flash(e.message, 'error')
+    }
+  }, [])
+
+  useEffect(() => {
+    loadRepBranches()
+  }, [loadRepBranches])
+
+  const runReplicate = async (dryRun) => {
+    const fromId = Number(copyFrom)
+    const toIds = copyTos.map(Number).filter((n) => Number.isFinite(n) && n > 0)
+    if (!Number.isFinite(fromId) || fromId > 0) {
+      flash('Pick the branch to copy from first.', 'error')
+      return
+    }
+    if (!toIds.length) {
+      flash('Pick at least one branch to copy to.', 'error')
+      return
+    }
+    if (dryRun && toIds.includes(fromId)) {
+      flash('Remove the source branch from “Copy to” — it cannot copy to itself.', 'error')
+      return
+    }
+    setRepBusy(true)
+    setRepErr(null)
+    if (!dryRun) setRepResult(null)
+    try {
+      const res = await fetch('/api/admin/branches/replicate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          from_branch_id: fromId,
+          to_branch_ids: toIds,
+          cycle_id: selectedCycleId ?? undefined,
+          dry_run: dryRun,
+        }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) throw new Error(json.error || `Request failed (${res.status})`)
+      setRepResult(json)
+      if (dryRun) {
+        flash('Preview ready — check the summary below, then press “Copy items” to apply.', 'success')
+      } else {
+        flash('Copy complete — press Refresh to reload the sections.', 'success')
+        loadSections()
+      }
+    } catch (e) {
+      setRepErr(e.message)
+    } finally {
+      setRepBusy(false)
+    }
+  }
+
 
   // Paging restarts whenever the underlying list changes (new search, new cycle).
   // Branches also reset to collapsed after a refresh so the admin always lands
@@ -1828,9 +1901,146 @@ function ItemsImportContent() {
             )}
           </div>
         </div>
-      </div>
 
-      {/* Shop preview — one branch's shop exactly as members see it */}
+        {/* ── 5. Copy items from another branch ─────────────────────── */}
+        <div className="bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
+          <div>
+            <h2 className="text-h3 font-semibold text-fg mb-1">⧉ Copy items from another branch</h2>
+            <p className="text-body text-muted">
+              Pick the branch that already has its items worked on, then the branch or branches that should receive
+              them for <strong>{cycle?.name || 'the selected cycle'}</strong> — names, categories, units, prices, rep
+              photos and saved products all come along. Nothing is linked after the copy: each branch keeps its
+              <strong> own copies</strong>, so editing, repricing or cancelling in one branch never changes any other
+              branch. Running the same copy twice is safe — what a branch already has is kept, never duplicated or
+              overwritten.
+            </p>
+          </div>
+
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div>
+              <Label htmlFor="rep-from">Copy from (the branch that has the items)</Label>
+              <SearchableSelect
+                options={repBranches.map((b) => ({ value: String(b.id), label: `${b.name}${b.code ? ` (${b.code})` : ''}` }))}
+                value={copyFrom || null}
+                onSelect={(v) => setCopyFrom(v || '')}
+                ariaLabel="Branch to copy from"
+                allLabel="— none —"
+                className="w-full"
+              />
+            </div>
+            <div>
+              <Label htmlFor="rep-to">Copy to (the branch or branches that receive the items)</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {repBranches
+                  .filter((b) => String(b.id) !== copyFrom)
+                  .map((b) => {
+                    const on = copyTos.includes(String(b.id))
+                    return (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() =>
+                          setCopyTos((prev) => (on ? prev.filter((id) => id !== String(b.id)) : [...prev, String(b.id)]))
+                        }
+                        className={`rounded-full border px-2.5 py-1 text-chips font-bold uppercase tracking-wide transition-opacity hover:opacity-75 ${
+                          on
+                            ? 'border-brand bg-brand text-white'
+                            : 'border-line-subtle bg-subtle/40 text-muted'
+                        }`}
+                      >
+                        {b.name}
+                        {b.code ? ` (${b.code})` : ''}
+                      </button>
+                    )
+                  })}
+              </div>
+              {copyTos.length === 0 && (
+                <p className="mt-1 text-caption text-muted">Tap the branches above to select them.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={() => runReplicate(true)} disabled={repBusy} leftIcon={Search}>
+              {repBusy ? 'Working…' : 'Preview what will be copied'}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => runReplicate(false)}
+              disabled={repBusy || !copyFrom || copyTos.length === 0}
+              leftIcon={Link2}
+            >
+              {repBusy ? 'Working…' : 'Copy items'}
+            </Button>
+            {repResult && (
+              <Button variant="secondary" size="sm" onClick={() => setRepResult(null)} leftIcon={X}>
+                Clear summary
+              </Button>
+            )}
+          </div>
+
+          {repErr && (
+            <p className="mt-3 rounded-lg border border-danger-border bg-danger-bg p-3 text-body text-danger-fg">{repErr}</p>
+          )}
+
+          {repResult && (
+            <div className="mt-3 rounded-lg border border-line bg-subtle/40 p-3">
+              <p className="mb-2 text-body font-semibold text-fg">
+                {repResult.dry_run ? 'Preview — nothing was written yet' : 'Copy result'} · from{' '}
+                {repResult.from?.name || 'source branch'}{' '}
+                {repResult.dry_run ? '(press “Copy items” to apply)' : ''}
+              </p>
+              <ul className="space-y-1.5">
+                {(repResult.results || []).map((t) => (
+                  <li key={t.branch_id} className="text-body">
+                    {t.ok ? (
+                      t.dry_run === true || repResult.dry_run ? (
+                        <span className="text-fg">
+                          <strong>{t.branch_name}</strong> — {t.entries_copied} item{t.entries_copied === 1 ? '' : 's'}
+                          {t.entries_skipped_existing ? `, ${t.entries_skipped_existing} already there` : ''},{' '}
+                          {t.prices_written} price{t.prices_written === 1 ? '' : 's'} would be copied
+                          {t.prices_kept_existing ? `, ${t.prices_kept_existing} kept as-is` : ''}
+                          {t.prices_unpriced_at_source
+                            ? `, ${t.prices_unpriced_at_source} not priced at the source yet`
+                            : ''}
+                          .
+                        </span>
+                      ) : (
+                        <span className="text-fg">
+                          <strong>{t.branch_name}</strong> — {t.entries_copied} item{t.entries_copied === 1 ? '' : 's'}{' '}
+                          copied
+                          {t.entries_skipped_existing ? `, ${t.entries_skipped_existing} already there` : ''},{' '}
+                          {t.prices_written} price{t.prices_written === 1 ? '' : 's'} written
+                          {t.prices_kept_existing ? `, ${t.prices_kept_existing} kept as-is` : ''}
+                          {t.prices_unpriced_at_source
+                            ? `, ${t.prices_unpriced_at_source} not priced at the source yet`
+                            : ''}
+                          .
+                        </span>
+                      )
+                    ) : (
+                      <span className="text-danger-fg">
+                        <strong>{t.branch_name || `Branch #${t.branch_id}`}</strong> — failed: {t.error}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {repResult.dry_run && (
+                <p className="mt-2 text-caption text-muted">
+                  Nothing has been written to the branches — press “Copy items” above to apply this copy.
+                </p>
+              )}
+              {!repResult.dry_run && (
+                <p className="mt-2 text-caption text-muted">
+                  Done. These copies are now each branch&apos;s own items — change, reprice or cancel them in any
+                  branch without touching the source or the other branches.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
       {preview && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
