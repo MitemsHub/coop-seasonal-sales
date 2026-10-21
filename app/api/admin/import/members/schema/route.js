@@ -26,6 +26,14 @@ const COLUMNS = [
     sample: 'John Doe',
   },
   {
+    key: 'email',
+    label: 'Email',
+    type: 'text',
+    required: false,
+    description: "Member's email address (for sign-in / notifications; leave blank to keep what's stored)",
+    sample: 'john.doe@example.com',
+  },
+  {
     key: 'grade',
     label: 'Grade',
     type: 'text',

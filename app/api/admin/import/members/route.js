@@ -28,7 +28,8 @@ export async function POST(req) {
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' })
 
     // Expected headers (simplified):
-    // member_id, full_name, grade, savings, loans, global_limit
+    // member_id, full_name, email, grade, savings, loans, global_limit
+    // email is OPTIONAL — a blank email never touches what's stored.
 
     if (!rows.length) return NextResponse.json({ ok: false, error: 'No rows found' }, { status: 400 })
 
@@ -70,6 +71,14 @@ export async function POST(req) {
         savings,
         loans,
         global_limit
+      }
+
+      // Email is optional: include it in the upsert ONLY when the sheet has a
+      // value, so blanks never overwrite an existing email. Basic shape check
+      // keeps obviously-wrong values ("john", spaces) from being written.
+      const emailRaw = String(r.email || '').trim().toLowerCase()
+      if (emailRaw && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
+        row.email = emailRaw
       }
 
       return row
