@@ -408,10 +408,10 @@ export async function POST(req) {
 
     const { data: member, error: mErr } = await supabase
       .from('members')
-      .select('member_id,full_name,savings,loans,global_limit,grade,phone')
+      .select('member_id,full_name,savings,loans,global_limit,grade,phone,portal_enabled')
       .eq('member_id', memberId)
       .single()
-    if (mErr || !member) {
+    if (mErr || !member || member.portal_enabled === false) {
       return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
     }
 

@@ -117,14 +117,21 @@ function MemberIdInput({ value, onChange, validation, memberStatus, isChecking, 
   )
 }
 
-function EmailConfirm({ maskedEmail, error, isLoading, onSubmit, onBack }) {
+function EmailConfirm({ maskedEmail, maskedAltEmail, error, isLoading, onSubmit, onBack }) {
   // The email must match the one on file — we show the masked email and ask
   // the user to confirm, rather than letting them type an arbitrary address.
+  // When a member has both a primary and an alternative email on file, both
+  // inboxes receive the same verification code, so both are listed here.
+  const emails = [maskedEmail, maskedAltEmail].filter(Boolean)
   return (
     <form className="space-y-3 md:space-y-4" onSubmit={onSubmit}>
       <div className="rounded-xl border-2 border-line-subtle bg-subtle/50 px-4 py-3">
         <p className="text-xs text-muted">We&apos;ll send a verification code to</p>
-        <p className="text-sm font-semibold text-fg mt-0.5">{maskedEmail || 'your registered email'}</p>
+        <div className="mt-0.5 space-y-0.5">
+          {(emails.length ? emails : ['your registered email']).map((mail, i) => (
+            <p key={`${mail}-${i}`} className="text-sm font-semibold text-fg">{mail}</p>
+          ))}
+        </div>
       </div>
 
       <p className="text-xs text-muted">
@@ -521,6 +528,7 @@ export default function MemberAuth() {
 
   // Member lookup data
   const [maskedEmail, setMaskedEmail] = useState('')
+  const [maskedAltEmail, setMaskedAltEmail] = useState('')
   const [rawEmail, setRawEmail] = useState('')
 
   // Signup flow
@@ -571,6 +579,7 @@ export default function MemberAuth() {
         if (data.exists) {
           setMemberStatus('found')
           setMaskedEmail(data.email || '')
+          setMaskedAltEmail(data.alternative_email || '')
           setRawEmail(data.rawEmail || '')
         } else {
           setMemberStatus('not_found')
@@ -807,6 +816,7 @@ export default function MemberAuth() {
       {step === STEP.ENTER_EMAIL && (
         <EmailConfirm
           maskedEmail={maskedEmail}
+          maskedAltEmail={maskedAltEmail}
           error={error}
           isLoading={isLoading}
           onSubmit={handleEmailSubmit}

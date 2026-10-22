@@ -33,7 +33,7 @@ export async function POST(request) {
     const db = createDbClient()
     const { data: member, error: mErr } = await db
       .from('members')
-      .select('member_id, email, auth_user_id')
+      .select('member_id, email, auth_user_id, portal_enabled')
       .eq('member_id', mid)
       .maybeSingle()
 
@@ -42,6 +42,10 @@ export async function POST(request) {
     }
     if (!member) {
       // Don't reveal whether the member exists — return a generic success
+      return NextResponse.json({ ok: true })
+    }
+    if (member.portal_enabled === false) {
+      // Excluded from the portal — silently do nothing, same as unknown member
       return NextResponse.json({ ok: true })
     }
     if (!member.auth_user_id || !member.email) {

@@ -48,7 +48,7 @@ export async function POST(request) {
     // Use ilike for case-insensitive member_id lookup
     const { data: member, error } = await supabase
       .from('members')
-      .select('member_id, email, auth_user_id')
+      .select('member_id, email, alternative_email, auth_user_id, portal_enabled')
       .ilike('member_id', mid)
       .maybeSingle()
 
@@ -56,6 +56,13 @@ export async function POST(request) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
     if (!member) {
+      return NextResponse.json({ exists: false, hasAuth: false, email: null })
+    }
+
+    // Members excluded from the latest official member import (portal_enabled =
+    // FALSE) are invisible to the portal — same response as an unknown ID so
+    // excluded members' records never surface here.
+    if (member.portal_enabled === false) {
       return NextResponse.json({ exists: false, hasAuth: false, email: null })
     }
 
@@ -100,21 +107,31 @@ export async function POST(request) {
     }
 
     // Mask email for display (e.g. j***n@example.com)
-    const rawEmail = member.email || ''
-    let maskedEmail = ''
-    if (rawEmail && rawEmail.includes('@')) {
-      const [local, domain] = rawEmail.split('@')
-      maskedEmail =
-        local.length > 2
-          ? `${local[0]}${'*'.repeat(Math.max(1, local.length - 2))}${local[local.length - 1]}@${domain}`
-          : `${local[0]}***@${domain}`
+    const maskEmail = (addr) => {
+      if (!addr || !addr.includes('@')) return ''
+      const [local, domain] = addr.split('@')
+      return local.length > 2
+        ? `${local[0]}${'*'.repeat(Math.max(1, local.length - 2))}${local[local.length - 1]}@${domain}`
+        : `${local[0]}***@${domain}`
     }
+    const rawEmail = member.email || ''
+    const maskedEmail = maskEmail(rawEmail)
+
+    // Optional second inbox, masked the same way. The signup "Confirm your
+    // email" step lists it under the primary so the member knows the OTP
+    // code lands in both mailboxes.
+    const rawAltEmail = String(member.alternative_email || '').trim().toLowerCase()
+    const maskedAltEmail =
+      rawAltEmail && rawAltEmail !== rawEmail.toLowerCase() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawAltEmail)
+        ? maskEmail(rawAltEmail)
+        : ''
 
     return NextResponse.json({
       exists: true,
       // hasAuth is only true if the auth user actually exists in Supabase Auth
       hasAuth: authIsValid,
       email: maskedEmail,
+      alternative_email: maskedAltEmail,
       // Only expose raw email if they have a valid auth account (for login flow)
       rawEmail: authIsValid ? rawEmail : null,
     })

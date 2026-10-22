@@ -38,11 +38,11 @@ export async function POST(request) {
     const db = createDbClient()
     const { data: member, error: mErr } = await db
       .from('members')
-      .select('member_id, email')
+      .select('member_id, email, portal_enabled')
       .eq('member_id', mid)
       .maybeSingle()
 
-    if (mErr || !member || !member.email) {
+    if (mErr || !member || !member.email || member.portal_enabled === false) {
       return NextResponse.json({ error: 'Member not found or no email on file' }, { status: 404 })
     }
     const addr = member.email.toLowerCase()

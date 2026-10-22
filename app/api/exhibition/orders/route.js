@@ -123,7 +123,7 @@ export async function POST(req) {
     // Member + phone
     const { data: member, error: mErr } = await supabase
       .from('members')
-      .select('member_id, full_name, category, savings, loans, global_limit, phone, branch_id, branches:branch_id(code, name)')
+      .select('member_id, full_name, category, savings, loans, global_limit, phone, branch_id, portal_enabled, branches:branch_id(code, name)')
       .eq('member_id', memberId)
       .maybeSingle()
     if (mErr) {
@@ -135,7 +135,7 @@ export async function POST(req) {
       }
       return NextResponse.json({ ok: false, error: mErr.message }, { status: 500 })
     }
-    if (!member) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
+    if (!member || member.portal_enabled === false) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
 
     const phoneDigits = String(member.phone || '').replace(/\D/g, '')
     if (!phoneDigits) {

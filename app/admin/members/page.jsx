@@ -110,6 +110,146 @@ function MembersImportSection() {
   )
 }
 
+function GradeLimitsSection() {
+  // Live editor for the grade_limits table — the per-grade DEFAULT loan limits
+  // the member import picks up when a member's global_limit cell is blank.
+  // Per-member overrides still come from the template's global_limit column.
+  const [limits, setLimits] = useState([])
+  const [drafts, setDrafts] = useState({}) // grade → edited limit (only dirty rows)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setMsg('')
+    try {
+      const res = await fetch('/api/admin/grade-limits', { cache: 'no-store' })
+      const json = await res.json()
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to load grade limits')
+      setLimits(json.limits || [])
+      setDrafts({})
+    } catch (e) {
+      setMsg(e.message || 'Failed to load grade limits')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const dirty = Object.keys(drafts).length > 0
+
+  const save = async () => {
+    setSaving(true)
+    setMsg('')
+    try {
+      const updates = Object.entries(drafts).map(([grade, v]) => ({ grade, global_limit: Number(v) }))
+      const res = await fetch('/api/admin/grade-limits', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to save')
+      await load()
+      setMsg(`Saved — ${updates.length} grade${updates.length === 1 ? '' : 's'} updated.`)
+      setTimeout(() => setMsg(''), 4000)
+    } catch (e) {
+      setMsg(e.message || 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card>
+      <Card.Header>
+        <Card.Title>Global limits</Card.Title>
+        <Card.Description>
+          Default loan limit per grade (₦). New member imports use these when the template's global_limit column is blank — fill that column only to override a specific member.
+        </Card.Description>
+      </Card.Header>
+      <Card.Body className="space-y-3">
+        {loading ? (
+          <div className="space-y-2">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} className="h-9 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-[1fr_auto] gap-2 rounded-lg bg-subtle px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted">
+              <span>Grade</span>
+              <span>Default limit (₦)</span>
+            </div>
+            <div className="divide-y divide-line max-h-96 overflow-y-auto rounded-xl border border-line">
+              {limits.map((g) => {
+                const draft = drafts[g.grade]
+                const value = draft != null ? draft : (g.global_limit ?? 0)
+                const changed = draft != null && Number(draft) !== Number(g.global_limit ?? 0)
+                return (
+                  <div
+                    key={g.grade}
+                    className={`grid grid-cols-[1fr_auto] items-center gap-2 px-3 py-1.5 ${changed ? 'bg-brand-subtle/40' : ''}`}
+                  >
+                    <span className="text-sm text-fg">{g.grade}{g.category ? <span className="ml-2 text-xs text-muted">· {g.category}</span> : null}</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="1"
+                      className="w-44 text-right"
+                      value={value}
+                      onChange={(e) => setDrafts((d) => ({ ...d, [g.grade]: e.target.value }))}
+                      onBlur={() => {
+                        // Clear no-op edits so only real changes get saved
+                        setDrafts((d) => {
+                          const next = { ...d }
+                          const cur = Number(next[g.grade])
+                          if (!Number.isFinite(cur) || cur < 0 || !Number.isInteger(cur)) return next
+                          if (cur === Number(g.global_limit ?? 0)) delete next[g.grade]
+                          return next
+                        })
+                      }}
+                    />
+                  </div>
+                )
+              })}
+              {limits.length === 0 && (
+                <p className="px-4 py-5 text-center text-sm text-muted">No grades found.</p>
+              )}
+            </div>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs text-muted">
+                {dirty ? `${Object.keys(drafts).length} change${Object.keys(drafts).length === 1 ? '' : 's'} pending` : 'All graded limits saved'}
+              </p>
+              <div className="flex gap-2">
+                <Button variant="secondary" leftIcon={RefreshCw} onClick={load} loading={loading} disabled={loading}>
+                  Refresh
+                </Button>
+                <Button onClick={save} loading={saving} disabled={!dirty || saving}>
+                  Save changes
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+        {!!msg && (
+          <div
+            className={`rounded-lg border px-3 py-2 text-sm ${
+              msg.startsWith('Saved')
+                ? 'border-success-border bg-success-bg text-success-fg'
+                : 'border-danger-border bg-danger-bg text-danger-fg'
+            }`}
+          >
+            {msg}
+          </div>
+        )}
+      </Card.Body>
+    </Card>
+  )
+}
+
 function MemberLookupSection() {
   const [q, setQ] = useState('')
   const [results, setResults] = useState(null) // null = not searched
@@ -302,6 +442,7 @@ function MembersSettingsContent() {
         </div>
       </div>
       <MembersImportSection />
+      <GradeLimitsSection />
       <MemberLookupSection />
     </div>
   )

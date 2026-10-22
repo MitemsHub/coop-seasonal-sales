@@ -66,6 +66,8 @@ export async function POST(req) {
       const category = ['A', 'R', 'P', 'E', 'C'].includes(letter) ? letter : 'A'
 
       // Only include fields present in simplified template to avoid clearing existing data
+      // portal_enabled: every imported member is portal-active. Re-uploading the
+      // workbook re-enables anyone previously excluded (see add-portal-enabled migration).
       const row = {
         member_id,
         full_name,
@@ -73,7 +75,8 @@ export async function POST(req) {
         grade,
         savings,
         loans,
-        global_limit
+        global_limit,
+        portal_enabled: true
       }
 
       // Email is optional: include it in the upsert ONLY when the sheet has a

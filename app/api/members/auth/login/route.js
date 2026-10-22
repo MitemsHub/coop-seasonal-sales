@@ -42,7 +42,7 @@ export async function POST(request) {
     const db = createDbClient()
     const { data: member, error: mErr } = await db
       .from('members')
-      .select('member_id, email, auth_user_id, full_name, branch_id, branches:branch_id(code, name)')
+      .select('member_id, email, auth_user_id, full_name, branch_id, portal_enabled, branches:branch_id(code, name)')
       .eq('member_id', mid)
       .maybeSingle()
 
@@ -50,6 +50,11 @@ export async function POST(request) {
       return NextResponse.json({ error: mErr.message }, { status: 500 })
     }
     if (!member) {
+      return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+    }
+
+    // Members excluded from the latest official member import can't sign in
+    if (member.portal_enabled === false) {
       return NextResponse.json({ error: 'Member not found' }, { status: 404 })
     }
     if (!member.auth_user_id || !member.email) {

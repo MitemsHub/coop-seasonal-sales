@@ -70,7 +70,7 @@ const COLUMNS = [
     label: 'Global Limit',
     type: 'number',
     required: false,
-    description: 'Maximum loan limit (₦). Defaults to grade limit if blank.',
+    description: "Maximum loan limit (₦). Leave blank to use this member's grade default (manage it under Members → Global limits); fill it only to override that one member.",
     sample: 40000000,
   },
 ]

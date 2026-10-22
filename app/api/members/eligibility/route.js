@@ -45,10 +45,10 @@ export async function GET(req) {
     // 1) Member snapshot (core balances + category for cycle cap lookup)
     const { data: m, error: mErr } = await supabase
       .from('members')
-      .select('member_id,savings,loans,global_limit,category')
+      .select('member_id,savings,loans,global_limit,category,portal_enabled')
       .eq('member_id', memberId)
       .single()
-    if (mErr || !m) {
+    if (mErr || !m || m.portal_enabled === false) {
       return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
     }
 

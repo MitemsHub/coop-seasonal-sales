@@ -62,10 +62,12 @@ export async function POST(req) {
     // Member (home branch + balances)
     const { data: member, error: mErr } = await supabase
       .from('members')
-      .select('member_id, full_name, category, savings, loans, global_limit, branch_id')
+      .select('member_id, full_name, category, savings, loans, global_limit, branch_id, portal_enabled')
       .eq('member_id', memberId)
       .single()
     if (mErr || !member) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
+    // Members excluded from the latest member import can't place portal orders
+    if (member.portal_enabled === false) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
 
     // Delivery branch (pricing & inventory)
     const { data: deliveryBranch, error: bErr } = await supabase

@@ -136,7 +136,7 @@ export async function POST(request) {
     const db = createDbClient()
     const { data: member, error: mErr } = await db
       .from('members')
-      .select('member_id, email, alternative_email, auth_user_id')
+      .select('member_id, email, alternative_email, auth_user_id, portal_enabled')
       .eq('member_id', mid)
       .maybeSingle()
 
@@ -145,6 +145,12 @@ export async function POST(request) {
       return NextResponse.json({ error: mErr.message }, { status: 500 })
     }
     if (!member) {
+      return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+    }
+
+    // Members excluded from the latest official member import are invisible
+    // to the portal — indistinguishable from an unknown ID.
+    if (member.portal_enabled === false) {
       return NextResponse.json({ error: 'Member not found' }, { status: 404 })
     }
 
