@@ -11,6 +11,7 @@ import ToastProvider from './components/ui/Toast'
 import { Geist, Geist_Mono } from 'next/font/google'
 import PageTransition from './components/PageTransition'
 import ChatWidget from './components/ChatWidget'
+import PwaRegister from './components/PwaRegister'
 import { siteMetadata } from '../lib/siteMetadata'
 import { structuredData } from '../lib/schema'
 
@@ -29,6 +30,11 @@ const geistMono = Geist_Mono({
 // Head metadata lives in lib/siteMetadata.js (single source of truth, covered
 // by unit tests): metadataBase, canonical resolution, og:type, brand title.
 export const metadata = siteMetadata
+
+// Browser/OS chrome colour for PWA + mobile tabs (matches --color-brand-700).
+export const viewport = {
+  themeColor: '#1d6746',
+}
 
 export default function RootLayout({ children }) {
   return (
@@ -66,6 +72,7 @@ if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches))d
                 <PageTransition>{children}</PageTransition>
               </main>
               <ChatWidget />
+              <PwaRegister />
             </ToastProvider>
           </ThemeProvider>
         </AuthProvider>

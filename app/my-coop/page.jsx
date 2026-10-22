@@ -196,6 +196,37 @@ function MyCoopContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [memberId])
 
+  // ── Keep Available credit live without a page reload ───────────────
+  // Orders placed in the shop (from this tab, another tab, or another
+  // device) must move the credit figure as soon as the member looks at
+  // it. The dashboard polls eligibility gently while the page is
+  // visible, and re-fetches immediately when the tab regains focus.
+  useEffect(() => {
+    if (!memberId) return
+    let cancelled = false
+    const refresh = async () => {
+      try {
+        const res = await fetch(`/api/members/eligibility?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' })
+        const json = await res.json().catch(() => null)
+        if (!cancelled) setElig(json?.ok ? json.eligibility : null)
+      } catch {
+        // Offline/network blip — keep showing the last known figure.
+      }
+    }
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+    const interval = setInterval(refreshIfVisible, 25000)
+    document.addEventListener('visibilitychange', refreshIfVisible)
+    window.addEventListener('focus', refreshIfVisible)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', refreshIfVisible)
+      window.removeEventListener('focus', refreshIfVisible)
+    }
+  }, [memberId])
+
   // ── Derived data ─────────────────────────────────────────────────
   const firstName = profile?.full_name ? String(profile.full_name).trim().split(/\s+/)[0] : memberId
 
