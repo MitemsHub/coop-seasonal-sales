@@ -2,7 +2,7 @@
   "name": "CBN Coop — Seasonal Sales",
   "short_name": "CBN Coop",
   "description": "CBN Coop Staff Multipurpose Co-operative Society — seasonal food distribution, RAM sales and exhibition ordering for members.",
-  "start_url": "/my-coop",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
