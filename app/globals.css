@@ -628,3 +628,32 @@ button:disabled,
     color: #000 !important;
   }
 }
+
+/* ─── Receipt sheets are PAPER in both themes ─────────────────────
+   Success pages and receipt modals render their invoice on a literal
+   white sheet (receipt-sheet). Its inner text uses theme tokens, so with
+   .dark on <html> those resolve to near-white — invisible on the paper.
+   Pin the sheet to its paper values for screen too (print already were
+   forced to #000): theme tokens inside .receipt-sheet resolve to the
+   LIGHT values below, and the brand-gradient header keeps its own
+   text-white on the green band untouched. */
+.receipt-sheet {
+  background-color: #fff !important;
+}
+.receipt-sheet .text-fg {
+  color: #141414 !important;
+}
+.receipt-sheet .text-muted,
+.receipt-sheet .text-subtext {
+  color: #57534e !important;
+}
+.receipt-sheet .text-brand,
+.receipt-sheet .text-brand-fg {
+  color: #1d6746 !important;
+}
+.receipt-sheet [class*="bg-subtle"] {
+  background-color: #f7f6f4 !important;
+}
+.receipt-sheet [class*="border-line"] {
+  border-color: #dbdad7 !important;
+}

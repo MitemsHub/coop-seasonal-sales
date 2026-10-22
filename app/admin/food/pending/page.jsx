@@ -10,7 +10,9 @@ import { announceRepFoodStats } from '../../../lib/repFoodStatsSync'
 import Button from '../../../components/ui/Button'
 import { CheckSquare, ChevronLeft, ChevronRight, Inbox, RefreshCw, RotateCcw, Search, Send, Truck, XCircle, Zap } from 'lucide-react'
 
-function FoodOrdersAdminPageContent({ status = 'Pending' }) {
+// Named export: the /admin/food/cancelled page re-renders this same list with
+// status="Cancelled" (one shared component, two routes).
+export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
   const [orders, setOrders] = useState([])
   const [branches, setBranches] = useState([])
   const [term, setTerm] = useState('')

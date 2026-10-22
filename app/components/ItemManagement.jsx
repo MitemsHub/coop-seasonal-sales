@@ -629,7 +629,7 @@ export default function ItemManagement({ reloadToken }) {
 
       {items.length === 0 && (
         <div className="text-center py-8">
-          <svg className="w-12 h-12 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-12 h-12 mx-auto text-line-strong mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -696,7 +696,7 @@ export default function ItemManagement({ reloadToken }) {
                   setShowImageUpload(false)
                   setSelectedItem(null)
                 }}
-                className="text-gray-400 hover:text-muted"
+                className="text-muted hover:text-fg"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

@@ -893,9 +893,17 @@ export async function PATCH(req) {
     const supabase = createClient()
     const body = await req.json().catch(() => ({}))
     const itemIds = [...new Set((Array.isArray(body.item_ids) ? body.item_ids : []).map(Number).filter((n) => Number.isInteger(n) && n > 0))]
-    const imageUrl = String(body.image_url || '').trim()
+  const imageUrl = String(body.image_url || '').trim()
+  // Bulk image assignment comes exclusively from the Image Bank. A rep
+  // survey photo must never be bulk-painted onto item rows.
+  if (imageUrl && imageUrl.includes('/food-survey/')) {
+    return NextResponse.json(
+      { ok: false, error: 'Rep survey photos cannot be assigned as item images — pick a refined image from the Image Bank.' },
+      { status: 400 }
+    )
+  }
 
-    // A single-item patch carrying only name/SKU/category/unit is a field
+  // A single-item patch carrying only name/SKU/category/unit is a field
     // edit (the Image Bank inline rename / reclassify) — it must not be
     // gated on an image_url.
     const isFieldEdit =
@@ -1133,11 +1141,30 @@ export async function POST(req) {
     const section = body.section === 'outsourced' ? 'outsourced' : 'general'
     const name = String(body.name || '').trim()
     const price = num(body.price)
-    const markup = body.markup === undefined || body.markup === null || body.markup === '' ? null : num(body.markup)
-    const category = String(body.category || '').trim()
-    const unit = String(body.unit || '').trim()
-    const image_url = String(body.image_url || '').trim()
+  const markup = body.markup === undefined || body.markup === null || body.markup === '' ? null : num(body.markup)
+  const category = String(body.category || '').trim()
+  const unit = String(body.unit || '').trim()
+    const incomingImageUrl = String(body.image_url || '').trim()
+    // A rep survey photo is a raw reference shot in the food-survey storage
+    // bucket (URL always contains /food-survey/). The shop item may only
+    // wear a REFINED Image Bank image: a survey photo may supply a picture
+    // for an item that has none, but it must never overwrite a bank image
+    // the admin already saved (the 20 Oct Gino Tomatoes Sachet repaint
+    // happened when a branch card that carried its draft's rep photo was
+    // re-saved over the shared item row).
+    const surveyIncoming = incomingImageUrl.includes('/food-survey/')
+    let image_url = incomingImageUrl
+    let surveyImageIgnored = false
     const itemId = body.item_id != null && body.item_id !== '' ? Number(body.item_id) : null
+
+    // Bank-only saves come from the Image Bank itself — a survey URL can
+    // never be intentional there.
+    if (surveyIncoming && body.bank_only === true) {
+      return NextResponse.json(
+        { ok: false, error: 'Rep survey photos cannot be saved as Image Bank images — upload or pick a refined image instead.' },
+        { status: 400 }
+      )
+    }
 
     // bank_only → a bank entry: the items row (name/SKU/category/unit/image)
     // with no price, no cycle and no branches. It joins the Image Bank right
@@ -1220,6 +1247,13 @@ export async function POST(req) {
       // (-2, -3, …) instead of failing the whole save with a Postgres
       // duplicate-key error the admin cannot act on.
       let effPatch = patch
+      if (surveyIncoming && item.image_url) {
+        // The item already wears a refined image — keep it. A rep photo
+        // never repaints a saved product on any branch card.
+        effPatch = { ...effPatch }
+        delete effPatch.image_url
+        surveyImageIgnored = true
+      }
       if (patch.sku) {
         const { data: owner } = await supabase.from('items').select('item_id').eq('sku', patch.sku).maybeSingle()
         if (owner && Number(owner.item_id) !== itemId) {
@@ -1242,9 +1276,15 @@ export async function POST(req) {
       // DELETE handler), so the base-SKU lookup only ever finds an ACTIVE
       // item — creating a new product can never silently resurrect the
       // retired one.
-      const { data: existing } = await supabase.from('items').select('item_id').eq('sku', sku).maybeSingle()
+      const { data: existing } = await supabase.from('items').select('item_id, image_url').eq('sku', sku).maybeSingle()
       if (existing) {
-        const { data, error } = await supabase.from('items').update(patch).eq('item_id', existing.item_id).select('item_id, sku, name').single()
+        let effPatch = patch
+        if (surveyIncoming && existing.image_url) {
+          effPatch = { ...patch }
+          delete effPatch.image_url
+          surveyImageIgnored = true
+        }
+        const { data, error } = await supabase.from('items').update(effPatch).eq('item_id', existing.item_id).select('item_id, sku, name').single()
         if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
         itemRow = data
       } else {
@@ -1269,6 +1309,7 @@ export async function POST(req) {
         item: { item_id: itemRow.item_id, sku: itemRow.sku, name: itemRow.name },
         branches_priced: 0,
         markup_branches: 0,
+        survey_image_ignored: surveyImageIgnored,
       })
     }
 
@@ -1404,6 +1445,10 @@ export async function POST(req) {
       item: { item_id: itemRow.item_id, sku: itemRow.sku, name: itemRow.name },
       branches_priced: priceRows.length,
       markup_branches: markupBranches,
+      // Non-null only when a rep survey photo was refused because the item
+      // already has a refined image — the client surfaces this so the admin
+      // knows why the card did not change.
+      survey_image_ignored: surveyImageIgnored,
     })
   } catch (e) {
     console.error('Items management POST error:', e)

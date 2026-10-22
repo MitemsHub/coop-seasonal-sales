@@ -102,7 +102,7 @@ export default function ImageUpload({ onImageUploaded, currentImageUrl = null, i
         className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
           dragOver
             ? 'border-blue-400 bg-info-bg'
-            : 'border-line hover:border-gray-400'
+            : 'border-line hover:border-line-strong'
         }`}
         onDrop={handleDrop}
         onDragOver={handleDragOver}
@@ -116,7 +116,7 @@ export default function ImageUpload({ onImageUploaded, currentImageUrl = null, i
         ) : (
           <div>
             <svg
-              className="mx-auto h-12 w-12 text-gray-400 mb-4"
+              className="mx-auto h-12 w-12 text-muted mb-4"
               stroke="currentColor"
               fill="none"
               viewBox="0 0 48 48"

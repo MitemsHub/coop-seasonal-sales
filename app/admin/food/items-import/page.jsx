@@ -725,7 +725,10 @@ function ItemsImportContent() {
             'Saved — “' + json.item.name + '” is live' + branchLabel +
             ' in ' + json.branches_priced + ' branch' + branchSufix + ' for this cycle' +
             (json.markup_branches ? ' with markup in ' + json.markup_branches + ' branch' + branchSufix : '') +
-            '. It shows in the shop immediately.'
+            '. It shows in the shop immediately.' +
+            (json.survey_image_ignored
+              ? ' The rep survey photo was NOT applied — the item keeps its refined image.'
+              : '')
           )
         })()
       )
