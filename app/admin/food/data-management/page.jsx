@@ -949,7 +949,7 @@ function DataManagementPageContent() {
                   </table>
                 </div>
                 <p className="mt-2 text-xs text-muted">
-                  Cross-module caveat: exposure from Exhibition/RAM orders in the same calendar year additionally reduces these limits at order time, and a grace (facility) order is strictly once per cycle.
+                  Cross-module caveat: exposure from Exhibition and Food Distribution orders in the same calendar year additionally reduces these limits at order time, and a grace (facility) order is strictly once per cycle.
                 </p>
               </div>
             </details>

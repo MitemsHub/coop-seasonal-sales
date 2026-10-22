@@ -159,6 +159,47 @@ describe('POST outsourced save — draft pinning', () => {
 })
 
 describe('outsourced drafts — link recovery and repair', () => {
+  // Lagos regression: a cancelled draft of the same product at the same
+  // branch claimed the (item, branch) card slot first, and the later LIVE
+  // draft was swallowed — the branch showed 9 active cards where the survey
+  // had 10, and the missing card (King's Oil, ₦65,000) has the cancelled
+  // sibling (₦32,500) still visible.
+  it('renders BOTH a live draft and its cancelled sibling of the same product at one branch (Lagos missing-card regression)', async () => {
+    const items = [
+      { item_id: 23, sku: 'KINGS5L', name: 'Kings Oil 5Ltrs', category: 'Oils', unit: 'Jerrycan', image_url: 'kings.png', source: 'outsourced' },
+    ]
+    const prices = [{ branch_id: 38, item_id: 23, price: 65000 }]
+    const entries = [
+      { ...ENTRY(287, "King's oil 5liters", 38, 32500, 23), cancelled: true },
+      ENTRY(480, "King's Oil 5liters", 38, 65000, 23),
+    ]
+    const branches = [{ id: 38, name: 'Lagos Branch', code: 'LAGOS' }]
+    createClient.mockReturnValue(makeSupabase({ items, prices, entries, branches }))
+
+    const res = await GET(GET_OUTSOURCED.clone())
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(body.ok).toBe(true)
+
+    const kings = body.rows.filter(
+      (r) => r.draft && (r.draft.entry_id === 287 || r.draft.entry_id === 480)
+    )
+    expect(kings.map((r) => r.draft.entry_id).sort((a, b) => a - b).join(',')).toBe('287,480')
+
+    // The live draft still resolves to its saved item with the branch price.
+    const live = kings.find((r) => r.draft.entry_id === 480)
+    expect(live.saved).toBe(true)
+    expect(live.item_id).toBe(23)
+    expect(live.price).toBe(65000)
+    expect(live.in_shop).toBe(true)
+
+    // And the cancelled card still shows as Cancelled (not swallowed either).
+    const cancelledCard = kings.find((r) => r.draft.entry_id === 287)
+    expect(cancelledCard).toBeTruthy()
+    expect(cancelledCard.draft.cancelled).toBe(true)
+    expect(cancelledCard.saved).toBe(false)
+  })
+
   it('does NOT force-link drafts of different products to the only priced item at a branch (screenshot regression)', async () => {
     const s = scenario()
     createClient.mockReturnValue(makeSupabase(s))

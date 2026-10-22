@@ -1,6 +1,6 @@
 // app/my-coop/page.jsx
 // Member "My Coop" dashboard — the logged-in home for members.
-// Shows savings, loan balance + interest, cycle status, recent orders,
+// Shows savings, loan balance, cycle status, recent orders,
 // and a spending chart using the Sakani Charts components.
 'use client'
 
@@ -252,6 +252,8 @@ function MyCoopContent() {
   // 3. The cycle's end date hasn't passed
   const isFoodOpen = !!(shoppingOpen && foodCycle && (!foodCycle.ends_at || new Date(foodCycle.ends_at) > new Date()))
   const isRamOpen = !!(ramOpen && ramCycle && (!ramCycle.ends_at || new Date(ramCycle.ends_at) > new Date()))
+  // Any active cycle (food, ram or exhibition) makes credit visible; no cycle → ₦0.
+  const anyCycleOpen = isFoodOpen || isRamOpen || exhibitionOpen
 
   const outstanding = elig ? Number(elig.outstandingLoansTotal || 0) : null
   const recentOrders = orders.filter((o) => o.status !== 'Cancelled').slice(0, 4)
@@ -521,7 +523,6 @@ function MyCoopContent() {
               icon={Wallet}
               title="Loan balance"
               value={profile ? naira(profile.loans) : '—'}
-              delta={elig ? `${elig.interest_rate_pct}% interest` : 'unavailable'}
               trend="flat"
             />
             <StatCard
@@ -534,9 +535,13 @@ function MyCoopContent() {
             <StatCard
               icon={TrendingUp}
               title="Available credit"
-              value={(isFoodOpen || isRamOpen || exhibitionOpen) && elig ? naira(Number(elig.loanEligible || 0) + Number(elig.savingsEligible || 0)) : '₦0'}
-              delta={(isFoodOpen || isRamOpen || exhibitionOpen) ? (elig ? 'loan + savings credit' : 'unavailable') : 'No active cycle — credit appears when a cycle opens'}
-              trend={(isFoodOpen || isRamOpen || exhibitionOpen) && elig && Number(elig.loanEligible || 0) + Number(elig.savingsEligible || 0) > 0 ? 'up' : 'flat'}
+              value={anyCycleOpen && elig ? naira(Number(elig.loanEligible || 0) + Number(elig.savingsEligible || 0)) : '₦0'}
+              delta={anyCycleOpen
+                ? (elig
+                    ? `loan ${naira(Number(elig.loanEligible || 0))} + savings ${naira(Number(elig.savingsEligible || 0))} — reduces as you shop`
+                    : 'unavailable')
+                : 'No active cycle — resets to the next one that opens'}
+              trend={anyCycleOpen && elig && Number(elig.loanEligible || 0) + Number(elig.savingsEligible || 0) > 0 ? 'up' : 'flat'}
             />
           </div>
 

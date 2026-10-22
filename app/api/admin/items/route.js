@@ -745,7 +745,16 @@ export async function GET(req) {
 
     const savedItemIdsClaimed = new Set() // `${item_id}::${branch}` — cards already shown IN that branch
     const itemsShownSomewhere = new Set() // items claimed by ANY draft row (guards the trailing pass)
-    for (const d of drafts.values()) {
+    // Live drafts must claim their (item, branch) card BEFORE cancelled ones.
+    // Iteration in entry order let an older CANCELLED draft of the same
+    // product claim the (item, branch) slot first, and the later LIVE draft
+    // was swallowed by savedItemIdsClaimed: Lagos Branch's active "King's Oil
+    // 5liters" (₦65,000) card vanished while its cancelled sibling (₦32,500)
+    // still showed, and the branch counter read 9/14 instead of 10/15.
+    // Sorting un-cancelled drafts first keeps the anti-resurrection claim
+    // (the cancelled card still shows) while the live card also renders.
+    const orderedDrafts = [...drafts.values()].sort((a, b) => Number(Boolean(a.cancelled)) - Number(Boolean(b.cancelled)))
+    for (const d of orderedDrafts) {
       // Collapse to one row PER RESOLVED PRODUCT PER BRANCH, not per draft
       // name: the same product resubmitted twice at the SAME branch (price
       // signature matches) renders once, while a genuinely different product
