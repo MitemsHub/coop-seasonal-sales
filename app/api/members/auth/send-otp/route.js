@@ -78,6 +78,46 @@ async function sendOtpWithRetry(email, options, maxRetries = 2) {
   return { data: null, error: lastError }
 }
 
+// Best-effort duplicate invite to the member's OPTIONAL alternative email.
+// A member may have two inboxes (work + personal), so the signup code goes to
+// both when alternative_email is on file. Never fails the request — if the
+// second send errors we just surface a note, since the primary inbox already
+// has the code.
+async function sendToAlternate(addr, mid, siteUrl) {
+  let sent = false
+  try {
+    const res = await sendOtpWithRetry(addr, {
+      data: { member_id: mid },
+      emailRedirectTo: `${siteUrl}/auth/callback`,
+    })
+    sent = !res?.error
+    if (res?.error) console.warn('[send-otp] alternate email send failed:', res.error.message)
+  } catch (e) {
+    console.warn('[send-otp] alternate email send crashed:', e?.message)
+  }
+  return sent
+}
+
+// Wraps the two success responses, sending the duplicate invite to the
+// alternative inbox first and adding a note when one was attempted.
+async function withAlternateNote(mid, altAddr, siteUrl, baseNote) {
+  const out = { ok: true }
+  if (baseNote) out.note = baseNote
+  if (altAddr) {
+    const sent = await sendToAlternate(altAddr, mid, siteUrl)
+    out.also_sent_to_alternate_email = sent
+    out.note = [
+      baseNote,
+      sent
+        ? `A copy was also sent to the alternative email (${altAddr}).`
+        : `Could not send a copy to the alternative email (${altAddr}) — the primary inbox has the code.`,
+    ]
+      .filter(Boolean)
+      .join(' ')
+  }
+  return out
+}
+
 export async function POST(request) {
   try {
     const ip = getClientIP(request)
@@ -96,7 +136,7 @@ export async function POST(request) {
     const db = createDbClient()
     const { data: member, error: mErr } = await db
       .from('members')
-      .select('member_id, email, auth_user_id')
+      .select('member_id, email, alternative_email, auth_user_id')
       .eq('member_id', mid)
       .maybeSingle()
 
@@ -124,6 +164,11 @@ export async function POST(request) {
     }
 
     const addr = member.email.toLowerCase()
+    // Optional second inbox — same shape validation as the import; ignored if
+    // it's just a duplicate of the primary or clearly not an email address.
+    const altRaw = String(member.alternative_email || '').trim().toLowerCase()
+    const altAddr =
+      altRaw && altRaw !== addr && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(altRaw) ? altRaw : null
 
     // Rate limit: 3 OTP requests per email per 5 minutes
     const otpLimit = checkRateLimit('send-otp', addr, 3, 5 * 60 * 1000)
@@ -254,15 +299,12 @@ export async function POST(request) {
       }
 
       // Retry succeeded — the OTP code should now be sent
-      return NextResponse.json({
-        ok: true,
-        note: 'Verification code sent. If you receive a link instead of a code, please contact support.',
-      })
+      return NextResponse.json(await withAlternateNote(mid, altAddr, siteUrl, 'Verification code sent. If you receive a link instead of a code, please contact support.'))
     }
 
     // OTP sent successfully — no auto-created user detected.
     // This is the happy path: Supabase sent a 6-digit OTP code.
-    return NextResponse.json({ ok: true })
+    return NextResponse.json(await withAlternateNote(mid, altAddr, siteUrl))
   } catch (e) {
     console.error('[send-otp] Unexpected error:', e.message || e)
     return NextResponse.json({ error: e.message || 'Internal server error' }, { status: 500 })

@@ -356,13 +356,16 @@ export async function POST(req) {
       p_payment_option: paymentOption,
       p_total_amount: finalTotal,
       p_cycle_id: ordersHasCycle ? activeCycle.id : null,
-      p_lines: JSON.stringify(pricedLines.map(pl => ({
+      // supabase-js serializes arrays/object trees into jsonb for us; wrapping
+      // in JSON.stringify would deliver a jsonb STRING scalar and the function's
+      // jsonb_array_elements would fail ("cannot extract elements from a scalar").
+      p_lines: pricedLines.map(pl => ({
         item_id: pl.item_id,
         branch_item_price_id: pl.branch_item_price_id,
         unit_price: pl.unit_price,
         qty: pl.qty,
         amount: pl.amount,
-      }))),
+      })),
       p_grace_used: useGrace,
       p_cap_amount: capAmount,
     })

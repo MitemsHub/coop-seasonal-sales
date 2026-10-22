@@ -28,8 +28,8 @@ export async function POST(req) {
     const rows = XLSX.utils.sheet_to_json(ws, { defval: '' })
 
     // Expected headers (simplified):
-    // member_id, full_name, email, grade, savings, loans, global_limit
-    // email is OPTIONAL — a blank email never touches what's stored.
+    // member_id, full_name, email, alternative_email, grade, savings, loans, global_limit
+    // email and alternative_email are OPTIONAL — a blank never touches what's stored.
 
     if (!rows.length) return NextResponse.json({ ok: false, error: 'No rows found' }, { status: 400 })
 
@@ -59,8 +59,11 @@ export async function POST(req) {
         if (typeof defaultLimit === 'number') global_limit = defaultLimit
       }
 
-      // Derive category from first character of member_id if available; default 'A'
-      const category = (member_id ? member_id[0].toUpperCase() : 'A')
+      // Derive category from first character of member_id if available.
+      // The members.category check allows A/R/P/E/C only, so an unknown prefix
+      // (e.g. a TEST row) must actually map to one of those letters.
+      const letter = (member_id ? member_id[0].toUpperCase() : 'A')
+      const category = ['A', 'R', 'P', 'E', 'C'].includes(letter) ? letter : 'A'
 
       // Only include fields present in simplified template to avoid clearing existing data
       const row = {
@@ -79,6 +82,14 @@ export async function POST(req) {
       const emailRaw = String(r.email || '').trim().toLowerCase()
       if (emailRaw && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRaw)) {
         row.email = emailRaw
+      }
+
+      // Alternative email is optional too — a second inbox to reach the member
+      // at (OTP invites also go here). Blank never overwrites what's stored,
+      // same rule as the primary email above.
+      const altEmailRaw = String(r.alternative_email || '').trim().toLowerCase()
+      if (altEmailRaw && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(altEmailRaw)) {
+        row.alternative_email = altEmailRaw
       }
 
       return row

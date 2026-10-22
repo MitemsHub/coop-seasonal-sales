@@ -34,6 +34,14 @@ const COLUMNS = [
     sample: 'john.doe@example.com',
   },
   {
+    key: 'alternative_email',
+    label: 'Alternative Email',
+    type: 'text',
+    required: false,
+    description: "Member's second email, used for signup invitations and notifications too. Optional — leave blank if the member has only one email.",
+    sample: 'j.doe2@example.com',
+  },
+  {
     key: 'grade',
     label: 'Grade',
     type: 'text',
