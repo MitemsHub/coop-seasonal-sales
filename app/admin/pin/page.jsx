@@ -27,14 +27,22 @@ export default function AdminPinPage() {
         credentials: 'include',
       })
       const j = await res.json()
-      if (!res.ok || !j.ok) throw new Error(j.error || 'Invalid passcode')
+      if (!res.ok || !j.ok) {
+        const err = new Error(j.error || 'We could not verify that passcode. Please try again.')
+        err.fromApi = true
+        throw err
+      }
 
       login({ type: 'admin', id: 'admin', authenticated: true })
 
       // Force a page reload so middleware recognizes the cookie
       window.location.href = '/admin'
     } catch (e) {
-      setMsg(e.message)
+      // The API returns professional copy (flagged via fromApi); anything
+      // thrown locally — a network drop or an aborted request — must not
+      // leak its raw exception text ("Failed to fetch") into the admin
+      // portal, so it maps to a friendly fallback.
+      setMsg(e.fromApi && e.message ? e.message : 'Sign-in is temporarily unavailable. Please try again.')
     } finally {
       setLoading(false)
     }

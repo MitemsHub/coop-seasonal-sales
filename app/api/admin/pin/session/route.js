@@ -79,12 +79,19 @@ export async function POST(req) {
     const bf = checkBruteForce(ip)
     if (!bf.allowed) {
       const msg = bf.reason === 'locked'
-        ? 'Too many failed attempts. Account temporarily locked (1 hour).'
-        : 'Too many attempts. Please try again later.'
+        ? 'Too many failed attempts. Sign-in is temporarily locked — please try again in about an hour.'
+        : 'Too many attempts. Please wait a few minutes and try again.'
       return NextResponse.json({ ok: false, error: msg }, { status: 429 })
     }
 
-    const { passcode } = await req.json()
+    // Parse defensively: a malformed body must never leak a raw parser
+    // message to the admin portal — it just counts as a failed attempt.
+    let passcode = ''
+    try {
+      ({ passcode } = await req.json())
+    } catch {
+      console.warn(`Admin PIN: malformed request body from IP: ${ip}`)
+    }
     const PIN = process.env.ADMIN_PASSCODE
     if (!PIN) {
       console.error('ADMIN_PASSCODE environment variable is not set')
@@ -94,7 +101,7 @@ export async function POST(req) {
     // Timing-safe comparison instead of plain ===
     if (!timingSafeEqual(passcode || '', PIN)) {
       console.warn(`Failed admin PIN attempt from IP: ${ip}`)
-      return NextResponse.json({ ok: false, error: 'Invalid passcode' }, { status: 401 })
+      return NextResponse.json({ ok: false, error: 'Incorrect passcode. Please check it and try again.' }, { status: 401 })
     }
 
     const token = sign({ role: 'admin' }, 60 * 60 * 8) // 8h
@@ -108,7 +115,8 @@ export async function POST(req) {
     })
     return res
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
+    console.error('Admin PIN session error:', e)
+    return NextResponse.json({ ok: false, error: 'Something went wrong. Please try again.' }, { status: 500 })
   }
 }
 
