@@ -49,7 +49,8 @@ try {
     const r2 = await fetch(BASE + '/api/orders', { method: 'POST', headers: { 'content-type': 'application/json', origin: BASE, referer: BASE + '/' }, body: JSON.stringify(payload) })
     const j2 = await r2.json()
     console.log('duplicate POST allowed? ->', r2.status, JSON.stringify(j2).slice(0, 160))
-    const dupId = j2.order_id ?? j2.orderId      if (dupId && dupId !== orderId) { await c.query('DELETE FROM order_lines WHERE order_id = \$1', [dupId]); await c.query('DELETE FROM orders WHERE order_id = \$1', [dupId]) }
+    const dupId = j2.order_id ?? j2.orderId
+    if (dupId && dupId !== orderId) { await c.query('DELETE FROM order_lines WHERE order_id = \$1', [dupId]); await c.query('DELETE FROM orders WHERE order_id = \$1', [dupId]) }
 
     const reports = await (await fetch(BASE + '/api/admin/reports/summary', { headers: { origin: BASE, cookie: await adminCookie() } })).json()
     check('admin reports see the order', (reports.totals?.totalAll ?? reports.totals?.totalPosted ?? -1) > 0, JSON.stringify(reports.totals?.slice ? reports.totals : reports.totals).slice(0, 160))

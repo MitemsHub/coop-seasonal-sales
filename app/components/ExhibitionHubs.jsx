@@ -54,6 +54,7 @@ export default function ExhibitionHubs({ vendors = [], vendorCounts = {} }) {
   const resumeTimer = useRef(null)
   const pauseRef = useRef(false)
   const countRef = useRef(0)
+  const stuckRef = useRef({ lastLeft: -1, armed: false })
   const [paused, setPaused] = useState(false)
 
   const count = vendors.length
@@ -84,7 +85,19 @@ export default function ExhibitionHubs({ vendors = [], vendorCounts = {} }) {
     const intervalMs = (window.innerWidth || 0) < 768 ? 5200 : 4200
     const id = setInterval(() => {
       const track = trackRef.current
-      if (!track || pauseRef.current) return
+      if (!track || pauseRef.current) {
+        // Paused: disarm stall detection so the no-movement it watched
+        // while paused isn't mistaken for a frozen animation on resume.
+        stuckRef.current.armed = false
+        return
+      }
+      // A hidden tab throttles timers and can leave a scheduled smooth
+      // scroll frozen; advancing while hidden would just queue up more
+      // freezes. Wait until the user is looking again.
+      if (document.hidden) {
+        stuckRef.current.armed = false
+        return
+      }
       const card = track.querySelector('[data-hub-card]')
       if (!card) return
       const step = card.offsetWidth + GAP
@@ -92,12 +105,31 @@ export default function ExhibitionHubs({ vendors = [], vendorCounts = {} }) {
       if (countRef.current <= perView) return // everything already fits on screen
       const max = track.scrollWidth - track.clientWidth
       if (max <= 1) return
+      // Chromium can freeze a pending smooth scroll (backgrounded tab, or a
+      // mandatory scroll-snap re-snap cancelling the animation) so the track
+      // sits still tick after tick until a page scroll or repaint kicks it —
+      // "the carousel only moves after I scroll". Detect a tick with zero
+      // movement since the previous scheduled advance and, for that tick
+      // only, advance instantly so the slideshow never stalls.
+      const stuck = stuckRef.current
+      const raw = track.scrollLeft
+      if (stuck.armed && Math.abs(raw - stuck.lastLeft) < 1) {
+        const atEnd = raw >= max - 0.5
+        if (atEnd) track.scrollLeft = 0
+        track.scrollTo({ left: Math.min(max, (atEnd ? 0 : raw) + step * perView), behavior: 'auto' })
+        stuck.armed = false
+        stuck.lastLeft = track.scrollLeft
+        return
+      }
+      stuck.lastLeft = raw
       // Seamless wrap — we've scrolled into the cloned region, whose cards are
       // identical to the start, so snapping to 0 is invisible to the eye.
-      if (track.scrollLeft >= max - 0.5) {
+      const atEnd = raw >= max - 0.5
+      if (atEnd) {
         track.scrollLeft = 0
       }
-      track.scrollTo({ left: Math.min(max, track.scrollLeft + step * perView), behavior: 'smooth' })
+      track.scrollTo({ left: Math.min(max, (atEnd ? 0 : track.scrollLeft) + step * perView), behavior: 'smooth' })
+      stuck.armed = true
     }, intervalMs)
     return () => {
       clearInterval(id)
