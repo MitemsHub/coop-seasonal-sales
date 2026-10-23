@@ -27,7 +27,7 @@ export default function VendorLoginPage() {
         const json = await res.json().catch(() => null)
         if (cancelled) return
         if (json?.ok) setVendors(Array.isArray(json.vendors) ? json.vendors : [])
-        else setVendorsError(json?.error || 'Could not load vendor stands')
+        else setVendorsError(json?.error || 'Could not load vendor stands. You can still type your code.')
       } catch {
         if (!cancelled) setVendorsError('Could not load vendor stands right now. You can still type your code.')
       } finally {
@@ -63,11 +63,11 @@ export default function VendorLoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: effectiveCode, passcode }),
       })
-      const json = await res.json()
-      if (!res.ok || !json.ok) throw new Error(json.error || 'Login failed')
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Could not sign you in. Please try again.')
       router.push('/vendor/dashboard')
     } catch (err) {
-      setMsg(err.message || 'Login failed')
+      setMsg(err.message || 'Could not sign you in. Please check your connection and try again.')
     } finally {
       setLoading(false)
     }

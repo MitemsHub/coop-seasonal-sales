@@ -113,7 +113,8 @@ export async function GET(req) {
         : null,
     })
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e.message || 'Session error' }, { status: 500 })
+    console.error('Vendor session introspection error:', e)
+    return NextResponse.json({ ok: false, error: 'Something went wrong. Please sign in again.' }, { status: 500 })
   }
 }
 
@@ -131,8 +132,8 @@ export async function POST(req) {
     const bf = checkBruteForce(ip)
     if (!bf.allowed) {
       const msg = bf.reason === 'locked'
-        ? 'Too many failed attempts. Account temporarily locked (1 hour).'
-        : 'Too many attempts. Please try again later.'
+        ? 'Too many failed attempts. Sign-in is temporarily locked — please try again in about an hour.'
+        : 'Too many attempts. Please wait a few minutes and try again.'
       return NextResponse.json({ ok: false, error: msg }, { status: 429 })
     }
 
@@ -153,23 +154,24 @@ export async function POST(req) {
     if (error) {
       if (String(error?.code || '') === '42P01') {
         return NextResponse.json(
-          { ok: false, error: 'Coop Exhibition is not set up yet. Run the exhibition migration in Supabase.' },
+          { ok: false, error: 'The Coop Exhibition is not available yet. Please try again soon.' },
           { status: 500 }
         )
       }
-      return NextResponse.json({ ok: false, error: error.message || 'Invalid credentials' }, { status: 500 })
+      console.error('Vendor lookup failed:', error)
+      return NextResponse.json({ ok: false, error: 'Something went wrong while checking your credentials. Please try again.' }, { status: 500 })
     }
 
     if (!vendor) {
       console.warn(`Failed vendor login attempt for code=${code} from IP: ${ip}`)
-      return NextResponse.json({ ok: false, error: 'Invalid vendor code' }, { status: 401 })
+      return NextResponse.json({ ok: false, error: 'Unknown vendor code. Please select your hub and try again.' }, { status: 401 })
     }
     if (!timingSafeEqual(passcode, String(vendor.passcode || ''))) {
       console.warn(`Failed vendor login attempt for code=${code} from IP: ${ip}`)
-      return NextResponse.json({ ok: false, error: 'Invalid passcode' }, { status: 401 })
+      return NextResponse.json({ ok: false, error: 'Incorrect passcode. Please check it and try again.' }, { status: 401 })
     }
     if (vendor.status !== 'active') {
-      return NextResponse.json({ ok: false, error: 'This vendor account is not active. Contact your administrator.' }, { status: 403 })
+      return NextResponse.json({ ok: false, error: 'This vendor account is not active. Please contact your administrator.' }, { status: 403 })
     }
 
     // Resolve the vendor's cycle for context (name/status surfaced in the portal).
@@ -179,7 +181,8 @@ export async function POST(req) {
       .eq('id', vendor.cycle_id)
       .maybeSingle()
     if (cycleErr && String(cycleErr?.code || '') !== '42P01') {
-      return NextResponse.json({ ok: false, error: cycleErr.message }, { status: 500 })
+      console.error('Vendor cycle lookup failed:', cycleErr)
+      return NextResponse.json({ ok: false, error: 'Something went wrong while loading your cycle. Please try again.' }, { status: 500 })
     }
 
     const token = await sign(
@@ -211,6 +214,7 @@ export async function POST(req) {
     res.cookies.set('vendor_token', token, { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 60 * 60 * 8 })
     return res
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e.message || 'Login failed' }, { status: 500 })
+    console.error('Vendor session error:', e)
+    return NextResponse.json({ ok: false, error: 'Something went wrong. Please try again.' }, { status: 500 })
   }
 }

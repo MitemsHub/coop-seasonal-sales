@@ -53,8 +53,8 @@ export default function RepLoginPage() {
         headers: {'Content-Type':'application/json'},
         body: JSON.stringify({ module: portalModule, passcode: code.trim().toUpperCase() })
       })
-      const json = await res.json()
-      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed')
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Could not sign you in. Please try again.')
 
       // ── RAM / Exhibition: keep existing flow (no department question) ──
       if (isRam || isExhibition) {
@@ -96,7 +96,7 @@ export default function RepLoginPage() {
       // Always ask the department question — even if this branch logged in before.
       setLoginStep('department-question')
     } catch (e) {
-      setMsg(e.message)
+      setMsg(e.message || 'Could not sign you in. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -157,7 +157,7 @@ export default function RepLoginPage() {
         phone: phoneToSave,
       })
     } catch (e) {
-      setMsg(e.message)
+      setMsg(e.message || 'Something went wrong. Please try again.')
     } finally {
       setLoading(false)
     }

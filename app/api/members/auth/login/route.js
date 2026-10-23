@@ -47,15 +47,25 @@ export async function POST(request) {
       .maybeSingle()
 
     if (mErr) {
-      return NextResponse.json({ error: mErr.message }, { status: 500 })
+      console.error('Member login: member lookup failed:', mErr)
+      return NextResponse.json(
+        { error: 'Something went wrong while checking the account. Please try again.' },
+        { status: 500 }
+      )
     }
     if (!member) {
-      return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+      return NextResponse.json(
+        { error: 'No member account found for that Staff ID. Please check it and try again.' },
+        { status: 404 }
+      )
     }
 
     // Members excluded from the latest official member import can't sign in
     if (member.portal_enabled === false) {
-      return NextResponse.json({ error: 'Member not found' }, { status: 404 })
+      return NextResponse.json(
+        { error: 'No member account found for that Staff ID. Please check it and try again.' },
+        { status: 404 }
+      )
     }
     if (!member.auth_user_id || !member.email) {
       return NextResponse.json(
@@ -72,14 +82,20 @@ export async function POST(request) {
 
     if (authError) {
       console.error('Login error:', authError)
-      return NextResponse.json(
-        { error: authError.message || 'Invalid email or password' },
-        { status: 401 }
-      )
+      // Never surface Supabase's raw auth messages (e.g. "Invalid login
+      // credentials") — map them to friendly, member-facing copy.
+      const authMsg = String(authError.message || '').toLowerCase()
+      const friendly = authMsg.includes('not confirmed')
+        ? 'Your email address hasn\u2019t been confirmed yet. Please check your inbox for the confirmation email.'
+        : 'Incorrect password. Please check it and try again, or use “Forgot password” to reset it.'
+      return NextResponse.json({ error: friendly }, { status: 401 })
     }
 
     if (!authData?.user) {
-      return NextResponse.json({ error: 'Login failed' }, { status: 401 })
+      return NextResponse.json(
+        { error: 'Could not sign you in. Please try again.' },
+        { status: 401 }
+      )
     }
 
     // Issue the signed member session cookie
@@ -102,6 +118,10 @@ export async function POST(request) {
     })
     return res
   } catch (e) {
-    return NextResponse.json({ error: e.message || 'Internal server error' }, { status: 500 })
+    console.error('Member login error:', e)
+    return NextResponse.json(
+      { error: 'Something went wrong. Please try again.' },
+      { status: 500 }
+    )
   }
 }

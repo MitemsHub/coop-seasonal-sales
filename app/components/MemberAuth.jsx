@@ -741,10 +741,10 @@ export default function MemberAuth() {
         await new Promise((r) => setTimeout(r, 400))
         router.push('/my-coop')
       } else {
-        setError(data.error || 'Invalid password')
+        setError(data.error || 'Could not sign you in. Please try again.')
       }
     } catch {
-      setError('Network error. Please try again.')
+      setError('Network error. Please check your connection and try again.')
     } finally {
       setIsLoading(false)
     }

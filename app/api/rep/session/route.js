@@ -112,7 +112,8 @@ export async function GET(req) {
       ...(claim.branch_code ? { branch_code: claim.branch_code } : {}),
     })
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e.message || 'Session error' }, { status: 500 })
+    console.error('Rep session introspection error:', e)
+    return NextResponse.json({ ok: false, error: 'Something went wrong. Please sign in again.' }, { status: 500 })
   }
 }
 
@@ -123,10 +124,13 @@ export async function POST(req) {
     // Brute-force check
     const bf = checkBruteForce(ip)
     if (!bf.allowed) {
-      const msg = bf.reason === 'locked'
-        ? 'Too many failed attempts. Account temporarily locked (1 hour).'
-        : 'Too many attempts. Please try again later.'
-      return NextResponse.json({ ok: false, error: msg }, { status: 429 })
+      let lockMessage
+      if (bf.reason === 'locked') {
+        lockMessage = 'Too many failed attempts. Sign-in is temporarily locked — please try again in about an hour.'
+      } else {
+        lockMessage = 'Too many attempts. Please wait a few minutes and try again.'
+      }
+      return NextResponse.json({ ok: false, error: lockMessage }, { status: 429 })
     }
 
     const supabase = createClient()
@@ -134,7 +138,7 @@ export async function POST(req) {
     const rawModule = String(body?.module || 'food').toLowerCase()
     const portalModule = rawModule === 'ram' ? 'ram' : rawModule === 'exhibition' ? 'exhibition' : 'food'
     const code = String(body?.passcode || body?.branchCode || '').trim().toUpperCase()
-    if (!code) return NextResponse.json({ ok:false, error:'passcode required' }, { status:400 })
+    if (!code) return NextResponse.json({ ok:false, error:'Passcode is required. Please enter it and try again.' }, { status:400 })
 
     if (portalModule === 'ram') {
       const { data: vendors, error } = await supabase
@@ -144,16 +148,20 @@ export async function POST(req) {
         .eq('is_active', true)
         .order('id', { ascending: true })
       if (error && isMissingTable(error, 'ram_delivery_locations')) {
+        console.error('Ram vendor lookup failed: ram_delivery_locations table is missing')
         return NextResponse.json(
-          { ok: false, error: 'Ram Sales vendors are not set up yet. Run the ram sales migration in Supabase.' },
+          { ok: false, error: 'Ram Sales vendors are not set up yet. Please contact support and try again later.' },
           { status: 500 }
         )
       }
-      if (error) return NextResponse.json({ ok: false, error: error.message || 'Invalid passcode' }, { status: 401 })
+      if (error) {
+        console.error('Ram vendor lookup failed:', error)
+        return NextResponse.json({ ok: false, error: 'Something went wrong while checking your passcode. Please try again.' }, { status: 500 })
+      }
       let list = Array.isArray(vendors) ? vendors.filter((v) => v && v.id) : []
       if (!list.length) {
         console.warn(`Failed rep login attempt for code=${code} (ram) from IP: ${ip}`)
-        return NextResponse.json({ ok: false, error: 'Invalid passcode' }, { status: 401 })
+        return NextResponse.json({ ok: false, error: 'Incorrect passcode. Please check it and try again.' }, { status: 401 })
       }
       let ids = list.map((v) => Number(v.id)).filter((n) => Number.isFinite(n) && n > 0)
 
@@ -167,7 +175,8 @@ export async function POST(req) {
           .in('ram_delivery_location_id', ids)
         if (linkErr) {
           if (!isMissingTable(linkErr, 'ram_cycle_delivery_locations')) {
-            return NextResponse.json({ ok: false, error: linkErr.message }, { status: 500 })
+            console.error('Ram cycle link lookup failed:', linkErr)
+            return NextResponse.json({ ok: false, error: 'Something went wrong while checking your passcode. Please try again.' }, { status: 500 })
           }
         } else {
           const allowed = new Set((links || []).map((r) => Number(r.ram_delivery_location_id)).filter((n) => Number.isFinite(n) && n > 0))
@@ -178,7 +187,7 @@ export async function POST(req) {
 
       if (!list.length) {
         console.warn(`Failed rep login attempt for code=${code} (ram cycle mismatch) from IP: ${ip}`)
-        return NextResponse.json({ ok: false, error: 'Invalid passcode for this cycle' }, { status: 401 })
+        return NextResponse.json({ ok: false, error: 'This passcode is not active for the current cycle. Please contact your coordinator.' }, { status: 401 })
       }
       const first = list[0]
 
@@ -211,9 +220,13 @@ export async function POST(req) {
     // Food + Exhibition both authenticate with the branch passcode and carry
     // a branch_id claim (exhibition is branch-scoped like Food).
     const { data: br, error } = await supabase.from('branches').select('id, code, name, rep_phone').eq('code', code).single()
-    if (error || !br) {
+    if (error && String(error?.code || '') !== 'PGRST116') {
+      console.error('Branch lookup failed:', error)
+      return NextResponse.json({ ok:false, error:'Something went wrong while checking your passcode. Please try again.' }, { status: 500 })
+    }
+    if (!br) {
       console.warn(`Failed rep login attempt for code=${code} (food/exhibition) from IP: ${ip}`)
-      return NextResponse.json({ ok:false, error:'Invalid passcode' }, { status:401 })
+      return NextResponse.json({ ok:false, error:'Incorrect passcode. Please check it and try again.' }, { status:401 })
     }
 
     const token = await sign({ role: 'rep', module: portalModule, branch_id: br.id, branch_code: br.code }, 60 * 60 * 8) // 8h token
@@ -223,6 +236,7 @@ export async function POST(req) {
     res.cookies.set('rep_token', token, { httpOnly: true, sameSite: 'lax', path: '/' })
     return res
   } catch (e) {
-    return NextResponse.json({ ok:false, error:e.message }, { status:500 })
+    console.error('Rep session error:', e)
+    return NextResponse.json({ ok:false, error:'Something went wrong. Please try again.' }, { status:500 })
   }
 }
