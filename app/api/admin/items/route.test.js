@@ -411,7 +411,7 @@ describe('outsourced drafts — General and Outsourced stay independent', () => 
       ENTRY(901, 'Semovita', 1, 14500), // no link, name does not match the saved name...
     ]
     createClient.mockReturnValue(independentSupabase({ items, prices, entries }))
-
+
     const res = await GET(GET_OUTSOURCED.clone())
     const body = await res.json()
     expect(body.ok).toBe(true)
@@ -435,7 +435,7 @@ describe('outsourced drafts — General and Outsourced stay independent', () => 
       ENTRY(902, 'Fresh Red Oil 5L', 1, 14500), // same name, no link (legacy)
     ]
     createClient.mockReturnValue(independentSupabase({ items, prices, entries }))
-
+
     const res = await GET(GET_OUTSOURCED.clone())
     const body = await res.json()
     expect(body.ok).toBe(true)
@@ -1035,5 +1035,138 @@ describe('DELETE branch-scoped cancel-draft does not require item_id', () => {
     const json = await res.json()
     expect(res.status).toBe(400)
     expect(json.error).toBe('item_id is required')
+  })
+})
+
+describe('outsourced saves — branch display independence', () => {
+  // Coop Secretariat/Abuja/Head Office regression: editing Category/Unit on
+  // an outsourced card at one branch rewrote the SAME card at every other
+  // branch, because the save wrote the display fields onto the one shared
+  // items row. Now the fields are branch-owned: the shared row only keeps
+  // catalog plumbing (sku), the edited branch gets an override row, and
+  // every branch that already prices the item is frozen at the previous
+  // shared copy BEFORE the edit.
+  const PRICE_ITEM = { item_id: 1, id: 9, is_active: true, sku: 'INDOMITABLESNOODLES', name: 'Indomitables Noodles', category: 'Instant foods', unit: 'Carton', image_url: 'a.png' }
+  function makeSaveSupabase() {
+    const updates = []
+    const supa = {
+      from(table) {
+        return {
+          select: () => ({
+            order: () => ({
+              maybeSingle: () => Promise.resolve({ data: { id: 2, code: 'COOP_SECRETARIAT' }, error: null }),
+              eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 2, code: 'COOP_SECRETARIAT' }, error: null }) }),
+            }),
+            eq: () => ({
+              maybeSingle: () => Promise.resolve({ data: PRICE_ITEM, error: null }),
+              single: () => Promise.resolve({ data: PRICE_ITEM, error: null }),
+            }),
+            maybeSingle: () => Promise.resolve({ data: PRICE_ITEM, error: null }),
+            single: () => Promise.resolve({ data: PRICE_ITEM, error: null }),
+            limit: () => Promise.resolve({ data: [], error: null }),
+          }),
+          update: (patch) => {
+            updates.push(patch)
+            return {
+              eq: () => ({
+                select: () => ({ single: () => Promise.resolve({ data: PRICE_ITEM, error: null }) }),
+              }),
+            }
+          },
+          upsert: () => Promise.resolve({ data: null, error: null, count: 1 }),
+        }
+      },
+    }
+    return { supa, updates }
+  }
+
+  const SAVE_BODY = {
+    section: 'outsourced',
+    item_id: 1,
+    name: 'Indomitables Noodles',
+    category: 'Instant foods',
+    unit: 'Case',
+    price: 9500,
+    image_url: 'noodles.png',
+    draft: { branch_id: 2, branch_name: 'Coop Secretariat', branch_code: 'COOP_SECRETARIAT', draft_id: 11, draft_name: 'Noodles', draft_category: 'Instant foods', draft_unit: 'Case', draft_price: 9500, saved: false, key: 'b2::noodles' },
+  }
+
+  it('does NOT rewrite the shared display fields — other branches keep their own cards', async () => {
+    const { supa, updates } = makeSaveSupabase()
+    createClient.mockReturnValue(supa)
+
+    const req = new Request('http://x/api/admin/items', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(SAVE_BODY) })
+    const res = await POST(req)
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(updates.length).toBe(1)
+    expect(Object.keys(updates[0]).sort()).toEqual(['sku'])
+
+    // The branch being edited got its own copy of ALL display fields.
+    const writeCall = queryDirect.mock.calls.find(
+      ([sql]) => sql.includes('INSERT INTO public.item_branch_overrides') && sql.includes('DO UPDATE')
+    )
+    expect(writeCall).toBeTruthy()
+    expect(writeCall[1]).toEqual([2, 1, 'Indomitables Noodles', 'Instant foods', 'Case', 'noodles.png'])
+
+    // Every OTHER branch was frozen at the previous shared copy first:
+    // old image 'a.png' and old unit 'Carton' — neither new value leaks.
+    const freezeCall = queryDirect.mock.calls.find(
+      ([sql]) => sql.includes('FROM public.branch_item_prices') && sql.includes('ON CONFLICT (branch_id, item_id) DO NOTHING')
+    )
+    expect(freezeCall).toBeTruthy()
+    expect(freezeCall[1]).toEqual([1, 'Indomitables Noodles', 'Instant foods', 'Carton', 'a.png', 2])
+  })
+
+  it('GET outsourced renders the branch card from ITS override, not the shared row', async () => {
+    const items = [
+      { item_id: 1, sku: 'INDOMITABLESNOODLES', name: 'Indomitables Noodles', category: 'Instant foods', unit: 'Carton', image_url: 'a.png', source: 'outsourced' },
+    ]
+    const prices = [{ branch_id: 2, item_id: 1, price: 9500 }]
+    const entries = [ENTRY(11, 'Noodles', 2, 9500, 1)]
+    const branches = [{ id: 2, name: 'Coop Secretariat', code: 'COOP_SECRETARIAT' }]
+    // Only the overrides lookup returns rows — everything else stays empty.
+    queryDirect.mockImplementation(async (sql) => {
+      if (sql.includes('FROM public.item_branch_overrides')) {
+        return { rows: [{ branch_id: 2, item_id: 1, name: 'Secretariat Noodles', category: 'Instant foods', unit: 'Case', image_url: 'secretariat.png' }] }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+    createClient.mockReturnValue(makeSupabase({ items, prices, entries, branches }))
+
+    const res = await GET(GET_OUTSOURCED.clone())
+    const body = await res.json()
+    expect(res.status).toBe(200)
+    expect(body.ok).toBe(true)
+
+    const card = body.rows.find((r) => r.draft?.entry_id === 11 && r.saved)
+    expect(card).toBeTruthy()
+    expect(card.name).toBe('Secretariat Noodles')
+    expect(card.category).toBe('Instant foods')
+    expect(card.unit).toBe('Case')
+    expect(card.image_url).toBe('secretariat.png')
+  })
+
+  it('falls back to the shared copy for a branch with no override', async () => {
+    queryDirect.mockImplementation(async (sql) => {
+      if (sql.includes('FROM public.item_branch_overrides')) {
+        return { rows: [{ branch_id: 9, item_id: 1, name: 'Other branch name', category: 'X', unit: 'Y', image_url: 'z.png' }] }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+    const items = [
+      { item_id: 1, sku: 'INDOMITABLESNOODLES', name: 'Indomitables Noodles', category: 'Instant foods', unit: 'Carton', image_url: 'a.png', source: 'outsourced' },
+    ]
+    const prices = [{ branch_id: 2, item_id: 1, price: 9500 }]
+    const entries = [ENTRY(11, 'Noodles', 2, 9500, 1)]
+    const branches = [{ id: 2, name: 'Coop Secretariat', code: 'COOP_SECRETARIAT' }]
+    createClient.mockReturnValue(makeSupabase({ items, prices, entries, branches }))
+
+    const res = await GET(GET_OUTSOURCED.clone())
+    const body = await res.json()
+    const card = body.rows.find((r) => r.draft?.entry_id === 11 && r.saved)
+    expect(card.name).toBe('Indomitables Noodles')
+    expect(card.category).toBe('Instant foods')
+    expect(card.unit).toBe('Carton')
   })
 })

@@ -98,7 +98,10 @@ const c = new pg.Client({ connectionString: process.env.SUPABASE_DB_URL, ssl: { 
 await c.connect()
 
 try {
-  // Stash the list in a TEMP table so the whole swap stays set-based
+  // Stash the list in a TEMP table so the whole swap stays set-based.
+  // Session-pooled connections can carry a leftover temp table from a previous
+  // run of this script, so drop before creating.
+  await c.query('DROP TABLE IF EXISTS cohort_ids')
   await c.query('CREATE TEMP TABLE cohort_ids (member_id TEXT PRIMARY KEY)')
   const CHUNK = 500
   for (let i = 0; i < listed.length; i += CHUNK) {

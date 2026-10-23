@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '../../../../lib/supabaseServer'
 import { getCached } from '../../../../lib/cache'
+import { loadOverrides } from '../../../../lib/itemOverrides'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -142,18 +143,26 @@ export async function GET(req) {
         }
       }
 
+      // Branch-owned display fields (item_branch_overrides): OUTSOURCED cards
+      // render THIS branch's refined name/category/unit — an edit saved in
+      // Coop Secretariat must not leak onto Abuja/Head Office shelves.
+      const overrides = await loadOverrides((itemsWithPrices || []).map((r) => r.item_id))
+
       // Transform data to expected format for demand tracking
       return (itemsWithPrices || [])
         .filter((row) => !cancelledItemIds.has(row.item_id))
         .map(row => {
         const base = Number(row.price || 0)
         const mk = markupByItemId.get(row.item_id) || 0
+        const co = overrides.get(`${branch.id}::${row.item_id}`)
+        // Same field rules as coalesceItem: a non-null name wins (never ''),
+        // a non-null category/unit wins, '' being a deliberate clerical clear.
         return {
           id: row.item_id,
-          name: row.item_name,
+          name: co?.name != null && co.name !== '' ? co.name : row.item_name,
           sku: row.sku,
-          unit: row.unit,
-          category: row.category,
+          unit: co?.unit != null ? co.unit : row.unit,
+          category: co?.category != null ? co.category : row.category,
           price: base + mk,
           demand: {
             total: Number(row.total_demand || 0),

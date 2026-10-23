@@ -29,6 +29,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '../../../../../lib/supabaseServer'
 import { validateSession } from '../../../../../lib/validation'
 import { invalidateCache } from '../../../../../lib/cache'
+import { loadOverrides, writeOverride } from '../../../../../lib/itemOverrides'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -113,6 +114,36 @@ export async function POST(request) {
       if (pErr) return json({ ok: false, error: pErr.message }, 500)
       for (const r of chunk || []) srcPrices.set(Number(r.item_id), Number(r.price || 0))
       if (!chunk || chunk.length < 1000) break
+    }
+  }
+
+  // Per-branch display fields (item_branch_overrides) — a refined branch card
+  // differs from the shared catalog copy, so a copy must carry exactly what
+  // the source branch SHOWS, not whatever the shared row currently holds.
+  // GENERAL items stay one shared catalog (deliberate) — they never need one.
+  const srcDisplay = new Map() // itemId → effective { name, category, unit, image_url }
+  const overridesMap = savedItemIds.length ? await loadOverrides(savedItemIds) : new Map()
+  if (savedItemIds.length) {
+    const { data: itemRows, error: itErr } = await supabase
+      .from('items')
+      .select('item_id, name, category, unit, image_url, source')
+      .in('item_id', savedItemIds)
+    if (itErr) return json({ ok: false, error: itErr.message }, 500)
+    for (const it of itemRows || []) {
+      if ((it.source || '') !== 'outsourced') continue
+      const srcOv = overridesMap.get(`${fromBranchId}::${it.item_id}`)
+      const eff = {
+        name: srcOv?.name ?? it.name,
+        category: srcOv?.category ?? it.category,
+        unit: srcOv?.unit ?? it.unit,
+        image_url: srcOv?.image_url ?? it.image_url,
+      }
+      const same = ['name', 'category', 'unit', 'image_url'].every(
+        (k) => String(eff[k] ?? '') === String(it[k] ?? '')
+      )
+      // Identical to the shared copy → the target simply falls back to the
+      // shared row like before; writing a row would add noise for nothing.
+      if (!same) srcDisplay.set(Number(it.item_id), eff)
     }
   }
 
@@ -211,6 +242,20 @@ export async function POST(request) {
       pricesWritten.count++
     }
 
+    // Display overrides — carry what the source branch shows. An existing
+    // target override always wins (same rule as the target's price rows),
+    // and failure is non-fatal for the rest of the copy: the target still
+    // falls back to the shared catalog fields.
+    const overridesWritten = { count: 0, kept: 0 }
+    for (const [itemId, eff] of srcDisplay) {
+      if (overridesMap.has(`${targetId}::${itemId}`)) { overridesWritten.kept++; continue }
+      if (!dryRun) {
+        const ok = await writeOverride({ branchId: targetId, itemId, ...eff })
+        if (!ok) { results.push({ branch_id: targetId, ok: false, error: 'Could not copy the branch display fields' }); break }
+      }
+      overridesWritten.count++
+    }
+
     // rep_phone backfill
     if (!dryRun && (phoneOverride || from.rep_phone) && !target.rep_phone) {
       await supabase.from('branches').update({ rep_phone: phoneOverride || from.rep_phone }).eq('id', targetId)
@@ -226,6 +271,8 @@ export async function POST(request) {
       prices_written: pricesWritten.count,
       prices_kept_existing: pricesWritten.kept,
       prices_unpriced_at_source: pricesWritten.unpriced,
+      overrides_written: overridesWritten.count,
+      overrides_kept_existing: overridesWritten.kept,
       rep_phone: dryRun ? undefined : (phoneOverride || from.rep_phone || target.rep_phone || null),
     })
   }

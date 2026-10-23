@@ -1,7 +1,7 @@
 // app/api/admin/members/update/route.js
 // Admin update of a member's details from Members Settings — name, phone,
-// email, savings, and loans.
-//   PATCH { member_id, full_name?, phone?, email?, savings?, loans? }
+// email, savings, loans, and portal access.
+//   PATCH { member_id, full_name?, phone?, email?, savings?, loans?, portal_enabled? }
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
@@ -55,6 +55,9 @@ export async function PATCH(request) {
       const loans = moneyField(body.loans)
       if (loans !== null) patch.loans = loans
     }
+    if (body.portal_enabled !== undefined) {
+      patch.portal_enabled = Boolean(body.portal_enabled)
+    }
 
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ ok: false, error: 'Nothing to update' }, { status: 400 })
@@ -65,7 +68,7 @@ export async function PATCH(request) {
       .from('members')
       .update(patch)
       .eq('member_id', memberId)
-      .select('member_id, full_name, phone, email, savings, loans, status')
+      .select('member_id, full_name, phone, email, savings, loans, status, portal_enabled')
       .maybeSingle()
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     if (!data) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
@@ -80,6 +83,7 @@ export async function PATCH(request) {
         savings: data.savings,
         loans: data.loans,
         status: data.status,
+        portal_enabled: data.portal_enabled !== false,
       },
     })
   } catch (e) {

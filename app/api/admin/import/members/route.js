@@ -42,12 +42,31 @@ export async function POST(req) {
       (gradeRows || []).map(g => [String(g.grade || '').trim().toLowerCase(), Number(g.global_limit || 0)])
     )
 
+    // Canonical grade spellings from grade_limits — imported grades must match
+    // the grade_limits rows or their members silently miss their grade default
+    // (a real-world case: 'Assitant Director' typo'd in the source sheet).
+    const canonicalGrades = new Map(
+      (gradeRows || []).map(g => [
+        String(g.grade || '').trim().toLowerCase().replace(/\s+/g, ' '),
+        String(g.grade || '').trim(),
+      ])
+    )
+    const normalizeGrade = (raw) => {
+      let s = String(raw || '').trim().replace(/\s+/g, ' ')
+      if (!s) return s
+      // Fix the known misspelling, then snap to a canonical grade_limits row
+      // when one matches (case/spacing-insensitive). Unknown grades pass
+      // through cleaned so data quality problems stay detectable.
+      const fixed = s.replace(/assitant/gi, 'assistant')
+      return canonicalGrades.get(fixed.toLowerCase()) || fixed
+    }
+
     // Build upsert rows from simplified template.
     // IMPORTANT: Do not overwrite branch_id/department_id/phone/email when not provided.
     const upsertRows = rows.map(r => {
       const member_id = String(r.member_id || '').trim()
       const full_name = String(r.full_name || '').trim()
-      const grade = String(r.grade || '').trim()
+      const grade = normalizeGrade(r.grade)
       const savings = Number(String(r.savings || '0').replace(/[, ]/g, '')) || 0
       const loans = Number(String(r.loans || '0').replace(/[, ]/g, '')) || 0
       let global_limit = Number(String(r.global_limit || '0').replace(/[, ]/g, '')) || 0
@@ -97,6 +116,41 @@ export async function POST(req) {
 
       return row
     })
+
+    // Reject sheets that list the same member_id more than once (case- and
+    // spacing-insensitive, e.g. 'a12345' vs 'A12345' vs ' A12345 '). With a
+    // duplicate on the sheet, the last row would silently win the upsert and
+    // the others' values would be lost, so the whole import is rejected
+    // before anything is written.
+    const seen = new Map() // normalized id → { count, rows[] (sheet row numbers) }
+    const dups = new Map()
+    rows.forEach((r, i) => {
+      const key = String(r.member_id || '').trim().toUpperCase().replace(/\s+/g, '')
+      if (!key) return
+      const rowNum = i + 2 // +2: sheet row 1 is the header, data starts at row 2
+      const entry = seen.get(key)
+      if (entry) {
+        entry.rows.push(rowNum)
+        if (entry.count === 1) dups.set(key, entry) // remember row of first sighting too
+        entry.count += 1
+      } else {
+        seen.set(key, { count: 1, rows: [rowNum] })
+      }
+    })
+    if (dups.size) {
+      const detail = [...dups.entries()]
+        .slice(0, 10)
+        .map(([id, e]) => `${id} (sheet rows ${e.rows.join(', ')})`)
+        .join('; ')
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Duplicate member_id${dups.size === 1 ? '' : 's'} found in the sheet — every member must appear exactly once. Nothing was imported. ${dups.size > 10 ? `First 10 of ${dups.size}: ` : ''}${detail}`,
+          duplicates: [...dups.entries()].map(([id, e]) => ({ member_id: id, sheet_rows: e.rows })),
+        },
+        { status: 400 }
+      )
+    }
 
     // Upsert in chunks
     let total = 0

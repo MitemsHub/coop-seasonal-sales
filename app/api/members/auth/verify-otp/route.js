@@ -38,7 +38,7 @@ export async function POST(request) {
     const db = createDbClient()
     const { data: member, error: mErr } = await db
       .from('members')
-      .select('member_id, email, portal_enabled')
+      .select('member_id, email, alternative_email, portal_enabled')
       .eq('member_id', mid)
       .maybeSingle()
 
@@ -47,12 +47,37 @@ export async function POST(request) {
     }
     const addr = member.email.toLowerCase()
 
-    // Verify the OTP with Supabase Auth
-    const { data, error: verifyError } = await authSupabase.auth.verifyOtp({
+    // Verify the OTP with Supabase Auth — primary inbox first.
+    let { data, error: verifyError } = await authSupabase.auth.verifyOtp({
       email: addr,
       token: code,
       type: 'email',
     })
+    let verifiedVia = 'primary'
+
+    if (verifyError) {
+      // Members with an alternative email on file receive a copy of the code
+      // there too — that copy belongs to the ALTERNATE auth account. Supabase
+      // tokens are per-account, so a member who typed the code from their
+      // alternative inbox always saw "Token has expired or is invalid". The
+      // server knows the official alternative address, so try it explicitly:
+      // control of either official inbox proves the same identity.
+      const altRaw = String(member.alternative_email || '').trim().toLowerCase()
+      const altUsable =
+        altRaw && altRaw !== addr && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(altRaw)
+      if (altUsable) {
+        const altTry = await authSupabase.auth.verifyOtp({
+          email: altRaw,
+          token: code,
+          type: 'email',
+        })
+        if (!altTry.error && altTry?.data?.session?.access_token) {
+          data = altTry.data
+          verifyError = null
+          verifiedVia = 'alternative'
+        }
+      }
+    }
 
     if (verifyError) {
       console.error('OTP verify error:', verifyError)
@@ -73,6 +98,7 @@ export async function POST(request) {
     return NextResponse.json({
       ok: true,
       accessToken: data.session.access_token,
+      verified_via: verifiedVia,
       user: {
         id: data.user?.id,
         email: data.user?.email,

@@ -33,6 +33,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '../../../../lib/supabaseServer'
 import { queryDirect, transactionalQuery } from '../../../../lib/directDb'
 import { invalidateCache } from '../../../../lib/cache'
+import { ensureOverrideTable, loadOverrides, coalesceItem, snapshotItemForOtherBranches, writeOverride } from '../../../../lib/itemOverrides'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -388,6 +389,21 @@ export async function GET(req) {
         }
       }
 
+      // 3. Branch-owned display fields (item_branch_overrides): the preview
+      // must render each branch's refined copies exactly as members see them
+      // — a Coop Secretariat-only Category/Unit edit must not leak here.
+      const previewOv = await loadOverrides((rows || []).map((r) => r.item_id))
+      if (previewOv.size) {
+        rows = (rows || []).map((r) => {
+          const co = previewOv.get(`${branchId}::${r.item_id}`)
+          if (!co) return r
+          const merged = coalesceItem({ ...r, name: r.item_name }, co)
+          merged.__shared_name = r.item_name // from_draft still matches the survey draft against the shared name
+          merged.item_name = merged.name
+          return merged
+        })
+      }
+
       // 3b. Origin per item so twins are identifiable at a glance — when two
       // cards look alike (one General, one Outsourced duplicate), the admin
       // must know which is which before cancelling.
@@ -416,7 +432,7 @@ export async function GET(req) {
           base_price: base,
           markup,
           price: base + markup,
-          from_draft: draftNames.has(norm(r.item_name)),
+          from_draft: draftNames.has(norm(r.__shared_name || r.item_name)),
           origin: originByItem.get(r.item_id) || 'general',
         }
       })
@@ -572,6 +588,11 @@ export async function GET(req) {
     const branchById = new Map((branches || []).map((b) => [b.id, b]))
     const itemByName = new Map()
     for (const it of items || []) if (!itemByName.has(norm(it.name))) itemByName.set(norm(it.name), it)
+
+    // Branch-owned display fields (item_branch_overrides): the outsourced
+    // card under each branch shows THAT branch's refined name/category/unit
+    // image — an edit at Coop Secretariat must not rewrite Abuja/Head Office.
+    const overridesMap = await loadOverrides((items || []).map((it) => it.item_id))
 
     // Drafts are keyed per branch + item — the same item submitted by two
     // branches appears under each branch so the admin works branch by branch.
@@ -817,8 +838,11 @@ export async function GET(req) {
         itemsShownSomewhere.add(resolvedItem.item_id)
         savedItemIdsClaimed.add(`${resolvedItem.item_id}::${d.branch_id ?? 'none'}`)
       }
-      const deco = decorate(saved || {})
+      let deco = decorate(saved || {})
       if (saved && d.branch_id != null) {
+        // BRANCH-SCOPED DISPLAY (fields): this card renders the branch's own
+        // refined copies, falling back field-by-field to the shared catalog
+        // copy for anything that branch never overrode.
         // BRANCH-SCOPED DISPLAY: this card represents ONE branch's saved
         // product, so it shows THAT branch's own price/markup rows — never
         // the cycle-wide minimum the General list collapses to. Showing the
@@ -852,6 +876,8 @@ export async function GET(req) {
           deco.markup_varies = false
         }
         deco.in_shop = prRow != null && deco.price > 0
+        const co = overridesMap.get(`${d.branch_id}::${saved.item_id}`)
+        if (co) deco = coalesceItem(deco, co)
       }
       rows.push({ ...deco, saved: !!saved, draft: d })
     }
@@ -1184,6 +1210,7 @@ export async function POST(req) {
 
     let branches = []
     let targetBranchId = null
+    let targetBranchCode = null // function-scoped for the branch cache bust below
     // The food_survey_entries id (from draft.draft_id) — declared here so the
     // pin-the-draft step below (outside the outsourced block) can read it.
     let surveyEntryId = null
@@ -1220,6 +1247,7 @@ export async function POST(req) {
         .eq('id', targetBranchId)
         .maybeSingle()
       if (brErr) return NextResponse.json({ ok: false, error: brErr.message }, { status: 500 })
+      if (branchRow?.code) targetBranchCode = branchRow.code
       if (!branchRow) return NextResponse.json({ ok: false, error: 'Branch not found' }, { status: 404 })
     } else {
       const { data: branchRows, error: bErr } = await supabase.from('branches').select('id, code').order('id')
@@ -1229,6 +1257,33 @@ export async function POST(req) {
     }
 
     // ── 1. Upsert the item row (the shared catalog entry) ────────────────
+    // OUTSOURCED edits of an EXISTING item are branch-scoped from here on:
+    // name/category/unit/image are written to item_branch_overrides for the
+    // branch being edited (writeOverride below), every branch that already
+    // prices the item is frozen at the CURRENT shared copy (snapshot below —
+    // so re-saving branch A never rewrites branch B's card), and the shared
+    // items row keeps only catalog plumbing (sku/source). General items and
+    // brand-new items keep the old shared-copy behavior.
+    const branchScopedEdit = section === 'outsourced' && !bankOnly && itemId != null
+    let sharedBase = null // current shared display copy, for the other-branch freeze
+    let branchBase = null // this branch's current view (override, else shared)
+    if (branchScopedEdit) {
+      const { data: cur, error: curErr } = await supabase
+        .from('items')
+        .select('item_id, sku, name, category, unit, image_url')
+        .eq('item_id', itemId)
+        .maybeSingle()
+      if (curErr) return NextResponse.json({ ok: false, error: curErr.message }, { status: 500 })
+      if (!cur) return NextResponse.json({ ok: false, error: 'Item not found' }, { status: 404 })
+      sharedBase = cur
+      try {
+        const oRes = await queryDirect(
+          `SELECT name, category, unit, image_url FROM public.item_branch_overrides WHERE branch_id = $1 AND item_id = $2 LIMIT 1`,
+          [targetBranchId, itemId]
+        )
+        branchBase = oRes?.rows?.[0] || null
+      } catch {}
+    }
     const sku = String(body.sku || '').trim().toUpperCase() || skuFromName(name)
     const patch = { name, sku }
     // A bank-only save may carry just a photo (or just a name) — it must not
@@ -1238,6 +1293,10 @@ export async function POST(req) {
     if (unit || !bankOnly) patch.unit = unit
     if (image_url || !bankOnly) patch.image_url = image_url
     if (sourceCol) patch.source = section // fall back to a plain catalog item if the column is missing
+    // The branch-scoped save moves the display fields OUT of the shared write;
+    // only { sku } stays shared so the SKU plumbing (uniqueness, image-naming,
+    // tombstones) keeps working exactly as before.
+    const sharedPatch = branchScopedEdit ? { sku } : patch
     let itemRow = null
 
     if (itemId) {
@@ -1246,8 +1305,8 @@ export async function POST(req) {
       // Cubes" rename: the old name's derived SKU is taken), suffix the SKU
       // (-2, -3, …) instead of failing the whole save with a Postgres
       // duplicate-key error the admin cannot act on.
-      let effPatch = patch
-      if (surveyIncoming && item.image_url) {
+      let effPatch = sharedPatch
+      if (surveyIncoming && !branchScopedEdit && sharedBase?.image_url) {
         // The item already wears a refined image — keep it. A rep photo
         // never repaints a saved product on any branch card.
         effPatch = { ...effPatch }
@@ -1265,7 +1324,7 @@ export async function POST(req) {
             if (!cOwner || Number(cOwner.item_id) === itemId) break
             candidate = ''
           }
-          effPatch = { ...patch, sku: candidate || `${patch.sku}-${Date.now().toString(36).toUpperCase()}` }
+          effPatch = { ...sharedPatch, sku: candidate || `${sku}-${Date.now().toString(36).toUpperCase()}` }
         }
       }
       const { data, error } = await supabase.from('items').update(effPatch).eq('item_id', itemId).select('item_id, sku, name').single()
@@ -1322,6 +1381,39 @@ export async function POST(req) {
       } catch (e) {
         console.warn('Survey entry link update skipped:', e?.message || e)
       }
+    }
+
+    // ── 1c. Branch-owned display fields for OUTSOURCED saves ───────────
+    // The freeze FIRST (other branches keep today's shared copy verbatim),
+    // then the target branch gets its own copy of the fields the admin just
+    // set. A rep survey photo may fill a missing picture but never repaint
+    // one the branch already has — same rule the shared row applies.
+    if (section === 'outsourced' && !bankOnly) {
+      const currentImage = branchBase?.image_url ?? sharedBase?.image_url ?? ''
+      let overrideImage = image_url
+      if (surveyIncoming && currentImage) {
+        overrideImage = undefined // field not supplied → writeOverride keeps the stored value
+        surveyImageIgnored = true
+      }
+      await snapshotItemForOtherBranches(itemRow.item_id, targetBranchId, {
+        name: sharedBase?.name ?? name,
+        category: sharedBase?.category ?? category,
+        unit: sharedBase?.unit ?? unit,
+        image_url: sharedBase?.image_url ?? currentImage,
+      })
+      await writeOverride({
+        branchId: targetBranchId,
+        itemId: itemRow.item_id,
+        name,
+        category,
+        unit,
+        image_url: overrideImage,
+      })
+      // The member shop reads these fields through /api/items/prices (60s
+      // cache) — bust it so this branch sees the refinement immediately.
+      try {
+        if (targetBranchCode) invalidateCache(`items-prices:${targetBranchCode}`)
+      } catch {}
     }
 
     // ── 2. Write price + markup only for the relevant branch(es) ─────────

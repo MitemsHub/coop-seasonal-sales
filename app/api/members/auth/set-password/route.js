@@ -55,9 +55,66 @@ export async function POST(request) {
       )
     }
 
+    // The member row is the source of truth for the official (primary)
+    // email. Load it BEFORE anything else — an earlier version copied the
+    // AUTH account's email onto the member row, which flipped the official
+    // record to the alternative inbox when the member verified from there.
+    const db = createDbClient()
+    const { data: memberRow, error: memberRowErr } = await db
+      .from('members')
+      .select('member_id, email')
+      .eq('member_id', mid)
+      .maybeSingle()
+    if (memberRowErr || !memberRow || !memberRow.email) {
+      return NextResponse.json(
+        { error: 'Member not found or no official email on file' },
+        { status: 404 }
+      )
+    }
+    const memberEmail = String(memberRow.email || '').trim().toLowerCase()
+    const authEmail = String(authUser.email || '').trim().toLowerCase()
+
+    // Which auth account receives the password? Normally the verified one.
+    // If the member verified from their ALTERNATIVE inbox (verify-otp accepts
+    // the code from either official address), the session account is the
+    // alternative one — the password must land on the CANONICAL primary
+    // account instead, and the member row links to that one, so future
+    // log-ins with the primary email keep working.
+    let targetUserId = authUser.id
+    if (authEmail && authEmail !== memberEmail) {
+      let primaryUser = null
+      let page = 1
+      while (!primaryUser) {
+        const { data: authUsers, error: listErr } = await authAdmin.auth.admin.listUsers({ page, perPage: 1000 })
+        if (listErr || !authUsers?.users?.length) break
+        primaryUser = authUsers.users.find((u) => (u.email || '').toLowerCase() === memberEmail)
+        if (authUsers.users.length < 1000) break // last page
+        page++
+        if (page > 10) break
+      }
+      if (!primaryUser) {
+        const { data: created, error: createErr } = await authAdmin.auth.admin.createUser({
+          email: memberRow.email,
+          email_confirm: true,
+          user_metadata: { member_id: mid },
+        })
+        if (createErr) {
+          console.error('Primary account create error:', createErr)
+          return NextResponse.json({ error: 'Could not prepare the primary account. Please try again.' }, { status: 500 })
+        }
+        primaryUser = created?.user || null
+      } else if (!primaryUser.email_confirmed_at) {
+        await authAdmin.auth.admin.updateUserById(primaryUser.id, { email_confirm: true }).catch(() => {})
+      }
+      if (!primaryUser?.id) {
+        return NextResponse.json({ error: 'Could not resolve the primary account. Please try again.' }, { status: 500 })
+      }
+      targetUserId = primaryUser.id
+    }
+
     // Set the password using the service-role client
     const { data: userData, error: pwError } = await authAdmin.auth.admin.updateUserById(
-      authUser.id,
+      targetUserId,
       { password: pw }
     )
 
@@ -76,15 +133,14 @@ export async function POST(request) {
       )
     }
 
-    const authUserId = userData.user.id
+    const authUserId = targetUserId
 
-    // Link the Supabase Auth user to the member record
-    const db = createDbClient()
+    // Link the Supabase Auth user to the member record. The member row keeps
+    // its own official email — it is never overwritten from the auth side.
     const { error: linkError } = await db
       .from('members')
       .update({
         auth_user_id: authUserId,
-        email: userData.user.email,
       })
       .eq('member_id', mid)
 

@@ -83,9 +83,22 @@ async function sendOtpWithRetry(email, options, maxRetries = 2) {
 // both when alternative_email is on file. Never fails the request — if the
 // second send errors we just surface a note, since the primary inbox already
 // has the code.
+
+// IMPORTANT ORDERING: every Supabase OTP send regenerates the code for the
+// account and invalidates any earlier one, so only the LAST inbox we send to
+// holds a code that still verifies. We therefore always send the alternative
+// copy FIRST and the primary send LAST — the primary inbox is the one the
+// member is told to look in, and it must hold the live code.
 async function sendToAlternate(addr, mid, siteUrl) {
   let sent = false
   try {
+    // Same pre-provisioning as the primary inbox: the copy must arrive as a
+    // 6-digit code, never as a confirmation link.
+    try {
+      await ensureAuthAccount(addr, mid)
+    } catch (e) {
+      console.warn('[send-otp] alternate account pre-provision failed:', e?.message || e)
+    }
     const res = await sendOtpWithRetry(addr, {
       data: { member_id: mid },
       emailRedirectTo: `${siteUrl}/auth/callback`,
@@ -98,18 +111,56 @@ async function sendToAlternate(addr, mid, siteUrl) {
   return sent
 }
 
-// Wraps the two success responses, sending the duplicate invite to the
-// alternative inbox first and adding a note when one was attempted.
-async function withAlternateNote(mid, altAddr, siteUrl, baseNote) {
+// Pre-provision ONE confirmed auth account per inbox BEFORE the OTP send.
+// With "Enable email confirmations" ON, signInWithOtp to an email that has no
+// auth user yet auto-creates an UNCONFIRMED user and may email a
+// confirmation LINK instead of the 6-digit code. The old cleanup path
+// detected that AFTER the send and deleted + re-sent — regenerating the code
+// and silently invalidating the one already in the member's inbox (the
+// "two different OTPs and it's not validating" report). Creating/confirming
+// the account up front means the very first send carries the live code.
+async function ensureAuthAccount(email, mid) {
+  // Find the existing auth user for this email (page through, capped ~10k).
+  let user = null
+  let page = 1
+  const perPage = 1000
+  while (!user) {
+    const { data: authUsers, error: listErr } = await authAdmin.auth.admin.listUsers({ page, perPage })
+    if (listErr || !authUsers?.users?.length) break
+    user = authUsers.users.find((u) => (u.email || '').toLowerCase() === email.toLowerCase())
+    if (authUsers.users.length < perPage) break // last page
+    page++
+    if (page > 10) break
+  }
+  if (!user) {
+    const { data: created, error: createErr } = await authAdmin.auth.admin.createUser({
+      email,
+      email_confirm: true,
+      user_metadata: { member_id: mid },
+    })
+    if (createErr) throw createErr
+    return { user: created?.user || null, created: true }
+  }
+  if (!user.email_confirmed_at) {
+    // A legacy auto-created (unconfirmed) account would otherwise walk the
+    // link-instead-of-code path again — confirm it in place, no delete/regen.
+    const { error: updErr } = await authAdmin.auth.admin.updateUserById(user.id, { email_confirm: true })
+    if (updErr) throw updErr
+  }
+  return { user, created: false }
+}
+
+// Adds the alternate-inbox note to a success response. The alternate send must
+// already have happened (before the primary send) — see sendToAlternate.
+async function withAlternateNote(mid, altAddr, altAlreadySent, baseNote) {
   const out = { ok: true }
   if (baseNote) out.note = baseNote
   if (altAddr) {
-    const sent = await sendToAlternate(altAddr, mid, siteUrl)
-    out.also_sent_to_alternate_email = sent
+    out.also_sent_to_alternate_email = altAlreadySent
     out.note = [
       baseNote,
-      sent
-        ? `A copy was also sent to the alternative email (${altAddr}).`
+      altAlreadySent
+        ? `A copy was also sent to the alternative email (${altAddr}). If you see a different code there, use the code in your primary inbox — it is the one that still works.`
         : `Could not send a copy to the alternative email (${altAddr}) — the primary inbox has the code.`,
     ]
       .filter(Boolean)
@@ -182,6 +233,22 @@ export async function POST(request) {
 
     // Send OTP via Supabase Auth.
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin
+
+    // Pre-provision the PRIMARY account first: with confirmations ON this is
+    // what guarantees the member's first email carries a live 6-digit code.
+    // If provisioning fails we fall back to the legacy cleanup path below.
+    let primaryAccountReady = true
+    try {
+      await ensureAuthAccount(addr, mid)
+    } catch (e) {
+      primaryAccountReady = false
+      console.warn('[send-otp] primary account pre-provision failed:', e?.message || e)
+    }
+
+    // Fire the OPTIONAL alternate-inbox copy first (see sendToAlternate on why
+    // the order matters). Failure is non-fatal and remembered for the note.
+    const altAlreadySent = altAddr ? await sendToAlternate(altAddr, mid, siteUrl) : false
+
     const { data: otpData, error: otpError } = await sendOtpWithRetry(
       addr,
       {
@@ -251,6 +318,12 @@ export async function POST(request) {
     // To detect and handle this: we check if a new auth user was auto-created.
     // If so, we need to clean it up and use the admin API to send a proper OTP.
 
+    // Legacy cleanup path — only when pre-provisioning FAILED. This block
+    // deletes the auto-created user and re-sends, which REGENERATES the code
+    // and invalidates the one already emailed. It must never run on the
+    // normal path (that regen was the cause of members typing a fresh-looking
+    // code only to be told it expired).
+    if (!primaryAccountReady) {
     // Check if an auth user was auto-created for this email.
     // We page through listUsers (max 1000 per call) until we find the email
     // or exhaust all users, so we never miss it due to pagination.
@@ -305,12 +378,13 @@ export async function POST(request) {
       }
 
       // Retry succeeded — the OTP code should now be sent
-      return NextResponse.json(await withAlternateNote(mid, altAddr, siteUrl, 'Verification code sent. If you receive a link instead of a code, please contact support.'))
+      return NextResponse.json(await withAlternateNote(mid, altAddr, altAlreadySent, 'Verification code sent. If you receive a link instead of a code, please contact support.'))
     }
+    } // end legacy-cleanup-if
 
     // OTP sent successfully — no auto-created user detected.
     // This is the happy path: Supabase sent a 6-digit OTP code.
-    return NextResponse.json(await withAlternateNote(mid, altAddr, siteUrl))
+    return NextResponse.json(await withAlternateNote(mid, altAddr, altAlreadySent))
   } catch (e) {
     console.error('[send-otp] Unexpected error:', e.message || e)
     return NextResponse.json({ error: e.message || 'Internal server error' }, { status: 500 })
