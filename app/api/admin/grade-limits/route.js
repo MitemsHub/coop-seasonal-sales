@@ -93,7 +93,29 @@ export async function PATCH(request) {
       if (uErr) return NextResponse.json({ ok: false, error: uErr.message }, { status: 500 })
     }
 
-    return NextResponse.json({ ok: true, updated: clean.length })
+    // The editor is authoritative: a saved default applies to EVERY member
+    // of that grade immediately. Member profiles and loan eligibility read
+    // members.global_limit, which used to be a snapshot taken at import
+    // time — editing a grade never reached those rows, so profiles kept
+    // the old limit until the next full member import. Now saving a grade
+    // pushes the new limit onto all members carrying that grade.
+    const spread = []
+    for (const { grade, global_limit } of clean) {
+      const { data: spreadRows, error: sErr } = await supabase
+        .from('members')
+        .update({ global_limit })
+        .eq('grade', grade)
+        .select('member_id')
+      if (sErr) {
+        return NextResponse.json(
+          { ok: false, error: `Grade "${grade}" saved, but its members did not update: ${sErr.message}` },
+          { status: 500 }
+        )
+      }
+      spread.push({ grade, members: (spreadRows || []).length })
+    }
+
+    return NextResponse.json({ ok: true, updated: clean.length, spread })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Failed to update grade limits' }, { status: 500 })
   }

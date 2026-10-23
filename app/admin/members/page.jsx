@@ -207,7 +207,7 @@ function GradeLimitsSection() {
       <Card.Header>
         <Card.Title>Global limits</Card.Title>
         <Card.Description>
-          Default loan limit per grade (₦). New member imports use these when the template's global_limit column is blank — fill that column only to override a specific member.
+          Default loan limit per grade (₦). Saving applies immediately to every member of the grade — their Global Limit and loan eligibility update together. New member imports with a blank global_limit column also use these.
         </Card.Description>
       </Card.Header>
       <Card.Body className="space-y-3">
