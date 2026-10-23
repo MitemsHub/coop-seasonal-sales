@@ -1,0 +1,135 @@
+{
+  "generated_at": "2026-10-23T08:17:06.590Z",
+  "items": [
+    {
+      "item_id": 85,
+      "sku": "BUASUGAR50KG-2",
+      "name": "Bua Rice 50Kg",
+      "category": "Rice",
+      "unit": "Bag",
+      "image_url": "https://lpzyvvsuksafnpchfdqw.supabase.co/storage/v1/object/public/item-images/items/RICEBUA50KG.png?v=1762168621232",
+      "is_active": true,
+      "source": "outsourced"
+    },
+    {
+      "item_id": 357,
+      "sku": "BUASUGAR50KG",
+      "name": "Bua Sugar 50Kg",
+      "category": "Sugar",
+      "unit": "Bag",
+      "image_url": "https://lpzyvvsuksafnpchfdqw.supabase.co/storage/v1/object/public/item-images/items/BUASUGAR50KG.png?v=1792742550618",
+      "is_active": true,
+      "source": "general"
+    }
+  ],
+  "prices": [
+    {
+      "id": 2462,
+      "branch_id": 1,
+      "item_id": 85,
+      "price": "63000.00",
+      "cycle_id": 3
+    },
+    {
+      "id": 832,
+      "branch_id": 7,
+      "item_id": 85,
+      "price": "57000.00",
+      "cycle_id": 1
+    },
+    {
+      "id": 4602,
+      "branch_id": 18,
+      "item_id": 85,
+      "price": "78000.00",
+      "cycle_id": 3
+    },
+    {
+      "id": 353,
+      "branch_id": 27,
+      "item_id": 85,
+      "price": "55000.00",
+      "cycle_id": 1
+    },
+    {
+      "id": 4518,
+      "branch_id": 27,
+      "item_id": 85,
+      "price": "61000.00",
+      "cycle_id": 3
+    },
+    {
+      "id": 4491,
+      "branch_id": 30,
+      "item_id": 85,
+      "price": "60000.00",
+      "cycle_id": 3
+    },
+    {
+      "id": 2168,
+      "branch_id": 33,
+      "item_id": 85,
+      "price": "60500.00",
+      "cycle_id": 3
+    },
+    {
+      "id": 2458,
+      "branch_id": 7,
+      "item_id": 357,
+      "price": "78000.00",
+      "cycle_id": 3
+    }
+  ],
+  "overrides": [
+    {
+      "id": "11",
+      "branch_id": "30",
+      "item_id": "85",
+      "name": "Bua Rice 50Kg",
+      "category": "Rice",
+      "unit": "Bag",
+      "image_url": "https://lpzyvvsuksafnpchfdqw.supabase.co/storage/v1/object/public/item-images/items/RICEBUA50KG.png?v=1762168621232",
+      "updated_at": "2026-10-23T02:15:21.679Z"
+    },
+    {
+      "id": "38",
+      "branch_id": "27",
+      "item_id": "85",
+      "name": "Bua Rice 50Kg",
+      "category": "Rice",
+      "unit": "Bag",
+      "image_url": "https://lpzyvvsuksafnpchfdqw.supabase.co/storage/v1/object/public/item-images/items/RICEBUA50KG.png?v=1762168621232",
+      "updated_at": "2026-10-23T02:47:46.527Z"
+    },
+    {
+      "id": "122",
+      "branch_id": "18",
+      "item_id": "85",
+      "name": "Bua Sugar 50Kg",
+      "category": "Rice",
+      "unit": "Bag",
+      "image_url": "https://lpzyvvsuksafnpchfdqw.supabase.co/storage/v1/object/public/item-images/items/BUASUGAR50KG.png?v=1792742550618",
+      "updated_at": "2026-10-23T08:03:27.634Z"
+    }
+  ],
+  "survey_entries": [
+    {
+      "id": "103",
+      "submission_id": "5",
+      "item_name": "Sugar Premium Refines 50kg  (BUA)",
+      "category": "Other",
+      "price": "78000.00",
+      "saved_item_id": "85",
+      "cancelled": false
+    },
+    {
+      "id": "105",
+      "submission_id": "5",
+      "item_name": "Rice 50kg (BUA)",
+      "category": "Other",
+      "price": "65000.00",
+      "saved_item_id": null,
+      "cancelled": false
+    }
+  ]
+}
