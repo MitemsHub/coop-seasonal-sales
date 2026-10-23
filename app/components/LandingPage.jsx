@@ -370,12 +370,18 @@ function TestimonialsSection({ testimonials }) {
               {visibleIndices.map((i) => {
                 const t = testimonials[i]
                 return (
-                  <Reveal key={`${t.name}-${i}`} delay={i * 0.07}>
+                  <Reveal key={t.id} delay={i * 0.07}>
                     <figure className="flex h-full flex-col rounded-xl border border-line bg-surface p-5 shadow-xs">
                       <Quote className="h-5 w-5 text-brand/40" />
-                      <blockquote className="mt-3 flex-1 text-sm leading-6 text-fg">
-                        &ldquo;{t.quote}&rdquo;
-                      </blockquote>
+                      {t.quote ? (
+                        <blockquote className="mt-3 flex-1 text-sm leading-6 text-fg">
+                          &ldquo;{t.quote}&rdquo;
+                        </blockquote>
+                      ) : (
+                        <p className="mt-3 flex-1 text-sm italic leading-6 text-subtext">
+                          Left a rating without a written note.
+                        </p>
+                      )}
                       <figcaption className="mt-4 flex items-center gap-2.5 border-t border-line pt-4">
                         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-subtle text-xs font-bold text-brand-fg">
                           {t.name.charAt(0)}
@@ -524,9 +530,12 @@ export default function LandingPage() {
     return `${parts[0]} ${parts[parts.length - 1].charAt(0)}.`
   }
 
-  // Map API reviews to testimonial format
-  const testimonials = reviews.map((r) => ({
-    quote: r.review_text || 'Great experience with CBN Coop.',
+  // Map API reviews to testimonial format. An empty review_text stays
+  // empty — substituting a fixed fallback made memberless cards look like
+  // duplicates; the card states "left a rating only" instead.
+  const testimonials = reviews.map((r, idx) => ({
+    id: r.id ?? `idx-${idx}`,
+    quote: (r.review_text || '').trim(),
     name: formatName(r.reviewer_name),
     branch: r.branch_name || 'CBN Coop',
     rating: r.rating,
