@@ -223,12 +223,16 @@ export async function POST(req) {
     // checked (the stored order total is always the repayable amount).
     const capAmount = paymentOption === 'Loan' ? (includeInterestInCap ? totalWithInterest : total) : total
 
+    // What this order adds to the cycle's loan exposure, compared against
+    // facility caps below and in the useGrace computation. Declared here (not
+    // inside the Loan block) because useGrace reads it after the limit checks.
+    const cumulativeCapAmount = cycleLoanTotal + capAmount
+
     // Enforce limits
     if (paymentOption === 'Savings') {
       if (outstandingLoansTotal > 0) return NextResponse.json({ ok:false, error:'Savings not allowed while loans outstanding (incl. pending/posted loan apps)' }, { status:400 })
       if (total > savingsEligible)   return NextResponse.json({ ok:false, error:`Total ₦${total.toLocaleString()} exceeds Savings available ₦${savingsEligible.toLocaleString()}` }, { status:400 })
     } else if (paymentOption === 'Loan') {
-      const cumulativeCapAmount = cycleLoanTotal + capAmount
 
       // Determine the effective ceiling for this member this cycle:
       //
