@@ -714,24 +714,31 @@ function ItemsImportContent() {
         )
       )
 
-      flash(
-        (() => {
-          const branchLabel =
-            form.section === 'outsourced' && form.draft?.branch_name
-              ? ` for ${form.draft.branch_name}`
-              : ''
-          const branchSufix = json.branches_priced === 1 ? '' : 'es'
-          return (
-            'Saved — “' + json.item.name + '” is live' + branchLabel +
-            ' in ' + json.branches_priced + ' branch' + branchSufix + ' for this cycle' +
-            (json.markup_branches ? ' with markup in ' + json.markup_branches + ' branch' + branchSufix : '') +
-            '. It shows in the shop immediately.' +
-            (json.survey_image_ignored
-              ? ' The rep survey photo was NOT applied — the item keeps its refined image.'
-              : '')
-          )
-        })()
-      )
+      // When another product already owns the requested SKU the server
+      // auto-suffixes it (BUASUGAR50KG → -2) instead of failing — tell the
+      // admin exactly that, so the suffix on the saved card is never a
+      // surprise (this is how the Maiduguri "Bua Sugar -2" happened).
+      const suffix = json.sku_auto_suffixed
+      const branchLabel =
+        form.section === 'outsourced' && form.draft?.branch_name
+          ? ` for ${form.draft.branch_name}`
+          : ''
+      const branchSufix = json.branches_priced === 1 ? '' : 'es'
+      let savedMsg =
+        'Saved — “' + json.item.name + '” is live' + branchLabel +
+        ' in ' + json.branches_priced + ' branch' + branchSufix + ' for this cycle' +
+        (json.markup_branches ? ' with markup in ' + json.markup_branches + ' branch' + branchSufix : '') +
+        '. It shows in the shop immediately.'
+      if (suffix) {
+        savedMsg +=
+          ` ⚠️ The SKU “${suffix.requested}” already belongs to another product` +
+          (suffix.owner_name ? ` (“${suffix.owner_name}”)` : '') +
+          `, so this item was stored as “${suffix.saved_as}”. Edit the SKU field if that is not intended.`
+      }
+      if (json.survey_image_ignored) {
+        savedMsg += ' The rep survey photo was NOT applied — the item keeps its refined image.'
+      }
+      flash(savedMsg, suffix ? 'error' : 'success')
 
       cancelEdit()
       loadSections()

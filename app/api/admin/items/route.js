@@ -1181,6 +1181,11 @@ export async function POST(req) {
     const surveyIncoming = incomingImageUrl.includes('/food-survey/')
     let image_url = incomingImageUrl
     let surveyImageIgnored = false
+    // Set when the save wanted one SKU but another item owns it and the
+    // collision guard assigned a suffixed one (BUASUGAR50KG → -2). The
+    // client surfaces this: the recurring surprise "-2" on cards the admin
+    // never touched was exactly this silent suffix.
+    let skuAutoSuffixed = null
     const itemId = body.item_id != null && body.item_id !== '' ? Number(body.item_id) : null
 
     // Bank-only saves come from the Image Bank itself — a survey URL can
@@ -1314,7 +1319,7 @@ export async function POST(req) {
         surveyImageIgnored = true
       }
       if (patch.sku) {
-        const { data: owner } = await supabase.from('items').select('item_id').eq('sku', patch.sku).maybeSingle()
+        const { data: owner } = await supabase.from('items').select('item_id, sku, name').eq('sku', patch.sku).maybeSingle()
         if (owner && Number(owner.item_id) !== itemId) {
           let candidate = ''
           // Cap the probe so a pathological catalog can't loop forever.
@@ -1325,6 +1330,11 @@ export async function POST(req) {
             candidate = ''
           }
           effPatch = { ...sharedPatch, sku: candidate || `${sku}-${Date.now().toString(36).toUpperCase()}` }
+          skuAutoSuffixed = {
+            requested: patch.sku,
+            saved_as: effPatch.sku,
+            owner_name: owner.name || null,
+          }
         }
       }
       const { data, error } = await supabase.from('items').update(effPatch).eq('item_id', itemId).select('item_id, sku, name').single()
@@ -1369,6 +1379,7 @@ export async function POST(req) {
         branches_priced: 0,
         markup_branches: 0,
         survey_image_ignored: surveyImageIgnored,
+        sku_auto_suffixed: skuAutoSuffixed,
       })
     }
 
@@ -1541,6 +1552,7 @@ export async function POST(req) {
       // already has a refined image — the client surfaces this so the admin
       // knows why the card did not change.
       survey_image_ignored: surveyImageIgnored,
+      sku_auto_suffixed: skuAutoSuffixed,
     })
   } catch (e) {
     console.error('Items management POST error:', e)
