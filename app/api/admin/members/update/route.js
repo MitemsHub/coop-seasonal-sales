@@ -1,7 +1,8 @@
 // app/api/admin/members/update/route.js
 // Admin update of a member's details from Members Settings — name, phone,
-// email, savings, loans, and portal access.
-//   PATCH { member_id, full_name?, phone?, email?, savings?, loans?, portal_enabled? }
+// email, savings, loans, portal access, and a per-member global loan limit.
+//   PATCH { member_id, full_name?, phone?, email?, savings?, loans?,
+//           portal_enabled?, global_limit? }
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
@@ -58,6 +59,11 @@ export async function PATCH(request) {
     if (body.portal_enabled !== undefined) {
       patch.portal_enabled = Boolean(body.portal_enabled)
     }
+    if (body.global_limit !== undefined && body.global_limit !== null && String(body.global_limit) !== '') {
+      const limit = Number(body.global_limit)
+      if (!Number.isFinite(limit) || limit < 0) throw new Error('Global limit must be a non-negative number')
+      patch.global_limit = Math.round(limit * 100) / 100
+    }
 
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ ok: false, error: 'Nothing to update' }, { status: 400 })
@@ -68,7 +74,7 @@ export async function PATCH(request) {
       .from('members')
       .update(patch)
       .eq('member_id', memberId)
-      .select('member_id, full_name, phone, email, savings, loans, status, portal_enabled')
+      .select('member_id, full_name, phone, email, savings, loans, global_limit, status, portal_enabled')
       .maybeSingle()
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     if (!data) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
@@ -82,6 +88,7 @@ export async function PATCH(request) {
         email: data.email || '',
         savings: data.savings,
         loans: data.loans,
+        global_limit: data.global_limit,
         status: data.status,
         portal_enabled: data.portal_enabled !== false,
       },

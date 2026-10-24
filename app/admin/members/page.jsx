@@ -5,7 +5,7 @@
 //   • Members Import (moved from the food Import page) with the import log
 //   • Member details set/reset — name, phone, and account management
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, FileSpreadsheet, KeyRound, Pencil, RefreshCw, RotateCcw, Search, UserRound } from 'lucide-react'
+import { Check, FileSpreadsheet, KeyRound, Pencil, RefreshCw, RotateCcw, Search, Trash2, UserRound } from 'lucide-react'
 import ProtectedRoute from '../../components/ProtectedRoute'
 import DraggableModal from '../../components/DraggableModal'
 import Button from '../../components/ui/Button'
@@ -334,8 +334,10 @@ function MemberLookupSection() {
   const [email, setEmail] = useState('')
   const [savings, setSavings] = useState('')
   const [loans, setLoans] = useState('')
+  const [limit, setLimit] = useState('')
   const [portalEnabled, setPortalEnabled] = useState(true)
   const [hasPassword, setHasPassword] = useState(false)
+  const [hasAuth, setHasAuth] = useState(false)
   // Inline set/reset portal password sub-modal (pensioners)
   const [pwOpen, setPwOpen] = useState(false)
   const [pwPassword, setPwPassword] = useState('')
@@ -378,10 +380,41 @@ function MemberLookupSection() {
     setEmail(m.email || '')
     setSavings(m.savings != null && m.savings !== '' ? String(m.savings) : '')
     setLoans(m.loans != null && m.loans !== '' ? String(m.loans) : '')
+    setLimit(m.global_limit != null && m.global_limit !== '' ? String(m.global_limit) : '')
     setPortalEnabled(m.portal_enabled !== false)
     setHasPassword(Boolean(m.has_password))
+    setHasAuth(Boolean(m.has_auth))
     setMsg('')
     setModalOpen(true)
+  }
+
+  // Delete the member's email (Supabase Auth) sign-up state —
+  // POST /api/admin/members/delete-auth. After this the member signs up
+  // again with a fresh OTP and can choose a new password.
+  const deleteAuth = async () => {
+    if (!member) return
+    const ok = window.confirm(
+      `Delete the email sign-up state for ${member.full_name || member.member_id} (${member.member_id})?\n\nTheir current email password stops working. They then sign up again with a fresh OTP code sent to their email on file, and choose a new password. Use this when they cannot remember their password and the reset email does not arrive.`
+    )
+    if (!ok) return
+    setSaving(true)
+    setMsg('')
+    try {
+      const res = await fetch('/api/admin/members/delete-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ member_id: member.member_id }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to delete sign-up state')
+      setHasAuth(false)
+      setModalOpen(false)
+      search(q)
+    } catch (e) {
+      setMsg(e.message || 'Failed to delete sign-up state')
+    } finally {
+      setSaving(false)
+    }
   }
 
   // Portal password set/reset — POST /api/admin/members/set-password
@@ -440,6 +473,8 @@ function MemberLookupSection() {
       if (savingsVal != null && savingsVal !== Number(member.savings || 0)) payload.savings = savingsVal
       const loansVal = numField(loans, member.loans)
       if (loansVal != null && loansVal !== Number(member.loans || 0)) payload.loans = loansVal
+      const limitVal = numField(limit, member.global_limit)
+      if (limitVal != null && limitVal !== Number(member.global_limit || 0)) payload.global_limit = limitVal
       if (portalEnabled !== (member.portal_enabled !== false)) payload.portal_enabled = portalEnabled
       if (Object.keys(payload).length === 1) {
         setMsg('Nothing to update — make a change and try again.')
@@ -539,7 +574,35 @@ function MemberLookupSection() {
             <Input id="m-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="member@example.com" />
             <p className="mt-1 text-[11px] text-muted">Required for member auth signup — OTP will be sent to this email.</p>
           </div>
-          {/* Portal password (pensioners sign in with Staff ID + local password) */}
+          {/* Email (OTP) sign-up state — delete it so the member can
+              sign up again and pick a fresh password when the reset flow
+              is not an option (lost mailbox access, missing emails). */}
+          <div className="rounded-lg border border-line bg-subtle px-3 py-3">
+            <Label htmlFor="m-auth-state">Email sign-up state</Label>
+            <div className="mt-1 flex items-center justify-between gap-3">
+              <p className="flex min-w-0 items-center gap-2 text-[11px] text-muted">
+                <KeyRound className="h-3.5 w-3.5 shrink-0 text-muted" />
+                {hasAuth
+                  ? 'Member has completed email sign-up and signs in with their email password (or OTP).'
+                  : 'No email sign-up on file — the member needs to complete sign-up (OTP) first.'}
+              </p>
+              <Button
+                id="m-auth-state"
+                size="sm"
+                variant="secondary"
+                leftIcon={Trash2}
+                onClick={deleteAuth}
+                disabled={!hasAuth || saving}
+              >
+                Delete sign-up state
+              </Button>
+            </div>
+            {hasAuth && (
+              <p className="mt-2 text-[11px] text-muted">
+                Forgotten their password and the reset email is not arriving? Delete the sign-up state — the member can then sign up again with a fresh OTP and choose a new password.
+              </p>
+            )}
+          </div>
           <div className="rounded-lg border border-line bg-subtle px-3 py-3">
             <Label htmlFor="m-portal-pw">Portal password</Label>
             {member?.member_id?.toUpperCase?.().startsWith('P') ? (
@@ -575,6 +638,13 @@ function MemberLookupSection() {
             <div>
               <Label htmlFor="m-loans">Loans (₦)</Label>
               <Input id="m-loans" type="number" min="0" step="0.01" value={loans} onChange={(e) => setLoans(e.target.value)} placeholder="e.g. 500000" />
+            </div>
+            <div className="sm:col-span-2">
+              <Label htmlFor="m-limit">Global limit (₦)</Label>
+              <Input id="m-limit" type="number" min="0" step="0.01" value={limit} onChange={(e) => setLimit(e.target.value)} placeholder="e.g. 3800000" />
+              <p className="mt-1 text-[11px] text-muted">
+                This member's loan ceiling. Saving a new value updates it everywhere the limit is checked (shop, eligibility, RAM orders) — eligibility re-reads it on the member's next page load.
+              </p>
             </div>
           </div>
           <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-subtle px-3 py-3">

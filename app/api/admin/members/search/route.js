@@ -22,7 +22,7 @@ export async function GET(request) {
     const supabase = createClient()
     const { data, error } = await supabase
       .from('members')
-      .select('member_id, full_name, phone, email, savings, loans, global_limit, status, portal_enabled, password_hash, branch_id, branches:branch_id(name, code)')
+      .select('member_id, full_name, phone, email, savings, loans, global_limit, status, portal_enabled, password_hash, auth_user_id, branch_id, branches:branch_id(name, code)')
       .or(`member_id.ilike.%${q}%,full_name.ilike.%${q}%,phone.ilike.%${q}%`)
       .order('member_id')
       .limit(25)
@@ -42,6 +42,9 @@ export async function GET(request) {
         portal_enabled: m.portal_enabled !== false,
         // Never expose the hash itself — only whether the member has one
         has_password: Boolean(m.password_hash),
+        // Whether the member has completed email (OTP) sign-up — used by the
+        // admin "delete sign-up state" action, never the auth user id itself
+        has_auth: Boolean(m.auth_user_id),
         branch_name: m.branches?.name || '',
         branch_code: m.branches?.code || '',
       })),
