@@ -66,11 +66,22 @@ export async function GET(req) {
     const savingsBase = 0.5 * savings
     const savingsEligible = outstandingLoansTotal > 0 ? 0 : Math.max(0, savingsBase - savingsExposure)
 
+    // ── Member group from the category code ───────────────────────────
+    // Categories are the single-letter codes: A = Active, P = Pensioner,
+    // R = Retiree (E = Exhibition?).  Keep includes() fallbacks so any
+    // legacy full-word category ("Pensioner", "Retirey") still resolves.
+    const memberCategory = String(m?.category || '').toLowerCase()
+    const group = memberCategory === 'p' || memberCategory.includes('pension')
+      ? 'pensioner' : memberCategory === 'r' || memberCategory.includes('retire')
+        ? 'retiree' : 'active'
+
     // Loan eligibility: compute base from savings, then cap at admin limit.
     // baseEligible = how much the member CAN borrow based on their savings.
     // The admin-configured cycle cap is the CEILING — the member cannot
     // exceed it, but can borrow less if their savings don't support more.
-    const rawLoanLimit = savings * 5
+    // RETIREE RULE: retirees (category R) may borrow at most their savings
+    // balance — never 5× — mirroring the RAM module and the atomic SQL fn.
+    const rawLoanLimit = group === 'retiree' ? savings : savings * 5
     const effectiveLimit = globalLimit > 0 ? Math.min(rawLoanLimit, globalLimit) : rawLoanLimit
     const baseEligible = Math.max(0, effectiveLimit - outstandingLoansTotal)
     let loanEligible = 0  // will be set after cycle cap is read
@@ -100,11 +111,7 @@ export async function GET(req) {
           .maybeSingle()
 
         if (policyRow) {
-          const memberCategory = String(m?.category || '').toLowerCase()
-          const group = memberCategory.includes('pension')
-            ? 'pensioner' : memberCategory.includes('retire')
-              ? 'retiree' : 'active'
-
+          // `group` was resolved from the category code above.
           const eligibleFallback = Math.max(0, Math.trunc(Number(policyRow.food_loan_eligible_amount_cap || 0)))
           const graceFallback = Math.max(0, Math.trunc(Number(policyRow.food_loan_grace_amount_cap || 0)))
 
@@ -177,6 +184,8 @@ export async function GET(req) {
         cycleLoanUsed,
         cycleLoanRemaining,
         graceLoanCap,
+        group,
+        retireeRule: group === 'retiree',
       },
       memberSnapshot: {
         savings,

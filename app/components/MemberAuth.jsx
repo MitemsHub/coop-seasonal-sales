@@ -74,6 +74,13 @@ function MemberIdInput({ value, onChange, validation, memberStatus, isChecking, 
               </svg>
               Member ID not found in the system
             </div>
+          ) : memberStatus === 'no_password' ? (
+            <div className="flex items-center text-warning-fg">
+              <svg className="w-3 h-3 md:w-4 md:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Password not set up yet — please visit the admin office to set your portal password
+            </div>
           ) : memberStatus === 'found' ? (
             <div className="flex items-center text-brand">
               <svg className="w-3 h-3 md:w-4 md:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -350,14 +357,18 @@ function PasswordSetup({ password, setPassword, confirmPassword, setConfirmPassw
   )
 }
 
-function PasswordLogin({ maskedEmail, password, setPassword, error, isLoading, onSubmit, onForgotPassword, onBack }) {
+function PasswordLogin({ maskedEmail, password, setPassword, error, isLoading, onSubmit, onForgotPassword, onBack, passwordOnly }) {
   return (
     <form className="space-y-3 md:space-y-4" onSubmit={onSubmit}>
-      {maskedEmail && (
+      {passwordOnly ? (
+        <p className="text-xs text-muted">
+          No email needed — just enter your password below.
+        </p>
+      ) : maskedEmail ? (
         <p className="text-xs text-muted">
           Signing in as <span className="font-medium text-fg">{maskedEmail}</span>
         </p>
-      )}
+      ) : null}
 
       <div>
         <label className="block text-xs font-medium text-muted mb-1.5">Password</label>
@@ -418,14 +429,20 @@ function PasswordLogin({ maskedEmail, password, setPassword, error, isLoading, o
           </svg>
           Back
         </button>
-        <button
-          type="button"
-          onClick={onForgotPassword}
-          disabled={isLoading}
-          className="text-caption md:text-sm font-medium text-brand hover:text-brand-hover transition-colors duration-150"
-        >
-          Forgot password?
-        </button>
+        {passwordOnly ? (
+          <span className="text-caption md:text-sm text-muted">
+            To reset your password, please see the admin office
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={onForgotPassword}
+            disabled={isLoading}
+            className="text-caption md:text-sm font-medium text-brand hover:text-brand-hover transition-colors duration-150"
+          >
+            Forgot password?
+          </button>
+        )}
       </div>
     </form>
   )
@@ -537,6 +554,10 @@ export default function MemberAuth() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
 
+  // Password-only sign-in (pensioners: IDs starting with "P")
+  const [passwordOnly, setPasswordOnly] = useState(false)
+  const [hasLocalPassword, setHasLocalPassword] = useState(false)
+
   // Login flow
   const [loginPassword, setLoginPassword] = useState('')
 
@@ -577,7 +598,14 @@ export default function MemberAuth() {
       const data = await res.json()
       if (res.ok) {
         if (data.exists) {
-          setMemberStatus('found')
+          // Password-only members (pensioners) — report setup status
+          setPasswordOnly(Boolean(data.passwordOnly))
+          setHasLocalPassword(Boolean(data.hasPassword))
+          if (data.passwordOnly && !data.hasPassword) {
+            setMemberStatus('no_password')
+          } else {
+            setMemberStatus('found')
+          }
           setMaskedEmail(data.email || '')
           setMaskedAltEmail(data.alternative_email || '')
           setRawEmail(data.rawEmail || '')
@@ -602,6 +630,8 @@ export default function MemberAuth() {
     const value = e.target.value.toUpperCase()
     setMemberId(value)
     setMemberStatus(null)
+    setPasswordOnly(false)
+    setHasLocalPassword(false)
     const v = validateMemberId(value)
     setValidation(v)
     // Clear any pending lookup
@@ -616,6 +646,12 @@ export default function MemberAuth() {
     e.preventDefault()
     const mid = memberId.trim().toUpperCase()
     if (!validation.isValid || memberStatus !== 'found') return
+    // Pensioners sign in with a locally-set password — no email involved
+    if (passwordOnly) {
+      if (!hasLocalPassword) return
+      setStep(STEP.ENTER_PASSWORD)
+      return
+    }
     // If the member has an auth account → login flow
     if (rawEmail) {
       setStep(STEP.ENTER_PASSWORD)
@@ -755,6 +791,7 @@ export default function MemberAuth() {
     setStep(STEP.ENTER_ID)
     setError('')
     setSuccess('')
+    setLoginPassword('')
   }
   const goToLogin = () => {
     setStep(STEP.ENTER_PASSWORD)
@@ -861,6 +898,7 @@ export default function MemberAuth() {
           onSubmit={handleLoginSubmit}
           onForgotPassword={goToForgot}
           onBack={goToId}
+          passwordOnly={passwordOnly}
         />
       )}
 

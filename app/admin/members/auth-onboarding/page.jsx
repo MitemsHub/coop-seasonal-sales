@@ -5,7 +5,7 @@
 // Shows which members have completed Supabase Auth signup vs pending,
 // with search, filtering, and the ability to resend OTP invitations.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CheckCircle2, Clock, RefreshCw, Search, Send, Users } from 'lucide-react'
+import { CheckCircle2, Clock, KeyRound, RefreshCw, Search, Send, Users } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
 import Card from '../../../components/ui/Card'
@@ -46,6 +46,14 @@ function AuthOnboardingContent() {
   const [resending, setResending] = useState(null) // member_id currently being resent
   const [resendMsg, setResendMsg] = useState('') // success/error message
   const debounceRef = useRef(null)
+
+  // Set-password modal (pensioners with no email on file)
+  const [pwMember, setPwMember] = useState(null) // { memberId, hasPassword }
+  const [pwPassword, setPwPassword] = useState('')
+  const [pwConfirm, setPwConfirm] = useState('')
+  const [pwError, setPwError] = useState('')
+  const [pwLoading, setPwLoading] = useState(false)
+  const [pwDoneMsg, setPwDoneMsg] = useState('')
 
   const fetchData = useCallback(async (pg = page, statusFilter = filter, searchTerm = search) => {
     setLoading(true)
@@ -113,6 +121,54 @@ function AuthOnboardingContent() {
     } finally {
       setResending(null)
       setTimeout(() => setResendMsg(''), 4000)
+    }
+  }
+
+  // Open / close the set-password modal
+  const openPwModal = (m) => {
+    setPwMember({ memberId: m.memberId, hasPassword: m.hasPassword })
+    setPwPassword('')
+    setPwConfirm('')
+    setPwError('')
+  }
+
+  const closePwModal = () => {
+    if (pwLoading) return
+    setPwMember(null)
+    setPwPassword('')
+    setPwConfirm('')
+    setPwError('')
+  }
+
+  // Save the local password via the admin endpoint
+  const submitPassword = async () => {
+    if (!pwMember) return
+    if (pwPassword.length < 6) {
+      setPwError('Password must be at least 6 characters')
+      return
+    }
+    if (pwPassword !== pwConfirm) {
+      setPwError('Passwords do not match')
+      return
+    }
+    setPwLoading(true)
+    setPwError('')
+    try {
+      const res = await fetch('/api/admin/members/set-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ member_id: pwMember.memberId, password: pwPassword }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to set password')
+      setPwMember(null)
+      setPwDoneMsg(`Password set for ${pwMember.memberId} — they can now sign in with their Staff ID + password (no email).`)
+      setTimeout(() => setPwDoneMsg(''), 6000)
+      fetchData(page, filter, search)
+    } catch (e) {
+      setPwError(e.message)
+    } finally {
+      setPwLoading(false)
     }
   }
 
@@ -187,6 +243,13 @@ function AuthOnboardingContent() {
         </div>
       )}
 
+      {/* Set-password success message */}
+      {pwDoneMsg && (
+        <div className="rounded-lg border border-success-border bg-success-bg px-3 py-2 text-sm text-success-fg">
+          {pwDoneMsg}
+        </div>
+      )}
+
       {/* Member table */}
       <Card>
         <div className="overflow-x-auto">
@@ -222,6 +285,11 @@ function AuthOnboardingContent() {
                             <CheckCircle2 className="inline h-3 w-3 mr-1 -mt-px" />
                             Signed Up
                           </Badge>
+                        ) : m.hasPassword ? (
+                          <Badge variant="success" className="text-[11px]">
+                            <KeyRound className="inline h-3 w-3 mr-1 -mt-px" />
+                            Password set
+                          </Badge>
                         ) : (
                           <Badge variant="warning" className="text-[11px]">
                             <Clock className="inline h-3 w-3 mr-1 -mt-px" />
@@ -239,6 +307,15 @@ function AuthOnboardingContent() {
                             loading={resending === m.memberId}
                           >
                             Resend
+                          </Button>
+                        ) : !m.hasAuth && !m.email && m.memberId.startsWith('P') ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            leftIcon={KeyRound}
+                            onClick={() => openPwModal(m)}
+                          >
+                            {m.hasPassword ? 'Reset password' : 'Set password'}
                           </Button>
                         ) : !m.hasAuth && !m.email ? (
                           <span className="text-xs text-muted">No email on file</span>
@@ -285,6 +362,64 @@ function AuthOnboardingContent() {
           </div>
         )}
       </Card>
+
+      {/* Set-password modal (pensioners with no email) */}
+      {pwMember && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={closePwModal}
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-sm rounded-xl bg-surface p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Set member password"
+          >
+            <h3 className="text-base font-bold text-fg">
+              {pwMember.hasPassword ? 'Reset password' : 'Set password'} — {pwMember.memberId}
+            </h3>
+            <p className="mt-1 text-xs text-muted">
+              No email needed. The member signs in with their Staff ID + this password. Share it with them securely (in person or by phone).
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <Input
+                type="password"
+                value={pwPassword}
+                onChange={(e) => setPwPassword(e.target.value)}
+                placeholder="New password (min. 6 characters)"
+                autoFocus
+              />
+              <Input
+                type="password"
+                value={pwConfirm}
+                onChange={(e) => setPwConfirm(e.target.value)}
+                placeholder="Confirm password"
+              />
+            </div>
+
+            {pwError && (
+              <p className="mt-2 text-xs text-danger-fg">{pwError}</p>
+            )}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button size="sm" variant="secondary" onClick={closePwModal} disabled={pwLoading}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={submitPassword}
+                loading={pwLoading}
+                disabled={pwPassword.length < 6 || pwPassword !== pwConfirm}
+              >
+                Save password
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

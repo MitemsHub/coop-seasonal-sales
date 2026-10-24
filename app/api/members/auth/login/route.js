@@ -9,6 +9,7 @@ import { createClient } from '@supabase/supabase-js'
 import { createClient as createDbClient } from '@/lib/supabaseServer'
 import { sign } from '@/lib/signingEdge'
 import { checkRateLimit, rateLimitResponse } from '@/lib/rateLimit'
+import { verifyPassword } from '@/lib/localPassword'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -42,7 +43,7 @@ export async function POST(request) {
     const db = createDbClient()
     const { data: member, error: mErr } = await db
       .from('members')
-      .select('member_id, email, auth_user_id, full_name, branch_id, portal_enabled, branches:branch_id(code, name)')
+      .select('member_id, email, auth_user_id, full_name, branch_id, portal_enabled, password_hash, branches:branch_id(code, name)')
       .eq('member_id', mid)
       .maybeSingle()
 
@@ -67,6 +68,50 @@ export async function POST(request) {
         { status: 404 }
       )
     }
+    // ── Password-only sign-in for pensioners ("P"-prefixed IDs) ──────
+    // Most pensioners have no email and no Supabase Auth account, so the
+    // generic "not set up yet" guard below must NOT run for them — the
+    // locally-set password (if any) is their account. See lib/localPassword
+    // and /api/admin/members/set-password.
+    const isPensionerId = mid.charAt(0) === 'P'
+    if (isPensionerId && member.password_hash) {
+      if (!verifyPassword(pw, member.password_hash)) {
+        return NextResponse.json(
+          { error: 'Incorrect password. Please check it and try again, or ask the admin to reset your password.' },
+          { status: 401 }
+        )
+      }
+
+      // Issue the same signed member session cookie as the email flow
+      const localClaims = {
+        role: 'member',
+        member_id: mid,
+        branch_id: member.branch_id ? Number(member.branch_id) : null,
+        branch_code: member.branches?.code || '',
+        name: member.full_name || '',
+        auth_user_id: null,
+      }
+      const localToken = await sign(localClaims, TOKEN_TTL)
+
+      const localRes = NextResponse.json({ success: true, member: localClaims })
+      localRes.cookies.set('member_token', localToken, {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: TOKEN_TTL,
+      })
+      return localRes
+    }
+
+    // A pensioner WITHOUT a local password and without an email/auth set-up
+    // can never complete the email-OTP flow — tell them who can fix it.
+    if (isPensionerId && (!member.email || !member.auth_user_id)) {
+      return NextResponse.json(
+        { error: 'Your portal password has not been set up yet. Please ask the co-op admin to set it up for you.' },
+        { status: 403 }
+      )
+    }
+
     if (!member.auth_user_id || !member.email) {
       return NextResponse.json(
         { error: 'This account has not been set up yet. Please sign up first.' },

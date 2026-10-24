@@ -112,7 +112,11 @@ export async function POST(req) {
     const savingsEligible = outstandingLoansTotal > 0 ? 0 : Math.max(0, savingsBase - savingsExposure);
 
     // Loan eligibility: compute base from savings, then cap at admin limit.
-    const rawLoanLimit = memberSavings * 5 - outstandingLoansTotal;
+    // RETIREE RULE: retirees (category R) borrow at most their savings
+    // balance — never 5× — mirroring the RAM module and the atomic SQL fn.
+    const categoryLower = String(member.category || '').trim().toLowerCase()
+    const isRetireeMember = categoryLower === 'r' || categoryLower.includes('retire');
+    const rawLoanLimit = (isRetireeMember ? memberSavings : memberSavings * 5) - outstandingLoansTotal;
     const baseEligible = globalLimit > 0 ? Math.min(Math.max(rawLoanLimit, 0), globalLimit) : Math.max(rawLoanLimit, 0);
     let loanEligible = baseEligible;  // will be capped by cycle limit below
 

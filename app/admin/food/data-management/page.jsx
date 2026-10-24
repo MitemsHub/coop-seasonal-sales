@@ -246,7 +246,8 @@ function DataManagementPageContent() {
     const graceCap = policyNum(
       s.group === 'pensioner' ? graceLoanMaxPensioner : s.group === 'retiree' ? graceLoanMaxRetiree : graceLoanMaxActive
     )
-    const base = Math.max(0, s.savings * 5 - s.outstanding + -0)
+    // RETIREE RULE: retirees borrow at most their savings balance, not 5×.
+    const base = Math.max(0, (s.group === 'retiree' ? s.savings : s.savings * 5) - s.outstanding)
     if (eligibleCap > 0) {
       const totalBorrowable = base + graceCap
       const ceiling = Math.max(0, eligibleCap - s.cycleUsed)

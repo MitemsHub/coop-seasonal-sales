@@ -80,7 +80,7 @@ export async function GET(request) {
     // Build query — we only need a few columns
     let query = supabase
       .from('members')
-      .select('member_id, full_name, email, auth_user_id, branch_id, branches:branch_id(code, name)', { count: 'exact' })
+      .select('member_id, full_name, email, auth_user_id, password_hash, branch_id, branches:branch_id(code, name)', { count: 'exact' })
 
     // Filter by auth status (preliminary — may be adjusted after validation)
     if (status === 'signed_up') {
@@ -123,6 +123,8 @@ export async function GET(request) {
       fullName: m.full_name || '',
       email: m.email || '',
       hasAuth: m.auth_user_id ? validAuthIds.has(m.auth_user_id) : false,
+      // Local (email-less) password, set by an admin — pensioners only
+      hasPassword: Boolean(m.password_hash),
       branchCode: m.branches?.code || '',
       branchName: m.branches?.name || '',
     }))

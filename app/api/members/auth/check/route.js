@@ -48,7 +48,7 @@ export async function POST(request) {
     // Use ilike for case-insensitive member_id lookup
     const { data: member, error } = await supabase
       .from('members')
-      .select('member_id, email, alternative_email, auth_user_id, portal_enabled')
+      .select('member_id, email, alternative_email, auth_user_id, portal_enabled, password_hash')
       .ilike('member_id', mid)
       .maybeSingle()
 
@@ -126,6 +126,12 @@ export async function POST(request) {
         ? maskEmail(rawAltEmail)
         : ''
 
+    // Pensioners ("P"-prefixed IDs) mostly have no email, so they use a
+    // locally-set password instead of the OTP/email flow (see login route).
+    const isPensionerId = mid.charAt(0) === 'P'
+    const passwordOnly = isPensionerId && !authIsValid
+    const hasPassword = Boolean(member.password_hash)
+
     return NextResponse.json({
       exists: true,
       // hasAuth is only true if the auth user actually exists in Supabase Auth
@@ -134,6 +140,9 @@ export async function POST(request) {
       alternative_email: maskedAltEmail,
       // Only expose raw email if they have a valid auth account (for login flow)
       rawEmail: authIsValid ? rawEmail : null,
+      // Password-only sign-in (pensioners)
+      passwordOnly,
+      hasPassword,
     })
   } catch (e) {
     return NextResponse.json({ error: e.message || 'Internal server error' }, { status: 500 })
