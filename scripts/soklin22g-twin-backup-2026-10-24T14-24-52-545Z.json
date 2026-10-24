@@ -1,0 +1,56 @@
+{
+  "generated_at": "2026-10-24T14:24:52.546Z",
+  "items": [
+    {
+      "item_id": 463,
+      "sku": "SOKLIN22G",
+      "name": "So Klin 22g",
+      "category": "Detergent",
+      "unit": "Carton",
+      "image_url": "https://lpzyvvsuksafnpchfdqw.supabase.co/storage/v1/object/public/item-images/items/SOKLIN22G.png?v=1792849795667",
+      "is_active": true,
+      "source": "general"
+    },
+    {
+      "item_id": 464,
+      "sku": "SOKLIN22G-2",
+      "name": "So Klin 40g",
+      "category": "Detergent",
+      "unit": "Carton",
+      "image_url": "https://lpzyvvsuksafnpchfdqw.supabase.co/storage/v1/object/public/item-images/items/SOKLIN40G.png?v=1792849826817",
+      "is_active": true,
+      "source": "outsourced"
+    }
+  ],
+  "prices": [
+    {
+      "id": 4678,
+      "branch_id": 2,
+      "item_id": 464,
+      "price": "9300.00",
+      "cycle_id": 3
+    }
+  ],
+  "overrides": [
+    {
+      "id": "199",
+      "branch_id": "2",
+      "item_id": "464",
+      "name": "So Klin 22g",
+      "category": "Detergent",
+      "unit": "Carton",
+      "image_url": "https://lpzyvvsuksafnpchfdqw.supabase.co/storage/v1/object/public/item-images/items/SOKLIN22G.png?v=1792849795667",
+      "updated_at": "2026-10-24T13:51:45.654Z"
+    }
+  ],
+  "entries": [
+    {
+      "id": "440",
+      "submission_id": "25",
+      "item_name": "Klin 22g",
+      "category": "Other",
+      "price": "9300.00",
+      "saved_item_id": "464"
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "generated_at": "2026-10-24T09:00:11.930Z",
+  "items": [
+    {
+      "item_id": 357,
+      "sku": "BUASUGAR50KG",
+      "name": "Bua Sugar 50Kg",
+      "category": "Sugar",
+      "unit": "Bag",
+      "source": "general",
+      "is_active": true,
+      "image_url": "https://lpzyvvsuksafnpchfdqw.supabase.co/storage/v1/object/public/item-images/items/BUASUGAR50KG.png?v=1792742550618"
+    },
+    {
+      "item_id": 359,
+      "sku": "VIVAPLUS20G",
+      "name": "Viva Plus 20g",
+      "category": "Detergent",
+      "unit": "Carton",
+      "source": "general",
+      "is_active": true,
+      "image_url": "https://lpzyvvsuksafnpchfdqw.supabase.co/storage/v1/object/public/item-images/items/VIVAPLUS20G.png?v=1792748667926"
+    }
+  ],
+  "prices": [
+    {
+      "id": 2458,
+      "branch_id": 7,
+      "item_id": 357,
+      "price": "78000.00",
+      "cycle_id": 3
+    },
+    {
+      "id": 4613,
+      "branch_id": 18,
+      "item_id": 357,
+      "price": "78000.00",
+      "cycle_id": 3
+    },
+    {
+      "id": 2460,
+      "branch_id": 7,
+      "item_id": 359,
+      "price": "10000.00",
+      "cycle_id": 3
+    },
+    {
+      "id": 4538,
+      "branch_id": 16,
+      "item_id": 359,
+      "price": "10500.00",
+      "cycle_id": 3
+    },
+    {
+      "id": 4616,
+      "branch_id": 18,
+      "item_id": 359,
+      "price": "10000.00",
+      "cycle_id": 3
+    },
+    {
+      "id": 4531,
+      "branch_id": 27,
+      "item_id": 359,
+      "price": "9000.00",
+      "cycle_id": 3
+    }
+  ],
+  "overrides": [
+    {
+      "id": "58",
+      "branch_id": "16",
+      "item_id": "359",
+      "name": "Viva Plus 20g",
+      "category": "Detergent",
+      "unit": "Carton",
+      "image_url": "https://lpzyvvsuksafnpchfdqw.supabase.co/storage/v1/object/public/item-images/items/VIVA40G.png?v=1792341725338",
+      "updated_at": "2026-10-23T02:59:29.608Z"
+    },
+    {
+      "id": "134",
+      "branch_id": "18",
+      "item_id": "359",
+      "name": "Viva Plus 20g",
+      "category": "Detergent",
+      "unit": "Carton",
+      "image_url": "https://lpzyvvsuksafnpchfdqw.supabase.co/storage/v1/object/public/item-images/items/VIVA40G.png?v=1792341725338",
+      "updated_at": "2026-10-23T09:42:27.207Z"
+    },
+    {
+      "id": "51",
+      "branch_id": "27",
+      "item_id": "359",
+      "name": "Viva Plus 20g",
+      "category": "Detergent",
+      "unit": "Carton",
+      "image_url": "https://lpzyvvsuksafnpchfdqw.supabase.co/storage/v1/object/public/item-images/items/VIVA40G.png?v=1792341725338",
+      "updated_at": "2026-10-23T02:55:06.863Z"
+    }
+  ]
+}
