@@ -60,12 +60,12 @@ BEGIN
     SELECT total_amount, payment_option::text FROM orders
     WHERE member_id = p_member_id
       AND status IN ('Pending', 'Posted', 'Delivered')
-      AND created_at >= v_year_start
+      AND cycle_id = (SELECT id FROM cycles WHERE is_active ORDER BY id DESC LIMIT 1)
     UNION ALL
     SELECT total_amount, payment_option::text FROM exhibition_orders
     WHERE member_id = p_member_id
       AND status IN ('Pending', 'Approved', 'Delivered')
-      AND created_at >= v_year_start
+      AND cycle_id = (SELECT id FROM cycles WHERE is_active ORDER BY id DESC LIMIT 1)
   ) combined;
 
   -- Compute limits (mirrors /api/orders/route.js logic)
