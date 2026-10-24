@@ -93,6 +93,16 @@ function Divider() {
   return <div className="my-2 h-px bg-line-subtle" aria-hidden="true" />
 }
 
+// Which sidebar module a pathname belongs to — used to auto-open the section
+// the active page lives in when nothing was persisted.
+function activeModuleForPath(pathname) {
+  if (!pathname || !pathname.startsWith('/rep')) return null
+  if (pathname.startsWith('/rep/posted') || pathname.startsWith('/rep/survey') || pathname.startsWith('/rep/delivered') || pathname.startsWith('/rep/banks')) return 'food'
+  if (pathname.startsWith('/rep/ram')) return 'ram'
+  if (pathname.startsWith('/rep/exhibition')) return 'exhibition'
+  return null
+}
+
 export default function RepLayout({ children }) {
   const pathname = usePathname()
   const { logout, user } = useAuth()
@@ -107,13 +117,50 @@ export default function RepLayout({ children }) {
 
   const [sidebarVisible, setSidebarVisible] = useState(true)
   const [mobileOpen, setMobileOpen] = useState(false)
-  // Accordion module groups — all collapsed on entry; only one open at a time,
-  // and only when clicked (the active page never auto-expands its section).
+  // Accordion module groups — only one open at a time. The open section is
+  // persisted to localStorage and initialised from the active page's module,
+  // so navigating between rep pages (or reloading one) never collapses the
+  // section the rep already opened.
   const [openModule, setOpenModule] = useState(null) // 'food' | 'ram' | 'exhibition' | null
+  const [openModuleHydrated, setOpenModuleHydrated] = useState(false)
   const foodOpen = openModule === 'food'
   const ramOpen = openModule === 'ram'
   const exhOpen = openModule === 'exhibition'
-  const toggleModule = (key) => setOpenModule((cur) => (cur === key ? null : key))
+  const toggleModule = (key) => {
+    const next = openModule === key ? null : key
+    setOpenModule(next)
+    try {
+      // Persist the new value ('' = collapsed) so a later remount or full
+      // page load keeps the section open.
+      window.localStorage.setItem('rep_open_module', next || '')
+    } catch {}
+  }
+  // Restore the last-open section after mount, then auto-open the section the
+  // active page lives in if nothing was persisted (first visit / new session).
+  useEffect(() => {
+    const moduleForPath = activeModuleForPath(pathname)
+    try {
+      const v = window.localStorage.getItem('rep_open_module')
+      if (v === 'food' || v === 'ram' || v === 'exhibition') setOpenModule(v)
+      else if (moduleForPath) setOpenModule(moduleForPath)
+      setOpenModuleHydrated(true)
+    } catch {
+      if (moduleForPath) setOpenModule(moduleForPath)
+      setOpenModuleHydrated(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  // Keep the section open across navigations that remount this layout (e.g.
+  // full-page loads into a deep page) without collapsing on same-module moves.
+  useEffect(() => {
+    if (!openModuleHydrated) return
+    const moduleForPath = activeModuleForPath(pathname)
+    try {
+      const persisted = window.localStorage.getItem('rep_open_module')
+      if (moduleForPath && persisted !== '' && openModule === null) setOpenModule(moduleForPath)
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, openModuleHydrated])
   // Awaiting-approval queue sizes per module — the same sources the rep
   // dashboard's quick-access tiles read, surfaced in the drawer so reps see
   // their queue before opening a page.
@@ -394,9 +441,9 @@ export default function RepLayout({ children }) {
               {!isCollapsed && foodOpen && (
                 <div className="mt-1 space-y-0.5">
                   <NavLink href="/rep/posted" label="Posted" icon={Send} active={activeKey === 'food_posted'} collapsed={false} onNavigate={navOnClick} count={foodLive === false ? 0 : pendingCounts.food} />
-                  <NavLink href="/rep/survey" label="Item Survey" icon={ClipboardList} active={activeKey === 'food_survey'} collapsed={false} onNavigate={navOnClick} />
                   <NavLink href="/rep/delivered" label="Delivered" icon={Truck} active={activeKey === 'food_delivered'} collapsed={false} onNavigate={navOnClick} />
                   <NavLink href="/rep/banks" label="Banks" icon={Landmark} active={activeKey === 'food_banks'} collapsed={false} onNavigate={navOnClick} />
+                  <NavLink href="/rep/survey" label="Item Survey" icon={ClipboardList} active={activeKey === 'food_survey'} collapsed={false} onNavigate={navOnClick} />
                 </div>
               )}
             </div>

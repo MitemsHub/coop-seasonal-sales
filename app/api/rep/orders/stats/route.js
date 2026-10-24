@@ -40,7 +40,11 @@ export async function GET(req) {
       .eq('delivery_branch_id', branchId)
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
-    // Branch-wide per-status cards, mirroring the exhibition strip.
+    // Per-status cards mirroring the exhibition strip. Scoped to the active
+    // food cycle when one exists so old cycles' figures (e.g. a delivered
+    // backlog carried over from before the cycle rollover) never inflate the
+    // cards; without an active cycle they fall back to all-time so they
+    // aren't silently zero.
     const STATUSES = ['Pending', 'Posted', 'Delivered', 'Cancelled']
     const statuses = {}
     for (const s of STATUSES) statuses[s] = { count: 0, total: 0 }
@@ -60,7 +64,7 @@ export async function GET(req) {
       const inCycle = cycleId != null && Number(row.cycle_id) === cycleId
 
       const key = STATUSES.includes(status) ? status : null
-      if (key) {
+      if (key && (cycleId == null || inCycle)) {
         statuses[key].count += 1
         statuses[key].total += amt
       }
