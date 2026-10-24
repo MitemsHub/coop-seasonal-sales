@@ -1097,6 +1097,26 @@ function ItemsImportContent() {
           </div>
         </div>
 
+        {(() => {
+          // Pre-save SKU-collision warning: the same rename-fork the server
+          // still guards with an auto-suffix, but shown BEFORE the save with
+          // instructions to reuse the owning product — the "-2" twins
+          // (Bua Sugar 50Kg, So Klin 40g) were both born from an unnoticed
+          // collision on save. A deliberate different-SKU save is still fine.
+          const wanted = String(form.sku || '').trim().toUpperCase()
+          if (!wanted || !allItems.length) return null
+          const owner = allItems.find(
+            (it) => String(it.sku || '').toUpperCase() === wanted && Number(it.item_id) !== Number(form.item_id)
+          )
+          if (!owner) return null
+          return (
+            <p className="mt-2 rounded-md border border-amber-400/60 bg-amber-50 px-2.5 py-1.5 text-caption text-amber-900">
+              ⚠️ SKU “{wanted}” already belongs to “{owner.name}”. Saving now stores THIS item as a separate product (“{wanted}-2”).
+              {' '}If they are the same product, open “{owner.name}” and edit it there instead — or change this item's SKU to something distinct.
+            </p>
+          )
+        })()}
+
         {saveErr && (
           <p className="mt-2 rounded-md border border-danger-border bg-danger-bg px-2.5 py-1.5 text-caption text-danger-fg">{saveErr}</p>
         )}
