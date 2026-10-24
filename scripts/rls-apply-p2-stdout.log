@@ -1,0 +1,75 @@
+
+Pre-check 1: tables with RLS currently OFF (public schema)
+  6 table(s): members, order_lines, orders, ram_cycles, ram_delivery_locations, ram_orders
+
+Pre-check 2: backup_* tables present
+  0 table(s):
+
+Pre-check 3: existing policies we will replace/drop
+  11 existing polic(ies) — listing all:
+    branch_item_markups.public_read_markups (SELECT)
+    branch_item_prices.public_read_prices (SELECT)
+    branches.public_read_branches (SELECT)
+    cycles.public_read_cycles (SELECT)
+    departments.public_read_departments (SELECT)
+    food_survey_catalog.Public can read survey catalog (SELECT)
+    item_branch_overrides.public_read_overrides (SELECT)
+    item_taxonomy.public_read_taxonomy (SELECT)
+    items.public_read_items (SELECT)
+    member_reviews.Members can insert own reviews (INSERT)
+    member_reviews.Public can read reviews (SELECT)
+
+Pre-check 4: any residual FK from backup_* into live tables
+  0 hit(s) — safe
+
+Applying migrations/rls-lockdown-2026-10-24-phase2.sql (statement-by-statement)…
+  ✓ [1/8] BEGIN; (0ms)
+  ✓ [2/8] DO $$ DECLARE tbl text; BEGIN FOREACH tbl IN ARRAY ARRAY[ 'members','orders','or (0ms)
+  ✓ [3/8] DO $$ DECLARE r record; BEGIN FOR r IN SELECT tablename, policyname FROM pg_poli (0ms)
+  ✓ [4/8] DO $$ DECLARE v text; BEGIN FOREACH v IN ARRAY ARRAY[ 'v_master_sheet','v_sheet_ (0ms)
+  ✓ [5/8] DO $$ DECLARE v text; BEGIN FOREACH v IN ARRAY ARRAY[ 'v_master_sheet','v_sheet_ (0ms)
+  ✓ [6/8] GRANT SELECT ON public.v_inventory_status TO anon; (0ms)
+  ✓ [7/8] DO $$ DECLARE unprotected text := ''; r record; BEGIN FOR r IN SELECT c.relname  (0ms)
+  ✓ [8/8] COMMIT; (0ms)
+
+Verify 1: tables still with RLS OFF
+  → 0 table(s) remain unprotected
+
+Verify 2: policies now in place
+  11 polic(ies):
+    branch_item_markups ← public_read_markups
+    branch_item_prices ← public_read_prices
+    branches ← public_read_branches
+    cycles ← public_read_cycles
+    departments ← public_read_departments
+    food_survey_catalog ← Public can read survey catalog
+    item_branch_overrides ← public_read_overrides
+    item_taxonomy ← public_read_taxonomy
+    items ← public_read_items
+    member_reviews ← Members can insert own reviews
+    member_reviews ← Public can read reviews
+
+Verify 3: backup_* tables remaining
+  → 0 remaining
+
+Verify 4: anonymous-key browser access (this is what RLS now enforces)
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: read ECONNRESET
+    at TLSWrap.onStreamRead (node:internal/stream_base_commons:216:20)
+Emitted 'error' event on Client instance at:
+    at Client._handleErrorEvent (C:\Users\USER\Desktop\Projects\Coop Seasonal Sales\coop-seasonal-sales\node_modules\pg\lib\client.js:350:10)
+    at Connection.emit (node:events:509:28)
+    at TLSSocket.reportStreamError (C:\Users\USER\Desktop\Projects\Coop Seasonal Sales\coop-seasonal-sales\node_modules\pg\lib\connection.js:57:12)
+    at TLSSocket.emit (node:events:509:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  errno: -4077,
+  code: 'ECONNRESET',
+  syscall: 'read'
+}
+
+Node.js v24.18.0

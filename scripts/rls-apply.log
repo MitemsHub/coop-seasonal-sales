@@ -1,0 +1,35 @@
+== run 2026-10-24T04:47:36.730Z dry=false
+
+Pre-check 1: tables with RLS currently OFF (public schema)
+
+Pre-check 2: backup_* tables present
+
+Pre-check 3: existing policies we will replace/drop
+
+Pre-check 4: any residual FK from backup_* into live tables
+
+Applying migrations/rls-lockdown-2026-10-24-phase2.sql (statement-by-statement)…
+START [1/8] BEGIN;
+  ✓ [1/8] BEGIN; (0ms)
+START [2/8] DO $$ DECLARE tbl text; BEGIN FOREACH tbl IN ARRAY ARRAY[ 'members','orders','or
+  ✓ [2/8] DO $$ DECLARE tbl text; BEGIN FOREACH tbl IN ARRAY ARRAY[ 'members','orders','or (0ms)
+START [3/8] DO $$ DECLARE r record; BEGIN FOR r IN SELECT tablename, policyname FROM pg_poli
+  ✓ [3/8] DO $$ DECLARE r record; BEGIN FOR r IN SELECT tablename, policyname FROM pg_poli (0ms)
+START [4/8] DO $$ DECLARE v text; BEGIN FOREACH v IN ARRAY ARRAY[ 'v_master_sheet','v_sheet_
+  ✓ [4/8] DO $$ DECLARE v text; BEGIN FOREACH v IN ARRAY ARRAY[ 'v_master_sheet','v_sheet_ (0ms)
+START [5/8] DO $$ DECLARE v text; BEGIN FOREACH v IN ARRAY ARRAY[ 'v_master_sheet','v_sheet_
+  ✓ [5/8] DO $$ DECLARE v text; BEGIN FOREACH v IN ARRAY ARRAY[ 'v_master_sheet','v_sheet_ (0ms)
+START [6/8] GRANT SELECT ON public.v_inventory_status TO anon;
+  ✓ [6/8] GRANT SELECT ON public.v_inventory_status TO anon; (0ms)
+START [7/8] DO $$ DECLARE unprotected text := ''; r record; BEGIN FOR r IN SELECT c.relname 
+  ✓ [7/8] DO $$ DECLARE unprotected text := ''; r record; BEGIN FOR r IN SELECT c.relname  (0ms)
+START [8/8] COMMIT;
+  ✓ [8/8] COMMIT; (0ms)
+
+Verify 1: tables still with RLS OFF
+
+Verify 2: policies now in place
+
+Verify 3: backup_* tables remaining
+
+Verify 4: anonymous-key browser access (this is what RLS now enforces)
