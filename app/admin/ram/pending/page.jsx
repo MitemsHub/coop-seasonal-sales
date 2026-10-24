@@ -30,7 +30,10 @@ const toastMotion = {
   transition: { duration: 0.18, ease: 'easeOut' },
 }
 
-function RamOrdersAdminPageContent({ status = 'Pending' }) {
+// Exported so app/admin/ram/cancelled/page.jsx can reuse the same order-list
+// UI with a different status filter (importing a named export from a client
+// page — the dev-server warned when this was not exported).
+export function RamOrdersAdminPageContent({ status = 'Pending' }) {
   const [orders, setOrders] = useState([])
   const [totalCount, setTotalCount] = useState(0)
   const [locations, setLocations] = useState([])

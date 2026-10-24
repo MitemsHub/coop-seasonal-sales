@@ -354,167 +354,28 @@ function ShopPageContent() {
     }
     ;(async () => {
       setItemsBusy(true)
+      // Items, prices, markups and demand aggregates come from the server
+      // (/api/items/prices, service-role). The inventory view runs as
+      // security_invoker now, so anon-key reads of it would fail — the
+      // browser no longer touches it directly.
       try {
-        const { data: br, error: brErr } = await supabase
-          .from('branches')
-          .select('id, code')
-          .eq('code', deliveryBranchCode)
-          .single()
-        if (brErr || !br) { setItems([]); return }
-
-        // Get active cycle
-        const { data: activeCycle, error: cycleError } = await supabase
-          .from('cycles')
-          .select('id')
-          .eq('is_active', true)
-          .maybeSingle()
-        if (cycleError) {
-          setItems([])
-          return
-        }
-        if (!activeCycle) {
-          setItems([])
-          return
-        }
-
-        // Get items with demand tracking data from inventory status view (fallback to branch_item_prices if view doesn't exist)
-        // Filter out zero-price items
-        let rows = null
-        let error = null
-        const runInventoryQuery = async (withCycle) => {
-          let q = supabase              .from('v_inventory_status')
-            .select(`
-              sku,
-              item_id,
-              item_name,
-              unit,
-              category,
-              image_url,
-              price,
-              demand_tracking_mode,
-              total_demand,
-              pending_demand,
-              confirmed_demand,
-              delivered_demand
-            `)
-            .eq('branch_code', deliveryBranchCode)
-            .gt('price', 0)
-          if (withCycle) q = q.eq('cycle_id', activeCycle.id)
-          return await q.order('item_name')
-        }
-
-        ;({ data: rows, error } = await runInventoryQuery(true))
-        if (error && error.message && error.message.includes('cycle_id')) {
-          ;({ data: rows, error } = await runInventoryQuery(false))
-        }
-        
-
-        
-        // Load per-branch markups to adjust displayed prices
-        let markupByItemId = new Map()
-        try {
-          const runMarkupsQuery = async (withCycle) => {
-            let q = supabase
-              .from('branch_item_markups')
-              .select('item_id, amount, active')
-              .eq('branch_id', br.id)
-            if (withCycle) q = q.eq('cycle_id', activeCycle.id)
-            return await q
-          }
-
-          let markupsRes = await runMarkupsQuery(true)
-          if (markupsRes.error && String(markupsRes.error.message || '').includes('cycle_id')) {
-            markupsRes = await runMarkupsQuery(false)
-          }
-          const markups = markupsRes.data
-          markupByItemId = new Map((markups || []).filter(m => m.active).map(m => [m.item_id, Number(m.amount || 0)]))
-        } catch (mkErr) {
-          console.warn('Markups fetch warn:', mkErr?.message)
-        }
-
-        // Fallback to original query if view doesn't exist
-        if (error && error.message.includes('does not exist')) {
-          let fallbackRows = null
-          let fallbackError = null
-          const runFallback = async (withCycle) => {
-            let q = supabase
-              .from('branch_item_prices')
-              .select(`
-                price,
-                items:item_id(
-                  item_id,
-                  name, 
-                  sku, 
-                  unit, 
-                  category,
-                  image_url
-                )
-              `)
-              .eq('branch_id', br.id)
-              .gt('price', 0)
-            if (withCycle) q = q.eq('cycle_id', activeCycle.id)
-            return await q.order('name', { foreignTable: 'items' })
-          }
-
-          ;({ data: fallbackRows, error: fallbackError } = await runFallback(true))
-          if (fallbackError && fallbackError.message && fallbackError.message.includes('cycle_id')) {
-            ;({ data: fallbackRows, error: fallbackError } = await runFallback(false))
-          }
-          
-          rows = fallbackRows
-          error = fallbackError
-
-        }
-        
-
-        
-        if (error) {
-  
-          setItems([])
-          return
-        }
-        
-        // Process items for demand tracking mode (apply branch markups)
-        const itemsWithDemand = (rows || []).map(row => {
-          // Handle both v_inventory_status view format and fallback format
-          if (row.item_name) {
-            // v_inventory_status view format
-            const base = Number(row.price || 0)
-            const mk = markupByItemId.get(row.item_id) || 0
-            return {
-              sku: row.sku,
-              name: row.item_name,
-              unit: row.unit,
-              category: row.category,
-              price: base + mk,
-              image_url: row.image_url,
-              demand_tracking_mode: row.demand_tracking_mode,
-              total_demand: row.total_demand || 0,
-              pending_demand: row.pending_demand || 0,
-              confirmed_demand: row.confirmed_demand || 0,
-              delivered_demand: (row.delivered_demand ?? row.delivered_qty ?? 0)
-            }
-          } else {
-            // Fallback branch_item_prices format - pure demand tracking
-            const base = Number(row.price || 0)
-            const mk = markupByItemId.get(row.items?.item_id) || 0
-            return {
-              sku: row.items.sku,
-              name: row.items.name,
-              unit: row.items.unit,
-              category: row.items.category,
-              price: base + mk,
-              image_url: row.items.image_url,
-              demand_tracking_mode: true, // Always use demand tracking
-              total_demand: 0,
-              pending_demand: 0,
-              confirmed_demand: 0,
-              delivered_demand: 0
-            }
-          }
-        })
-
-        setItems(itemsWithDemand)
+        const res = await fetch(`/api/items/prices?branch=${encodeURIComponent(deliveryBranchCode)}`, { cache: 'no-store' })
+        const json = await res.json().catch(() => null)
+        if (!json?.ok) throw new Error(json?.error || `Item load failed (${res.status})`)
+        const loaded = (json.items || []).map(it => ({
+          sku: it.sku,
+          name: it.name,
+          unit: it.unit,
+          category: it.category,
+          price: it.price,
+          image_url: it.image_url,
+          demand_tracking_mode: it.demand_tracking_mode,
+          total_demand: it.demand?.total || 0,
+          pending_demand: it.demand?.pending || 0,
+          confirmed_demand: it.demand?.confirmed || 0,
+          delivered_demand: it.demand?.delivered || 0,
+        }))
+        setItems(loaded)
         setQty({})
       } catch (e) {
         setItems([])

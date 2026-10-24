@@ -69,7 +69,9 @@ export async function GET(req) {
           item_name,
           sku,
           unit,
-          category
+          category,
+          image_url,
+          demand_tracking_mode
         `)
         .eq('branch_code', branchCode)
         .gt('price', 0)
@@ -163,6 +165,8 @@ export async function GET(req) {
           sku: row.sku,
           unit: co?.unit != null ? co.unit : row.unit,
           category: co?.category != null ? co.category : row.category,
+          image_url: row.image_url || null,
+          demand_tracking_mode: row.demand_tracking_mode !== false,
           price: base + mk,
           demand: {
             total: Number(row.total_demand || 0),

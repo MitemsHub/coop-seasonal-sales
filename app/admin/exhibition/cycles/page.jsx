@@ -32,7 +32,10 @@ function fmtDate(iso) {
   }
 }
 
-function ExhibitionCyclesContent() {
+// Exported so app/admin/exhibition/data/page.jsx can reuse the cycles UI
+// in-line (importing a named export from a client page keeps those modules
+// in one client bundle — the dev-server warned when this was not exported).
+export function ExhibitionCyclesContent() {
   const [cycles, setCycles] = useState([])
   const [branches, setBranches] = useState([])
   const [loading, setLoading] = useState(true)
