@@ -69,30 +69,14 @@ function RamSuccessContent() {
       setMember(null)
       setLocation(null)
       try {
-        const { data: o, error: oErr } = await supabase
-          .from('ram_orders')
-          .select(
-            'id,member_id,status,created_at,payment_option,qty,unit_price,principal_amount,interest_amount,total_amount,ram_delivery_location_id'
-          )
-          .eq('id', Number(orderId))
-          .single()
-        if (oErr || !o) throw new Error(oErr?.message || 'Order not found')
-
-        const [mRes, lRes] = await Promise.all([
-          supabase.from('members').select('member_id,full_name,branch_id').eq('member_id', o.member_id).maybeSingle(),
-          o.ram_delivery_location_id
-            ? supabase
-                .from('ram_delivery_locations')
-                .select('id,delivery_location,name,phone,address')
-                .eq('id', o.ram_delivery_location_id)
-                .maybeSingle()
-            : Promise.resolve({ data: null, error: null }),
-        ])
+        const res = await fetch(`/api/ram/order?id=${encodeURIComponent(orderId)}`, { cache: 'no-store' })
+        const json = await res.json().catch(() => null)
+        if (!json?.ok) throw new Error(json?.error || 'Order not found')
 
         if (!cancelled) {
-          setOrder(o)
-          setMember(mRes?.data || null)
-          setLocation(lRes?.data || null)
+          setOrder(json.order || null)
+          setMember(json.member || null)
+          setLocation(json.location || null)
         }
       } catch (e) {
         if (!cancelled) setError(e?.message || 'Failed to load order')

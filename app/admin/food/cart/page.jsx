@@ -21,17 +21,10 @@ function AdminCartPageContent() {
 
   const loadMembers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('members')
-        .select(`
-          member_id, 
-          full_name, 
-          branches:branch_id(code)
-        `)
-        .order('full_name')
-      
-      if (error) throw error
-      setMembers(data || [])
+      const res = await fetch('/api/admin/members/list', { cache: 'no-store' })
+      const json = await res.json().catch(() => null)
+      if (!json?.ok) throw new Error(json?.error || 'Failed to load members')
+      setMembers(json.members || [])
     } catch (error) {
       console.error('Error loading members:', error)
       setMessage({ type: 'error', text: 'Failed to load members' })

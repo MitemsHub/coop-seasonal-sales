@@ -1,10 +1,12 @@
 // app/api/items/list/route.js
 import { NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '../../../../lib/supabaseServer'
+// Service-role client: public shop-catalog loader; output is server-shaped,
+// and under full RLS the anon-key cookie client would break.
+import { createClient } from '../../../../lib/supabaseServer'
 
 export async function GET() {
   try {
-    const supabase = await createSupabaseServerClient()
+    const supabase = createClient()
 
     const { error: colErr } = await supabase.from('branch_item_prices').select('cycle_id').limit(1)
     const pricesHasCycle = !colErr

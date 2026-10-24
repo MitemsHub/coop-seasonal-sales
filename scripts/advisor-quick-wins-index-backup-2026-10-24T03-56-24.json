@@ -1,0 +1,93 @@
+[
+  {
+    "name": "idx_branch_item_prices_item_performance",
+    "size": "56 kB",
+    "scans": "0",
+    "definition": "CREATE INDEX idx_branch_item_prices_item_performance ON public.branch_item_prices USING btree (item_id)",
+    "valid": true
+  },
+  {
+    "name": "idx_bip_branch_item",
+    "size": "96 kB",
+    "scans": "0",
+    "definition": "CREATE INDEX idx_bip_branch_item ON public.branch_item_prices USING btree (branch_id, item_id)",
+    "valid": true
+  },
+  {
+    "name": "idx_v_inventory_status_branch_item",
+    "size": "96 kB",
+    "scans": "0",
+    "definition": "CREATE INDEX idx_v_inventory_status_branch_item ON public.branch_item_prices USING btree (branch_id, item_id)",
+    "valid": true
+  },
+  {
+    "name": "idx_branch_item_prices_branch_item_performance",
+    "size": "96 kB",
+    "scans": "0",
+    "definition": "CREATE INDEX idx_branch_item_prices_branch_item_performance ON public.branch_item_prices USING btree (branch_id, item_id)",
+    "valid": true
+  },
+  {
+    "name": "idx_branch_item_prices_branch_item_cycle",
+    "size": "144 kB",
+    "scans": "31871",
+    "definition": "CREATE UNIQUE INDEX idx_branch_item_prices_branch_item_cycle ON public.branch_item_prices USING btree (branch_id, item_id, cycle_id)",
+    "valid": true
+  },
+  {
+    "name": "idx_items_sku_performance",
+    "size": "40 kB",
+    "scans": "0",
+    "definition": "CREATE INDEX idx_items_sku_performance ON public.items USING btree (sku)",
+    "valid": true
+  },
+  {
+    "name": "idx_items_category_performance",
+    "size": "16 kB",
+    "scans": "0",
+    "definition": "CREATE INDEX idx_items_category_performance ON public.items USING btree (category)",
+    "valid": true
+  },
+  {
+    "name": "idx_order_lines_item_id_performance",
+    "size": "144 kB",
+    "scans": "0",
+    "definition": "CREATE INDEX idx_order_lines_item_id_performance ON public.order_lines USING btree (item_id)",
+    "valid": true
+  },
+  {
+    "name": "idx_order_lines_order",
+    "size": "184 kB",
+    "scans": "0",
+    "definition": "CREATE INDEX idx_order_lines_order ON public.order_lines USING btree (order_id)",
+    "valid": true
+  },
+  {
+    "name": "idx_order_lines_order_id_performance",
+    "size": "184 kB",
+    "scans": "0",
+    "definition": "CREATE INDEX idx_order_lines_order_id_performance ON public.order_lines USING btree (order_id)",
+    "valid": true
+  },
+  {
+    "name": "idx_orders_member",
+    "size": "104 kB",
+    "scans": "0",
+    "definition": "CREATE INDEX idx_orders_member ON public.orders USING btree (member_id)",
+    "valid": true
+  },
+  {
+    "name": "idx_orders_member_id_performance",
+    "size": "104 kB",
+    "scans": "0",
+    "definition": "CREATE INDEX idx_orders_member_id_performance ON public.orders USING btree (member_id)",
+    "valid": true
+  },
+  {
+    "name": "idx_orders_branch_status_performance",
+    "size": "56 kB",
+    "scans": "0",
+    "definition": "CREATE INDEX idx_orders_branch_status_performance ON public.orders USING btree (branch_id, status)",
+    "valid": true
+  }
+]

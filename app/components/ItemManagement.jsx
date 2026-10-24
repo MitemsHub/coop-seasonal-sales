@@ -143,9 +143,15 @@ export default function ItemManagement({ reloadToken }) {
   const updateItemImage = async (itemId, imageUrl) => {
     try {
       const versionedUrl = withVersion(imageUrl)
-      const { error } = await supabase.from('items').update({ image_url: versionedUrl }).eq('item_id', itemId)
-
-      if (error) throw error
+      // Goes through the admin API (server-side service-role write) instead of
+      // a direct anon-key update on `items` — RLS correctly blocks the latter.
+      const res = await fetch('/api/admin/items/set-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: itemId, image_url: versionedUrl }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) throw new Error(json.error || `Set-image failed (${res.status})`)
 
       await fetchItems()
       setRefreshKey((prev) => prev + 1)

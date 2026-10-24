@@ -1,6 +1,8 @@
 // app/api/rep/orders/update/route.js
 import { NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '../../../../../lib/supabaseServer'
+// Service-role client: the session above was already validated with the
+// rep token; under full RLS the anon-key cookie client would fail.
+import { createClient } from '../../../../../lib/supabaseServer'
 import { validateSession } from '../../../../../lib/validation'
 
 export async function PUT(request) {
@@ -29,7 +31,7 @@ export async function PUT(request) {
       return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
     }
 
-    const supabase = await createSupabaseServerClient()
+    const supabase = createClient()
 
     const { error: ordersColErr } = await supabase.from('orders').select('cycle_id').limit(1)
     const { error: pricesColErr } = await supabase.from('branch_item_prices').select('cycle_id').limit(1)

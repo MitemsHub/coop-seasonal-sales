@@ -1,6 +1,8 @@
 // app/api/rep/orders/cancel/route.js
 import { NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '../../../../../lib/supabaseServer'
+// Service-role client: the session above was already validated with the
+// admin/rep token; under full RLS the anon-key cookie client would fail.
+import { createClient } from '../../../../../lib/supabaseServer'
 import { validateSession } from '../../../../../lib/validation'
 import { csrfGuard } from '../../../../../lib/csrf'
 
@@ -28,7 +30,7 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
     }
 
-    const supabase = await createSupabaseServerClient()
+    const supabase = createClient()
 
     // Check if order exists and belongs to the rep's branch
     const { data: order, error: orderError } = await supabase

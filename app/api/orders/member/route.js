@@ -1,6 +1,9 @@
 // app/api/orders/member/route.js
 import { NextResponse } from 'next/server'
-import { createSupabaseServerClient } from '../../../../lib/supabaseServer'
+// Service-role client: this route validates its own admin/rep session (or
+// serves the public per-member lookup shaped above) and must keep working
+// under full RLS, which the anon-key cookie client would not bypass.
+import { createClient } from '../../../../lib/supabaseServer'
 import { validateSession } from '../../../../lib/validation'
 
 export async function GET(request) {
@@ -48,7 +51,7 @@ export async function GET(request) {
     // If no session tokens, assume it's a member request (members access via URL params)
     // This is acceptable since the UI controls access to member data
 
-    const supabase = await createSupabaseServerClient()
+    const supabase = createClient()
 
     let query = supabase
       .from('orders')

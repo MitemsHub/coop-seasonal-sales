@@ -87,32 +87,12 @@ function MyCoopContent() {
       setLoading(true)
       setError('')
 
-      // 1) Member profile snapshot
+      // 1) Member profile snapshot (via the server API — the browser no
+      // longer queries the members table directly)
       try {
-        const { data: m, error: mErr } = await supabase
-          .from('members')
-          .select(`
-            member_id,
-            full_name,
-            savings,
-            loans,
-            global_limit,
-            category,
-            branches:branch_id(code, name),
-            departments:department_id(name)
-          `)
-          .eq('member_id', memberId)
-          .maybeSingle()
-        if (!cancelled) {
-          if (!mErr) {
-            setProfile(m || null)
-          } else if (/failed to fetch|network|fetch/i.test(mErr.message || '')) {
-            // Network-level failure (e.g. Coop unreachable) — show a friendly hint.
-            setError('Could not reach the Coop right now. Check your connection and refresh to retry.')
-          } else if (!/no rows/i.test(mErr.message || '')) {
-            setError(mErr.message || 'Failed to load profile')
-          }
-        }
+        const res = await fetch(`/api/members/lookup?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' })
+        const json = await res.json().catch(() => null)
+        if (!cancelled) setProfile(json?.ok ? json.member : null)
       } catch {
         if (!cancelled) setError('Could not reach the Coop right now. Check your connection and refresh to retry.')
       }
@@ -135,26 +115,25 @@ function MyCoopContent() {
         console.error('Failed to load food orders:', e.message)
       }
 
-      // 4) Active food cycle
+      // 4) Active food cycle + 5) Active ram cycle (both via the server API)
+      let rc = null
       try {
-        const { data: fc } = await supabase.from('cycles').select('id, code, name, ends_at').eq('is_active', true).maybeSingle()
+        const cycRes = await fetch('/api/cycles/active', { cache: 'no-store' })
+        const cycJson = await cycRes.json().catch(() => null)
+        const fc = cycJson?.ok ? cycJson.food : null
+        rc = cycJson?.ok ? cycJson.ram : null
         if (!cancelled) setFoodCycle(fc || null)
+        if (!cancelled) setRamCycle(rc || null)
       } catch (e) {
-        console.error('Failed to load food cycle:', e.message)
+        console.error('Failed to load cycles:', e.message)
       }
 
-      // 5) Active ram cycle + ram order totals for this member
+      // 5b) RAM order totals for this member (via the server API)
       try {
-        const { data: rc } = await supabase.from('ram_cycles').select('id, code, name, ends_at').eq('is_active', true).maybeSingle()
-        if (!cancelled) setRamCycle(rc || null)
-
-        const { data: ramOrders } = await supabase
-          .from('ram_orders')
-          .select('id, status, total_amount, ram_cycle_id')
-          .eq('member_id', memberId)
-          .neq('status', 'Cancelled')
+        const ramRes = await fetch(`/api/ram/orders?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' })
+        const ramJson = await ramRes.json().catch(() => null)
         if (!cancelled) {
-          const rows = Array.isArray(ramOrders) ? ramOrders : []
+          const rows = (Array.isArray(ramJson?.orders) ? ramJson.orders : []).filter((r) => r.status !== 'Cancelled')
           const cycleRows = rc ? rows.filter((r) => Number(r.ram_cycle_id) === Number(rc.id)) : []
           setRamStats({
             count: rows.length,

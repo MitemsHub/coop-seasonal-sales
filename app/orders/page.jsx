@@ -183,31 +183,19 @@ function OrdersPageContent() {
 
   const loadRamOrders = async () => {
     try {
-      const { data, error } = await supabase
-        .from('ram_orders')
-        .select(
-          'id,member_id,status,created_at,payment_option,qty,unit_price,principal_amount,interest_amount,total_amount,ram_delivery_location_id'
-        )
-        .eq('member_id', memberId)
-        .order('created_at', { ascending: false })
-
-      if (error) throw new Error(error.message || 'Failed to load ram orders')
-      const rows = Array.isArray(data) ? data : []
+      const res = await fetch(`/api/ram/orders?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' })
+      const json = await res.json().catch(() => null)
+      if (!json?.ok) throw new Error(json?.error || 'Failed to load ram orders')
+      const rows = Array.isArray(json.orders) ? json.orders : []
       setRamOrders(rows)
 
-      const ids = Array.from(new Set(rows.map((r) => r?.ram_delivery_location_id).filter((x) => x != null)))
-      if (ids.length === 0) {
-        setRamLocations([])
-        return
-      }
-
-      const { data: locs, error: lErr } = await supabase
-        .from('ram_delivery_locations')
-        .select('id,delivery_location,name')
-        .in('id', ids)
-
-      if (lErr) throw new Error(lErr.message || 'Failed to load ram delivery locations')
-      setRamLocations(Array.isArray(locs) ? locs : [])
+      // Delivery locations now come from the shared server endpoint so the
+      // browser never reads `ram_delivery_locations` directly.
+      const locRes = await fetch('/api/ram/delivery-locations', { cache: 'no-store' })
+      const locJson = await locRes.json().catch(() => null)
+      const allLocs = Array.isArray(locJson?.locations) ? locJson.locations : []
+      const ids = new Set(rows.map((r) => r?.ram_delivery_location_id).filter((x) => x != null))
+      setRamLocations(allLocs.filter((l) => ids.has(l.id)))
     } catch (e) {
       setMessage({ type: 'error', text: e?.message || 'Failed to load ram orders' })
     }

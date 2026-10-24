@@ -185,13 +185,11 @@ function RamShopPageContent() {
           return
         }
 
-        const { data: memberData, error: mErr } = await supabase
-          .from('members')
-          .select('member_id,full_name,grade,savings,loans,global_limit,phone')
-          .eq('member_id', memberId)
-          .single()
+        const lookupRes = await fetch(`/api/members/lookup?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' })
+        const lookupJson = await lookupRes.json().catch(() => null)
+        const memberData = lookupJson?.ok ? lookupJson.member : null
 
-        if (mErr || !memberData) {
+        if (!memberData) {
           if (!cancelled) setMessage({ type: 'error', text: 'Member not found' })
           if (!cancelled) setMember(null)
           return

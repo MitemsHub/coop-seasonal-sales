@@ -22,17 +22,10 @@ function AdminOrdersPageContent() {
 
   const loadMembers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('members')
-        .select(`
-          member_id, 
-          full_name, 
-          branches:branch_id(code)
-        `)
-        .order('full_name')
-      
-      if (error) throw error
-      setMembers(data || [])
+      const res = await fetch('/api/admin/members/list', { cache: 'no-store' })
+      const json = await res.json().catch(() => null)
+      if (!json?.ok) throw new Error(json?.error || 'Failed to load members')
+      setMembers(json.members || [])
     } catch (error) {
       console.error('Error loading members:', error)
     }
@@ -41,35 +34,14 @@ function AdminOrdersPageContent() {
   const loadAllOrders = async () => {
     setLoading(true)
     try {
-      let query = supabase
-        .from('orders')
-        .select(`
-          *,
-          members!inner(full_name, branch_code),
-          branches!delivery_branch_code(name),
-          departments(name),
-          order_lines(
-            id,
-            qty,
-            unit_price,
-            amount,
-            items(sku, name, unit)
-          )
-        `)
-        .order('created_at', { ascending: false })
-
-      if (selectedMember) {
-        query = query.eq('member_id', selectedMember)
-      }
-
-      if (statusFilter) {
-        query = query.eq('status', statusFilter)
-      }
-
-      const { data, error } = await query
-      
-      if (error) throw error
-      setOrders(data || [])
+      const params = new URLSearchParams()
+      if (selectedMember) params.set('member_id', selectedMember)
+      if (statusFilter) params.set('status', statusFilter)
+      const qs = params.toString()
+      const res = await fetch(`/api/admin/food/orders/all${qs ? `?${qs}` : ''}`, { cache: 'no-store' })
+      const json = await res.json().catch(() => null)
+      if (!json?.ok) throw new Error(json?.error || 'Failed to load orders')
+      setOrders(json.orders || [])
     } catch (error) {
       console.error('Error loading orders:', error)
       setMessage({ type: 'error', text: 'Failed to load orders' })

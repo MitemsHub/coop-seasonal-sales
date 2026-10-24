@@ -132,32 +132,23 @@ function CartPageContent() {
     }
   }
 
-  // Lookup member from database
+  // Lookup member from database (now via the server API — the browser no
+  // longer queries the members table directly, so RLS can stay deny-all)
   const lookupMember = async (memberIdToLookup) => {
     if (!memberIdToLookup) return null
 
     const normalizedMemberId = memberIdToLookup.trim().toUpperCase()
-    const { data, error } = await supabase
-      .from('members')
-      .select(`
-        member_id,
-        full_name,
-        savings,
-        loans,
-        global_limit,
-        category,
-        branches:branch_id(code, name),
-        departments:department_id(name)
-      `)
-      .eq('member_id', normalizedMemberId)
-      .single()
-
-    if (error || !data) {
-      console.warn('Member not found:', normalizedMemberId)
+    try {
+      const res = await fetch(`/api/members/lookup?member_id=${encodeURIComponent(normalizedMemberId)}`, { cache: 'no-store' })
+      const json = await res.json().catch(() => null)
+      if (!json?.ok || !json.member) {
+        console.warn('Member not found:', normalizedMemberId)
+        return null
+      }
+      return json.member
+    } catch {
       return null
     }
-
-    return data
   }
 
   // Load member data and cart from localStorage
@@ -673,20 +664,6 @@ function CartPageContent() {
                     </button>
                   ))}
                 </div>
-
-                {/* Retiree eligibility prompt — spell out the savings-based rule */}
-                {eligibility?.group === 'retiree' && (
-                  loanEligible > 0 ? (
-                    <p className="mt-3 rounded-lg border border-line-subtle bg-subtle/60 px-3 py-2 text-xs text-muted">
-                      <span className="font-semibold text-fg">Retiree loan rule:</span> you can borrow at most your savings balance — the ×5 uplift does not apply. Your loan eligibility this cycle is{' '}
-                      <span className="font-semibold text-fg">₦{loanEligible.toLocaleString()}</span>.
-                    </p>
-                  ) : (
-                    <p className="mt-3 rounded-lg border border-line-subtle bg-danger-bg px-3 py-2 text-xs text-muted">
-                      <span className="font-semibold text-danger-fg">No loan this cycle.</span> Your outstanding loans have used up your savings balance, and retirees get no facility (grace) pool. Switch to Savings or Cash.
-                    </p>
-                  )
-                )}
 
                 {/* Quick Summary */}
                 <div className="mt-3 space-y-1.5 rounded-xl border border-line-subtle bg-subtle/60 p-3">
