@@ -351,10 +351,17 @@ export async function GET(request) {
       }
     }
 
+    // Every headline count — including the "All Orders"/"Total orders" figure —
+    // is scoped to the same operational statuses (Pending, Posted, Delivered) so
+    // the cards never disagree. Cancelled (and any other non-operational status)
+    // is deliberately excluded from "All Orders"; it has its own Cancelled page
+    // and would otherwise inflate the headline beyond the sum of the three
+    // status cards and cause confusion in both the dashboard and reports.
+    const COUNT_STATUSES = ['Pending','Posted','Delivered']
     let totalPostedQ = supabase.from('orders').select('order_id', { count: 'exact', head: true }).in('status', ['Posted','Delivered'])
     let totalPendingQ = supabase.from('orders').select('order_id', { count: 'exact', head: true }).eq('status', 'Pending')
     let totalDeliveredQ = supabase.from('orders').select('order_id', { count: 'exact', head: true }).eq('status', 'Delivered')
-    let totalAllQ = supabase.from('orders').select('order_id', { count: 'exact', head: true })
+    let totalAllQ = supabase.from('orders').select('order_id', { count: 'exact', head: true }).in('status', COUNT_STATUSES)
     if (ordersHasCycle) {
       totalPostedQ = totalPostedQ.eq('cycle_id', cycleId)
       totalPendingQ = totalPendingQ.eq('cycle_id', cycleId)
