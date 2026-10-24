@@ -12,6 +12,7 @@ import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import Input from '../../components/ui/Input'
 import Label from '../../components/ui/Label'
+import Select from '../../components/ui/Select'
 import Badge from '../../components/ui/Badge'
 import Skeleton from '../../components/ui/Skeleton'
 
@@ -334,7 +335,10 @@ function MemberLookupSection() {
   const [email, setEmail] = useState('')
   const [savings, setSavings] = useState('')
   const [loans, setLoans] = useState('')
-  const [limit, setLimit] = useState('')
+  // Status (grade) dropdown — the member's loan ceiling follows their grade
+  const [gradeSel, setGradeSel] = useState('')
+  const [gradeOptions, setGradeOptions] = useState([])
+  const [gradeLoading, setGradeLoading] = useState(true)
   const [portalEnabled, setPortalEnabled] = useState(true)
   const [hasPassword, setHasPassword] = useState(false)
   const [hasAuth, setHasAuth] = useState(false)
@@ -346,6 +350,18 @@ function MemberLookupSection() {
   const [pwSaving, setPwSaving] = useState(false)
   const [saving, setSaving] = useState(false)
   const debounceRef = useRef(null)
+
+  // Load the status list (grade_limits) once — the dropdown shows each grade
+  // with its default loan ceiling, and saving a grade applies that ceiling.
+  useEffect(() => {
+    let alive = true
+    fetch('/api/admin/grade-limits', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => { if (alive && j?.ok) setGradeOptions(sortGradeLimits(j.limits || [])) })
+      .catch(() => {})
+      .finally(() => { if (alive) setGradeLoading(false) })
+    return () => { alive = false }
+  }, [])
 
   const search = useCallback(async (term) => {
     if (String(term || '').trim().length < 2) {
@@ -380,7 +396,7 @@ function MemberLookupSection() {
     setEmail(m.email || '')
     setSavings(m.savings != null && m.savings !== '' ? String(m.savings) : '')
     setLoans(m.loans != null && m.loans !== '' ? String(m.loans) : '')
-    setLimit(m.global_limit != null && m.global_limit !== '' ? String(m.global_limit) : '')
+    setGradeSel(m.grade || '')
     setPortalEnabled(m.portal_enabled !== false)
     setHasPassword(Boolean(m.has_password))
     setHasAuth(Boolean(m.has_auth))
@@ -473,8 +489,9 @@ function MemberLookupSection() {
       if (savingsVal != null && savingsVal !== Number(member.savings || 0)) payload.savings = savingsVal
       const loansVal = numField(loans, member.loans)
       if (loansVal != null && loansVal !== Number(member.loans || 0)) payload.loans = loansVal
-      const limitVal = numField(limit, member.global_limit)
-      if (limitVal != null && limitVal !== Number(member.global_limit || 0)) payload.global_limit = limitVal
+      // Only send the status when it actually changed — the server applies
+      // the new grade's default limit along with it.
+      if (gradeSel && gradeSel.trim().toLowerCase() !== String(member.grade || '').trim().toLowerCase()) payload.grade = gradeSel
       if (portalEnabled !== (member.portal_enabled !== false)) payload.portal_enabled = portalEnabled
       if (Object.keys(payload).length === 1) {
         setMsg('Nothing to update — make a change and try again.')
@@ -501,7 +518,7 @@ function MemberLookupSection() {
     <Card>
       <Card.Header>
         <Card.Title>Member details</Card.Title>
-        <Card.Description>Look up a member and edit their name, phone, email, savings or loans.</Card.Description>
+        <Card.Description>Look up a member and edit their name, phone, email, savings, loans or status.</Card.Description>
       </Card.Header>
       <Card.Body className="space-y-3">
         <div className="relative">
@@ -541,7 +558,7 @@ function MemberLookupSection() {
                     )}
                   </p>
                   <p className="text-chips text-muted">
-                    {m.member_id} · {m.branch_name || '—'} · {m.phone || 'no phone'} · savings ₦{Number(m.savings || 0).toLocaleString()} · loans ₦{Number(m.loans || 0).toLocaleString()}
+                    {m.member_id}{m.grade ? ` · ${m.grade}` : ''} · {m.branch_name || '—'} · {m.phone || 'no phone'} · savings ₦{Number(m.savings || 0).toLocaleString()} · loans ₦{Number(m.loans || 0).toLocaleString()}
                   </p>
                 </div>
                 <Button size="sm" variant="secondary" leftIcon={Pencil} onClick={() => openEdit(m)}>
@@ -558,7 +575,7 @@ function MemberLookupSection() {
           {member && (
             <div className="rounded-lg bg-subtle px-3 py-2 text-sm">
               <p className="font-semibold text-fg">{member.full_name || member.member_id}</p>
-              <p className="text-xs text-muted">{member.branch_name || '—'} · savings ₦{Number(member.savings || 0).toLocaleString()} · loans ₦{Number(member.loans || 0).toLocaleString()} · limit ₦{Number(member.global_limit || 0).toLocaleString()}</p>
+              <p className="text-xs text-muted">{member.grade ? `${member.grade} · ` : ''}{member.branch_name || '—'} · savings ₦{Number(member.savings || 0).toLocaleString()} · loans ₦{Number(member.loans || 0).toLocaleString()} · limit ₦{Number(member.global_limit || 0).toLocaleString()}</p>
             </div>
           )}
           <div>
@@ -640,11 +657,36 @@ function MemberLookupSection() {
               <Input id="m-loans" type="number" min="0" step="0.01" value={loans} onChange={(e) => setLoans(e.target.value)} placeholder="e.g. 500000" />
             </div>
             <div className="sm:col-span-2">
-              <Label htmlFor="m-limit">Global limit (₦)</Label>
-              <Input id="m-limit" type="number" min="0" step="0.01" value={limit} onChange={(e) => setLimit(e.target.value)} placeholder="e.g. 3800000" />
+              <Label htmlFor="m-grade">Status</Label>
+              <Select
+                id="m-grade"
+                value={gradeSel}
+                onChange={(e) => setGradeSel(e.target.value)}
+                disabled={gradeLoading || saving}
+                placeholder={gradeLoading ? 'Loading statuses…' : '— select status —'}
+              >
+                {/* A grade that drifted off the list still shows as the current value */}
+                {gradeSel && !gradeOptions.some((g) => g.grade.toLowerCase() === gradeSel.toLowerCase()) && (
+                  <option value={gradeSel}>{gradeSel} (current)</option>
+                )}
+                {gradeOptions.map((g) => (
+                  <option key={g.grade} value={g.grade}>
+                    {g.grade} — ₦{Number(g.global_limit || 0).toLocaleString()}
+                  </option>
+                ))}
+              </Select>
               <p className="mt-1 text-[11px] text-muted">
-                This member's loan ceiling. Saving a new value updates it everywhere the limit is checked (shop, eligibility, RAM orders) — eligibility re-reads it on the member's next page load.
+                The member's loan ceiling follows their status. Saving a new status sets their Global limit to that status's default — applied everywhere the limit is checked (shop, eligibility, RAM orders). Edit the defaults in the Global limits section above.
               </p>
+              {(() => {
+                const sel = gradeOptions.find((g) => g.grade.toLowerCase() === String(gradeSel || '').trim().toLowerCase())
+                const changed = sel && String(gradeSel || '').trim().toLowerCase() !== String(member?.grade || '').trim().toLowerCase()
+                return changed ? (
+                  <p className="mt-1 text-[11px] font-medium text-fg">
+                    Saving sets the loan ceiling to ₦{Number(sel.global_limit || 0).toLocaleString()} (was ₦{Number(member?.global_limit || 0).toLocaleString()}).
+                  </p>
+                ) : null
+              })()}
             </div>
           </div>
           <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-subtle px-3 py-3">

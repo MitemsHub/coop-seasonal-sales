@@ -1,8 +1,15 @@
 // app/api/admin/members/update/route.js
 // Admin update of a member's details from Members Settings — name, phone,
-// email, savings, loans, portal access, and a per-member global loan limit.
+// email, savings, loans, portal access, and the member's status (grade).
 //   PATCH { member_id, full_name?, phone?, email?, savings?, loans?,
-//           portal_enabled?, global_limit? }
+//           portal_enabled?, grade?, global_limit? }
+//
+// Status (grade) is the primary way the loan ceiling is set: sending a new
+// grade validates it against grade_limits and applies that grade's default
+// as the member's global_limit in the same write, so the two never drift.
+// Sending the grade the member already has leaves the limit untouched (it
+// keeps any per-member override). global_limit is still accepted on its own
+// for API compatibility, but the Members Settings UI no longer sends it.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
@@ -64,17 +71,51 @@ export async function PATCH(request) {
       if (!Number.isFinite(limit) || limit < 0) throw new Error('Global limit must be a non-negative number')
       patch.global_limit = Math.round(limit * 100) / 100
     }
+    if (body.grade !== undefined && body.grade !== null) {
+      const gradeName = cleanText(body.grade, 80)
+      if (!gradeName) return NextResponse.json({ ok: false, error: 'Status cannot be empty' }, { status: 400 })
+      patch.grade = gradeName
+    }
 
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ ok: false, error: 'Nothing to update' }, { status: 400 })
     }
 
     const supabase = createClient()
+
+    // Status (grade) drives the loan ceiling — validate it against
+    // grade_limits and, when it actually changes, apply that grade's default
+    // as the member's global_limit in the same write.
+    if (patch.grade) {
+      const { data: grades, error: gErr } = await supabase.from('grade_limits').select('grade, global_limit')
+      if (gErr) return NextResponse.json({ ok: false, error: gErr.message }, { status: 500 })
+      const wanted = patch.grade.toLowerCase()
+      const match = (grades || []).find((g) => String(g.grade || '').trim().toLowerCase() === wanted)
+      if (!match) {
+        return NextResponse.json(
+          { ok: false, error: `Unknown status "${patch.grade}" — choose one from the status list` },
+          { status: 400 }
+        )
+      }
+      patch.grade = match.grade // canonical spelling from the list
+
+      const { data: current, error: cErr } = await supabase
+        .from('members')
+        .select('grade')
+        .eq('member_id', memberId)
+        .maybeSingle()
+      if (cErr) return NextResponse.json({ ok: false, error: cErr.message }, { status: 500 })
+      if (!current) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
+
+      const unchanged = String(current.grade || '').trim().toLowerCase() === patch.grade.toLowerCase()
+      if (!unchanged) patch.global_limit = Number(match.global_limit) || 0
+    }
+
     const { data, error } = await supabase
       .from('members')
       .update(patch)
       .eq('member_id', memberId)
-      .select('member_id, full_name, phone, email, savings, loans, global_limit, status, portal_enabled')
+      .select('member_id, full_name, phone, email, savings, loans, global_limit, grade, status, portal_enabled')
       .maybeSingle()
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     if (!data) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
@@ -89,6 +130,7 @@ export async function PATCH(request) {
         savings: data.savings,
         loans: data.loans,
         global_limit: data.global_limit,
+        grade: data.grade || '',
         status: data.status,
         portal_enabled: data.portal_enabled !== false,
       },

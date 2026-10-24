@@ -22,7 +22,7 @@ export async function GET(request) {
     const supabase = createClient()
     const { data, error } = await supabase
       .from('members')
-      .select('member_id, full_name, phone, email, savings, loans, global_limit, status, portal_enabled, password_hash, auth_user_id, branch_id, branches:branch_id(name, code)')
+      .select('member_id, full_name, phone, email, savings, loans, global_limit, grade, status, portal_enabled, password_hash, auth_user_id, branch_id, branches:branch_id(name, code)')
       .or(`member_id.ilike.%${q}%,full_name.ilike.%${q}%,phone.ilike.%${q}%`)
       .order('member_id')
       .limit(25)
@@ -38,6 +38,9 @@ export async function GET(request) {
         savings: m.savings,
         loans: m.loans,
         global_limit: m.global_limit,
+        // Staff status/rank (Director, Senior Supervisor 1, …) — drives the
+        // member's global limit via the grade_limits defaults
+        grade: m.grade || '',
         status: m.status,
         portal_enabled: m.portal_enabled !== false,
         // Never expose the hash itself — only whether the member has one
