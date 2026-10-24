@@ -674,6 +674,20 @@ function CartPageContent() {
                   ))}
                 </div>
 
+                {/* Retiree eligibility prompt — spell out the savings-based rule */}
+                {eligibility?.group === 'retiree' && (
+                  loanEligible > 0 ? (
+                    <p className="mt-3 rounded-lg border border-line-subtle bg-subtle/60 px-3 py-2 text-xs text-muted">
+                      <span className="font-semibold text-fg">Retiree loan rule:</span> you can borrow at most your savings balance — the ×5 uplift does not apply. Your loan eligibility this cycle is{' '}
+                      <span className="font-semibold text-fg">₦{loanEligible.toLocaleString()}</span>.
+                    </p>
+                  ) : (
+                    <p className="mt-3 rounded-lg border border-line-subtle bg-danger-bg px-3 py-2 text-xs text-muted">
+                      <span className="font-semibold text-danger-fg">No loan this cycle.</span> Your outstanding loans have used up your savings balance, and retirees get no facility (grace) pool. Switch to Savings or Cash.
+                    </p>
+                  )
+                )}
+
                 {/* Quick Summary */}
                 <div className="mt-3 space-y-1.5 rounded-xl border border-line-subtle bg-subtle/60 p-3">
                   <div className="flex justify-between text-xs text-muted">

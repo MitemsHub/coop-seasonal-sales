@@ -77,6 +77,39 @@ function MemberInfoSkeleton() {
   )
 }
 
+// Plain-language prompt of what this member can shop for this cycle.
+// Retirees get the savings-based rule spelled out (no ×5 uplift), because
+// that's the group the numbers surprise the most.
+function EligibilityBanner({ eligibility }) {
+  if (!eligibility) return null
+  const group = String(eligibility.group || '')
+  const loanEligible = Number(eligibility.loanEligible || 0)
+  const savingsEligible = Number(eligibility.savingsEligible || 0)
+  const outstanding = Number(eligibility.outstandingLoansTotal || 0)
+  if (group === 'retiree') {
+    if (loanEligible > 0) {
+      return (
+        <div className="mt-2 rounded-lg border border-line-subtle bg-subtle/60 px-3 py-2 text-xs text-muted">
+          <span className="font-semibold text-fg">Retiree loan rule:</span> you can borrow at most your savings balance — the ×5 uplift does not apply. Your loan eligibility this cycle is{' '}
+          <span className="font-semibold text-fg">{naira(loanEligible)}</span> (outstanding loans already reduce this). You can also spend up to{' '}
+          <span className="font-semibold text-fg">{naira(savingsEligible)}</span> from savings, or pay cash.
+        </div>
+      )
+    }
+    return (
+      <div className="mt-2 rounded-lg border border-line-subtle bg-danger-bg px-3 py-2 text-xs text-muted">
+        <span className="font-semibold text-danger-fg">No loan this cycle.</span> Retirees can only borrow up to their savings balance, and your outstanding loans ({naira(outstanding)}) have used it all — there is no facility (grace) pool for retirees. You can still pay by Cash or Savings ({naira(savingsEligible)} available).
+      </div>
+    )
+  }
+  return (
+    <div className="mt-2 rounded-lg border border-line-subtle bg-subtle/60 px-3 py-2 text-xs text-muted">
+      This cycle you can borrow up to <span className="font-semibold text-fg">{naira(loanEligible)}</span> on loan, or spend up to{' '}
+      <span className="font-semibold text-fg">{naira(savingsEligible)}</span> from savings. Cash has no limit.
+    </div>
+  )
+}
+
 function ShopPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -1149,6 +1182,7 @@ const itemCards = useMemo(() => (
               ) : member ? (
                 <div className="mt-3 border-t border-line-subtle pt-3">
                   <MemberInfoGrid member={member} eligibility={eligibility} />
+                  <EligibilityBanner eligibility={eligibility} />
                 </div>
               ) : null}
             </Card>
@@ -1170,7 +1204,10 @@ const itemCards = useMemo(() => (
               </div>
               <div className="mt-3">
                 {member ? (
-                  <MemberInfoGrid member={member} eligibility={eligibility} />
+                  <>
+                    <MemberInfoGrid member={member} eligibility={eligibility} />
+                    <EligibilityBanner eligibility={eligibility} />
+                  </>
                 ) : (
                   <MemberInfoSkeleton />
                 )}
