@@ -90,7 +90,7 @@ function DataManagementPageContent() {
       if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load policy')
       const p = json.policy || {}
       setEligibleLoanMaxPensioner(String(Number(p?.eligible?.pensioner || 0)))
-      setEligibleLoanMaxRetiree(String(Number(p?.eligible?.retiree || 0)))
+      setEligibleLoanMaxRetiree(String(Math.max(0, Number(p?.eligible?.retiree || 0))))
       setEligibleLoanMaxActive(String(Number(p?.eligible?.active || 0)))
       setGraceLoanMaxPensioner(String(Number(p?.grace?.pensioner || 0)))
       setGraceLoanMaxRetiree(String(Number(p?.grace?.retiree || 0)))
@@ -158,7 +158,7 @@ function DataManagementPageContent() {
       setPolicyMsg('Food cycle policy saved successfully')
       const p = json.policy || {}
       setEligibleLoanMaxPensioner(String(Number(p?.eligible?.pensioner || 0)))
-      setEligibleLoanMaxRetiree(String(Number(p?.eligible?.retiree || 0)))
+      setEligibleLoanMaxRetiree(String(Math.max(0, Number(p?.eligible?.retiree || 0))))
       setEligibleLoanMaxActive(String(Number(p?.eligible?.active || 0)))
       setGraceLoanMaxPensioner(String(Number(p?.grace?.pensioner || 0)))
       setGraceLoanMaxRetiree(String(Number(p?.grace?.retiree || 0)))
@@ -239,6 +239,9 @@ function DataManagementPageContent() {
     { label: 'Pensioner · savings ₦80,000 · owes ₦50,000 this cycle', group: 'pensioner', savings: 80000, outstanding: 50000, cycleUsed: 50000 },
     { label: 'Pensioner · NO savings', group: 'pensioner', savings: 0, outstanding: 0, cycleUsed: 0 },
   ]
+  const previewBase = (s) =>
+    // RETIREE RULE: retirees borrow at most their savings balance, not 5×.
+    Math.max(0, (s.group === 'retiree' ? s.savings : s.savings * 5) - s.outstanding)
   const previewRow = (s) => {
     const eligibleCap = policyNum(
       s.group === 'pensioner' ? eligibleLoanMaxPensioner : s.group === 'retiree' ? eligibleLoanMaxRetiree : eligibleLoanMaxActive
@@ -246,8 +249,7 @@ function DataManagementPageContent() {
     const graceCap = policyNum(
       s.group === 'pensioner' ? graceLoanMaxPensioner : s.group === 'retiree' ? graceLoanMaxRetiree : graceLoanMaxActive
     )
-    // RETIREE RULE: retirees borrow at most their savings balance, not 5×.
-    const base = Math.max(0, (s.group === 'retiree' ? s.savings : s.savings * 5) - s.outstanding)
+    const base = previewBase(s)
     if (eligibleCap > 0) {
       const totalBorrowable = base + graceCap
       const ceiling = Math.max(0, eligibleCap - s.cycleUsed)
@@ -919,7 +921,7 @@ function DataManagementPageContent() {
               </summary>
               <div className="px-3 pb-3">
                 <p className="text-xs text-muted mb-2">
-                  Maximum Loan per cycle each scenario member could reach: limit = min(savings×payment + facility pool, category cap − already used). With include-interest ON the cap counts principal + interest; OFF, principal only.
+                  Maximum Loan per cycle each scenario member could reach: limit = min(savings-based base + facility pool, category cap − already used). Retirees base on savings only (capped at the Eligible ceiling above), everyone else savings × 5. With include-interest ON the cap counts principal + interest; OFF, principal only.
                   {includeInterestInCap ? ' Currently ON.' : ' Currently OFF.'} Rate {ratePctNum}%
                 </p>
                 <div className="overflow-x-auto">
@@ -940,7 +942,7 @@ function DataManagementPageContent() {
                         return (
                           <tr key={s.label} className="border-t border-line-subtle/60 align-top">
                             <td className="py-1.5 pr-3 text-fg">{s.label}</td>
-                            <td className="py-1.5 pr-3 text-muted">{naira(s.savings * 5 - s.outstanding)}</td>
+                            <td className="py-1.5 pr-3 text-muted">{naira(previewBase(s))}</td>
                             <td className={`py-1.5 pr-3 font-semibold ${loanEligible > 0 ? 'text-fg' : 'text-muted'}`}>{naira(loanEligible)}{loanEligible === 0 && <span className='ml-1 text-muted'>({mode})</span>}</td>
                             <td className="py-1.5 pr-3 text-fg">{naira(withInterest)} <span className="text-muted">(repay), cap sees {naira(includeInterestInCap ? withInterest : principal)}</span></td>
                           </tr>

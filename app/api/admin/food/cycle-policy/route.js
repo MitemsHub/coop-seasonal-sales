@@ -86,13 +86,20 @@ export async function GET(req) {
     const graceFallback = Number(data.food_loan_grace_amount_cap || 0)
     const ratePct = hasLoanRate ? Number(data.food_loan_interest_rate_pct || 0) : 13
 
+    // RETIREE eligible cap sentinel: a NEGATIVE retiree cap (−1) means
+    // "Savings-based (dynamic)" — the retiree's limit is their savings
+    // balance minus outstanding loans, with the grace (facility) pool added.
+    // There is no fixed admin number in that mode.
+    const retireeRaw = hasPolicyV2 ? Number(data.food_loan_eligible_amount_cap_retiree || 0) : eligibleFallback
+
     return NextResponse.json({
       ok: true,
       cycle_id: data.id,
       policy: {
         eligible: {
           pensioner: hasPolicyV2 ? Number(data.food_loan_eligible_amount_cap_pensioner || 0) : eligibleFallback,
-          retiree: hasPolicyV2 ? Number(data.food_loan_eligible_amount_cap_retiree || 0) : eligibleFallback,
+          retiree: retireeRaw,
+          retiree_mode: retireeRaw < 0 ? 'savings' : 'fixed',
           active: hasPolicyV2 ? Number(data.food_loan_eligible_amount_cap_active || 0) : eligibleFallback,
         },
         grace: {
@@ -150,7 +157,11 @@ export async function POST(req) {
     const eligible = body?.eligible || {}
     const grace = body?.grace || {}
     const eligibleP = asNonNegInt(eligible?.pensioner ?? body?.food_loan_eligible_amount_cap_pensioner)
-    const eligibleR = asNonNegInt(eligible?.retiree ?? body?.food_loan_eligible_amount_cap_retiree)
+    // Retiree accepts the "Savings-based (dynamic)" mode: the client sends
+    // either the string 'savings'/sentinel −1 (store −1), or a fixed cap ≥ 0.
+    const retireeRaw = eligible?.retiree ?? body?.food_loan_eligible_amount_cap_retiree
+    const retireeIsSavingsMode = retireeRaw === 'savings' || retireeRaw === 'SAVINGS' || retireeRaw === -1 || (typeof retireeRaw === 'number' && retireeRaw < 0)
+    const eligibleR = retireeIsSavingsMode ? -1 : asNonNegInt(retireeRaw)
     const eligibleA = asNonNegInt(eligible?.active ?? body?.food_loan_eligible_amount_cap_active)
     const graceP = asNonNegInt(grace?.pensioner ?? body?.food_loan_grace_amount_cap_pensioner)
     const graceR = asNonNegInt(grace?.retiree ?? body?.food_loan_grace_amount_cap_retiree)
@@ -208,13 +219,16 @@ export async function POST(req) {
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     if (!data?.id) return NextResponse.json({ ok: false, error: 'Cycle not found' }, { status: 404 })
 
+    const retireeSaved = hasPolicyV2 ? Number(data.food_loan_eligible_amount_cap_retiree || 0) : Number(data.food_loan_eligible_amount_cap || 0)
+
     return NextResponse.json({
       ok: true,
       cycle_id: data.id,
       policy: {
         eligible: {
           pensioner: hasPolicyV2 ? Number(data.food_loan_eligible_amount_cap_pensioner || 0) : Number(data.food_loan_eligible_amount_cap || 0),
-          retiree: hasPolicyV2 ? Number(data.food_loan_eligible_amount_cap_retiree || 0) : Number(data.food_loan_eligible_amount_cap || 0),
+          retiree: retireeSaved,
+          retiree_mode: retireeSaved < 0 ? 'savings' : 'fixed',
           active: hasPolicyV2 ? Number(data.food_loan_eligible_amount_cap_active || 0) : Number(data.food_loan_eligible_amount_cap || 0),
         },
         grace: {

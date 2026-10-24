@@ -1,6 +1,8 @@
 // app/api/admin/members/search/route.js
 // Admin member lookup for the Members Settings module — find a member by
 // staff ID, name or phone so staff can set/reset their details.
+// Also exposes has_password (boolean) so the admin can see and reset a
+// pensioner's local portal password from this singular view.
 //   GET /api/admin/members/search?q=...
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
@@ -20,7 +22,7 @@ export async function GET(request) {
     const supabase = createClient()
     const { data, error } = await supabase
       .from('members')
-      .select('member_id, full_name, phone, email, savings, loans, global_limit, status, portal_enabled, branch_id, branches:branch_id(name, code)')
+      .select('member_id, full_name, phone, email, savings, loans, global_limit, status, portal_enabled, password_hash, branch_id, branches:branch_id(name, code)')
       .or(`member_id.ilike.%${q}%,full_name.ilike.%${q}%,phone.ilike.%${q}%`)
       .order('member_id')
       .limit(25)
@@ -38,6 +40,8 @@ export async function GET(request) {
         global_limit: m.global_limit,
         status: m.status,
         portal_enabled: m.portal_enabled !== false,
+        // Never expose the hash itself — only whether the member has one
+        has_password: Boolean(m.password_hash),
         branch_name: m.branches?.name || '',
         branch_code: m.branches?.code || '',
       })),

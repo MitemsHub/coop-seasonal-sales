@@ -12,6 +12,7 @@ const STEP = {
   ENTER_EMAIL: 'enter_email',
   ENTER_OTP: 'enter_otp',
   SET_PASSWORD: 'set_password',
+  SET_LOCAL_PASSWORD: 'set_local_password',
   ENTER_PASSWORD: 'enter_password',
   FORGOT_PASSWORD: 'forgot_password',
 }
@@ -79,7 +80,7 @@ function MemberIdInput({ value, onChange, validation, memberStatus, isChecking, 
               <svg className="w-3 h-3 md:w-4 md:h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Password not set up yet — please visit the admin office to set your portal password
+              Password not set up yet — tap Continue below to create your own password
             </div>
           ) : memberStatus === 'found' ? (
             <div className="flex items-center text-brand">
@@ -110,7 +111,7 @@ function MemberIdInput({ value, onChange, validation, memberStatus, isChecking, 
         type="submit"
         disabled={!validation.isValid || !memberStatus || isChecking || memberStatus === 'not_found'}
         className={`w-full inline-flex items-center justify-center px-4 py-2 md:px-6 md:py-3 text-sm md:text-base font-semibold rounded-xl transition-all duration-200 ${
-          validation.isValid && memberStatus === 'found' && !isChecking
+          validation.isValid && (memberStatus === 'found' || memberStatus === 'no_password') && !isChecking
             ? 'bg-brand hover:bg-brand-hover text-on-accent shadow-lg hover:shadow-xl'
             : 'bg-subtle text-muted cursor-not-allowed'
         }`}
@@ -645,10 +646,18 @@ export default function MemberAuth() {
   const handleIdSubmit = (e) => {
     e.preventDefault()
     const mid = memberId.trim().toUpperCase()
-    if (!validation.isValid || memberStatus !== 'found') return
+    if (!validation.isValid || (memberStatus !== 'found' && memberStatus !== 'no_password')) return
     // Pensioners sign in with a locally-set password — no email involved
     if (passwordOnly) {
-      if (!hasLocalPassword) return
+      if (!hasLocalPassword) {
+        // First time: the pensioner creates their own password (no admin
+        // office visit needed) — only while the account has no password yet.
+        setPassword('')
+        setConfirmPassword('')
+        setError('')
+        setStep(STEP.SET_LOCAL_PASSWORD)
+        return
+      }
       setStep(STEP.ENTER_PASSWORD)
       return
     }
@@ -786,6 +795,42 @@ export default function MemberAuth() {
     }
   }
 
+  // ── Step 2a (pensioners, first time): Create local password ──
+  const handleSelfSetPasswordSubmit = async (e) => {
+    e.preventDefault()
+    if (password.length < 6 || password !== confirmPassword) return
+    setIsLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/members/auth/self-set-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          memberId: memberId.trim().toUpperCase(),
+          password,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setHasLocalPassword(true)
+        login({
+          type: 'member',
+          id: memberId.trim().toUpperCase(),
+          authenticated: true,
+          ...(data.member || {}),
+        })
+        await new Promise((r) => setTimeout(r, 400))
+        router.push('/my-coop')
+      } else {
+        setError(data.error || 'Failed to set up password')
+      }
+    } catch {
+      setError('Network error. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   // ── Navigation helpers ──
   const goToId = () => {
     setStep(STEP.ENTER_ID)
@@ -811,6 +856,7 @@ export default function MemberAuth() {
     [STEP.ENTER_EMAIL]: { title: 'Confirm your email', sub: 'We\u2019ll send a verification code to the email on file' },
     [STEP.ENTER_OTP]: { title: 'Enter verification code', sub: 'Enter the 6-digit code sent to your email' },
     [STEP.SET_PASSWORD]: { title: 'Set your password', sub: 'This will be your password for future sign-ins' },
+    [STEP.SET_LOCAL_PASSWORD]: { title: 'Create your password', sub: 'Choose a password you will remember — you will sign in with your Staff ID and this password' },
     [STEP.ENTER_PASSWORD]: { title: 'Welcome back', sub: 'Enter your password to sign in' },
     [STEP.FORGOT_PASSWORD]: { title: 'Reset password', sub: "We'll help you get back into your account" },
   }
@@ -884,6 +930,20 @@ export default function MemberAuth() {
           isLoading={isLoading}
           onSubmit={handlePasswordSubmit}
           onBack={() => { setStep(STEP.ENTER_OTP); setError('') }}
+        />
+      )}
+
+      {/* Step: Create local password (pensioners, first time) */}
+      {step === STEP.SET_LOCAL_PASSWORD && (
+        <PasswordSetup
+          password={password}
+          setPassword={setPassword}
+          confirmPassword={confirmPassword}
+          setConfirmPassword={setConfirmPassword}
+          error={error}
+          isLoading={isLoading}
+          onSubmit={handleSelfSetPasswordSubmit}
+          onBack={() => { setStep(STEP.ENTER_ID); setError('') }}
         />
       )}
 

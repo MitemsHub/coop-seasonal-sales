@@ -104,10 +104,11 @@ export async function POST(request) {
     }
 
     // A pensioner WITHOUT a local password and without an email/auth set-up
-    // can never complete the email-OTP flow — tell them who can fix it.
+    // can never complete the email-OTP flow — point them to the self-service
+    // first-time setup on the sign-in card (enter Staff ID → Continue).
     if (isPensionerId && (!member.email || !member.auth_user_id)) {
       return NextResponse.json(
-        { error: 'Your portal password has not been set up yet. Please ask the co-op admin to set it up for you.' },
+        { error: 'Your portal password has not been set up yet. Please sign in with your Staff ID on the portal to create your password, or ask the co-op admin for help.' },
         { status: 403 }
       )
     }

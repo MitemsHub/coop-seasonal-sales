@@ -5,7 +5,7 @@
 //   • Members Import (moved from the food Import page) with the import log
 //   • Member details set/reset — name, phone, and account management
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Check, FileSpreadsheet, Pencil, RefreshCw, RotateCcw, Search, UserRound } from 'lucide-react'
+import { Check, FileSpreadsheet, KeyRound, Pencil, RefreshCw, RotateCcw, Search, UserRound } from 'lucide-react'
 import ProtectedRoute from '../../components/ProtectedRoute'
 import DraggableModal from '../../components/DraggableModal'
 import Button from '../../components/ui/Button'
@@ -335,6 +335,13 @@ function MemberLookupSection() {
   const [savings, setSavings] = useState('')
   const [loans, setLoans] = useState('')
   const [portalEnabled, setPortalEnabled] = useState(true)
+  const [hasPassword, setHasPassword] = useState(false)
+  // Inline set/reset portal password sub-modal (pensioners)
+  const [pwOpen, setPwOpen] = useState(false)
+  const [pwPassword, setPwPassword] = useState('')
+  const [pwConfirm, setPwConfirm] = useState('')
+  const [pwError, setPwError] = useState('')
+  const [pwSaving, setPwSaving] = useState(false)
   const [saving, setSaving] = useState(false)
   const debounceRef = useRef(null)
 
@@ -372,8 +379,46 @@ function MemberLookupSection() {
     setSavings(m.savings != null && m.savings !== '' ? String(m.savings) : '')
     setLoans(m.loans != null && m.loans !== '' ? String(m.loans) : '')
     setPortalEnabled(m.portal_enabled !== false)
+    setHasPassword(Boolean(m.has_password))
     setMsg('')
     setModalOpen(true)
+  }
+
+  // Portal password set/reset — POST /api/admin/members/set-password
+  // (server-side this endpoint only accepts "P"-prefixed pensioner accounts,
+  // matching the local-password sign-in flow).
+  const submitPw = async () => {
+    if (!member) return
+    if (pwPassword.length < 6) {
+      setPwError('Password must be at least 6 characters')
+      return
+    }
+    if (pwPassword !== pwConfirm) {
+      setPwError('Passwords do not match')
+      return
+    }
+    setPwSaving(true)
+    setPwError('')
+    try {
+      const res = await fetch('/api/admin/members/set-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ member_id: member.member_id, password: pwPassword }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to set password')
+      setHasPassword(true)
+      setPwOpen(false)
+      setPwPassword('')
+      setPwConfirm('')
+      setMsg('')
+      // Refresh the list so the status line reflects the new state
+      search(q)
+    } catch (e) {
+      setPwError(e.message)
+    } finally {
+      setPwSaving(false)
+    }
   }
 
   const save = async () => {
@@ -449,6 +494,11 @@ function MemberLookupSection() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-fg">
                     {m.full_name || m.member_id}
+                    {m.member_id?.toUpperCase?.().startsWith?.('P') && (
+                      <span className={`ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${m.has_password ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'}`}>
+                        {m.has_password ? 'PW set' : 'No PW'}
+                      </span>
+                    )}
                     {m.portal_enabled === false && (
                       <span className="ml-2 inline-flex items-center rounded-full bg-danger-bg px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-danger-fg">
                         No portal access
@@ -488,6 +538,34 @@ function MemberLookupSection() {
             <Label htmlFor="m-email">Email address</Label>
             <Input id="m-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="member@example.com" />
             <p className="mt-1 text-[11px] text-muted">Required for member auth signup — OTP will be sent to this email.</p>
+          </div>
+          {/* Portal password (pensioners sign in with Staff ID + local password) */}
+          <div className="rounded-lg border border-line bg-subtle px-3 py-3">
+            <Label htmlFor="m-portal-pw">Portal password</Label>
+            {member?.member_id?.toUpperCase?.().startsWith('P') ? (
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <p className="flex min-w-0 items-center gap-2 text-[11px] text-muted">
+                  <KeyRound className="h-3.5 w-3.5 shrink-0 text-muted" />
+                  {hasPassword
+                    ? 'Password is set. To reset it (e.g. forgotten), enter a new one below — it replaces the old password immediately.'
+                    : 'No password yet — the member can create one themselves on their first portal sign-in, or set one here.'}
+                </p>
+                <Button
+                  id="m-portal-pw"
+                  size="sm"
+                  variant="secondary"
+                  leftIcon={KeyRound}
+                  onClick={() => { setPwPassword(''); setPwConfirm(''); setPwError(''); setPwOpen(true) }}
+                  disabled={saving || pwSaving}
+                >
+                  {hasPassword ? 'Reset password' : 'Set password'}
+                </Button>
+              </div>
+            ) : (
+              <p className="mt-1 text-[11px] text-muted">
+                This member signs in by email — password changes go through the email reset flow, not here.
+              </p>
+            )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -545,6 +623,40 @@ function MemberLookupSection() {
           </div>
         </div>
       </DraggableModal>
+
+      {/* Set/reset portal password sub-modal (pensioners only) */}
+      {pwOpen && (
+        <DraggableModal
+          open={pwOpen}
+          onClose={() => { if (!pwSaving) setPwOpen(false) }}
+          title={`Portal password · ${member?.member_id || ''}`}
+        >
+          <div className="space-y-4">
+            <p className="rounded-lg bg-subtle px-3 py-2 text-xs text-muted">
+              No email needed — {member?.full_name || member?.member_id} signs in with their Staff ID + this password.{hasPassword ? ' The password they use now will stop working as soon as you save.' : ''} Share it with them securely (in person or by phone).
+            </p>
+            <div>
+              <Label htmlFor="m-pw">New password</Label>
+              <Input id="m-pw" type="password" value={pwPassword} onChange={(e) => setPwPassword(e.target.value)} placeholder="Min. 6 characters" autoFocus />
+            </div>
+            <div>
+              <Label htmlFor="m-pw-confirm">Confirm password</Label>
+              <Input id="m-pw-confirm" type="password" value={pwConfirm} onChange={(e) => setPwConfirm(e.target.value)} placeholder="Repeat the password" />
+            </div>
+            {pwError && (
+              <div className="rounded-lg border border-danger-border bg-danger-bg px-3 py-2 text-sm text-danger-fg">{pwError}</div>
+            )}
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="secondary" onClick={() => setPwOpen(false)} disabled={pwSaving}>
+                Cancel
+              </Button>
+              <Button onClick={submitPw} loading={pwSaving} disabled={pwPassword.length < 6 || pwPassword !== pwConfirm}>
+                Save password
+              </Button>
+            </div>
+          </div>
+        </DraggableModal>
+      )}
     </Card>
   )
 }
