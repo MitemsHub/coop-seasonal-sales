@@ -3,9 +3,12 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
+import DraggableModal from '../../../components/DraggableModal'
 import Button from '../../../components/ui/Button'
 import ExportButton from '../../../components/ui/ExportButton'
-import { FileBarChart2, Package } from 'lucide-react'
+import { FileBarChart2, Package, Sparkles, Download } from 'lucide-react'
+import { buildQuickAnalysisModel } from '@/lib/quickAnalysis'
+import { renderQuickAnalysisPng } from '@/lib/quickAnalysisCanvas'
 
 function ReportsSkeleton() {
   return (
@@ -60,6 +63,11 @@ function ReportsPageContent() {
   const [err, setErr] = useState(null)
   const [loading, setLoading] = useState(true)
   const [reportBusy, setReportBusy] = useState(false)
+
+  // Quick Analysis — client-rendered branch-orders infographic (PNG)
+  const [analysisBusy, setAnalysisBusy] = useState(false)
+  const [analysisImage, setAnalysisImage] = useState(null) // { blob, dataUrl }
+  const [analysisOpen, setAnalysisOpen] = useState(false)
 
   // Branch pack controls
   const [branches, setBranches] = useState([])
@@ -1361,6 +1369,45 @@ function ReportsPageContent() {
     }
   }
 
+  // Builds the branch grouping (lib/quickAnalysis) and renders the
+  // infographic onto a canvas (lib/quickAnalysisCanvas) entirely in the
+  // browser — same analysis as the standalone matplotlib prototype, but
+  // produced on click with no server round-trip. The preview <img> uses the
+  // data: URL (CSP img-src allows data:, not blob:); download uses the blob.
+  const openQuickAnalysis = async () => {
+    if (!data || analysisBusy) return
+    setAnalysisBusy(true)
+    try {
+      const model = buildQuickAnalysisModel({
+        byBranch: data.byBranch || [],
+        allBranches: branches,
+      })
+      const { blob, dataUrl } = await renderQuickAnalysisPng(model)
+      setAnalysisImage({ blob, dataUrl })
+      setAnalysisOpen(true)
+    } catch (e) {
+      console.error('Quick Analysis failed:', e)
+      alert(`Quick Analysis failed: ${e.message}`)
+    } finally {
+      setAnalysisBusy(false)
+    }
+  }
+
+  const closeQuickAnalysis = () => {
+    setAnalysisOpen(false)
+    setAnalysisImage(null)
+  }
+
+  const downloadQuickAnalysis = () => {
+    if (!analysisImage?.blob) return
+    const url = URL.createObjectURL(analysisImage.blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Quick_Analysis_${new Date().toISOString().slice(0, 10)}.png`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   if (loading && !data) return <ReportsSkeleton />
   if (err) return (
     <div className="p-6">
@@ -1376,12 +1423,21 @@ function ReportsPageContent() {
     <div className="p-3 sm:p-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 sm:mb-6">
         <h1 className="text-h2 font-semibold mb-2 sm:mb-0">Admin · Reports</h1>
-        <div className="flex gap-2">
+        {/* flex-wrap keeps three buttons from overflowing a phone-width header */}
+        <div className="flex flex-wrap gap-2">
           <Button
             onClick={loadSummary}
             loading={loading}
           >
             {loading ? 'Refreshing…' : 'Refresh'}
+          </Button>
+          <Button
+            onClick={openQuickAnalysis}
+            loading={analysisBusy}
+            disabled={!data}
+            leftIcon={Sparkles}
+          >
+            {analysisBusy ? 'Analysing…' : 'Quick Analysis'}
           </Button>
           <Button
             onClick={downloadReport}
@@ -1799,6 +1855,38 @@ function ReportsPageContent() {
       })()}
 
       {/* Branch Item Prices Matrix removed */}
+
+      {/* Quick Analysis preview — the infographic PNG generated on demand */}
+      <DraggableModal
+        open={analysisOpen}
+        onClose={closeQuickAnalysis}
+        title="Quick Analysis · Branch Orders"
+        widthClass="max-w-3xl w-full mx-4"
+        footer={
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="secondary" onClick={closeQuickAnalysis}>
+              Close
+            </Button>
+            <Button
+              onClick={downloadQuickAnalysis}
+              disabled={!analysisImage?.blob}
+              leftIcon={Download}
+            >
+              Download PNG
+            </Button>
+          </div>
+        }
+      >
+        {analysisImage?.dataUrl ? (
+          <img
+            src={analysisImage.dataUrl}
+            alt="Quick analysis infographic of orders by branch"
+            className="w-full h-auto rounded-lg border border-line-subtle"
+          />
+        ) : (
+          <div className="h-64 bg-muted rounded-lg animate-pulse" />
+        )}
+      </DraggableModal>
     </div>
   )
 }
