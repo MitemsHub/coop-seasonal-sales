@@ -58,6 +58,16 @@ Steps (any provider):
 - The `ecmitti@cbncoopng.com` auth user does not receive resets for E00076
   by design; repointing the member's auth account is a separate decision.
 
+## Code change (27 Oct 2026)
+Until the SMTP provider is fixed, the portal no longer depends on recovery
+mail at all. `POST /api/members/auth/forgot-password` now sends a 6-digit
+**OTP** instead of calling `resetPasswordForEmail`, and the login UI runs the
+existing sign-up screens (`ENTER_OTP` → `SET_PASSWORD`) in "reset" mode:
+verify the code → type a new password → signed in. The account is **not**
+deleted and the member does not re-sign up; `set-password` updates the same
+auth user. Recovery links still work if Supabase ever emits one
+(`/reset-password` + `app/auth/confirm`).
+
 ## Files
 - Template backup: [recovery-template-supabase-current.html](./recovery-template-supabase-current.html)
 - Repo-side template sources: [reset-password-template.html](./reset-password-template.html),

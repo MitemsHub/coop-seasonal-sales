@@ -268,14 +268,17 @@ function OtpInput({ otp, setOtp, error, isLoading, onSubmit, onBack }) {
   )
 }
 
-function PasswordSetup({ password, setPassword, confirmPassword, setConfirmPassword, error, isLoading, onSubmit, onBack }) {
+function PasswordSetup({ password, setPassword, confirmPassword, setConfirmPassword, error, isLoading, onSubmit, onBack, mode = 'signup' }) {
+  const isReset = mode === 'reset'
   const pwValid = password.length >= 6
   const match = password && confirmPassword && password === confirmPassword
 
   return (
     <form className="space-y-3 md:space-y-4" onSubmit={onSubmit}>
       <div>
-        <label className="block text-xs font-medium text-muted mb-1.5">Password</label>
+        <label className="block text-xs font-medium text-muted mb-1.5">
+          {isReset ? 'New password' : 'Password'}
+        </label>
         <input
           id="new-password"
           type="password"
@@ -331,14 +334,14 @@ function PasswordSetup({ password, setPassword, confirmPassword, setConfirmPassw
         {isLoading ? (
           <>
             <div className="animate-spin rounded-full h-4 w-4 md:h-5 md:w-5 border-2 border-on-accent border-t-transparent mr-2"></div>
-            Creating account...
+            {isReset ? 'Saving password...' : 'Creating account...'}
           </>
         ) : (
           <>
             <svg className="w-4 h-4 md:w-5 md:h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
-            Create account & sign in
+            {isReset ? 'Save new password & sign in' : 'Create account & sign in'}
           </>
         )}
       </button>
@@ -449,7 +452,7 @@ function PasswordLogin({ maskedEmail, password, setPassword, error, isLoading, o
   )
 }
 
-function ForgotPassword({ memberId, isLoading, setIsLoading, error, setError, success, setSuccess, onBack }) {
+function ForgotPassword({ memberId, maskedEmail, isLoading, setIsLoading, error, setError, success, setSuccess, onCodeSent, onBack }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setIsLoading(true)
@@ -463,7 +466,9 @@ function ForgotPassword({ memberId, isLoading, setIsLoading, error, setError, su
       })
       const data = await res.json()
       if (res.ok) {
-        setSuccess('Check your email for a password reset link.')
+        // The server mailed a 6-digit code — move straight to the code entry
+        // step, then the member picks a new password.
+        onCodeSent()
       } else {
         setError(data.error || 'Something went wrong. Please try again.')
       }
@@ -477,7 +482,14 @@ function ForgotPassword({ memberId, isLoading, setIsLoading, error, setError, su
   return (
     <form className="space-y-3 md:space-y-4" onSubmit={handleSubmit}>
       <p className="text-sm text-muted">
-        We&apos;ll send a password reset link to the email associated with your account.
+        We&apos;ll email a 6-digit code to{' '}
+        {maskedEmail ? (
+          <span className="font-medium text-fg">{maskedEmail}</span>
+        ) : (
+          'the email on file'
+        )}
+        . Enter it on the next screen to choose a new password — no reset link
+        needed.
       </p>
 
       {error && (
@@ -513,7 +525,7 @@ function ForgotPassword({ memberId, isLoading, setIsLoading, error, setError, su
             Sending...
           </>
         ) : (
-          'Send reset link'
+          'Send reset code'
         )}
       </button>
 
@@ -566,6 +578,10 @@ export default function MemberAuth() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  // True while the member reached the OTP / set-password steps from
+  // "Forgot password" rather than first-time sign-up — it changes the wording
+  // and where "Back" leads.
+  const [isReset, setIsReset] = useState(false)
 
   // ── Member ID validation ──
   const validateMemberId = (id) => {
@@ -683,6 +699,7 @@ export default function MemberAuth() {
       })
       const data = await res.json()
       if (res.ok) {
+        setIsReset(false)
         setStep(STEP.ENTER_OTP)
       } else {
         setError(data.error || 'Failed to send OTP')
@@ -751,7 +768,7 @@ export default function MemberAuth() {
         await new Promise((r) => setTimeout(r, 400))
         router.push('/my-coop')
       } else {
-        setError(data.error || 'Failed to create account')
+        setError(data.error || (isReset ? 'Failed to set new password' : 'Failed to create account'))
       }
     } catch {
       setError('Network error. Please try again.')
@@ -837,28 +854,46 @@ export default function MemberAuth() {
     setError('')
     setSuccess('')
     setLoginPassword('')
+    setIsReset(false)
   }
   const goToLogin = () => {
     setStep(STEP.ENTER_PASSWORD)
     setPassword('')
     setConfirmPassword('')
     setError('')
+    setIsReset(false)
   }
   const goToForgot = () => {
     setStep(STEP.FORGOT_PASSWORD)
     setError('')
     setSuccess('')
+    setOtp('')
+    setIsReset(false)
+  }
+  // Forgot password → code emailed → continue into the existing OTP step.
+  // The member verifies, then sets a new password on the SAME account, so
+  // nothing is deleted and they never re-sign-up.
+  const goToOtpFromReset = () => {
+    setOtp('')
+    setError('')
+    setSuccess('')
+    setIsReset(true)
+    setStep(STEP.ENTER_OTP)
   }
 
   // ── Title / subtitle per step ──
   const titles = {
     [STEP.ENTER_ID]: { title: 'Member sign in', sub: 'Enter your staff ID to continue' },
     [STEP.ENTER_EMAIL]: { title: 'Confirm your email', sub: 'We\u2019ll send a verification code to the email on file' },
-    [STEP.ENTER_OTP]: { title: 'Enter verification code', sub: 'Enter the 6-digit code sent to your email' },
-    [STEP.SET_PASSWORD]: { title: 'Set your password', sub: 'This will be your password for future sign-ins' },
+    [STEP.ENTER_OTP]: isReset
+      ? { title: 'Enter your reset code', sub: 'Enter the 6-digit code we just emailed you' }
+      : { title: 'Enter verification code', sub: 'Enter the 6-digit code sent to your email' },
+    [STEP.SET_PASSWORD]: isReset
+      ? { title: 'Choose a new password', sub: 'This replaces your old password — use it next time you sign in' }
+      : { title: 'Set your password', sub: 'This will be your password for future sign-ins' },
     [STEP.SET_LOCAL_PASSWORD]: { title: 'Create your password', sub: 'Choose a password you will remember — you will sign in with your Staff ID and this password' },
     [STEP.ENTER_PASSWORD]: { title: 'Welcome back', sub: 'Enter your password to sign in' },
-    [STEP.FORGOT_PASSWORD]: { title: 'Reset password', sub: "We'll help you get back into your account" },
+    [STEP.FORGOT_PASSWORD]: { title: 'Reset password', sub: 'We’ll email you a code to set a new password' },
   }
 
   const { title, sub } = titles[step] || titles[STEP.ENTER_ID]
@@ -907,7 +942,7 @@ export default function MemberAuth() {
         />
       )}
 
-      {/* Step: Enter OTP (signup) */}
+      {/* Step: Enter OTP (sign-up, or password reset) */}
       {step === STEP.ENTER_OTP && (
         <OtpInput
           otp={otp}
@@ -915,11 +950,11 @@ export default function MemberAuth() {
           error={error}
           isLoading={isLoading}
           onSubmit={handleOtpSubmit}
-          onBack={() => { setStep(STEP.ENTER_EMAIL); setError('') }}
+          onBack={() => { setStep(isReset ? STEP.FORGOT_PASSWORD : STEP.ENTER_EMAIL); setError('') }}
         />
       )}
 
-      {/* Step: Set password (signup) */}
+      {/* Step: Set password (sign-up, or password reset) */}
       {step === STEP.SET_PASSWORD && (
         <PasswordSetup
           password={password}
@@ -928,6 +963,7 @@ export default function MemberAuth() {
           setConfirmPassword={setConfirmPassword}
           error={error}
           isLoading={isLoading}
+          mode={isReset ? 'reset' : 'signup'}
           onSubmit={handlePasswordSubmit}
           onBack={() => { setStep(STEP.ENTER_OTP); setError('') }}
         />
@@ -962,16 +998,18 @@ export default function MemberAuth() {
         />
       )}
 
-      {/* Step: Forgot password */}
+      {/* Step: Forgot password — sends the OTP that drives the reset */}
       {step === STEP.FORGOT_PASSWORD && (
         <ForgotPassword
           memberId={memberId.trim().toUpperCase()}
+          maskedEmail={maskedEmail}
           isLoading={isLoading}
           setIsLoading={setIsLoading}
           error={error}
           setError={setError}
           success={success}
           setSuccess={setSuccess}
+          onCodeSent={goToOtpFromReset}
           onBack={goToLogin}
         />
       )}
