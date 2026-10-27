@@ -488,8 +488,7 @@ function ForgotPassword({ memberId, maskedEmail, isLoading, setIsLoading, error,
         ) : (
           'the email on file'
         )}
-        . Enter it on the next screen to choose a new password — no reset link
-        needed.
+        .
       </p>
 
       {error && (
