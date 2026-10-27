@@ -120,14 +120,19 @@ export async function GET(req) {
             .select('cancelled, saved_item_id')
             .in('submission_id', subIds)
           const rawLinks = new Set()
+          const liveLinks = new Set()
           for (const e of ents || []) {
-            if (e.cancelled === true && e.saved_item_id != null) {
-              rawLinks.add(Number(e.saved_item_id))
-            }
+            if (e.saved_item_id == null) continue
+            if (e.cancelled === true) rawLinks.add(Number(e.saved_item_id))
+            else liveLinks.add(Number(e.saved_item_id))
           }
           // Cancelled hides only OUTSOURCED products. A rep's mistaken
           // duplicate of a GENERAL item keeps selling from the General item —
           // cancelling the outsourced copy never pulls the General twin.
+          // A LIVE entry linking the same product keeps it on the shelf:
+          // Lagos cancelled its stale King's Oil draft while the
+          // resubmission stayed live, and acting on the cancelled link
+          // alone hid the working Kings Oil 5L from that branch's shop.
           if (rawLinks.size) {
             const { data: linkItems } = await supabase
               .from('items')
@@ -135,11 +140,12 @@ export async function GET(req) {
               .in('item_id', [...rawLinks])
             if (linkItems && linkItems.length) {
               for (const li of linkItems) {
-                if ((li.source || 'general') === 'outsourced') cancelledItemIds.add(li.item_id)
+                if ((li.source || 'general') === 'outsourced' && !liveLinks.has(li.item_id)) cancelledItemIds.add(li.item_id)
               }
             } else {
               // source column unknown → keep the old behavior (hide the link)
-              for (const id of rawLinks) cancelledItemIds.add(id)
+              // unless a live entry still stands behind it.
+              for (const id of rawLinks) if (!liveLinks.has(id)) cancelledItemIds.add(id)
             }
           }
         }

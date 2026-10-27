@@ -350,6 +350,7 @@ export async function GET(req) {
       const draftNames = new Set()
       const cancelledItemIds = new Set()
       const cancelledLinks = new Set()
+      const liveLinks = new Set() // products a LIVE entry still keeps on this shelf
       if (subIds.length) {
         let ents = null
         let entsErr = null
@@ -368,6 +369,8 @@ export async function GET(req) {
             if (linkId) cancelledLinks.add(linkId) // candidate linked product hidden for this branch+cycle
             continue // cancelled entries never rank a product as "refined work"
           }
+          const liveId = e.saved_item_id != null ? Number(e.saved_item_id) : null
+          if (liveId) liveLinks.add(liveId) // a live resubmission still sells this product here
           const key = norm(e.item_name)
           if (key) draftNames.add(key)
         }
@@ -376,15 +379,21 @@ export async function GET(req) {
       // draft whose save landed on (or twinned with) a GENERAL item stands in
       // for the rep's mistaken duplicate submission — the General item keeps
       // selling in every branch, exactly as before the cancel.
+      // A LIVE entry linking the same product keeps it on the shelf too:
+      // Lagos's stale "King's oil 5liters" draft was cancelled while the
+      // rep's resubmission of the same product stayed live — hiding on the
+      // cancelled link alone pulled the working Kings Oil 5L off Lagos's
+      // preview while its own card still read "Worked on · in shop".
       if (cancelledLinks.size) {
         const srcRes = await supabase.from('items').select('item_id, source').in('item_id', [...cancelledLinks])
         const linkItems = srcRes.data
         if (srcRes.error || linkItems === null) {
-          // source column unknown → keep the old behavior: hide every link.
-          for (const id of cancelledLinks) cancelledItemIds.add(id)
+          // source column unknown → keep the old behavior: hide every link
+          // that no live entry still stands behind.
+          for (const id of cancelledLinks) if (!liveLinks.has(id)) cancelledItemIds.add(id)
         } else {
           for (const li of linkItems) {
-            if ((li.source || 'general') === 'outsourced') cancelledItemIds.add(li.item_id)
+            if ((li.source || 'general') === 'outsourced' && !liveLinks.has(li.item_id)) cancelledItemIds.add(li.item_id)
           }
         }
       }
@@ -1345,8 +1354,35 @@ export async function POST(req) {
       // DELETE handler), so the base-SKU lookup only ever finds an ACTIVE
       // item — creating a new product can never silently resurrect the
       // retired one.
-      const { data: existing } = await supabase.from('items').select('item_id, image_url').eq('sku', sku).maybeSingle()
-      if (existing) {
+      const { data: existing } = await supabase.from('items').select('item_id, image_url, source, name').eq('sku', sku).maybeSingle()
+      // GENERAL and OUTSOURCED are two independent worlds — a save may never
+      // take over an item from the other section. An unlinked Outsourced save
+      // whose derived SKU matched the General "Golden Morn 45G" used to
+      // rewrite that General product in place (its source flipped to
+      // outsourced, so every shop preview badged it OUTSOURCED). A foreign-
+      // owned SKU is now treated like a rename collision: suffix it and
+      // create a separate item for this section — reported through
+      // sku_auto_suffixed — leaving the other world's row untouched.
+      const foreignWorld = Boolean(existing) && sourceCol && (existing.source || 'general') !== section
+      let insertSku = sku
+      if (foreignWorld) {
+        let candidate = ''
+        for (let n = 2; n < 100; n++) {
+          const cand = `${sku}-${n}`
+          const { data: cOwner } = await supabase.from('items').select('item_id').eq('sku', cand).maybeSingle()
+          if (!cOwner) {
+            candidate = cand
+            break
+          }
+        }
+        insertSku = candidate || `${sku}-${Date.now().toString(36).toUpperCase()}`
+        skuAutoSuffixed = {
+          requested: sku,
+          saved_as: insertSku,
+          owner_name: existing.name || null,
+        }
+      }
+      if (existing && !foreignWorld) {
         let effPatch = patch
         if (surveyIncoming && existing.image_url) {
           effPatch = { ...patch }
@@ -1357,7 +1393,7 @@ export async function POST(req) {
         if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
         itemRow = data
       } else {
-        const doInsert = () => supabase.from('items').insert(patch).select('item_id, sku, name').single()
+        const doInsert = () => supabase.from('items').insert({ ...patch, sku: insertSku }).select('item_id, sku, name').single()
         let { data, error } = await doInsert()
         if (error && String(error.message || '').includes('duplicate key value') && String(error.message || '').includes('items_pkey')) {
           try {

@@ -158,6 +158,87 @@ describe('POST outsourced save — draft pinning', () => {
   })
 })
 
+describe('POST — cross-world SKU collision (Golden Morn 45G regression)', () => {
+  // The Golden Morn 45G report: an UNLINKED Outsourced save whose derived
+  // SKU matched the GENERAL item rewrote that item in place — patch.source
+  // = 'outsourced' flipped the General product, so every shop preview
+  // badged it OUTSOURCED. GENERAL and OUTSOURCED are two independent
+  // worlds: a foreign-owned SKU must be suffixed and a separate item
+  // created for the saving section instead of taking the other world over.
+  it('never flips a GENERAL item to outsourced — suffixes the SKU and creates a separate item', async () => {
+    const generalItem = { item_id: 16, sku: 'GOLDENMORN45G', name: 'Golden Morn 45G', image_url: 'g.png', source: 'general' }
+    const itemsUpdate = vi.fn()
+    const itemsInsert = vi.fn((row) => ({
+      select: () => ({
+        single: () => Promise.resolve({ data: { item_id: 99, sku: row.sku, name: row.name }, error: null }),
+      }),
+    }))
+    const supa = {
+      from(table) {
+        if (table === 'items') {
+          return {
+            select: () => ({
+              eq: (col, val) => ({
+                maybeSingle: () =>
+                  Promise.resolve(
+                    col === 'sku' && val === 'GOLDENMORN45G'
+                      ? { data: generalItem, error: null }
+                      : { data: null, error: null }
+                  ),
+              }),
+              limit: () => Promise.resolve({ data: [], error: null }),
+            }),
+            insert: itemsInsert,
+            update: itemsUpdate,
+          }
+        }
+        if (table === 'branches') {
+          return {
+            select: () => ({
+              eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 1, code: 'ABEOKUTA' }, error: null }) }),
+            }),
+          }
+        }
+        // price/markup column probes and upserts
+        return {
+          select: () => ({ limit: () => Promise.resolve({ data: [], error: null }) }),
+          upsert: () => Promise.resolve({ data: null, error: null, count: 1 }),
+        }
+      },
+    }
+    createClient.mockReturnValue(supa)
+
+    const body = {
+      cycle_id: 9,
+      section: 'outsourced',
+      // no item_id — an unlinked draft save, the path that used to hijack
+      name: 'Golden Morn 45G',
+      category: 'Cereals',
+      unit: 'Carton',
+      price: 23000,
+      image_url: 'g.png',
+      draft: { branch_id: 1, branch_name: 'Abeokuta', branch_code: 'ABEOKUTA', draft_id: 1413, draft_name: 'Golden morn 45g carton', draft_category: 'Cereals', draft_unit: 'Carton', draft_price: 23000, saved: false, key: 'b1::golden morn 45g carton' },
+    }
+    const req = new Request('http://x/api/admin/items', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+
+    const res = await POST(req)
+    const json = await res.json()
+    expect(res.status).toBe(200)
+    expect(json.ok).toBe(true)
+    // The GENERAL item was NOT taken over — no update ever touched it.
+    expect(itemsUpdate).not.toHaveBeenCalled()
+    // The save created its own item on a suffixed SKU, reported to the admin.
+    expect(itemsInsert).toHaveBeenCalledWith(expect.objectContaining({ sku: 'GOLDENMORN45G-2', source: 'outsourced' }))
+    expect(json.item).toMatchObject({ item_id: 99, sku: 'GOLDENMORN45G-2' })
+    expect(json.sku_auto_suffixed).toMatchObject({ requested: 'GOLDENMORN45G', saved_as: 'GOLDENMORN45G-2', owner_name: 'Golden Morn 45G' })
+    // The rep's draft pins to the NEW item, never the General one.
+    expect(queryDirect).toHaveBeenCalledWith(
+      expect.stringContaining('SET saved_item_id = $1 WHERE id = $2'),
+      [99, 1413]
+    )
+  })
+})
+
 describe('outsourced drafts — link recovery and repair', () => {
   // Lagos regression: a cancelled draft of the same product at the same
   // branch claimed the (item, branch) card slot first, and the later LIVE
@@ -807,6 +888,30 @@ describe('shop preview — branch cancel respects item origin', () => {
     const byId = Object.fromEntries(body.items.map((i) => [i.item_id, i]))
     expect(byId[3].origin).toBe('general')
     expect(byId[7].origin).toBe('outsourced')
+  })
+
+  it('keeps a product a LIVE resubmission still sells — the cancelled stale draft alone never hides it', async () => {
+    // Lagos's Kings Oil 5L report: the branch's stale draft (entry 287) was
+    // cancelled while the rep's resubmission of the same product (entry 480)
+    // stayed live — both link to item 7. Hiding on the cancelled link alone
+    // pulled the working product off the preview while its card still read
+    // "Worked on · in shop".
+    const s = {
+      viewRows: [VIEW_ROWS[0]],
+      items: [ITEMS[0]],
+      entries: [
+        { id: 287, item_name: "King's oil 5liters", cancelled: true, saved_item_id: 7 },
+        { id: 480, item_name: "King's Oil 5liters", cancelled: false, saved_item_id: 7 },
+      ],
+      subs: SUBS,
+    }
+    createClient.mockReturnValue(previewSupabase(s))
+
+    const res = await GET(GET_PREVIEW.clone())
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+    expect(body.items.map((i) => i.item_id)).toContain(7)
+    expect(body.cancelled_hidden).toBe(0)
   })
 })
 
