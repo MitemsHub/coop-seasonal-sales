@@ -19,17 +19,38 @@
 import { Calendar } from 'lucide-react'
 
 // Whole days until a season closes — clamped at 0 so a past date reads
-// "closes today" rather than a negative count.
+// "closes today" rather than a negative count.  Ceil of the exact remaining
+// time, so with an end-of-day ends_at it counts the closing day itself:
+// viewing on the 27th for a close on the 31st reads 5 days left, matching
+// how the admin pages and humans count the same date range.
 function daysUntil(iso) {
   if (!iso) return null
   const diff = new Date(iso).getTime() - Date.now()
   return Math.max(0, Math.ceil(diff / 86400000))
 }
 
+// True when the close DATE — in the viewer's local time — is today, even if
+// hours remain.  The final day must read "closes today", never "closes
+// tomorrow" (a ceil of a sub-24h remainder would say tomorrow).
+function closesOnLocalDate(iso) {
+  const end = new Date(iso)
+  const now = new Date()
+  return (
+    end.getFullYear() === now.getFullYear() &&
+    end.getMonth() === now.getMonth() &&
+    end.getDate() === now.getDate()
+  )
+}
+
 export default function CycleCountdown({ endsAt, noun = 'Season', prefix, variant = 'default', className = '' }) {
   const days = daysUntil(endsAt)
   if (days == null) return null
-  const label = days <= 0 ? 'closes today' : days === 1 ? 'closes tomorrow' : `closes in ${days} days`
+  const label =
+    days <= 0 || closesOnLocalDate(endsAt)
+      ? 'closes today'
+      : days === 1
+        ? 'closes tomorrow'
+        : `closes in ${days} days`
   const title = `${noun} closes ${new Date(endsAt).toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',

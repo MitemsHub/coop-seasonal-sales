@@ -276,7 +276,11 @@ function DataManagementPageContent() {
       }
       if (newCycleSurveyOpen) payload.survey_open = true
       if (newCycleStartsAt) payload.starts_at = newCycleStartsAt
-      if (newCycleEndsAt) payload.ends_at = newCycleEndsAt
+      // Store the chosen date as END of day (23:59:59 WAT = 22:59:59Z).
+      // A bare YYYY-MM-DD would be read as 00:00 UTC — the shop would close
+      // at 01:00 local ON the closing day and the countdown chip would read
+      // a day short of the date shown on this page.
+      if (newCycleEndsAt) payload.ends_at = `${newCycleEndsAt}T22:59:59`
 
       const res = await fetch('/api/admin/cycles', {
         method: 'POST',
@@ -378,7 +382,9 @@ function DataManagementPageContent() {
       }
       if (editCycleStartsAt) payload.starts_at = editCycleStartsAt
       else payload.starts_at = null
-      if (editCycleEndsAt) payload.ends_at = editCycleEndsAt
+      // End of the chosen day in local time (see createCycle) — never a
+      // bare date, which would close the shop at the start of the day.
+      if (editCycleEndsAt) payload.ends_at = `${editCycleEndsAt}T22:59:59`
       else payload.ends_at = null
 
       const res = await fetch('/api/admin/cycles', {
