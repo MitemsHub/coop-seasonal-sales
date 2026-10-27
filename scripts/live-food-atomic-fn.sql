@@ -1,6 +1,7 @@
 CREATE OR REPLACE FUNCTION public.create_food_order_atomic(p_member_id text, p_member_name text, p_member_category text, p_branch_id integer, p_delivery_branch_id integer, p_department_id integer, p_payment_option text, p_total_amount numeric, p_cycle_id integer, p_lines jsonb, p_grace_used boolean DEFAULT false, p_cap_amount numeric DEFAULT NULL::numeric)
  RETURNS jsonb
  LANGUAGE plpgsql
+ SET search_path TO 'public'
 AS $function$
 DECLARE
   v_member RECORD;
@@ -17,13 +18,13 @@ DECLARE
   v_effective_limit NUMERIC := 0;
   v_base_eligible NUMERIC := 0;
   v_loan_eligible NUMERIC := 0;
-  v_order_id TEXT;
   v_order RECORD;
   v_line JSONB;
   v_inserted_lines INTEGER;
   -- Cycle-cap enforcement variables
   v_cycle_loan_cap NUMERIC := 0;
   v_cycle_grace_cap NUMERIC := 0;
+  v_grace_component NUMERIC := 0; -- pool remaining this cycle (see formula)
   v_cycle_loan_total NUMERIC := 0;
   v_cumulative_cap_amount NUMERIC := 0;
   v_eligible_fallback NUMERIC := 0;
@@ -44,6 +45,20 @@ BEGIN
 
   IF NOT FOUND THEN
     RETURN jsonb_build_object('ok', false, 'error', 'Member not found');
+  END IF;
+
+  -- Resolve the member group from the category code BEFORE computing
+  -- limits. Categories are single-letter codes: A = Active, P = Pensioner,
+  -- R = Retiree. LIKE fallbacks keep legacy full-word categories working.
+  -- (Previously this mapping only ran inside the cycle-cap block and never
+  -- matched the letter codes, so every member used the "active" caps.)
+  v_member_category_lower := LOWER(COALESCE(v_member.category, ''));
+  IF LEFT(v_member_category_lower, 1) = 'p' OR v_member_category_lower LIKE '%pension%' THEN
+    v_group := 'pensioner';
+  ELSIF LEFT(v_member_category_lower, 1) = 'r' OR v_member_category_lower LIKE '%retire%' THEN
+    v_group := 'retiree';
+  ELSE
+    v_group := 'active';
   END IF;
 
   v_member_savings := COALESCE(v_member.savings, 0);
@@ -73,8 +88,14 @@ BEGIN
   v_savings_base := 0.5 * v_member_savings;
   v_savings_eligible := CASE WHEN v_outstanding > 0 THEN 0 ELSE GREATEST(0, v_savings_base - v_savings_exposure) END;
 
-  -- Loan eligibility: base from savings, no hardcoded facility or cap
-  v_raw_loan_limit := v_member_savings * 5 - v_outstanding;
+  -- Loan eligibility: base from savings, no hardcoded facility or cap.
+  -- RETIREE RULE: retirees (category R) may borrow at most their savings
+  -- balance — never 5× savings — mirroring the RAM module and /api/orders.
+  IF v_group = 'retiree' THEN
+    v_raw_loan_limit := v_member_savings - v_outstanding;
+  ELSE
+    v_raw_loan_limit := v_member_savings * 5 - v_outstanding;
+  END IF;
   v_effective_limit := CASE WHEN v_global_limit > 0 THEN LEAST(v_raw_loan_limit, v_global_limit) ELSE v_raw_loan_limit END;
   v_base_eligible := GREATEST(0, v_effective_limit);
   -- loanEligible will be set by cycle-cap enforcement below
@@ -101,14 +122,7 @@ BEGIN
       WHERE id = p_cycle_id;
 
       IF FOUND THEN
-        v_member_category_lower := LOWER(COALESCE(v_member.category, ''));
-        IF v_member_category_lower LIKE '%pension%' THEN
-          v_group := 'pensioner';
-        ELSIF v_member_category_lower LIKE '%retire%' THEN
-          v_group := 'retiree';
-        ELSE
-          v_group := 'active';
-        END IF;
+        -- v_group was already resolved from the category code above.
 
         -- Fallback (legacy single-column cap)
         v_eligible_fallback := GREATEST(0, TRUNC(COALESCE(v_policy.food_loan_eligible_amount_cap, 0)));
@@ -144,10 +158,23 @@ BEGIN
         -- Apply facility pool + ceiling formula.
         -- facility (graceLoanCap) is ADDED to baseEligible for all members.
         -- eligible cap is the absolute ceiling.
-        IF v_cycle_loan_cap > 0 THEN
-          v_loan_eligible := LEAST(v_base_eligible + v_cycle_grace_cap, GREATEST(0, v_cycle_loan_cap - v_cycle_loan_total));
+        -- Facility pool: while savings still support borrowing (base > 0) the
+        -- base already nets out this cycle's usage through exposure, so the
+        -- pool rides flat. For a non-eligible member (base = 0) the pool IS
+        -- the remaining room, so it decrements by this cycle's loan orders —
+        -- the amount-based rule that replaced the old once-per-cycle
+        -- "facility already used" guard (several orders are allowed while
+        -- they are still inside the pool).
+        IF v_base_eligible > 0 THEN
+          v_grace_component := v_cycle_grace_cap;
         ELSE
-          v_loan_eligible := v_base_eligible + v_cycle_grace_cap;
+          v_grace_component := GREATEST(0, v_cycle_grace_cap - v_cycle_loan_total);
+        END IF;
+
+        IF v_cycle_loan_cap > 0 THEN
+          v_loan_eligible := LEAST(v_base_eligible + v_grace_component, GREATEST(0, v_cycle_loan_cap - v_cycle_loan_total));
+        ELSE
+          v_loan_eligible := v_base_eligible + v_grace_component;
         END IF;
 
         -- Enforce ceiling — against the CAP-AWARE amount (principal when the
@@ -166,22 +193,9 @@ BEGIN
           );
         END IF;
 
-        -- For non-eligible members (base = 0), check grace was not already used
-        IF v_base_eligible <= 0 AND v_cycle_grace_cap > 0 THEN
-          IF EXISTS (
-            SELECT 1 FROM orders
-            WHERE member_id = p_member_id
-              AND payment_option = 'Loan'
-              AND food_loan_grace_used = TRUE
-              AND status IN ('Pending', 'Posted', 'Delivered')
-              AND cycle_id = p_cycle_id
-          ) THEN
-            RETURN jsonb_build_object(
-              'ok', false,
-              'error', 'Facility has already been used for this member in the current cycle.'
-            );
-          END IF;
-        END IF;
+        -- (Old once-per-cycle facility guard removed: the facility pool now
+        -- decrements by this cycle's loan orders above, so exceeding it is
+        -- caught by the amount check below with the real remaining figure.)
       END IF;
     EXCEPTION WHEN OTHERS THEN
       -- Column missing or other schema issue — skip cycle cap enforcement.
@@ -209,18 +223,16 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'error', 'Invalid payment option');
   END IF;
 
-  -- Generate order ID
-  v_order_id := 'F' || to_char(NOW(), 'YYMMDD') || '-' || upper(md5(random()::text));
-
-  -- Insert order
+  -- Insert order — order_id comes from the BIGINT serial default; the
+  -- previous TEXT 'F...-md5' id could not be stored in the bigint column.
   INSERT INTO orders (
-    order_id, member_id, member_name_snapshot, member_category_snapshot,
+    member_id, member_name_snapshot, member_category_snapshot,
     branch_id, delivery_branch_id, department_id,
     payment_option, total_amount, status, cycle_id, food_loan_grace_used
   ) VALUES (
-    v_order_id, p_member_id, p_member_name, p_member_category,
+    p_member_id, p_member_name, p_member_category,
     p_branch_id, p_delivery_branch_id, p_department_id,
-    p_payment_option, p_total_amount, 'Pending', p_cycle_id, p_grace_used
+    p_payment_option::payment_option, p_total_amount, 'Pending', p_cycle_id, p_grace_used
   )
   RETURNING * INTO v_order;
 
@@ -234,8 +246,9 @@ BEGIN
 
   RETURN jsonb_build_object(
     'ok', true,
-    'order_id', v_order_id,
+    'order_id', v_order.order_id,
     'total', p_total_amount,
+    'inserted_lines', v_inserted_lines,
     'eligibility', jsonb_build_object(
       'savingsEligible', v_savings_eligible,
       'loanEligible', v_loan_eligible

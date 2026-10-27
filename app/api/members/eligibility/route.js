@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getCrossModuleExposure } from '@/lib/crossModuleExposure'
+import { facilityAvailable } from '@/lib/foodLoanMath'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -133,8 +134,10 @@ export async function GET(req) {
             graceLoanCap = graceFallback
           }
 
-          // Cumulative loan amount already in this cycle (Pending/Posted/Delivered)
-          if (hasCycleIdCol && cycleLoanCap > 0) {
+          // Cumulative loan amount already in this cycle (Pending/Posted/Delivered).
+          // Also fetched when only a facility cap is configured: the facility
+          // pool decrements with this cycle's loan orders for base = 0 members.
+          if (hasCycleIdCol && (cycleLoanCap > 0 || graceLoanCap > 0)) {
             const statuses = ['Pending', 'Posted', 'Delivered']
             const { data: cycleRows } = await supabase
               .from('orders')
@@ -158,13 +161,18 @@ export async function GET(req) {
     // ceiling          = eligibleCap - cycleLoanUsed (admin cap minus what they've used)
     // loanEligible     = min(totalBorrowable, ceiling)
     let cycleLoanRemaining = null
+    // Facility pool: flat while base > 0 (base already nets out cycle usage
+    // through exposure), decrements from base = 0 — the amount-based rule
+    // that replaced the once-per-cycle "Facility has already been used"
+    // guard. Mirrors create_food_order_atomic and lib/foodLoanMath.js.
+    const facility = facilityAvailable({ baseEligible, graceCap: graceLoanCap, cycleLoanUsed })
     if (cycleLoanCap != null && cycleLoanCap > 0) {
       cycleLoanRemaining = Math.max(0, cycleLoanCap - cycleLoanUsed)
-      const totalBorrowable = baseEligible + graceLoanCap
+      const totalBorrowable = baseEligible + facility
       loanEligible = Math.min(totalBorrowable, cycleLoanRemaining)
     } else {
       // No cycle cap configured — member gets their full base + facility
-      loanEligible = baseEligible + graceLoanCap
+      loanEligible = baseEligible + facility
     }
 
     return NextResponse.json({

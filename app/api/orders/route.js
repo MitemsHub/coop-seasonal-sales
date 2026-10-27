@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { csrfGuard } from '@/lib/csrf'
 import { getCrossModuleExposure } from '@/lib/crossModuleExposure'
+import { facilityAvailable } from '@/lib/foodLoanMath'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -251,7 +252,10 @@ export async function POST(req) {
       if (eligibleLoanMaxCap > 0) {
         // Admin set a ceiling for this category
         const ceiling = Math.max(0, eligibleLoanMaxCap - cycleLoanTotal)
-        const totalBorrowable = baseEligible + graceLoanMaxCap
+        // Facility pool is flat while base > 0 and decrements from base = 0
+        // (amount-based rule — mirrors create_food_order_atomic / foodLoanMath).
+        const facilityPool = facilityAvailable({ baseEligible, graceCap: graceLoanMaxCap, cycleLoanUsed: cycleLoanTotal })
+        const totalBorrowable = baseEligible + facilityPool
         loanEligible = Math.min(totalBorrowable, ceiling)
 
         if (capAmount > loanEligible) {
@@ -259,8 +263,8 @@ export async function POST(req) {
             {
               ok: false,
               error: includeInterestInCap
-                ? `Loan limit: ₦${loanEligible.toLocaleString()} remaining this cycle (base ₦${baseEligible.toLocaleString()} + ₦${graceLoanMaxCap.toLocaleString()} facility, capped at ₦${eligibleLoanMaxCap.toLocaleString()}). Adding ₦${totalWithInterest.toLocaleString()} (incl. ${loanRatePct}% interest) would exceed it.`
-                : `Loan limit: ₦${loanEligible.toLocaleString()} remaining this cycle (base ₦${baseEligible.toLocaleString()} + ₦${graceLoanMaxCap.toLocaleString()} facility, capped at ₦${eligibleLoanMaxCap.toLocaleString()}). Adding ₦${total.toLocaleString()} would exceed it (interest excluded from cap).`,
+                ? `Loan limit: ₦${loanEligible.toLocaleString()} remaining this cycle (base ₦${baseEligible.toLocaleString()} + ₦${facilityPool.toLocaleString()} facility, capped at ₦${eligibleLoanMaxCap.toLocaleString()}). Adding ₦${totalWithInterest.toLocaleString()} (incl. ${loanRatePct}% interest) would exceed it.`
+                : `Loan limit: ₦${loanEligible.toLocaleString()} remaining this cycle (base ₦${baseEligible.toLocaleString()} + ₦${facilityPool.toLocaleString()} facility, capped at ₦${eligibleLoanMaxCap.toLocaleString()}). Adding ₦${total.toLocaleString()} would exceed it (interest excluded from cap).`,
             },
             { status: 400 }
           )
@@ -268,22 +272,28 @@ export async function POST(req) {
       } else if (baseEligible > 0) {
         // Member is eligible by savings, but admin hasn't set a cycle cap.
         // Use baseEligible + facility as the limit.
-        loanEligible = baseEligible + graceLoanMaxCap
+        // Facility pool is flat while base > 0 (matches the SQL function).
+        const facilityPool = facilityAvailable({ baseEligible, graceCap: graceLoanMaxCap, cycleLoanUsed: cycleLoanTotal })
+        loanEligible = baseEligible + facilityPool
         if (capAmount > loanEligible) {
           return NextResponse.json(
             {
               ok: false,
               error: includeInterestInCap
-                ? `Loan available: ₦${loanEligible.toLocaleString()} (base ₦${baseEligible.toLocaleString()} + ₦${graceLoanMaxCap.toLocaleString()} facility). Adding ₦${totalWithInterest.toLocaleString()} (incl. ${loanRatePct}% interest) would exceed it.`
-                : `Loan available: ₦${loanEligible.toLocaleString()} (base ₦${baseEligible.toLocaleString()} + ₦${graceLoanMaxCap.toLocaleString()} facility). Adding ₦${total.toLocaleString()} would exceed it (interest excluded from cap).`,
+                ? `Loan available: ₦${loanEligible.toLocaleString()} (base ₦${baseEligible.toLocaleString()} + ₦${facilityPool.toLocaleString()} facility). Adding ₦${totalWithInterest.toLocaleString()} (incl. ${loanRatePct}% interest) would exceed it.`
+                : `Loan available: ₦${loanEligible.toLocaleString()} (base ₦${baseEligible.toLocaleString()} + ₦${facilityPool.toLocaleString()} facility). Adding ₦${total.toLocaleString()} would exceed it (interest excluded from cap).`,
             },
             { status: 400 }
           )
         }
       } else if (graceLoanMaxCap > 0) {
         // Member is not eligible by savings (baseEligible = 0), but admin
-        // set a grace/facility cap — allow up to that amount.
-        const graceRemaining = Math.max(0, graceLoanMaxCap - cycleLoanTotal)
+        // set a grace/facility cap — allow up to that amount. The pool is
+        // their remaining room this cycle: it decrements by the loan orders
+        // already taken (amount-based rule — the old once-per-cycle
+        // "Facility has already been used" guard is removed; exceeding the
+        // pool is caught by the amount check below).
+        const graceRemaining = facilityAvailable({ baseEligible, graceCap: graceLoanMaxCap, cycleLoanUsed: cycleLoanTotal })
         loanEligible = graceRemaining
         if (capAmount > graceRemaining) {
           return NextResponse.json(
@@ -297,25 +307,6 @@ export async function POST(req) {
           )
         }
 
-        if (ordersHasFoodGraceFlag) {
-          let gq = supabase
-            .from('orders')
-            .select('order_id')
-            .eq('member_id', memberId)
-            .eq('payment_option', 'Loan')
-            .eq('food_loan_grace_used', true)
-            .in('status', statuses)
-            .order('order_id', { ascending: false })
-            .limit(1)
-          if (ordersHasCycle) gq = gq.eq('cycle_id', activeCycle.id)
-          const { data: usedRows, error: gErr } = await gq
-          if (!gErr && (usedRows || []).length > 0) {
-            return NextResponse.json(
-              { ok: false, error: 'Facility has already been used for this member in the current cycle.' },
-              { status: 400 }
-            )
-          }
-        }
       } else {
         // No loan caps configured for this cycle — Loan not available
         return NextResponse.json(
