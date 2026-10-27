@@ -58,7 +58,8 @@ describe('useModuleStatusToasts', () => {
     await flush()
     expect(toasts.success).not.toHaveBeenCalled()
     await act(async () => {
-      vi.advanceTimersByTime(5000)
+      // Active cadence: the fixtures below all return an order to watch.
+      vi.advanceTimersByTime(30_000)
     })
     await flush()
     expect(toasts.success).toHaveBeenCalledWith(
@@ -80,7 +81,8 @@ describe('useModuleStatusToasts', () => {
     await flush()
     expect(toasts.warning).not.toHaveBeenCalled()
     await act(async () => {
-      vi.advanceTimersByTime(5000)
+      // Active cadence: the fixtures below all return an order to watch.
+      vi.advanceTimersByTime(30_000)
     })
     await flush()
     // The transition uses the status-specific copy (Posted → Cancelled).

@@ -164,11 +164,23 @@ export default function ChatWidget() {
 
     channelRef.current = channel
 
-    // Also do a fallback poll every 15 seconds in case realtime events are missed
-    // (Supabase Realtime has occasional delivery gaps on free tier)
-    pollRef.current = setInterval(fetchMessages, 15000)
+    // Realtime above is the primary channel. This is only a safety net for
+    // missed events (Supabase Realtime has occasional delivery gaps on free
+    // tier), so it does not need to run every 15s — and never while the tab
+    // is hidden, where nobody can read the messages. Coming back to the tab
+    // refetches immediately instead.
+    const poll = () => {
+      if (document.visibilityState === 'hidden') return
+      fetchMessages()
+    }
+    pollRef.current = setInterval(poll, 60_000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchMessages()
+    }
+    document.addEventListener('visibilitychange', onVisible)
 
     return () => {
+      document.removeEventListener('visibilitychange', onVisible)
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current)
         channelRef.current = null

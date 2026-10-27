@@ -10,7 +10,9 @@
 // table; the hook logic is shared.
 //
 // How it works:
-//   - Polls the module's slim `?status_only=1` view every `pollMs`.
+//   - Polls the module's slim `?status_only=1` view, but only while the member
+//     is actually looking at the page, and only as fast as there is something
+//     to watch (see POLLING below).
 //   - Keeps a per-member snapshot of `orderId -> status` in localStorage so
 //     transitions are detected across reloads and tabs without re-toasting.
 //   - The first poll baselines silently (no toast for pre-existing statuses);
@@ -20,6 +22,23 @@
 import { useEffect, useRef } from 'react'
 import { useToast } from '../components/ui/Toast'
 import recordMemberNotification from '@/lib/recordMemberNotification'
+
+// ── Polling ───────────────────────────────────────────────────────────
+// These three watchers are mounted once in the root layout, so they run for
+// every signed-in member on every open tab — whether or not the member has
+// any orders in that module, and whether or not the tab is even visible.
+//
+// The original 5s cadence therefore cost ~720 requests/member/hour per module
+// (~2,160 across food + exhibition + ram), almost all of it for members with
+// nothing to watch. That is what drove function invocations and observability
+// events through the roof.
+//
+// Now: no polls at all in a hidden tab (visibilitychange wakes it up again),
+// a 30s cadence while there are orders to watch, and a 5-minute cadence when
+// there are none. A member who has just placed an order flips back to the
+// fast cadence on the very next poll.
+const ACTIVE_POLL_MS = 30_000
+const IDLE_POLL_MS = 300_000
 
 export const MODULE_STATUS_CONFIG = {
   food: {
@@ -171,7 +190,7 @@ function writeSnapshot(key, snap) {
 
 export default function useModuleStatusToasts(moduleName, memberId, opts = {}) {
   const cfg = MODULE_STATUS_CONFIG[moduleName]
-  const pollMs = opts.pollMs ?? 5000
+  const pollMs = opts.pollMs ?? ACTIVE_POLL_MS
   const toast = useToast()
   const busyRef = useRef(false)
 
@@ -179,6 +198,9 @@ export default function useModuleStatusToasts(moduleName, memberId, opts = {}) {
     if (!cfg || !memberId) return undefined
 
     let disposed = false
+    let timer = null
+    // Orders seen on the last successful poll; null until the first one lands.
+    let watching = null
 
     const check = async () => {
       if (busyRef.current) return
@@ -192,6 +214,7 @@ export default function useModuleStatusToasts(moduleName, memberId, opts = {}) {
 
         const current = {}
         for (const o of json.orders || []) current[String(cfg.orderKey(o))] = o.status
+        watching = Object.keys(current).length
 
         const prev = readSnapshot(cfg.snapshotKey(memberId))
         if (prev) {
@@ -240,11 +263,52 @@ export default function useModuleStatusToasts(moduleName, memberId, opts = {}) {
       }
     }
 
-    check()
-    const timer = setInterval(check, pollMs)
+    // Self-scheduling instead of setInterval so the cadence can change with
+    // what the member actually has outstanding. `null` means "stay asleep" —
+    // the visibilitychange listener below is what wakes it back up.
+    const schedule = (ms) => {
+      clearTimeout(timer)
+      if (disposed || ms === null) return
+      timer = setTimeout(run, ms)
+    }
+
+    const nextDelay = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return null
+      }
+      if (watching === null) return pollMs // first poll has not succeeded yet
+      return watching > 0 ? pollMs : IDLE_POLL_MS
+    }
+
+    async function run() {
+      if (disposed) return
+      // A hidden tab cannot show a toast — do not spend a request on it.
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        schedule(null)
+        return
+      }
+      await check()
+      schedule(nextDelay())
+    }
+
+    const onVisible = () => {
+      if (typeof document === 'undefined') return
+      if (document.visibilityState === 'visible') schedule(0)
+    }
+
+    run()
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisible)
+      window.addEventListener('focus', onVisible)
+    }
+
     return () => {
       disposed = true
-      clearInterval(timer)
+      clearTimeout(timer)
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisible)
+        window.removeEventListener('focus', onVisible)
+      }
     }
   }, [cfg, memberId, pollMs, toast])
 

@@ -369,8 +369,21 @@ export default function AdminLayout({ children }) {
 
   useEffect(() => {
     fetchChatUnread()
-    const t = setInterval(fetchChatUnread, 10000) // poll every 10s
-    return () => clearInterval(t)
+    // 10s on every admin page was a lot of traffic for a badge; 30s is plenty
+    // and a hidden tab has nobody looking at it. Returning to the tab refreshes
+    // it straight away.
+    const t = setInterval(() => {
+      if (document.visibilityState === 'hidden') return
+      fetchChatUnread()
+    }, 30_000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchChatUnread()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(t)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [fetchChatUnread])
 
   const hamburgerRef = useRef(null)
