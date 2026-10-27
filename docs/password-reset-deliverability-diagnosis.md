@@ -59,16 +59,33 @@ Steps (any provider):
   by design; repointing the member's auth account is a separate decision.
 
 ## Code change (27 Oct 2026)
-Until the SMTP provider is fixed, the portal no longer depends on recovery
-mail at all. `POST /api/members/auth/forgot-password` now sends a 6-digit
-**OTP** instead of calling `resetPasswordForEmail`, and the login UI runs the
-existing sign-up screens (`ENTER_OTP` → `SET_PASSWORD`) in "reset" mode:
-verify the code → type a new password → signed in. The account is **not**
-deleted and the member does not re-sign up; `set-password` updates the same
-auth user. Recovery links still work if Supabase ever emits one
-(`/reset-password` + `app/auth/confirm`).
+`POST /api/members/auth/forgot-password` now sends a 6-digit **code** instead
+of a link, and the login UI runs the existing sign-up screens
+(`ENTER_OTP` → `SET_PASSWORD`) in "reset" mode: verify the code → type a new
+password → signed in. The account is **not** deleted and the member does not
+re-sign up; `set-password` updates the same auth user.
+
+Two rounds:
+1. First pass used `signInWithOtp` — proven delivery, but that always renders
+   Supabase's **Magic Link** template, so the email arrived saying "complete
+   your sign-in to the member portal".
+2. Now it uses `resetPasswordForEmail`, verified as `type: 'recovery'`, so it
+   renders the separate **Reset password** template instead. GoTrue hands that
+   template `{{ .Token }}` — the 6-digit code, not the link token — giving a
+   genuine reset-code email (see [reset-password-email-template.html](./reset-password-email-template.html)).
+
+⚠️ **Delivery of this variant is NOT yet proven.** What Gmail was discarding
+was the recovery *link*; a recovery *code* in the same template has never been
+confirmed to arrive. Send one forgot-password for E00076 and confirm it lands
+before trusting it. If it does not arrive, restoring the `signInWithOtp` send
+from commit `18b5982` puts delivery back on the proven path — `verify-otp`
+already defaults `type` to `'email'`, so that revert is confined to
+`forgot-password/route.js`.
 
 ## Files
 - Template backup: [recovery-template-supabase-current.html](./recovery-template-supabase-current.html)
-- Repo-side template sources: [reset-password-template.html](./reset-password-template.html),
+- **Supabase "Reset password" template (code-based, current):**
   [reset-password-email-template.html](./reset-password-email-template.html)
+- **Supabase "Magic Link" template (sign-up/sign-in, unchanged):**
+  [otp-email-template.html](./otp-email-template.html)
+- Legacy link-based sources: [reset-password-template.html](./reset-password-template.html)

@@ -1,15 +1,23 @@
 // app/api/members/auth/forgot-password/route.js
 // Send a password-reset VERIFICATION CODE (6-digit OTP) to the member's
-// registered email — the same code channel the sign-up flow uses.
+// registered email, using Supabase's RECOVERY flow so the message carries
+// reset wording instead of the sign-in copy.
 //   POST { memberId } → { ok }  (always, unless the request itself is invalid)
 //   GET  → admin-only debug echo of the origin/env used to build the link
 //
 // WHY A CODE AND NOT A RESET LINK:
-// The old flow called Supabase `resetPasswordForEmail`. Those messages never
-// reach the member — Gmail silently discards account-recovery mail coming from
-// the co-op's shared-hosting SMTP while delivering short verification codes
-// fine (see docs/password-reset-deliverability-diagnosis.md). The OTP path is
-// the one proven to arrive, so the reset now rides it.
+// The original flow sent a recovery LINK. Those messages never reach the
+// member — Gmail silently discards account-recovery mail coming from the
+// co-op's shared-hosting SMTP while delivering short verification codes fine
+// (see docs/password-reset-deliverability-diagnosis.md).
+//
+// WHY resetPasswordForEmail AND NOT signInWithOtp:
+// `signInWithOtp` always renders Supabase's *Magic Link* template, so a reset
+// sent that way arrives wearing the sign-in copy ("complete your sign-in to
+// the member portal"). The recovery flow renders the separate *Reset password*
+// template, and GoTrue hands that template `{{ .Token }}` — the 6-digit code,
+// not the long link token — so the member gets a genuinely reset-worded code
+// email. It is verified as `type: 'recovery'` in verify-otp.
 //
 // The member verifies the code, which hands back a Supabase session token, and
 // then /api/members/auth/set-password sets the new password on the SAME auth
@@ -37,8 +45,8 @@ const authServiceRole = createClient(
   { auth: { persistSession: false, autoRefreshToken: false } }
 )
 
-// Resolves the URL-of-origin the member's browser sees, so any link Supabase
-// still emits (fallback confirmation) points to a reachable page. Order:
+// Resolves the URL-of-origin the member's browser sees, so the recovery
+// redirect (must be on Supabase's allow-list) points to a reachable page. Order:
 //   1. explicit NEXT_PUBLIC_SITE_URL (must be a full http(s) URL)
 //   2. request Origin header (browser origin, works behind proxies)
 //   3. request Host + x-forwarded-proto headers
@@ -60,11 +68,11 @@ function resolveSiteOrigin(request) {
   return ''
 }
 
-// With "Enable email confirmations" ON, signInWithOtp against an UNCONFIRMED
-// account emails a confirmation LINK instead of a 6-digit code — which is
-// exactly the failure this flow must not have. A member reaching this endpoint
-// already has a password, so their account is normally confirmed; if it isn't,
-// confirm it in place first so the message is guaranteed to be a code.
+// An UNCONFIRMED account can make Supabase fall back to a confirmation LINK
+// instead of a 6-digit code — which is exactly the failure this flow must not
+// have. A member reaching this endpoint already has a password, so their
+// account is normally confirmed; if it isn't, confirm it in place first so the
+// message is guaranteed to be a code.
 // Never fatal: if the admin API hiccups we still attempt the send.
 async function ensureAccountConfirmed(authUserId) {
   if (!authUserId) return
@@ -129,9 +137,9 @@ export async function POST(request) {
       return NextResponse.json({ ok: true })
     }
 
-    // Supabase only uses this if it falls back to a link; without a resolvable
-    // origin we simply omit it rather than refuse to send the code.
-    const emailRedirectTo = siteOrigin ? `${siteOrigin}/auth/callback` : undefined
+    // Supabase only honours this if it is a full origin; without one we omit it
+    // rather than refuse to send the code (the member types it anyway).
+    const redirectTo = siteOrigin ? `${siteOrigin}/reset-password` : undefined
 
     await ensureAccountConfirmed(member.auth_user_id)
 
@@ -146,10 +154,7 @@ export async function POST(request) {
         : null
     if (altAddr) {
       try {
-        const alt = await authServiceRole.auth.signInWithOtp({
-          email: altAddr,
-          options: { emailRedirectTo, data: { member_id: mid } },
-        })
+        const alt = await authServiceRole.auth.resetPasswordForEmail(altAddr, { redirectTo })
         if (alt.error) {
           console.warn(`[forgot-password] ${mid}: alternate-inbox code failed:`, alt.error.message)
         }
@@ -158,10 +163,11 @@ export async function POST(request) {
       }
     }
 
-    // Send the 6-digit reset code to the official address.
-    const { error: otpError } = await authServiceRole.auth.signInWithOtp({
-      email: primary,
-      options: { emailRedirectTo, data: { member_id: mid } },
+    // Send the reset code through the RECOVERY flow so it renders the
+    // "Reset password" template (reset wording + {{ .Token }} = the 6-digit
+    // code) rather than the Magic Link template the sign-in OTP uses.
+    const { error: otpError } = await authServiceRole.auth.resetPasswordForEmail(primary, {
+      redirectTo,
     })
 
     if (otpError) {
@@ -171,7 +177,7 @@ export async function POST(request) {
           code: otpError.code,
           status: otpError.status,
           message: otpError.message,
-          emailRedirectTo: emailRedirectTo || null,
+          redirectTo: redirectTo || null,
         })
       )
       // Still return success to avoid leaking info; the failure details are on
@@ -180,7 +186,7 @@ export async function POST(request) {
     }
 
     console.log(
-      `[forgot-password] reset code sent to ${mid} (${member.email})${siteOrigin ? ` → ${siteOrigin}/auth/callback` : ' (no site origin — code only)'}`
+      `[forgot-password] reset code sent to ${mid} (${member.email})${siteOrigin ? ` → ${siteOrigin}/reset-password` : ' (no site origin — code only)'}`
     )
     return NextResponse.json({ ok: true })
   } catch (e) {
@@ -203,6 +209,6 @@ export async function GET(request) {
       service_role_set: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
     },
     resolvedSiteOrigin: origin,
-    emailRedirectToExample: origin ? `${origin}/auth/callback` : null,
+    redirectToExample: origin ? `${origin}/reset-password` : null,
   })
 }

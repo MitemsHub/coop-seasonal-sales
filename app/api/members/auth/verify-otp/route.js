@@ -1,6 +1,12 @@
 // app/api/members/auth/verify-otp/route.js
 // Verify the OTP code the member received via email.
-//   POST { memberId, email, token } → { ok, accessToken }
+//   POST { memberId, token, type } → { ok, accessToken }
+//
+// `type` is 'email' for the sign-up / sign-in code (sent by signInWithOtp,
+// which renders the Magic Link template) and 'recovery' for the forgot-password
+// code (sent by resetPasswordForEmail, which renders the Reset password
+// template). GoTrue issues and accepts the two as distinct token types, so the
+// wrong value fails verification. Anything unrecognised falls back to 'email'.
 //
 // On success, returns the Supabase Auth access token so the client can
 // call the set-password endpoint in the next step.
@@ -19,9 +25,10 @@ const authSupabase = createClient(
 
 export async function POST(request) {
   try {
-    const { memberId, token } = await request.json().catch(() => ({}))
+    const { memberId, token, type } = await request.json().catch(() => ({}))
     const mid = String(memberId || '').trim().toUpperCase()
     const code = String(token || '').trim()
+    const otpType = type === 'recovery' ? 'recovery' : 'email'
 
     if (!mid) {
       return NextResponse.json({ error: 'Member ID is required' }, { status: 400 })
@@ -51,7 +58,7 @@ export async function POST(request) {
     let { data, error: verifyError } = await authSupabase.auth.verifyOtp({
       email: addr,
       token: code,
-      type: 'email',
+      type: otpType,
     })
     let verifiedVia = 'primary'
 
@@ -69,7 +76,7 @@ export async function POST(request) {
         const altTry = await authSupabase.auth.verifyOtp({
           email: altRaw,
           token: code,
-          type: 'email',
+          type: otpType,
         })
         if (!altTry.error && altTry?.data?.session?.access_token) {
           data = altTry.data

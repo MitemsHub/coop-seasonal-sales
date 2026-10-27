@@ -723,6 +723,10 @@ export default function MemberAuth() {
         body: JSON.stringify({
           memberId: memberId.trim().toUpperCase(),
           token: otp.trim(),
+          // The forgot-password code was issued by resetPasswordForEmail, so
+          // GoTrue expects it verified as 'recovery'; sign-up/sign-in codes
+          // come from signInWithOtp and stay 'email'.
+          type: isReset ? 'recovery' : 'email',
         }),
       })
       const data = await res.json()
