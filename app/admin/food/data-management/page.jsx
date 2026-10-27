@@ -535,6 +535,36 @@ function DataManagementPageContent() {
     setProcessingAction(null)
   }
 
+  // Middleware guards /api/admin/* with PLAIN-TEXT 401/429 bodies (and the
+  // platform can answer 5xx with HTML), so calling response.json() on a failed
+  // backup threw "Unexpected token 'U'" instead of telling the admin what
+  // actually went wrong. Read the body by content-type and translate the cases
+  // an admin can act on.
+  const readBackupError = async (response) => {
+    const type = response.headers.get('content-type') || ''
+    let text = ''
+    let body = null
+    try {
+      text = await response.text()
+      if (type.includes('json')) body = JSON.parse(text)
+    } catch {
+      // empty or unparseable body — fall through to the status-based message
+    }
+
+    if (response.status === 401) {
+      return 'Your admin session has expired — sign in again, then retry the backup.'
+    }
+    if (response.status === 429) {
+      const wait = Number(response.headers.get('Retry-After'))
+      return `Too many admin requests — wait ${Number.isFinite(wait) && wait > 0 ? wait : 60} seconds and try again.`
+    }
+    if (body?.error) return body.error
+    if (text && !/^\s*</.test(text)) {
+      return `Backup failed (HTTP ${response.status}): ${text.slice(0, 200)}`
+    }
+    return `Backup failed (HTTP ${response.status}) — the server did not return a file. Please try again.`
+  }
+
   const exportBackup = async (e) => {
     e.preventDefault()
     e.stopPropagation()
@@ -564,8 +594,7 @@ function DataManagementPageContent() {
         URL.revokeObjectURL(downloadUrl)
         setMessage('Backup exported successfully as Excel file with multiple sheets')
       } else {
-        const result = await response.json()
-        setMessage(`Error: ${result.error}`)
+        setMessage(`Error: ${await readBackupError(response)}`)
       }
     } catch (error) {
       setMessage(`Error: ${error.message}`)
