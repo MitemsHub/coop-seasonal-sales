@@ -1,0 +1,29 @@
+{
+  "generated_at": "2026-10-28T12:38:12.774Z",
+  "duplicate": [
+    {
+      "item_id": 471,
+      "sku": "TINTOMATOESSARAH400G",
+      "name": "Tin Tomatoes Sarah 400g",
+      "is_active": true,
+      "source": "general"
+    }
+  ],
+  "kept": [
+    {
+      "item_id": 472,
+      "sku": "TINTOMATOSARAH400G",
+      "name": "Tin Tomato Sarah 400g",
+      "is_active": true,
+      "source": "outsourced"
+    }
+  ],
+  "lafia_price_on_kept": [
+    {
+      "id": 4716,
+      "price": "34000.00",
+      "cycle_id": 3
+    }
+  ],
+  "sku_twins": 0
+}
