@@ -351,7 +351,13 @@ export async function POST(req) {
       p_member_id: member.member_id,
       p_member_name: member.full_name,
       p_member_category: member.category || '',
-      p_branch_id: member.branch_id,
+      // orders.branch_id is NOT NULL. It carries the member's home branch,
+      // which is only ever written by the Shop page's branch selector — most
+      // members have never set it (NULL), and a NULL here makes the atomic
+      // insert fail with a raw constraint violation the member can't act on.
+      // The delivery branch is what every recent order already carries in both
+      // columns, so fall back to it rather than rejecting a valid order.
+      p_branch_id: member.branch_id || deliveryBranch.id,
       p_delivery_branch_id: deliveryBranch.id,
       p_department_id: deptRow.id,
       p_payment_option: paymentOption,
