@@ -63,35 +63,44 @@ export async function POST(request) {
     const rateParam = ordersHasCycle && cycleId ? '$2' : '$1'
     const params = ordersHasCycle && cycleId ? [cycleId, rateDecimal] : [rateDecimal]
  
+    // The UPDATE target (ol) may only be referenced in SET/WHERE/RETURNING —
+    // matching it inside the JOIN's ON clause raised
+    // "invalid reference to FROM-clause entry for table ol" (42P01) and failed
+    // every reprice. The markup is therefore a scalar subquery, the same shape
+    // as migrations/fix-reprice-orders-for-branch-item-use-cycle-loan-rate.sql.
     const sql = `
       WITH updated_lines AS (
         UPDATE public.order_lines ol
         SET
-          unit_price = bip.price + COALESCE(bim.amount, 0),
+          unit_price = bip.price + COALESCE((
+                SELECT bim.amount FROM public.branch_item_markups bim
+                WHERE bim.branch_id = o.delivery_branch_id
+                  AND bim.item_id = ol.item_id
+                  AND bim.active = TRUE
+                  ${markupCycleJoin}
+              ), 0),
           branch_item_price_id = bip.id,
-          amount = (bip.price + COALESCE(bim.amount, 0)) * ol.qty
+          amount = (bip.price + COALESCE((
+                SELECT bim.amount FROM public.branch_item_markups bim
+                WHERE bim.branch_id = o.delivery_branch_id
+                  AND bim.item_id = ol.item_id
+                  AND bim.active = TRUE
+                  ${markupCycleJoin}
+              ), 0)) * ol.qty
         FROM public.orders o
         JOIN public.branch_item_prices bip
           ON bip.branch_id = o.delivery_branch_id
-         AND bip.item_id = ol.item_id
          ${cycleJoin}
-        LEFT JOIN public.branch_item_markups bim
-          ON bim.branch_id = o.delivery_branch_id
-         AND bim.item_id = ol.item_id
-         AND bim.active = TRUE
-         ${markupCycleJoin}
         WHERE ol.order_id = o.order_id
+          AND bip.item_id = ol.item_id
           AND o.status::text IN ('Pending','Posted','Delivered')
           ${cycleFilter}
-        RETURNING ol.id
+        RETURNING ol.order_id, ol.amount
       ),
       totals AS (
-        SELECT o.order_id, COALESCE(SUM(ol.amount), 0)::numeric AS base_total
-        FROM public.orders o
-        JOIN public.order_lines ol ON ol.order_id = o.order_id
-        WHERE o.status::text IN ('Pending','Posted','Delivered')
-          ${cycleFilter}
-        GROUP BY o.order_id
+        SELECT order_id, COALESCE(SUM(amount), 0)::numeric AS base_total
+        FROM updated_lines
+        GROUP BY order_id
       ),
       updated_orders AS (
         UPDATE public.orders o

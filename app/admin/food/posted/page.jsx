@@ -369,9 +369,9 @@ function PostedAdminPageContent() {
         <p className="text-sm text-muted">Deliver or rollback orders that have been posted.</p>
       </div>
 
-      {/* At-a-glance strip — today's pending queue plus delivered-this-cycle
-          progress, mirroring the rep pages. Admin-wide and independent of the
-          page's status filter. */}
+      {/* At-a-glance strip — the pending queue awaiting action plus
+          delivered-this-cycle progress, mirroring the rep pages. Admin-wide and
+          independent of the page's status filter. */}
       {summary && (
         <div className="mb-4 flex flex-col gap-2 rounded-xl border border-brand/30 bg-brand/5 px-3.5 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-brand">

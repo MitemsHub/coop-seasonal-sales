@@ -54,8 +54,14 @@ function applyOrderFilters({
   }
   if (from || to) {
     const dateCol = status === 'Pending' || status === 'Cancelled' ? 'created_at' : 'posted_at'
-    if (from) out = out.gte(dateCol, `${from}T00:00:00`)
-    if (to) out = out.lte(dateCol, `${to}T23:59:59.999`)
+    // Callers pass a plain date (2026-10-29) or a full ISO timestamp. Only
+    // append the time part to a bare date — tacking T00:00:00 onto a full
+    // timestamp produces "...ZT00:00:00", which PostgREST only tolerates by
+    // parsing the leading half.
+    const startOf = (d) => (d.includes('T') ? d : `${d}T00:00:00`)
+    const endOf = (d) => (d.includes('T') ? d : `${d}T23:59:59.999`)
+    if (from) out = out.gte(dateCol, startOf(from))
+    if (to) out = out.lte(dateCol, endOf(to))
   }
   return out
 }
@@ -127,9 +133,13 @@ async function computeSummary({
   }
 
   // The strip's figures are admin-wide and independent of the page's status
-  // filter: today's pending queue (orders created today still awaiting
-  // approval) and delivered-this-cycle progress. Both stay within the active
-  // cycle the list already scopes to.
+  // filter: the pending queue awaiting approval and delivered-this-cycle
+  // progress. Both stay within the active cycle the list already scopes to.
+  //
+  // The pending queue is NOT restricted to orders created today: every order
+  // created today is posted as the admin clears it, so a "created today" filter
+  // drained the strip to 0 orders · ₦0 every evening while ₦millions sat in the
+  // queue below it.
   const countTotalFor = async ({ status: st, from: f, to: t }) => {
     let n = 0
     try {
@@ -184,8 +194,7 @@ async function computeSummary({
     return { count: n, total: Math.round(total) }
   }
 
-  const todayStart = `${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`
-  const todayPending = await countTotalFor({ status: 'Pending', from: todayStart })
+  const todayPending = await countTotalFor({ status: 'Pending', from: '' })
   const deliveredCycle = await countTotalFor({ status: 'Delivered', from: '' })
 
   return { count, totalAmount, todayPending, deliveredCycle }

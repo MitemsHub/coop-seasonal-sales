@@ -513,9 +513,10 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
         <p className="text-sm text-muted">Browse, filter, post and manage {status.toLowerCase()} orders.</p>
       </div>
 
-      {/* At-a-glance strip — today's pending queue plus delivered-this-cycle
-          progress, mirroring the rep pages. Admin-wide and independent of the
-          page's status filter. Only on the actionable Pending view (the
+      {/* At-a-glance strip — the pending queue awaiting action plus
+          delivered-this-cycle progress, mirroring the rep pages. Admin-wide and
+          independent of the page's status filter (so it stays put while the
+          list below is filtered). Only on the actionable Pending view (the
           component is shared with the Cancelled page). */}
       {status === 'Pending' && summary && (
         <div className="mb-4 flex flex-col gap-2 rounded-xl border border-brand/30 bg-brand/5 px-3.5 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
@@ -969,7 +970,10 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
                 onClick={() => { setShowModal(null); setModalInput('') }}
                 className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle"
               >
-                Cancel
+                {/* "Cancel" here only dismisses the dialog, but next to a
+                    "Cancel Order" confirm it reads as a second destructive
+                    button — label it Close, matching the RAM modal. */}
+                {showModal.type === 'cancel' ? 'Close' : 'Cancel'}
               </button>
               <button
                 onClick={
