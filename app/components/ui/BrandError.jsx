@@ -41,6 +41,19 @@ const NAV_LINKS = {
   ],
 }
 
+// A tab (or installed PWA window) opened before a deploy keeps asking Webpack
+// for chunk filenames that the new build has deleted, so the lazy import dies
+// with "Loading chunk 9367 failed. (error: /_next/static/chunks/…)". `reset()`
+// can never fix that — it re-requests the same dead URL — which is why this
+// screen used to be a dead end. Only a full reload re-reads the current HTML
+// and its chunk map, so stale-chunk errors are routed to location.reload.
+const STALE_CHUNK_RE =
+  /loading (?:css )?chunk|chunkloaderror|error loading chunk|failed to load dynamically imported module/i
+
+function isStaleChunkError(err) {
+  return STALE_CHUNK_RE.test(String(err?.message || err || ''))
+}
+
 export default function BrandError({
   error,
   reset,
@@ -50,9 +63,31 @@ export default function BrandError({
   showDetails = true,
   fullScreen = false,
 }) {
+  const staleChunk = isStaleChunkError(error)
+
   useEffect(() => {
     if (error) console.error(`[${context} error]:`, error)
   }, [error, context])
+
+  // Recover on arrival so the member doesn't have to read a raw chunk URL to
+  // get out of it — but at most once a minute, so a genuinely broken server
+  // can never bounce the browser in a reload loop.
+  useEffect(() => {
+    if (!staleChunk) return
+    try {
+      const last = Number(sessionStorage.getItem('cbn-stale-chunk-reload') || 0)
+      if (Date.now() - last < 60_000) return
+      sessionStorage.setItem('cbn-stale-chunk-reload', String(Date.now()))
+      window.location.reload()
+    } catch {
+      // Storage blocked (private mode) — the retry button below still works.
+    }
+  }, [staleChunk])
+
+  const retry = () => {
+    if (staleChunk) window.location.reload()
+    else reset?.()
+  }
 
   const headings = {
     root: 'Something went wrong',
@@ -106,7 +141,12 @@ export default function BrandError({
 
         {/* Error message */}
         <p className="mt-3 text-sm leading-relaxed text-muted">
-          {message || descriptions[context] || descriptions.root}
+          {message ||
+            (staleChunk
+              ? 'This page went out of date after an update. Reload to get the latest version.'
+              : null) ||
+            descriptions[context] ||
+            descriptions.root}
         </p>
 
         {/* Error details (collapsed) */}
@@ -124,9 +164,9 @@ export default function BrandError({
 
         {/* Action buttons */}
         <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:justify-center">
-          {reset && (
+          {(reset || staleChunk) && (
             <button
-              onClick={() => reset()}
+              onClick={retry}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand px-7 py-3 text-sm font-semibold text-on-accent shadow-lg shadow-brand/20 transition-all duration-200 hover:bg-brand-hover hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
