@@ -25,9 +25,12 @@ export async function POST(request) {
     if (!token) {
       return NextResponse.json({ error: 'Reset token is required' }, { status: 400 })
     }
-    if (!pw || pw.length < 6) {
+    // Supabase Auth enforces 8 on this project — a shorter password is
+    // rejected by updateUser() with "Password should be at least 8
+    // characters." Gate first so the member gets our message, not GoTrue's.
+    if (!pw || pw.length < 8) {
       return NextResponse.json(
-        { error: 'Password must be at least 6 characters' },
+        { error: 'Password must be at least 8 characters' },
         { status: 400 }
       )
     }

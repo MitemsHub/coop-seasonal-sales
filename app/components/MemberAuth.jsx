@@ -268,9 +268,16 @@ function OtpInput({ otp, setOtp, error, isLoading, onSubmit, onBack }) {
   )
 }
 
-function PasswordSetup({ password, setPassword, confirmPassword, setConfirmPassword, error, isLoading, onSubmit, onBack, mode = 'signup' }) {
+// minLength mirrors the policy actually enforced by Supabase Auth for this
+// flow. The Supabase project's minimum password length is 8 (verified against
+// its own signup endpoint: 6- and 7-character passwords are rejected with
+// "Password should be at least 8 characters.") — advertising 6 here only let
+// the member type a password the server would refuse. Pensioner passwords are
+// hashed locally (lib/localPassword.js) and never reach Supabase, so that step
+// still passes 6.
+function PasswordSetup({ password, setPassword, confirmPassword, setConfirmPassword, error, isLoading, onSubmit, onBack, mode = 'signup', minLength = 8 }) {
   const isReset = mode === 'reset'
-  const pwValid = password.length >= 6
+  const pwValid = password.length >= minLength
   const match = password && confirmPassword && password === confirmPassword
 
   return (
@@ -288,11 +295,11 @@ function PasswordSetup({ password, setPassword, confirmPassword, setConfirmPassw
           className={`w-full py-2 pl-3 pr-3 md:py-3 md:pl-4 border-2 rounded-xl transition-all duration-200 outline-none text-[13px] md:text-base text-fg placeholder:text-subtext disabled:bg-subtle disabled:cursor-not-allowed ${
             !password ? 'border-line-subtle focus:border-brand' : pwValid ? 'border-brand focus:border-brand' : 'border-danger focus:border-danger'
           }`}
-          placeholder="Min. 6 characters"
+          placeholder={`Min. ${minLength} characters`}
           autoFocus
         />
         {password && !pwValid && (
-          <p className="mt-1 text-caption text-danger-fg">Password must be at least 6 characters</p>
+          <p className="mt-1 text-caption text-danger-fg">Password must be at least {minLength} characters</p>
         )}
       </div>
 
@@ -745,7 +752,8 @@ export default function MemberAuth() {
   // ── Step 4 (signup): Set password → create account → login ──
   const handlePasswordSubmit = async (e) => {
     e.preventDefault()
-    if (password.length < 6 || password !== confirmPassword) return
+    // 8, not 6 — Supabase Auth refuses anything shorter (see PasswordSetup).
+    if (password.length < 8 || password !== confirmPassword) return
     setIsLoading(true)
     setError('')
     try {
@@ -981,6 +989,7 @@ export default function MemberAuth() {
           setConfirmPassword={setConfirmPassword}
           error={error}
           isLoading={isLoading}
+          minLength={6}
           onSubmit={handleSelfSetPasswordSubmit}
           onBack={() => { setStep(STEP.ENTER_ID); setError('') }}
         />

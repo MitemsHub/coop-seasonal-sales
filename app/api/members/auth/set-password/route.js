@@ -36,9 +36,13 @@ export async function POST(request) {
     if (!token) {
       return NextResponse.json({ error: 'Access token is required' }, { status: 400 })
     }
-    if (!pw || pw.length < 6) {
+    // Supabase Auth is the authority here: this project's minimum password
+    // length is 8, and a shorter one comes back from updateUserById as
+    // "Password should be at least 8 characters." — which the member saw raw.
+    // Gate at 8 so we reject it with our own copy instead.
+    if (!pw || pw.length < 8) {
       return NextResponse.json(
-        { error: 'Password must be at least 6 characters' },
+        { error: 'Password must be at least 8 characters' },
         { status: 400 }
       )
     }

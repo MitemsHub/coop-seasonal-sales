@@ -32,7 +32,10 @@ function ResetPasswordContent() {
     }
   }, [])
 
-  const pwValid = password.length >= 6
+  // Supabase Auth enforces a minimum password length of 8 on this project
+  // (6- and 7-character passwords come back as "Password should be at least
+  // 8 characters."), so the form must gate on 8 too.
+  const pwValid = password.length >= 8
   const match = password && confirmPassword && password === confirmPassword
 
   const handleSubmit = async (e) => {
@@ -132,11 +135,11 @@ function ResetPasswordContent() {
               className={`w-full py-2.5 px-4 border-2 rounded-xl transition-all duration-200 outline-none text-sm text-fg placeholder:text-subtext disabled:bg-subtle disabled:cursor-not-allowed ${
                 !password ? 'border-line-subtle focus:border-brand' : pwValid ? 'border-success focus:border-success' : 'border-danger focus:border-danger'
               }`}
-              placeholder="At least 6 characters"
+              placeholder="At least 8 characters"
               autoFocus
             />
             {password && !pwValid && (
-              <p className="mt-1 text-xs text-danger-fg">Password must be at least 6 characters</p>
+              <p className="mt-1 text-xs text-danger-fg">Password must be at least 8 characters</p>
             )}
           </div>
 
