@@ -121,7 +121,7 @@ export async function POST(request) {
     const db = createDbClient()
     const { data: member, error: mErr } = await db
       .from('members')
-      .select('member_id, email, alternative_email, auth_user_id, portal_enabled')
+      .select('member_id, email, auth_user_id, portal_enabled')
       .eq('member_id', mid)
       .maybeSingle()
 
@@ -150,22 +150,21 @@ export async function POST(request) {
     await ensureAccountConfirmed(member.auth_user_id)
 
     const primary = String(member.email).trim().toLowerCase()
-    const altRaw = String(member.alternative_email || '').trim().toLowerCase()
-    const altAddr =
-      altRaw && altRaw !== primary && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(altRaw)
-        ? altRaw
-        : null
 
     // Send the reset code through the RECOVERY flow so it renders the
     // "Reset password" template (reset wording + {{ .Token }} = the 6-digit
     // code) rather than the Magic Link template the sign-in OTP uses.
     //
-    // PRIMARY INBOX FIRST. Every Supabase Auth email draws on one project-wide
-    // hourly send budget (30/hour on custom SMTP out of the box), so a copy to
-    // the alternate address queued ahead of the primary could spend the quota
-    // the member's own inbox needs — and the primary is the address the login
-    // screen showed them. The alternate copy is best effort and only attempted
-    // once the primary send has succeeded.
+    // ONE SEND PER REQUEST — deliberately. This route used to mail a second
+    // copy to alternative_email; 613 members have one, so nearly every reset
+    // burned TWO emails out of a single project-wide hourly budget that every
+    // Supabase Auth send shares (30/hour on custom SMTP by default), and both
+    // were competing with login OTPs and sign-up codes for the same room. The
+    // reset screen only ever names the primary address, so the copy promised
+    // nothing the member was looking for — it just pushed both sends over the
+    // quota and made the code that mattered arrive late or not at all.
+    // Restore the copy only if the budget is raised in the Supabase dashboard
+    // (Authentication → Rate limits → Email send rate limit).
     const { error: otpError } = await authServiceRole.auth.resetPasswordForEmail(primary, {
       redirectTo,
     })
@@ -198,19 +197,6 @@ export async function POST(request) {
         },
         { status: rateLimited ? 429 : 502 }
       )
-    }
-
-    // Optional copy to the alternate inbox on file — best effort only, and
-    // never allowed to mask the primary send's outcome.
-    if (altAddr) {
-      try {
-        const alt = await authServiceRole.auth.resetPasswordForEmail(altAddr, { redirectTo })
-        if (alt.error) {
-          console.warn(`[forgot-password] ${mid}: alternate-inbox code failed:`, alt.error.message)
-        }
-      } catch (e) {
-        console.warn(`[forgot-password] ${mid}: alternate-inbox send crashed:`, e?.message || e)
-      }
     }
 
     console.log(
