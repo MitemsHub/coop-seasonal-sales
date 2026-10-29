@@ -1025,7 +1025,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
                       </svg>
                       Cancelling...
                     </div>
-                  ) : 'Cancel'
+                  ) : (Array.isArray(showModal.orderIds) && showModal.orderIds.length === 1 ? 'Cancel Order' : 'Cancel Orders')
                 ) : (
                   restoringOrders ? (
                     <div className="flex items-center justify-center">
