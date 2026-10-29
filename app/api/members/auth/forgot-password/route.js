@@ -2,7 +2,9 @@
 // Send a password-reset VERIFICATION CODE (6-digit OTP) to the member's
 // registered email, using Supabase's RECOVERY flow so the message carries
 // reset wording instead of the sign-in copy.
-//   POST { memberId } → { ok }  (always, unless the request itself is invalid)
+//   POST { memberId } → { ok }, or { error } when Supabase rejected the send
+//                (rate limit / SMTP / redirect). Unknown members still get
+//                { ok } so account existence is not revealed.
 //   GET  → admin-only debug echo of the origin/env used to build the link
 //
 // WHY A CODE AND NOT A RESET LINK:
@@ -23,9 +25,13 @@
 // then /api/members/auth/set-password sets the new password on the SAME auth
 // account. Nothing is deleted and the member never has to sign up again.
 //
-// To avoid leaking account existence, every no-send path returns the same
-// generic { ok: true } as a successful send; the concrete reason is logged on
-// the server only.
+// To avoid leaking account existence, the "this member cannot receive a
+// code" paths (unknown ID, outside the portal cohort, no auth account) still
+// return the same generic { ok: true } as a successful send, with the
+// concrete reason on the server console. A send that SUPABASE REJECTED is
+// different: that is reported back as an error, because answering "code sent"
+// for a mail that was never handed to SMTP is what hid this failure — the
+// member waited for an email the system had already failed to produce.
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { createClient as createDbClient } from '@/lib/supabaseServer'
@@ -143,29 +149,23 @@ export async function POST(request) {
 
     await ensureAccountConfirmed(member.auth_user_id)
 
-    // Optional copy to the alternative inbox on file. Sent FIRST, primary
-    // LAST, so the inbox the member is told about holds the live code — the
-    // ordering rule the sign-up flow follows (see send-otp). Best effort only.
     const primary = String(member.email).trim().toLowerCase()
     const altRaw = String(member.alternative_email || '').trim().toLowerCase()
     const altAddr =
       altRaw && altRaw !== primary && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(altRaw)
         ? altRaw
         : null
-    if (altAddr) {
-      try {
-        const alt = await authServiceRole.auth.resetPasswordForEmail(altAddr, { redirectTo })
-        if (alt.error) {
-          console.warn(`[forgot-password] ${mid}: alternate-inbox code failed:`, alt.error.message)
-        }
-      } catch (e) {
-        console.warn(`[forgot-password] ${mid}: alternate-inbox send crashed:`, e?.message || e)
-      }
-    }
 
     // Send the reset code through the RECOVERY flow so it renders the
     // "Reset password" template (reset wording + {{ .Token }} = the 6-digit
     // code) rather than the Magic Link template the sign-in OTP uses.
+    //
+    // PRIMARY INBOX FIRST. Every Supabase Auth email draws on one project-wide
+    // hourly send budget (30/hour on custom SMTP out of the box), so a copy to
+    // the alternate address queued ahead of the primary could spend the quota
+    // the member's own inbox needs — and the primary is the address the login
+    // screen showed them. The alternate copy is best effort and only attempted
+    // once the primary send has succeeded.
     const { error: otpError } = await authServiceRole.auth.resetPasswordForEmail(primary, {
       redirectTo,
     })
@@ -180,9 +180,37 @@ export async function POST(request) {
           redirectTo: redirectTo || null,
         })
       )
-      // Still return success to avoid leaking info; the failure details are on
-      // the server console. A retry (10 min apart, per rate limit) may succeed.
-      return NextResponse.json({ ok: true })
+      // Do NOT claim success here. The member's screen already says "code
+      // sent" on { ok: true }, so reporting success on a rejected send is
+      // what made this failure invisible — the code never left Supabase and
+      // nobody had any reason to retry. The wording stays generic so the
+      // response still distinguishes nothing about the account itself.
+      const rateLimited =
+        otpError.status === 429 ||
+        /rate.?limit|too many|over_email_send_rate_limit|over_request_rate_limit/i.test(
+          `${otpError.code || ''} ${otpError.message || ''}`
+        )
+      return NextResponse.json(
+        {
+          error: rateLimited
+            ? 'Too many attempts. Please wait a minute before requesting another code.'
+            : 'We could not send the reset code right now. Please try again in a few minutes.',
+        },
+        { status: rateLimited ? 429 : 502 }
+      )
+    }
+
+    // Optional copy to the alternate inbox on file — best effort only, and
+    // never allowed to mask the primary send's outcome.
+    if (altAddr) {
+      try {
+        const alt = await authServiceRole.auth.resetPasswordForEmail(altAddr, { redirectTo })
+        if (alt.error) {
+          console.warn(`[forgot-password] ${mid}: alternate-inbox code failed:`, alt.error.message)
+        }
+      } catch (e) {
+        console.warn(`[forgot-password] ${mid}: alternate-inbox send crashed:`, e?.message || e)
+      }
     }
 
     console.log(
