@@ -1091,6 +1091,38 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
             </tbody>
           </table>
         </div>
+        {(() => {
+          const lines = viewing?.order_lines || []
+          const subtotal = lines.reduce((s, l) => s + Number(l.amount || 0), 0)
+          const totalQty = lines.reduce((s, l) => s + Number(l.qty || 0), 0)
+          const isLoan = viewing?.payment_option === 'Loan'
+          const storedTotal = Number(viewing?.total_amount || 0)
+          const interest = isLoan && storedTotal > subtotal ? storedTotal - subtotal : 0
+          const total = storedTotal > 0 ? storedTotal : subtotal + interest
+          if (!lines.length) return null
+          return (
+            <div className="mt-3 space-y-1.5">
+              <div className="flex justify-between text-sm text-muted">
+                <span>Total quantity</span>
+                <span className="font-medium text-fg">{totalQty.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between text-sm text-muted">
+                <span>Items subtotal</span>
+                <span className="font-medium text-fg">{money(subtotal)}</span>
+              </div>
+              {isLoan && (
+                <div className="flex justify-between text-sm text-muted">
+                  <span>Interest</span>
+                  <span className="font-medium text-warning-fg">{money(interest)}</span>
+                </div>
+              )}
+              <div className="flex justify-between rounded-lg bg-subtle px-3 py-2 text-sm font-semibold text-fg">
+                <span>Total{isLoan ? ' payable (incl. interest)' : ''}</span>
+                <span>{money(total)}</span>
+              </div>
+            </div>
+          )
+        })()}
       </DraggableModal>
 
 
