@@ -42,6 +42,8 @@ async function introspectSession() {
       const memberClaims = json.member && typeof json.member === 'object' ? json.member : {}
       const branchId = json.branch_id ?? memberClaims.branch_id
       const branchCode = json.branch_code ?? memberClaims.branch_code
+      const branchName = json.branch_name ?? memberClaims.branch_name
+      const department = json.department ?? memberClaims.department
       const id = json.id || memberClaims.member_id || memberClaims.id || role
 
       return {
@@ -51,6 +53,10 @@ async function introspectSession() {
         ...(json.module ? { module: json.module } : {}),
         ...(branchId != null ? { branchId } : {}),
         ...(branchCode ? { branchCode } : {}),
+        ...(branchName ? { branchName } : {}),
+        // A department rep's scope lives in the httpOnly cookie — without it
+        // a reload would silently widen the view back to the whole branch.
+        ...(department ? { department } : {}),
         ...(memberClaims.name ? { name: memberClaims.name } : {}),
       }
     } catch {

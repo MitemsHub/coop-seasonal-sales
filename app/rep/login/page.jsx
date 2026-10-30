@@ -151,7 +151,7 @@ export default function RepLoginPage() {
 
       const deptName = isDeptRep ? selectedDept : ''
 
-      finishLogin({
+      await finishLogin({
         isDeptRep: isDeptRep,
         department: deptName,
         phone: phoneToSave,
@@ -163,18 +163,46 @@ export default function RepLoginPage() {
     }
   }
 
-  const finishLogin = ({ isDeptRep: isDept, department }) => {
+  const finishLogin = async ({ isDeptRep: isDept, department }) => {
+    // Bind the department scope into the signed cookie before entering the
+    // portal: the server enforces it (a department rep may only ever see their
+    // own department) and a page reload must keep it — client state alone is
+    // not enough, it is re-hydrated from the cookie on every load.
+    const scopeDept = isDept && department ? department : ''
+    let scoped = null
+    try {
+      const res = await fetch('/api/rep/session/scope', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ department: scopeDept }),
+      })
+      const j = await res.json().catch(() => null)
+      if (res.ok && j?.ok) {
+        scoped = j
+      } else if (scopeDept) {
+        setMsg(j?.error || 'Could not apply your department scope. Please try again.')
+        return false
+      }
+    } catch {
+      if (scopeDept) {
+        setMsg('Could not apply your department scope. Please check your connection and try again.')
+        return false
+      }
+    }
+
+    const deptName = scoped?.department || scopeDept
     login({
       type: 'rep',
       id: branchCode,
       authenticated: true,
       module: 'food',
       branchCode,
-      branchName,
+      branchName: scoped?.branch_name || branchName,
       branchId,
-      ...(isDept && department ? { department } : {}),
+      ...(deptName ? { department: deptName } : {}),
     })
     router.push('/rep')
+    return true
   }
 
   return (

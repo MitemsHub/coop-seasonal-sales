@@ -110,6 +110,11 @@ export async function GET(req) {
       module: mod,
       ...(claim.branch_id ? { branch_id: claim.branch_id } : {}),
       ...(claim.branch_code ? { branch_code: claim.branch_code } : {}),
+      ...(claim.branch_name ? { branch_name: claim.branch_name } : {}),
+      // A department rep's scope rides in the signed cookie, so a page reload
+      // keeps it: the client never stores auth data itself.
+      ...(claim.department ? { department: claim.department } : {}),
+      ...(claim.department_id ? { department_id: claim.department_id } : {}),
     })
   } catch (e) {
     console.error('Rep session introspection error:', e)
@@ -229,7 +234,7 @@ export async function POST(req) {
       return NextResponse.json({ ok:false, error:'Incorrect passcode. Please check it and try again.' }, { status:401 })
     }
 
-    const token = await sign({ role: 'rep', module: portalModule, branch_id: br.id, branch_code: br.code }, 60 * 60 * 8) // 8h token
+    const token = await sign({ role: 'rep', module: portalModule, branch_id: br.id, branch_code: br.code, branch_name: br.name || '' }, 60 * 60 * 8) // 8h token
     const res = NextResponse.json({ ok:true, module: portalModule, branch: br, rep_phone: br.rep_phone || '' })
     // Browser-session cookie (no maxAge): closing the browser ends the
     // session, so the next visit always asks for the passcode again.

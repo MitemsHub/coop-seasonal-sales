@@ -124,7 +124,10 @@ export async function GET(req) {
     }
 
     const { searchParams } = new URL(req.url)
-    const deptName = (searchParams.get('dept') || '').trim()
+    // A department rep's scope comes from the signed cookie and overrides the
+    // query, so the pack can never summarize another department's orders.
+    const scopedDeptId = Number(claim.department_id) > 0 ? Number(claim.department_id) : null
+    const deptName = scopedDeptId ? '' : (searchParams.get('dept') || '').trim()
 
     const { error: ordersColErr } = await supabase.from('orders').select('cycle_id').limit(1)
     const { error: pricesColErr } = await supabase.from('branch_item_prices').select('cycle_id').limit(1)
@@ -147,9 +150,9 @@ export async function GET(req) {
       activeCycleId = activeCycle.id
     }
 
-    // Resolve department id if deptName provided
-    let deptId = null
-    if (deptName) {
+    // Resolve department id: the cookie scope wins, otherwise the query name.
+    let deptId = scopedDeptId
+    if (!deptId && deptName) {
       const { data, error } = await supabase.from('departments').select('id').eq('name', deptName).single()
       if (error) throw new Error(error.message)
       deptId = data?.id || null

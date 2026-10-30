@@ -10,6 +10,7 @@ import DraggableModal from '../../components/DraggableModal'
 import ExportButton from '../../components/ui/ExportButton'
 import PrintOrderSheet from '../../components/PrintOrderSheet'
 import { createManifestDoc, addManifestTable, renderTable, sanitizePdfText } from '../../lib/pdfExport'
+import { buildManifest } from '../../lib/repManifest'
 
 
 const Spinner = ({ className = 'h-4 w-4 text-on-accent' }) => (
@@ -237,57 +238,34 @@ function RepPostedPageContent() {
     if (!sourceOrders.length) return alert('No rows to export')
     setPdfLoading(true)
     try {
-      // Determine delivery branch from filtered data
-      const filteredForHeader = !search ? sourceOrders : sourceOrders.filter(o => {
-        const s = search.toLowerCase()
-        return String(o.order_id).toLowerCase().includes(s) || String(o.member_id).toLowerCase().includes(s)
+      // One shared row set for every export format (app/lib/repManifest), so
+      // the PDF, the Excel sheet and the table can never disagree.
+      const { rows: manifestRows, totalQty, totalAmount, scope, orderCount } = buildManifest({
+        orders: sourceOrders,
+        search,
+        dept,
       })
-      const branchSet = new Set(filteredForHeader.map(o => o?.delivery?.name).filter(Boolean))
-      const branchLabel = branchSet.size === 1 ? [...branchSet][0] : (branchSet.size > 1 ? 'Multiple Delivery Branches' : 'All Delivery Branches')
 
       const headers = ['ID','Order','Member','Dept','Pay','Item','Qty','Unit Price','Amount','Remarks','Sign']
       const sanitize = sanitizePdfText
       const doc = await createManifestDoc({
         title: 'Posted Orders Manifest',
-        meta: `Delivery Branch: ${branchLabel}${dept ? '  |  Department: ' + dept : ''}`,
+        meta: `${scope}  |  Orders: ${orderCount}`,
       })
-    const filtered = !search ? sourceOrders : sourceOrders.filter(o => {
-      const s = search.toLowerCase()
-      return String(o.order_id).toLowerCase().includes(s) || String(o.member_id).toLowerCase().includes(s)
-    })
-    const rows = filtered.flatMap(o => (o.order_lines || [])
-      .filter(l => {
-        if (!dept) return true
-        const orderDeptName = o.departments?.name
-        const itemDeptId = l?.items?.department_id
-        const orderMatches = String(orderDeptName || '').trim().toLowerCase() === String(dept).trim().toLowerCase()
-        return orderMatches || Boolean(itemDeptId)
-      })
-      .map(l => ([
-      sanitize(o.member_id),
-      sanitize(o.order_id),
-      sanitize(o.member_name_snapshot),
-      sanitize(o.departments?.name),
-      sanitize(o.payment_option),
-      sanitize(l.items?.name),
-      String(l.qty || 0),
-      `NGN ${Number(l.unit_price || 0).toLocaleString()}`,
-      `NGN ${Number(l.amount || 0).toLocaleString()}`,
-      '',
-      '',
-    ])))
+    const rows = manifestRows.map(r => ([
+      sanitize(r.id),
+      sanitize(r.order),
+      sanitize(r.member),
+      sanitize(r.dept),
+      sanitize(r.pay),
+      sanitize(r.item),
+      String(r.qty),
+      `NGN ${r.unitPrice.toLocaleString()}`,
+      `NGN ${r.amount.toLocaleString()}`,
+      sanitize(r.remarks),
+      sanitize(r.signature),
+    ]))
 
-    // Compute totals for Qty and Amount
-    const lineItems = filtered.flatMap(o => (o.order_lines || [])
-      .filter(l => {
-        if (!dept) return true
-        const orderDeptName = o.departments?.name
-        const itemDeptId = l?.items?.department_id
-        const orderMatches = String(orderDeptName || '').trim().toLowerCase() === String(dept).trim().toLowerCase()
-        return orderMatches || Boolean(itemDeptId)
-      }))
-    const totalQty = lineItems.reduce((acc, l) => acc + Number(l?.qty || 0), 0)
-    const totalAmount = lineItems.reduce((acc, l) => acc + Number(l?.amount || 0), 0)
     // Create a foot row: label under Item, totals under Qty and Amount
     const footRow = headers.map((_, i) => {
       if (i === 5) return 'TOTAL'
@@ -335,7 +313,7 @@ function RepPostedPageContent() {
             doc.text('Posted Orders Manifest', 12, 12)
             doc.setFontSize(9)
             doc.text(`Generated: ${new Date().toLocaleString()}`, 12, 18)
-            doc.text(`Delivery Branch: ${branchLabel}${dept ? '  |  Department: ' + dept : ''}`, 12, 24)
+            doc.text(scope, 12, 24)
           }
         },
       },
@@ -366,31 +344,8 @@ function RepPostedPageContent() {
     setExcelLoading(true)
     // Load all pages to prevent partial exports
     const sourceOrders = await collectAllOrdersForExport()
-    const filtered = !search ? sourceOrders : sourceOrders.filter(o => {
-      const s = search.toLowerCase()
-      return String(o.order_id).toLowerCase().includes(s) || String(o.member_id).toLowerCase().includes(s)
-    })
-    const rows = filtered.flatMap(o => (o.order_lines || [])
-      .filter(l => {
-        if (!dept) return true
-        const orderDeptName = o.departments?.name
-        const itemDeptId = l?.items?.department_id
-        const orderMatches = String(orderDeptName || '').trim().toLowerCase() === String(dept).trim().toLowerCase()
-        return orderMatches || Boolean(itemDeptId)
-      })
-      .map(l => ({
-        id:o.member_id,
-        order:o.order_id,
-        member:o.member_name_snapshot,
-        dept:o.departments?.name||'',
-        pay:o.payment_option,
-        item:l.items?.name,
-        qty:Number(l.qty||0),
-        unit_price:Number(l.unit_price||0),
-        amount:Number(l.amount||0),
-        remarks:'',
-        signature:''
-      })))
+    // Same builder as the PDF — identical rows, totals and scope line.
+    const { rows, totalQty, totalAmount, scope, orderCount } = buildManifest({ orders: sourceOrders, search, dept })
     if (!rows.length) return alert('No rows to export')
 
     try {
@@ -405,10 +360,8 @@ function RepPostedPageContent() {
       ws.getRow(1).font = { bold: true, size: 14 }
       ws.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' }
 
-      // Derive delivery branch from filtered rows
-      const branchSet = new Set(filtered.map(o => o?.delivery?.name).filter(Boolean))
-      const branchLabel = branchSet.size === 1 ? [...branchSet][0] : (branchSet.size > 1 ? 'Multiple Delivery Branches' : 'All Delivery Branches')
-      const details = `Delivery Branch: ${branchLabel}${dept ? '  |  Department: ' + dept : ''}`
+      // Derive scope line from the shared builder
+      const details = `${scope}  |  Orders: ${orderCount}`
       ws.addRow([details])
       ws.mergeCells('A2','K2')
       ws.getRow(2).font = { italic: true }
@@ -424,14 +377,12 @@ function RepPostedPageContent() {
       })
 
       rows.forEach(r => {
-        const row = ws.addRow([r.id, r.order, r.member, r.dept, r.pay, r.item, r.qty, r.unit_price, r.amount, r.remarks, r.signature])
+        const row = ws.addRow([r.id, r.order, r.member, r.dept, r.pay, r.item, r.qty, r.unitPrice, r.amount, r.remarks, r.signature])
         row.eachCell(cell => {
           cell.border = { top: {style: 'thin'}, left: {style: 'thin'}, bottom: {style: 'thin'}, right: {style: 'thin'} }
         })
       })
 
-      const totalQty = rows.reduce((acc, r) => acc + Number(r.qty||0), 0)
-      const totalAmount = rows.reduce((acc, r) => acc + Number(r.amount||0), 0)
       const totalsRow = ws.addRow(['', '', 'TOTAL', '', '', '', totalQty, '', totalAmount, '', ''])
       totalsRow.eachCell(cell => {
         cell.border = { top: {style: 'thin'}, left: {style: 'thin'}, bottom: {style: 'thin'}, right: {style: 'thin'} }
@@ -775,7 +726,10 @@ function RepPostedPageContent() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div>
           <h1 className="text-h2 font-bold tracking-tight text-fg">Food Distribution · Posted</h1>
-          <div className="text-xs text-muted">Current Branch: {user?.branchCode || '—'}</div>
+          <div className="text-xs text-muted">
+            Current Branch: {user?.branchName || user?.branchCode || '—'}
+            {user?.department ? `, ${user.department}` : ''}
+          </div>
         </div>
         <button
           type="button"
@@ -791,6 +745,13 @@ function RepPostedPageContent() {
 
       <div className="ui-card p-4 mb-4">
         <div className="flex flex-wrap items-center gap-2">
+          {user?.department ? (
+            // A department rep's scope is fixed by the server session — there
+            // is nothing to switch, so show what they are scoped to.
+            <span className="inline-flex w-full shrink-0 items-center gap-2 rounded-lg border border-brand/40 bg-brand/5 px-3 py-2 text-xs sm:text-sm font-medium text-brand sm:w-56">
+              {user.department}
+            </span>
+          ) : (
           <select
             className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full sm:w-56 shrink-0"
             value={dept}
@@ -808,6 +769,7 @@ function RepPostedPageContent() {
               </option>
             ))}
           </select>
+          )}
 
           <div className="flex items-center gap-2 flex-1 min-w-[240px] sm:max-w-[560px]">
             <input

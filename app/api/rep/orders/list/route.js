@@ -34,10 +34,16 @@ export async function GET(req) {
 
     const { searchParams } = new URL(req.url)
     const status = searchParams.get('status') || 'Pending'
-    const dept = searchParams.get('dept') || ''     // '' = All
     const limit = Number(searchParams.get('limit') || 50)
     const cursor = searchParams.get('cursor') // order_id
     const direction = searchParams.get('dir') || 'next' // next|prev
+
+    // A department rep's scope is carried by the signed cookie and is NOT
+    // user-selectable: they must only ever see their own department. The
+    // ?dept= query is a convenience for a branch rep (whole branch by default,
+    // or one department when they pick one).
+    const scopedDeptId = Number(claim.department_id) > 0 ? Number(claim.department_id) : null
+    const dept = scopedDeptId ? '' : (searchParams.get('dept') || '') // '' = All
     const ordersHasCycle = await hasColumn(supabase, 'orders', 'cycle_id')
     const cycleId = ordersHasCycle ? await getActiveCycleId(supabase) : null
     if (ordersHasCycle && !cycleId) {
@@ -60,7 +66,8 @@ export async function GET(req) {
       .order('order_id', { ascending: false })
 
     if (ordersHasCycle) q = q.eq('cycle_id', cycleId)
-    if (dept) q = q.eq('department_id', (await deptId(supabase, dept)))
+    if (scopedDeptId) q = q.eq('department_id', scopedDeptId)
+    else if (dept) q = q.eq('department_id', (await deptId(supabase, dept)))
     if (cursor) {
       q = direction === 'next'
         ? q.lt('order_id', Number(cursor))
@@ -77,7 +84,7 @@ export async function GET(req) {
       page = page.slice(0, limit)
     }
 
-    return NextResponse.json({ ok:true, orders: page, nextCursor, branch: claim.branch_code })
+    return NextResponse.json({ ok:true, orders: page, nextCursor, branch: claim.branch_code, department: scopedDeptId ? claim.department || '' : (dept || '') })
   } catch (e) {
     return NextResponse.json({ ok:false, error:e.message }, { status:500 })
   }

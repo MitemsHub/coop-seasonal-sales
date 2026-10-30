@@ -24,6 +24,11 @@ export async function GET(req) {
 
     const supabase = createClient()
 
+    // A department rep only ever sees their own department — the cards, the
+    // strip and the exported manifests must all tell the same story, so the
+    // same scope is applied here as in /api/rep/orders/list.
+    const deptId = Number(claim.department_id) > 0 ? Math.trunc(Number(claim.department_id)) : null
+
     // The active food cycle (orders carry cycle_id). If the column or the
     // table is missing, cycle-scoped figures just read 0.
     let cycleId = null
@@ -34,10 +39,12 @@ export async function GET(req) {
       // No cycles table — cycle-scoped figures read 0.
     }
 
-    const { data, error } = await supabase
+    const ordersQuery = supabase
       .from('orders')
       .select('status, total_amount, created_at, cycle_id')
       .eq('delivery_branch_id', branchId)
+    if (deptId) ordersQuery.eq('department_id', deptId)
+    const { data, error } = await ordersQuery
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
     // Per-status cards mirroring the exhibition strip. Scoped to the active
@@ -87,6 +94,8 @@ export async function GET(req) {
     return NextResponse.json({
       ok: true,
       branch_id: branchId,
+      department: claim.department || '',
+      department_id: deptId,
       statuses,
       todayPending: { count: todayPendingCount, total: Math.round(todayPendingTotal) },
       postedCycle: { count: postedCycleCount, total: Math.round(postedCycleTotal) },

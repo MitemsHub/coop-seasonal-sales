@@ -260,12 +260,21 @@ function RepDeliveredContent() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div>
           <h1 className="text-h2 font-bold tracking-tight text-fg">Food Distribution · Delivered</h1>
-          <div className="text-xs text-muted">Current Branch: {user?.branchCode || '—'}</div>
+          <div className="text-xs text-muted">
+            Current Branch: {user?.branchName || user?.branchCode || '—'}
+            {user?.department ? `, ${user.department}` : ''}
+          </div>
         </div>
       </div>
 
       <div className="ui-card p-4 mb-4">
         <div className="flex flex-wrap items-center gap-2">
+          {user?.department ? (
+            // Department rep: scope is fixed server-side, nothing to switch.
+            <span className="inline-flex w-full shrink-0 items-center gap-2 rounded-lg border border-brand/40 bg-brand/5 px-3 py-2 text-xs sm:text-sm font-medium text-brand sm:w-56">
+              {user.department}
+            </span>
+          ) : (
           <select
             className="bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none w-full sm:w-56 shrink-0"
             value={dept}
@@ -285,6 +294,7 @@ function RepDeliveredContent() {
               </option>
             ))}
           </select>
+          )}
 
           <div className="flex items-center gap-2 flex-1 min-w-[240px] sm:max-w-[560px]">
             <input
