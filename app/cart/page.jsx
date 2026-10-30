@@ -313,7 +313,15 @@ function CartPageContent() {
     const othersTotal = cartItems.reduce((sum, i) => sum + i.price * (i.sku === sku ? 0 : i.qty), 0)
     const nextCartTotal = othersTotal + item.price * nextQty
 
-    if (paymentOption === 'Savings') {
+    // Only changes that GROW the basket are checked against the limit.
+    // A cart that is already over its limit (policy changed, stale cart
+    // carried over) must still be able to shrink — otherwise every "-"
+    // press lands back above the cap and the member is frozen out of
+    // editing their own checkout.
+    const currentCartTotal = cartItems.reduce((sum, i) => sum + i.price * i.qty, 0)
+    const grows = nextCartTotal > currentCartTotal
+
+    if (grows && paymentOption === 'Savings') {
       const limit = Number(eligibility.savingsEligible || 0)
       if (limit > 0 && nextCartTotal > limit) {
         setMessage({ type: 'error', text: 'This change would exceed your Savings limit. Reduce quantities or switch payment method.' })
@@ -322,7 +330,7 @@ function CartPageContent() {
       }
     }
 
-    if (paymentOption === 'Loan') {
+    if (grows && paymentOption === 'Loan') {
       const limit = Number(eligibility.loanEligible || 0)
       const withInterest = nextCartTotal + Math.round(nextCartTotal * loanInterestRate)
       const used = includeInterestInLoanLimit ? withInterest : nextCartTotal
