@@ -392,7 +392,17 @@ function CartPageContent() {
   const updateItemSku = (oldSku, newSku) => {
     const selectedItem = items.find(item => item.sku === newSku)
     if (!selectedItem) return
-    
+
+    // Swapping this row onto a SKU that another row already holds would submit
+    // the same SKU twice — checkout creates one order_line per cart row, so the
+    // member gets charged twice for one item (order #2143: rice on 2 lines).
+    if (cartItems.some(item => item.sku === newSku)) {
+      const takenMsg = `${selectedItem.name || newSku} is already in your cart. Change its quantity on that row instead.`
+      setMessage({ type: 'error', text: takenMsg })
+      emitToast('error', takenMsg)
+      return
+    }
+
     const updatedCart = cartItems.map(item => 
       item.sku === oldSku ? {
         ...selectedItem,
@@ -743,11 +753,14 @@ function CartPageContent() {
                             ) : items.length === 0 ? (
                               <option value={item.sku}>{item.name} - ₦{item.price.toLocaleString()}</option>
                             ) : (
-                              items.map(availableItem => (
-                                <option key={availableItem.sku} value={availableItem.sku}>
-                                  {availableItem.name} - ₦{availableItem.price.toLocaleString()}
-                                </option>
-                              ))
+                              items.map(availableItem => {
+                                const taken = availableItem.sku !== item.sku && cartItems.some(c => c.sku === availableItem.sku)
+                                return (
+                                  <option key={availableItem.sku} value={availableItem.sku} disabled={taken}>
+                                    {availableItem.name} - ₦{availableItem.price.toLocaleString()}{taken ? ' (already in cart)' : ''}
+                                  </option>
+                                )
+                              })
                             )}
                           </Select>
                           <div className="mt-1 text-chips text-muted">
