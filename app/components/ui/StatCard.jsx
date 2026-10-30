@@ -3,6 +3,7 @@
 // app/components/ui/StatCard.jsx
 // Sakani stat card — fluid 20px→30px value with tight tracking, icon chip, trend delta + sparkline.
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react'
+import Link from 'next/link'
 import Skeleton from './Skeleton'
 
 function Sparkline({ points, trend }) {
@@ -43,17 +44,19 @@ export default function StatCard({
   featured = false,
   loading = false,
   className = '',
+  href = null,
 }) {
   const DeltaIcon = DELTA_ICON[trend] || Minus
-  return (
-    <div
-      className={[
-        'flex min-w-[200px] flex-col gap-2 rounded-xl border border-line-subtle bg-surface p-3',
-        'transition-[border-color,box-shadow] duration-200 ease-sakani hover:border-line-strong hover:shadow-md',
-        featured && 'bg-accent-subtle',
-        className,
-      ].join(' ')}
-    >
+  const classes = [
+    'flex min-w-[200px] flex-col gap-2 rounded-xl border border-line-subtle bg-surface p-3',
+    'transition-[border-color,box-shadow] duration-200 ease-sakani hover:border-line-strong hover:shadow-md',
+    featured && 'bg-accent-subtle',
+    href && 'cursor-pointer',
+    className,
+  ].join(' ')
+
+  const content = (
+    <>
       <div className="flex items-center gap-2">
         {Icon && (
           <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-subtle text-fg">
@@ -85,6 +88,22 @@ export default function StatCard({
       </div>
 
       {sparkline && <Sparkline points={sparkline} trend={trend} />}
-    </div>
+    </>
   )
+
+  // Optional target: a clickable card navigates to the list the number came
+  // from (e.g. the Pending card → the pending orders page).
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={`${classes} block no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand`}
+        aria-label={`${title} — open list`}
+      >
+        {content}
+      </Link>
+    )
+  }
+
+  return <div className={classes}>{content}</div>
 }

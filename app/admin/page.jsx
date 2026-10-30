@@ -173,15 +173,15 @@ function FoodDashboard({ loading, data }) {
     <>
       {/* KPI + payment cards — one 3-up grid, from total orders down to cash */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard loading={loading} icon={ClipboardList} title="Total orders" value={loading ? '' : (totals.totalAll ?? 0).toLocaleString()} delta="this cycle" trend="flat" />
-        <StatCard loading={loading} icon={Clock} title="Pending" value={loading ? '' : (totals.totalPending ?? 0).toLocaleString()} delta="awaiting approval" trend="flat" />
-        <StatCard loading={loading} icon={Send} title="Posted" value={loading ? '' : Math.max(0, (totals.totalPosted ?? 0) - (totals.totalDelivered ?? 0)).toLocaleString()} delta="awaiting delivery" trend="flat" />
-        <StatCard loading={loading} icon={Truck} title="Delivered" value={loading ? '' : (totals.totalDelivered ?? 0).toLocaleString()} delta="completed" trend="flat" />
-        <StatCard loading={loading} featured icon={Banknote} title="Total order value" value={loading ? '' : naira(amounts.totalAll)} delta="loan + savings + cash" trend="flat" />
-        <StatCard loading={loading} icon={Wallet} title="Loan value" value={loading ? '' : naira(amounts.loansPrincipal)} delta="excl. interest" trend="flat" />
-        <StatCard loading={loading} icon={Percent} title="Loan interest" value={loading ? '' : naira(amounts.loansInterest)} delta="interest portion" trend="flat" />
-        <StatCard loading={loading} icon={PiggyBank} title="Savings" value={loading ? '' : naira(amounts.savings)} delta="recorded line amounts" trend="flat" />
-        <StatCard loading={loading} icon={Coins} title="Cash" value={loading ? '' : naira(amounts.cash)} delta="recorded line amounts" trend="flat" />
+        <StatCard loading={loading} icon={ClipboardList} title="Total orders" value={loading ? '' : (totals.totalAll ?? 0).toLocaleString()} delta="this cycle" trend="flat" href="/admin/food/orders" />
+        <StatCard loading={loading} icon={Clock} title="Pending" value={loading ? '' : (totals.totalPending ?? 0).toLocaleString()} delta="awaiting approval" trend="flat" href="/admin/food/pending" />
+        <StatCard loading={loading} icon={Send} title="Posted" value={loading ? '' : Math.max(0, (totals.totalPosted ?? 0) - (totals.totalDelivered ?? 0)).toLocaleString()} delta="awaiting delivery" trend="flat" href="/admin/food/posted" />
+        <StatCard loading={loading} icon={Truck} title="Delivered" value={loading ? '' : (totals.totalDelivered ?? 0).toLocaleString()} delta="completed" trend="flat" href="/admin/food/delivered" />
+        <StatCard loading={loading} featured icon={Banknote} title="Total order value" value={loading ? '' : naira(amounts.totalAll)} delta="loan + savings + cash" trend="flat" href="/admin/food/reports" />
+        <StatCard loading={loading} icon={Wallet} title="Loan value" value={loading ? '' : naira(amounts.loansPrincipal)} delta="excl. interest" trend="flat" href="/admin/food/reports" />
+        <StatCard loading={loading} icon={Percent} title="Loan interest" value={loading ? '' : naira(amounts.loansInterest)} delta="interest portion" trend="flat" href="/admin/food/reports" />
+        <StatCard loading={loading} icon={PiggyBank} title="Savings" value={loading ? '' : naira(amounts.savings)} delta="recorded line amounts" trend="flat" href="/admin/food/reports" />
+        <StatCard loading={loading} icon={Coins} title="Cash" value={loading ? '' : naira(amounts.cash)} delta="recorded line amounts" trend="flat" href="/admin/food/reports" />
       </div>
 
       {/* Charts row */}
@@ -372,13 +372,13 @@ function RamDashboard({ loading, data }) {
     <>
       {/* KPI cards — one 3-up grid, matching the food dashboard */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard loading={loading} icon={ClipboardList} title="Ram orders" value={loading ? '' : (ramTotals.orders ?? 0).toLocaleString()} delta="this cycle" trend="flat" />
-        <StatCard loading={loading} featured icon={Banknote} title="Total value" value={loading ? '' : naira(ramTotals.amount)} delta="this cycle" trend="flat" />
-        <StatCard loading={loading} icon={Wallet} title="Loan value" value={loading ? '' : naira(ramPrincipal)} delta="excl. interest" trend="flat" />
-        <StatCard loading={loading} icon={Percent} title="Ram interest" value={loading ? '' : naira(ramTotals.loan_interest)} delta="interest portion" trend="flat" />
-        <StatCard loading={loading} icon={PiggyBank} title="Savings" value={loading ? '' : naira(ramSavings)} delta="recorded amounts" trend="flat" />
-        <StatCard loading={loading} icon={Coins} title="Cash" value={loading ? '' : naira(ramCash)} delta="recorded amounts" trend="flat" />
-        <StatCard loading={loading} icon={Truck} title="Total quantity" value={loading ? '' : (ramTotals.qty ?? 0).toLocaleString()} delta="units ordered" trend="flat" />
+        <StatCard loading={loading} icon={ClipboardList} title="Ram orders" value={loading ? '' : (ramTotals.orders ?? 0).toLocaleString()} delta="this cycle" trend="flat" href="/admin/ram/reports" />
+        <StatCard loading={loading} featured icon={Banknote} title="Total value" value={loading ? '' : naira(ramTotals.amount)} delta="this cycle" trend="flat" href="/admin/ram/reports" />
+        <StatCard loading={loading} icon={Wallet} title="Loan value" value={loading ? '' : naira(ramPrincipal)} delta="excl. interest" trend="flat" href="/admin/ram/reports" />
+        <StatCard loading={loading} icon={Percent} title="Ram interest" value={loading ? '' : naira(ramTotals.loan_interest)} delta="interest portion" trend="flat" href="/admin/ram/reports" />
+        <StatCard loading={loading} icon={PiggyBank} title="Savings" value={loading ? '' : naira(ramSavings)} delta="recorded amounts" trend="flat" href="/admin/ram/reports" />
+        <StatCard loading={loading} icon={Coins} title="Cash" value={loading ? '' : naira(ramCash)} delta="recorded amounts" trend="flat" href="/admin/ram/reports" />
+        <StatCard loading={loading} icon={Truck} title="Total quantity" value={loading ? '' : (ramTotals.qty ?? 0).toLocaleString()} delta="units ordered" trend="flat" href="/admin/ram/reports" />
       </div>
 
       {/* Charts row — mirrors the food dashboard: pipeline chart wide + value line */}
@@ -496,16 +496,16 @@ function ExhibitionDashboard({ loading, data }) {
     <>
       {/* KPI cards — row 1: cycles, vendors, orders (unchanged) */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard loading={loading} icon={Store} title="Active cycles" value={loading ? '' : (summary.active_cycles ?? 0).toLocaleString()} delta={`${summary.branches ?? 0} branch${summary.branches === 1 ? '' : 'es'}`} trend="flat" />
-        <StatCard loading={loading} icon={Package} title="Vendors" value={loading ? '' : (summary.vendors ?? 0).toLocaleString()} delta={`${summary.products ?? 0} products`} trend="flat" />
-        <StatCard loading={loading} icon={ClipboardList} title="Orders" value={loading ? '' : (summary.orders ?? 0).toLocaleString()} delta={`${summary.active_orders ?? 0} this cycle`} trend="flat" />
-        <StatCard loading={loading} featured icon={Banknote} title="Total value" value={loading ? '' : naira(amounts.total)} delta="non-cancelled, this cycle" trend="flat" />
-        <StatCard loading={loading} icon={Wallet} title="Loan" value={loading ? '' : naira(amounts.loans)} delta="loan orders" trend="flat" />
-        <StatCard loading={loading} icon={PiggyBank} title="Savings" value={loading ? '' : naira(amounts.savings)} delta="savings orders" trend="flat" />
-        <StatCard loading={loading} icon={Coins} title="Cash" value={loading ? '' : naira(amounts.cash)} delta="cash orders" trend="flat" />
-        <StatCard loading={loading} icon={Clock} title="Pending" value={loading ? '' : (byStatus.Pending ?? 0).toLocaleString()} delta="awaiting approval" trend="flat" />
-        <StatCard loading={loading} icon={Send} title="Approved" value={loading ? '' : (byStatus.Approved ?? 0).toLocaleString()} delta="ready for delivery" trend="flat" />
-        <StatCard loading={loading} icon={Truck} title="Delivered" value={loading ? '' : (byStatus.Delivered ?? 0).toLocaleString()} delta="delivered" trend="flat" />
+        <StatCard loading={loading} icon={Store} title="Active cycles" value={loading ? '' : (summary.active_cycles ?? 0).toLocaleString()} delta={`${summary.branches ?? 0} branch${summary.branches === 1 ? '' : 'es'}`} trend="flat" href="/admin/exhibition/cycles" />
+        <StatCard loading={loading} icon={Package} title="Vendors" value={loading ? '' : (summary.vendors ?? 0).toLocaleString()} delta={`${summary.products ?? 0} products`} trend="flat" href="/admin/exhibition/vendors" />
+        <StatCard loading={loading} icon={ClipboardList} title="Orders" value={loading ? '' : (summary.orders ?? 0).toLocaleString()} delta={`${summary.active_orders ?? 0} this cycle`} trend="flat" href="/admin/exhibition/reports" />
+        <StatCard loading={loading} featured icon={Banknote} title="Total value" value={loading ? '' : naira(amounts.total)} delta="non-cancelled, this cycle" trend="flat" href="/admin/exhibition/reports" />
+        <StatCard loading={loading} icon={Wallet} title="Loan" value={loading ? '' : naira(amounts.loans)} delta="loan orders" trend="flat" href="/admin/exhibition/reports" />
+        <StatCard loading={loading} icon={PiggyBank} title="Savings" value={loading ? '' : naira(amounts.savings)} delta="savings orders" trend="flat" href="/admin/exhibition/reports" />
+        <StatCard loading={loading} icon={Coins} title="Cash" value={loading ? '' : naira(amounts.cash)} delta="cash orders" trend="flat" href="/admin/exhibition/reports" />
+        <StatCard loading={loading} icon={Clock} title="Pending" value={loading ? '' : (byStatus.Pending ?? 0).toLocaleString()} delta="awaiting approval" trend="flat" href="/admin/exhibition/pending" />
+        <StatCard loading={loading} icon={Send} title="Approved" value={loading ? '' : (byStatus.Approved ?? 0).toLocaleString()} delta="ready for delivery" trend="flat" href="/admin/exhibition/approved" />
+        <StatCard loading={loading} icon={Truck} title="Delivered" value={loading ? '' : (byStatus.Delivered ?? 0).toLocaleString()} delta="delivered" trend="flat" href="/admin/exhibition/delivered" />
       </div>
 
       {/* Charts row — status chart wide + cycle health, one row */}
