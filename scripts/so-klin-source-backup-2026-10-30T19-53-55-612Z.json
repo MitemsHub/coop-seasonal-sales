@@ -1,0 +1,26 @@
+{
+  "generated_at": "2026-10-30T19:53:55.613Z",
+  "purpose": "items.source flip general -> outsourced for item 463 (So Klin 22g)",
+  "item": {
+    "item_id": 463,
+    "name": "So Klin 22g",
+    "sku": "SOKLIN22G",
+    "source": "general",
+    "is_active": true
+  },
+  "links": [
+    {
+      "id": "440",
+      "item_name": "Klin 22g",
+      "price": "9300.00",
+      "cancelled": false,
+      "cycle_id": 3,
+      "branch": "UYO"
+    }
+  ],
+  "scope": {
+    "total_branches": 39,
+    "priced_branches": 1,
+    "which": "UYO"
+  }
+}

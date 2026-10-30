@@ -579,6 +579,88 @@ describe('outsourced rows — renamed item has no duplicate trailing row', () =>
   })
 })
 
+// Regression (2026-10-30, Akure): two drafts of DIFFERENT products can carry
+// the SAME generic name and both be pinned to ONE item. The old same-NAME
+// rule called that a resubmission and kept both, so the product that really
+// carried the second price (Good Mama 850G, ₦14,000 at Akure) ended up with
+// NO draft at all and fell into the trailing "Saved items — no survey draft"
+// bucket on the LAST page of the Items Import list.
+describe('outsourced rows — same name, different prices are different products', () => {
+  it('keeps the price-matching pin and re-links the freed draft to its own item', async () => {
+    const s = scenario()
+    s.items = [
+      { item_id: 1, sku: 'VIVAPLUS800G', name: 'Viva Plus 800g', category: 'Detergent', unit: 'Carton', image_url: 'x.png', source: 'outsourced' },
+      { item_id: 2, sku: 'GOODMAMA850G', name: 'Good Mama 850G', category: 'Detergent', unit: 'Carton', image_url: 'y.png', source: 'outsourced' },
+    ]
+    s.prices = [
+      { branch_id: 1, item_id: 1, price: 12300 },
+      { branch_id: 1, item_id: 2, price: 14000 },
+    ]
+    s.entries = [
+      ENTRY(21, 'Detergent', 1, 12300, 1), // correct pin — item 1's own price here
+      ENTRY(22, 'Detergent', 1, 14000, 1), // WRONG pin — item 1 costs 12,300 at this branch
+    ]
+    createClient.mockReturnValue(makeSupabase(s))
+
+    const res = await GET(GET_OUTSOURCED.clone())
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+
+    // the wrong pin is cleared by the repair pass…
+    expect(queryDirect).toHaveBeenCalledWith(
+      expect.stringContaining('SET saved_item_id = NULL'),
+      expect.anything()
+    )
+    // …and the freed draft is re-linked on THIS load by its verified price,
+    // not left pending until the admin refreshes.
+    expect(queryDirect).toHaveBeenCalledWith(
+      expect.stringContaining('SET saved_item_id = $1'),
+      expect.arrayContaining([2])
+    )
+
+    const moved = body.rows.find((r) => r.draft?.entry_id === 22)
+    expect(moved?.saved).toBe(true)
+    expect(moved?.item_id).toBe(2)
+
+    // The price-matching draft keeps its own card, and Good Mama renders
+    // EXACTLY ONCE with its draft — never as a draft:null row stranded in the
+    // trailing bucket.
+    const kept = body.rows.filter((r) => r.draft?.entry_id === 21)
+    expect(kept.length).toBe(1)
+    expect(kept[0].item_id).toBe(1)
+    const goodMama = body.rows.filter((r) => r.item_id === 2)
+    expect(goodMama.length).toBe(1)
+    expect(goodMama[0].draft?.entry_id).toBe(22)
+  })
+
+  it('still treats same name AND same price as one legit resubmission', async () => {
+    const s = scenario()
+    s.items = [
+      { item_id: 1, sku: 'VIVAPLUS800G', name: 'Viva Plus 800g', category: 'Detergent', unit: 'Carton', image_url: 'x.png', source: 'outsourced' },
+    ]
+    s.prices = [{ branch_id: 1, item_id: 1, price: 12300 }]
+    s.entries = [
+      ENTRY(31, 'Detergent', 1, 12300, 1),
+      ENTRY(32, 'Detergent', 1, 12300, 1),
+    ]
+    createClient.mockReturnValue(makeSupabase(s))
+
+    const res = await GET(GET_OUTSOURCED.clone())
+    const body = await res.json()
+    expect(body.ok).toBe(true)
+    expect(queryDirect).not.toHaveBeenCalledWith(
+      expect.stringContaining('SET saved_item_id = NULL'),
+      expect.anything()
+    )
+    for (const r of body.rows) {
+      if (r.draft?.draft_name === 'Detergent') {
+        expect(r.saved).toBe(true)
+        expect(r.item_id).toBe(1)
+      }
+    }
+  })
+})
+
 // Regression (2026-10-15, Abeokuta): the admin refined Samvita into "Golden
 // Penny Semovita 1Kg" — an item ALREADY saved earlier from Kano's Samvita
 // draft. The cycle-wide claim set then hid Abeokuta's card entirely (item

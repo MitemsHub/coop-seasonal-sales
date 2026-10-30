@@ -459,7 +459,15 @@ export async function GET(req) {
       })
     }
 
-    const sourceCol = (await ensureSourceColumn()) && (await hasColumn(supabase, 'items', 'source'))
+    // items.source is what splits "General Items" from "Outsourced", so use it
+    // whenever the column exists. Gating on the lazy ALTER succeeding (as this
+    // line used to) meant a failed DDL — no direct SQL URL in that environment,
+    // or missing ALTER rights — silently re-merged EVERY priced product back
+    // into General Items, which is how a 1-branch survey product showed up
+    // under "added once, priced in every branch". The ALTER is best-effort;
+    // hasColumn decides.
+    await ensureSourceColumn()
+    const sourceCol = await hasColumn(supabase, 'items', 'source')
     const pricesHasCycle = await hasColumn(supabase, 'branch_item_prices', 'cycle_id')
     const markupsHasCycle = await hasColumn(supabase, 'branch_item_markups', 'cycle_id')
     const itemsHasActive = await hasColumn(supabase, 'items', 'is_active')
@@ -655,7 +663,11 @@ export async function GET(req) {
     // priced at the branch", which force-links different products together.
     // The recovered link is persisted so every later load resolves it directly.
     const recoveredLinks = new Map() // entry_id → item_id
-    if (surveyLinkCol) {
+    // Declared as a function so the repair pass below can run FIRST and this
+    // recovery afterwards: a pin the repair clears must be re-linkable on the
+    // SAME load, not on the admin's next refresh. The body is unchanged.
+    const runRecovery = async () => {
+      if (!surveyLinkCol) return
       const pendingDrafts = []
       for (const d of drafts.values()) {
         const link = d.entry_id_link
@@ -727,12 +739,15 @@ export async function GET(req) {
       }
     }
     // Repair pass: clear links written by the old over-eager recovery.
-    // A saved outsourced item is ONE product, so within a (branch, item)
-    // link group every draft with the SAME draft name is a legit
-    // resubmission — but drafts of DIFFERENT names sharing one item can
-    // only mean at most one of them is real. Keep a candidate only when
-    // its draft price matches the item's current branch price; otherwise
-    // clear the group so the name-match fallback (or a re-Edit + Save) can
+    // A saved outsourced item is ONE product with ONE price per branch, so
+    // within a (branch, item) link group only drafts naming the SAME product
+    // at the SAME price are a legit resubmission — two "Detergent" drafts at
+    // ₦12,300 and ₦14,000 are two different products (Akure: Viva Plus 800g
+    // vs Good Mama 850G), and calling them one stranded Good Mama 850G in the
+    // trailing "Saved items — no survey draft" bucket. Drafts disagreeing on
+    // name OR price can only have at most one real pin: keep the candidate
+    // whose draft price matches the item's current branch price, otherwise
+    // clear the group so the recovery below (or a re-Edit + Save) can
     // re-link each draft correctly.
     if (surveyLinkCol) {
       const linkGroups = new Map() // `${branch}::${item}` → drafts
@@ -746,7 +761,14 @@ export async function GET(req) {
       const unlinks = new Set() // entry ids whose link must be cleared
       for (const [, group] of linkGroups.entries()) {
         if (group.length < 2) continue
-        if (new Set(group.map((d) => d.norm_name)).size < 2) continue // same product name → legit resubmissions
+        const sameProduct = group.every(
+          (d) =>
+            d.norm_name === group[0].norm_name &&
+            (!(d.draft_price > 0) ||
+              !(group[0].draft_price > 0) ||
+              Math.abs(Number(d.draft_price) - Number(group[0].draft_price)) < 0.01)
+        )
+        if (sameProduct) continue // same name AND same price → legit resubmissions
         const winners = group.filter((d) => {
           if (!(d.draft_price > 0)) return false
           const pr = (pricesByItem.get(itemById.get(d.entry_id_link).item_id) || []).find(
@@ -759,10 +781,10 @@ export async function GET(req) {
           if (!keep.has(d.entry_id)) {
             unlinks.add(d.entry_id)
             d.entry_id_link = null
-            // The recovery pass may have recorded this link before the
-            // repair saw the conflict — drop it so this same load already
-            // resolves the draft as unsaved (no second refresh needed).
-            recoveredLinks.delete(d.entry_id)
+            // Recovery has not run yet on this load, so no stale link is
+            // recorded for it: the runRecovery() call below sees a genuinely
+            // pending draft and re-links it by its verified price (or leaves
+            // it visibly unsaved) — same load, no second refresh.
           }
         }
       }
@@ -772,6 +794,13 @@ export async function GET(req) {
         } catch {}
       }
     }
+
+    // Freed drafts are recovered now — AFTER the repair — so a cleared pin is
+    // re-linked on this same load whenever exactly one outsourced item at that
+    // branch carries the draft's price (Akure's "Detergent" ₦14,000 → Good
+    // Mama 850G, which had no draft at all and so sat in the last-page
+    // "Saved items — no survey draft" bucket).
+    await runRecovery()
 
     const savedItemIdsClaimed = new Set() // `${item_id}::${branch}` — cards already shown IN that branch
     const itemsShownSomewhere = new Set() // items claimed by ANY draft row (guards the trailing pass)
