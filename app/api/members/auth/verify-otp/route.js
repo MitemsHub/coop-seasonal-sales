@@ -54,36 +54,41 @@ export async function POST(request) {
     }
     const addr = member.email.toLowerCase()
 
-    // Verify the OTP with Supabase Auth — primary inbox first.
-    let { data, error: verifyError } = await authSupabase.auth.verifyOtp({
-      email: addr,
-      token: code,
-      type: otpType,
-    })
-    let verifiedVia = 'primary'
+    // Verify the OTP with Supabase Auth. Four combinations, in order:
+    //   primary inbox × requested type, alternative inbox × requested type,
+    //   then the same two with the OTHER token type.
+    // The last pair matters because forgot-password now sends its code through
+    // the sign-in path (the only delivery that reaches members) while the
+    // reset screen still asks for 'recovery'; a code is only ever valid under
+    // the type that issued it, so both are tried rather than making the member
+    // guess which flow produced the mail.
+    const altRaw = String(member.alternative_email || '').trim().toLowerCase()
+    const altUsable =
+      altRaw && altRaw !== addr && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(altRaw)
+    const otherType = otpType === 'recovery' ? 'email' : 'recovery'
+    const attempts = [
+      { email: addr, type: otpType, via: 'primary' },
+      ...(altUsable ? [{ email: altRaw, type: otpType, via: 'alternative' }] : []),
+      { email: addr, type: otherType, via: 'primary' },
+      ...(altUsable ? [{ email: altRaw, type: otherType, via: 'alternative' }] : []),
+    ]
 
-    if (verifyError) {
-      // Members with an alternative email on file receive a copy of the code
-      // there too — that copy belongs to the ALTERNATE auth account. Supabase
-      // tokens are per-account, so a member who typed the code from their
-      // alternative inbox always saw "Token has expired or is invalid". The
-      // server knows the official alternative address, so try it explicitly:
-      // control of either official inbox proves the same identity.
-      const altRaw = String(member.alternative_email || '').trim().toLowerCase()
-      const altUsable =
-        altRaw && altRaw !== addr && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(altRaw)
-      if (altUsable) {
-        const altTry = await authSupabase.auth.verifyOtp({
-          email: altRaw,
-          token: code,
-          type: otpType,
-        })
-        if (!altTry.error && altTry?.data?.session?.access_token) {
-          data = altTry.data
-          verifyError = null
-          verifiedVia = 'alternative'
-        }
+    let data = null
+    let verifyError = null
+    let verifiedVia = 'primary'
+    for (const attempt of attempts) {
+      const res = await authSupabase.auth.verifyOtp({
+        email: attempt.email,
+        token: code,
+        type: attempt.type,
+      })
+      if (!res.error && res?.data?.session?.access_token) {
+        data = res.data
+        verifyError = null
+        verifiedVia = attempt.via
+        break
       }
+      verifyError = res.error || verifyError
     }
 
     if (verifyError) {

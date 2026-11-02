@@ -151,10 +151,6 @@ export async function POST(request) {
 
     const primary = String(member.email).trim().toLowerCase()
 
-    // Send the reset code through the RECOVERY flow so it renders the
-    // "Reset password" template (reset wording + {{ .Token }} = the 6-digit
-    // code) rather than the Magic Link template the sign-in OTP uses.
-    //
     // ONE SEND PER REQUEST — deliberately. This route used to mail a second
     // copy to alternative_email; 613 members have one, so nearly every reset
     // burned TWO emails out of a single project-wide hourly budget that every
@@ -165,9 +161,31 @@ export async function POST(request) {
     // quota and made the code that mattered arrive late or not at all.
     // Restore the copy only if the budget is raised in the Supabase dashboard
     // (Authentication → Rate limits → Email send rate limit).
-    const { error: otpError } = await authServiceRole.auth.resetPasswordForEmail(primary, {
-      redirectTo,
+    // DELIVERY: sign-in OTP first, recovery template second.
+    // Login codes from this project reach Gmail every time, while mail sent
+    // through the recovery template from the same SMTP host is dropped
+    // silently (docs/password-reset-deliverability-diagnosis.md). A member who
+    // never receives a code cannot reset anything, so the proven path runs
+    // first; the recovery template is still attempted as a fallback so the
+    // reset wording comes back on its own once mailbox reputation allows it.
+    // /verify-otp tries both token types, so which path ran never reaches the
+    // member.
+    let sentVia = 'sign-in code'
+    let { error: otpError } = await authServiceRole.auth.signInWithOtp({
+      email: primary,
+      options: {
+        shouldCreateUser: false,
+        data: { member_id: mid, reset_password: true },
+      },
     })
+    if (otpError) {
+      console.warn(
+        `[forgot-password] sign-in code path failed for ${mid} (${member.email}): ${otpError.message} — trying recovery template`
+      )
+      const recovery = await authServiceRole.auth.resetPasswordForEmail(primary, { redirectTo })
+      otpError = recovery.error
+      sentVia = 'recovery code'
+    }
 
     if (otpError) {
       console.error(
@@ -200,7 +218,7 @@ export async function POST(request) {
     }
 
     console.log(
-      `[forgot-password] reset code sent to ${mid} (${member.email})${siteOrigin ? ` → ${siteOrigin}/reset-password` : ' (no site origin — code only)'}`
+      `[forgot-password] ${sentVia} sent to ${mid} (${member.email})${siteOrigin ? ` → ${siteOrigin}/reset-password` : ' (no site origin — code only)'}`
     )
     return NextResponse.json({ ok: true })
   } catch (e) {

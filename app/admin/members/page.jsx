@@ -152,10 +152,12 @@ function sortGradeLimits(rows) {
 
 function GradeLimitsSection() {
   // Live editor for grade_limits.
-  //   annual_limit — the member's yearly ceiling. The Exhibition lends against
-  //     whatever is left of it (annual limit minus loans already taken).
-  //   global_limit — the per-grade loan ceiling used by Food and the global
-  //     limits, and by the member import when a global_limit cell is blank.
+  //   annual_limit — kept for reference and future use. Nothing reads it since
+  //     the Exhibition moved to five times savings, but it is deliberately
+  //     retained, not deleted.
+  //   global_limit — the per-grade loan ceiling used by Food, the Exhibition
+  //     (five times savings, never above this) and the global limits, and by
+  //     the member import when a global_limit cell is blank.
   const [limits, setLimits] = useState([])
   const [drafts, setDrafts] = useState({}) // grade → { annual_limit?, global_limit? }
   const [editing, setEditing] = useState({}) // grade → row open while true
@@ -254,9 +256,9 @@ function GradeLimitsSection() {
       <Card.Header>
         <Card.Title>Global limits</Card.Title>
         <Card.Description>
-          Annual limit is the member's yearly ceiling — the Exhibition lends against what is left of it after
-          loans already taken. Default loan limit stays the per-grade ceiling for Food and the global limits, and
-          new member imports with a blank global_limit use it.
+          Global limit is the per-grade ceiling: Food caps at it, the Exhibition lends five times savings without
+          going above it, and new member imports with a blank global_limit use it. The annual column is kept for
+          reference — nothing reads it at the moment.
         </Card.Description>
       </Card.Header>
       <Card.Body className="space-y-3">
@@ -272,7 +274,7 @@ function GradeLimitsSection() {
               <span>Grade</span>
               <div className="flex items-center gap-1.5">
                 <span className="w-28 text-right sm:w-36">Annual (₦)</span>
-                <span className="w-28 text-right sm:w-36">Loan (₦)</span>
+                <span className="w-28 text-right sm:w-36">Global limit (₦)</span>
                 <span className="w-8" aria-hidden="true" />
               </div>
             </div>
@@ -292,7 +294,6 @@ function GradeLimitsSection() {
                     {isOpen ? (
                       <div className="flex items-center gap-1.5">
                         <Input
-                          autoFocus
                           type="number"
                           min="0"
                           step="1"
@@ -303,6 +304,7 @@ function GradeLimitsSection() {
                           onBlur={() => clearNoOp(g.grade, 'annual_limit')}
                         />
                         <Input
+                          autoFocus
                           type="number"
                           min="0"
                           step="1"

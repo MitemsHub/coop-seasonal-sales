@@ -32,8 +32,8 @@ function LoanLimitsSection() {
   const [msg, setMsg] = useState(null)
   const [editing, setEditing] = useState(false)
 
-  // Members by category — the amount that still applies once the member's
-  // annual limit (grade table) has no space left after their loans.
+  // Members by category — the grace amount that applies once five times
+  // savings (less everything already taken) has no space left.
   const [junior, setJunior] = useState('700000')
   const [senior, setSenior] = useState('1500000')
   const [executive, setExecutive] = useState('3000000')
@@ -147,10 +147,10 @@ function LoanLimitsSection() {
       <Card.Header>
         <Card.Title>Exhibition Loan Limits (Selected Cycle)</Card.Title>
         <Card.Description>
-          How much a member may borrow this season. Active members get their annual limit (Global limits page)
-          minus loans already taken, including this cycle&apos;s food. Once that is used up, the category amount
-          below still applies. Pensioners have their own two figures; retirees are strictly savings minus loans,
-          with no grace.
+          How much a member may borrow this season. Active staff get five times their savings minus everything
+          already taken (this cycle&apos;s food included), and never more than their global limit; once that is
+          used up, the grace amount for their grade category applies. Pensioners use the same space with their own
+          ceiling and grace; retirees are strictly savings minus loans, with no grace.
         </Card.Description>
       </Card.Header>
       <Card.Body>
@@ -174,16 +174,16 @@ function LoanLimitsSection() {
               </Select>
             </div>
 
-            {/* Members by category */}
+            {/* Members by category — grace for active staff */}
             <div className="rounded-xl border border-line-subtle p-3 bg-subtle/40">
               <div className="mb-1 flex flex-wrap items-baseline gap-2">
                 <div className="text-sm font-medium text-fg">Junior · Senior · Executive</div>
-                <div className="text-xs text-muted">Annual limit, then this amount</div>
+                <div className="text-xs text-muted">Grace amount, used when savings space is gone</div>
               </div>
               <p className="mb-3 text-xs text-muted">
-                Each member&apos;s space is their annual limit minus outstanding loans and this cycle&apos;s food.
-                While that space is positive it is their limit; once it runs out, the amount for their category
-                applies instead.
+                A member&apos;s limit is five times savings minus outstanding loans and this cycle&apos;s food and
+                exhibition orders, never above their global limit (Global limits page). Once that space is used up,
+                the grace amount for their grade category applies instead.
               </p>
               <div className="grid gap-2 sm:grid-cols-3">
                 <div>
@@ -205,11 +205,11 @@ function LoanLimitsSection() {
             <div className="rounded-xl border border-line-subtle p-3 bg-subtle/40">
               <div className="mb-1 flex flex-wrap items-baseline gap-2">
                 <div className="text-sm font-medium text-fg">Pensioner</div>
-                <div className="text-xs text-muted">Own figures — annual limit does not apply</div>
+                <div className="text-xs text-muted">Own ceiling and grace amount</div>
               </div>
               <p className="mb-3 text-xs text-muted">
-                A pensioner with savings left after their loans uses the eligible amount; with nothing left they
-                use the non-eligible amount.
+                A pensioner&apos;s limit is five times savings minus everything taken, with the eligible amount as
+                the ceiling. With no space left they get the non-eligible (grace) amount instead.
               </p>
               <div className="grid gap-2 sm:grid-cols-2">
                 <div>
