@@ -53,6 +53,59 @@ export async function GET(req) {
       return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
     }
 
+    // ── Which session owns the portal's Available credit? ──────────────
+    // Food first. Once no food cycle is active, an open exhibition season
+    // takes over the same figure, so the dashboard never advertises credit
+    // left over from a closed distribution.
+    if (!activeCycleId) {
+      try {
+        const now = Date.now()
+        const { data: xRows } = await supabase
+          .from('exhibition_cycles')
+          .select('id,code,name,starts_at,ends_at')
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(3)
+        const live = (xRows || []).find((c) => {
+          if (c.starts_at && new Date(c.starts_at).getTime() > now) return false
+          if (c.ends_at && new Date(c.ends_at).getTime() <= now) return false
+          return true
+        })
+        if (live) {
+          const { data: xExp, error: xErr } = await supabase.rpc('check_exhibition_exposure_atomic', {
+            p_member_id: memberId,
+            p_payment_option: 'Loan',
+            p_total_amount: 0,
+            p_cycle_id: Number(live.id),
+          })
+          if (!xErr && xExp && xExp.ok !== false) {
+            return NextResponse.json({
+              ok: true,
+              session: 'exhibition',
+              eligibility: {
+                savingsEligible: Number(xExp.savingsEligible || 0),
+                loanEligible: Number(xExp.loanEligible || 0),
+                outstandingLoansTotal: Number(xExp.outstandingLoansTotal || 0),
+                savingsExposure: Number(xExp.savingsExposure || 0),
+                loanExposure: Number(xExp.loanExposure || 0),
+                session: 'exhibition',
+                sessionLabel: live.name || live.code || `Exhibition ${live.id}`,
+                cycleId: live.id,
+                cycleCode: live.code || null,
+              },
+              memberSnapshot: {
+                savings: Number(m.savings || 0),
+                loans: Number(m.loans || 0),
+                globalLimit: Number(m.global_limit || 0),
+              },
+            })
+          }
+        }
+      } catch {
+        // Fall through to the food calculation, which reports zero when closed.
+      }
+    }
+
     // 2) Cross-module exposure: Food + Exhibition + RAM orders in the current year
     const { loanExposure, savingsExposure } = await getCrossModuleExposure(supabase, memberId)
 

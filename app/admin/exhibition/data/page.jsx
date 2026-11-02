@@ -5,12 +5,13 @@
 // food data-management page. Contains:
 //   • Cycles — create / activate / close / edit seasons (merged from the
 //     standalone Cycles page, so operations live in one place).
-//   • Exhibition Loan Limits (Selected Cycle) — eligible vs non-eligible
-//     (grace) loan caps per member category, mirroring the Food module. The
-//     loan interest and vendor deduction rates live in the cycle settings.
+//   • Exhibition Loan Limits (Selected Cycle) — annual-limit rules: category
+//     amounts for Junior/Senior/Executive, two pensioner figures, and the
+//     fixed retiree rule. Loan interest and vendor deduction rates live in the
+//     cycle settings.
 //
 // Exhibition availability is determined solely by cycle status: opening a
-// cycle (status='active') opens that branch's market; closing it closes it.
+// cycle (status='active') opens the exhibition for every branch; closing it closes it.
 import { useCallback, useEffect, useState } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
@@ -31,21 +32,24 @@ function LoanLimitsSection() {
   const [msg, setMsg] = useState(null)
   const [editing, setEditing] = useState(false)
 
-  const [ePensioner, setEPensioner] = useState('0')
-  const [eRetiree, setERetiree] = useState('0')
-  const [eActive, setEActive] = useState('0')
-  const [gPensioner, setGPensioner] = useState('0')
-  const [gRetiree, setGRetiree] = useState('0')
-  const [gActive, setGActive] = useState('0')
+  // Members by category — the amount that still applies once the member's
+  // annual limit (grade table) has no space left after their loans.
+  const [junior, setJunior] = useState('700000')
+  const [senior, setSenior] = useState('1500000')
+  const [executive, setExecutive] = useState('3000000')
+
+  // Pensioners are separate: they do not use the annual limit at all.
+  const [pensionerEligible, setPensionerEligible] = useState('0')
+  const [pensionerNonEligible, setPensionerNonEligible] = useState('0')
+
   const [includeInterest, setIncludeInterest] = useState(true)
 
   const applyCycle = (c) => {
-    setEPensioner(String(Number(c?.exh_loan_eligible_amount_cap_pensioner || 0)))
-    setERetiree(String(Number(c?.exh_loan_eligible_amount_cap_retiree || 0)))
-    setEActive(String(Number(c?.exh_loan_eligible_amount_cap_active || 0)))
-    setGPensioner(String(Number(c?.exh_loan_grace_amount_cap_pensioner || 0)))
-    setGRetiree(String(Number(c?.exh_loan_grace_amount_cap_retiree || 0)))
-    setGActive(String(Number(c?.exh_loan_grace_amount_cap_active || 0)))
+    setJunior(String(Number(c?.exh_no_space_junior ?? 700000)))
+    setSenior(String(Number(c?.exh_no_space_senior ?? 1500000)))
+    setExecutive(String(Number(c?.exh_no_space_executive ?? 3000000)))
+    setPensionerEligible(String(Number(c?.exh_loan_eligible_amount_cap_pensioner || 0)))
+    setPensionerNonEligible(String(Number(c?.exh_loan_grace_amount_cap_pensioner || 0)))
     setIncludeInterest(c?.exh_loan_cap_include_interest !== false)
   }
 
@@ -90,12 +94,12 @@ function LoanLimitsSection() {
   const save = async () => {
     if (!cycleId) return
     if (saving) return
-    const nums = [ePensioner, eRetiree, eActive, gPensioner, gRetiree, gActive].map((v) => {
+    const nums = [junior, senior, executive, pensionerEligible, pensionerNonEligible].map((v) => {
       const n = Math.trunc(Number(v === '' ? 0 : v))
       return Number.isFinite(n) && n >= 0 ? n : null
     })
     if (nums.some((n) => n == null)) {
-      setMsg({ type: 'error', text: 'All limits must be non-negative numbers' })
+      setMsg({ type: 'error', text: 'All amounts must be non-negative numbers' })
       return
     }
     setSaving(true)
@@ -106,12 +110,11 @@ function LoanLimitsSection() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: Number(cycleId),
-          exh_loan_eligible_amount_cap_pensioner: nums[0],
-          exh_loan_eligible_amount_cap_retiree: nums[1],
-          exh_loan_eligible_amount_cap_active: nums[2],
-          exh_loan_grace_amount_cap_pensioner: nums[3],
-          exh_loan_grace_amount_cap_retiree: nums[4],
-          exh_loan_grace_amount_cap_active: nums[5],
+          exh_no_space_junior: nums[0],
+          exh_no_space_senior: nums[1],
+          exh_no_space_executive: nums[2],
+          exh_loan_eligible_amount_cap_pensioner: nums[3],
+          exh_loan_grace_amount_cap_pensioner: nums[4],
           exh_loan_cap_include_interest: includeInterest,
         }),
       })
@@ -144,8 +147,10 @@ function LoanLimitsSection() {
       <Card.Header>
         <Card.Title>Exhibition Loan Limits (Selected Cycle)</Card.Title>
         <Card.Description>
-          Set maximum Loan amounts per cycle for Eligible members and Non-Eligible (Grace) members,
-          mirroring the Food module. Loan interest and vendor deduction rates live in the cycle settings.
+          How much a member may borrow this season. Active members get their annual limit (Global limits page)
+          minus loans already taken, including this cycle&apos;s food. Once that is used up, the category amount
+          below still applies. Pensioners have their own two figures; retirees are strictly savings minus loans,
+          with no grace.
         </Card.Description>
       </Card.Header>
       <Card.Body>
@@ -169,53 +174,69 @@ function LoanLimitsSection() {
               </Select>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              {/* Eligible (Loan) */}
-              <div className="rounded-xl border border-line-subtle p-3 bg-subtle/40">
-                <div className="mb-3 text-sm font-medium text-fg">Eligible (Loan)</div>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <div>
-                    <div className="mb-1 text-xs text-muted">Pensioner</div>
-                    {numInput(ePensioner, setEPensioner, disabled)}
-                  </div>
-                  <div>
-                    <div className="mb-1 text-xs text-muted">Retiree</div>
-                    {numInput(eRetiree, setERetiree, disabled)}
-                  </div>
-                  <div>
-                    <div className="mb-1 text-xs text-muted">Active (Other)</div>
-                    {numInput(eActive, setEActive, disabled)}
-                  </div>
-                </div>
-                <div className="mt-2 text-xs text-muted">Applies to Loan orders that pass eligibility.</div>
+            {/* Members by category */}
+            <div className="rounded-xl border border-line-subtle p-3 bg-subtle/40">
+              <div className="mb-1 flex flex-wrap items-baseline gap-2">
+                <div className="text-sm font-medium text-fg">Junior · Senior · Executive</div>
+                <div className="text-xs text-muted">Annual limit, then this amount</div>
               </div>
+              <p className="mb-3 text-xs text-muted">
+                Each member&apos;s space is their annual limit minus outstanding loans and this cycle&apos;s food.
+                While that space is positive it is their limit; once it runs out, the amount for their category
+                applies instead.
+              </p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div>
+                  <div className="mb-1 text-xs text-muted">Junior</div>
+                  {numInput(junior, setJunior, disabled)}
+                </div>
+                <div>
+                  <div className="mb-1 text-xs text-muted">Senior</div>
+                  {numInput(senior, setSenior, disabled)}
+                </div>
+                <div>
+                  <div className="mb-1 text-xs text-muted">Executive</div>
+                  {numInput(executive, setExecutive, disabled)}
+                </div>
+              </div>
+            </div>
 
-              {/* Non-Eligible (Grace Loan) */}
-              <div className="rounded-xl border border-line-subtle p-3 bg-subtle/40">
-                <div className="mb-3 text-sm font-medium text-fg">Non-Eligible (Grace Loan)</div>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <div>
-                    <div className="mb-1 text-xs text-muted">Pensioner</div>
-                    {numInput(gPensioner, setGPensioner, disabled)}
-                  </div>
-                  <div>
-                    <div className="mb-1 text-xs text-muted">Retiree</div>
-                    {numInput(gRetiree, setGRetiree, disabled)}
-                  </div>
-                  <div>
-                    <div className="mb-1 text-xs text-muted">Active (Other)</div>
-                    {numInput(gActive, setGActive, disabled)}
-                  </div>
-                </div>
-                <div className="mt-2 text-xs text-muted">If eligibility fails, allowed once per cycle up to this max.</div>
+            {/* Pensioner */}
+            <div className="rounded-xl border border-line-subtle p-3 bg-subtle/40">
+              <div className="mb-1 flex flex-wrap items-baseline gap-2">
+                <div className="text-sm font-medium text-fg">Pensioner</div>
+                <div className="text-xs text-muted">Own figures — annual limit does not apply</div>
               </div>
+              <p className="mb-3 text-xs text-muted">
+                A pensioner with savings left after their loans uses the eligible amount; with nothing left they
+                use the non-eligible amount.
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div>
+                  <div className="mb-1 text-xs text-muted">Eligible amount</div>
+                  {numInput(pensionerEligible, setPensionerEligible, disabled)}
+                </div>
+                <div>
+                  <div className="mb-1 text-xs text-muted">Non-eligible amount</div>
+                  {numInput(pensionerNonEligible, setPensionerNonEligible, disabled)}
+                </div>
+              </div>
+            </div>
+
+            {/* Retiree */}
+            <div className="rounded-xl border border-line-subtle p-3 bg-subtle/40">
+              <div className="text-sm font-medium text-fg">Retiree</div>
+              <p className="mt-1 text-xs text-muted">
+                Fixed rule, nothing to set: savings minus all loans, no grace. A retiree with no savings left after
+                their loans cannot take the Loan option.
+              </p>
             </div>
 
             <div className="flex items-center justify-between gap-3 rounded-xl border border-line-subtle p-3 bg-subtle/40 sm:max-w-md">
               <div>
                 <div className="text-sm font-medium text-fg">Include Interest In Limit</div>
                 <div className="text-xs text-muted">
-                  When ON, interest is counted inside the max. When OFF, max applies to principal only.
+                  When ON, interest is counted inside the available amount. When OFF, it applies to principal only.
                 </div>
               </div>
               <label

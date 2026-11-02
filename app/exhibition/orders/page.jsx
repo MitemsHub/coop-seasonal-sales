@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import {
+  CheckCircle2,
   Package,
   Receipt,
   Store,
@@ -44,6 +45,7 @@ function ExhibitionOrdersContent() {
   const { announceCart: announceExhPending } = useCartCount('exhibitionPending', { memberId })
 
   const [orders, setOrders] = useState([])
+  const [confirming, setConfirming] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -68,6 +70,37 @@ function ExhibitionOrdersContent() {
     return () => { cancelled = true }
   }, [memberId])
 
+  // ── Confirm receipt ──
+  // The vendor marks Delivered when the goods leave the stand; the member's
+  // confirmation is what closes the order. Ownership is decided server-side
+  // from the signed session, never from this payload.
+  const confirmReceipt = async (orderId) => {
+    if (!orderId || confirming) return
+    setConfirming(orderId)
+    setError('')
+    try {
+      const res = await fetch('/api/exhibition/orders/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.ok) {
+        setError(json?.error || 'Could not confirm this order. Please try again.')
+        return
+      }
+      setOrders((prev) =>
+        prev.map((o) =>
+          o.order_id === orderId ? { ...o, status: 'Confirmed', member_confirmed_at: json.confirmed_at } : o
+        )
+      )
+    } catch {
+      setError('Could not reach the Coop right now. Please try again.')
+    } finally {
+      setConfirming('')
+    }
+  }
+
   // Pending exhibition orders — feeds the Navbar's "awaiting approval" badge.
   // This page IS the pending view, so the current queue is marked as SEEN
   // (fresh = false); the badge pulses only for genuinely new arrivals.
@@ -85,7 +118,7 @@ function ExhibitionOrdersContent() {
   }, [memberId, orders, announceExhPending])
 
   const stats = useMemo(() => {
-    const byStatus = { Pending: 0, Approved: 0, Delivered: 0, Cancelled: 0 }
+    const byStatus = { Pending: 0, Approved: 0, Delivered: 0, Confirmed: 0, Cancelled: 0 }
     let total = 0
     for (const o of orders) {
       if (byStatus[o.status] !== undefined) byStatus[o.status]++
@@ -133,7 +166,7 @@ function ExhibitionOrdersContent() {
                 <div className="text-chips font-medium text-muted">Approved</div>
               </div>
               <div className="ui-card p-3 text-center">
-                <div className="text-xl font-bold tabular-nums text-success-fg">{stats.byStatus.Delivered}</div>
+                <div className="text-xl font-bold tabular-nums text-success-fg">{stats.byStatus.Delivered + stats.byStatus.Confirmed}</div>
                 <div className="text-chips font-medium text-muted">Delivered</div>
               </div>
               <div className="ui-card p-3 text-center">
@@ -190,6 +223,29 @@ function ExhibitionOrdersContent() {
                     <div className="border-b border-line px-4 py-4">
                       <ExhibitionOrderStepper status={o.status} />
                     </div>
+
+                    {/* Member confirmation — the final step of the transaction */}
+                    {o.status === 'Delivered' && (
+                      <div className="flex flex-col gap-2 border-b border-line bg-success-bg/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-fg">Did you receive your goods?</p>
+                          <p className="text-chips text-muted">Confirm to close this order.</p>
+                        </div>
+                        <Button
+                          leftIcon={CheckCircle2}
+                          onClick={() => confirmReceipt(o.order_id)}
+                          disabled={confirming === o.order_id}
+                        >
+                          {confirming === o.order_id ? 'Confirming…' : 'Confirm received'}
+                        </Button>
+                      </div>
+                    )}
+                    {o.status === 'Confirmed' && (
+                      <div className="flex items-center gap-2 border-b border-line bg-success-bg/40 px-4 py-3 text-sm text-success-fg">
+                        <CheckCircle2 className="h-4 w-4 shrink-0" strokeWidth={2.2} />
+                        <span>Receipt confirmed{o.member_confirmed_at ? ` · ${fmtDate(o.member_confirmed_at)}` : ''}</span>
+                      </div>
+                    )}
 
                     {/* Lines */}
                     <div className="divide-y divide-line-subtle">

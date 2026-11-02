@@ -15,7 +15,7 @@ import { validateSession } from '@/lib/validation'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const ACTIONS = ['Approved', 'Cancelled', 'Restored', 'Delivered']
+const ACTIONS = ['Approved', 'Cancelled', 'Restored', 'Delivered', 'Confirmed']
 
 // exhibition_orders has FKs to branches AND cycles — both embeds resolve.
 const ORDER_SELECT =

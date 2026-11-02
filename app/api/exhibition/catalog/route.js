@@ -24,6 +24,49 @@ function isMissingTable(error, table) {
   return msg.includes(String(table || '').toLowerCase()) && (msg.includes('does not exist') || msg.includes('could not find the table'))
 }
 
+// ── Member-independent catalog cache ─────────────────────────────────
+// The cycle, vendors, categories and products are identical for every member,
+// so rebuilding them per request is wasted work — and on a busy exhibition day
+// this route is what every member hits. Cache the result per cycle for a
+// minute. Failures are never cached. Process-local by design: each instance
+// warms once instead of querying on every page view.
+const CORE_TTL_MS = 60_000
+const coreCache = new Map() // cycleId -> { at, data }
+
+async function loadCatalogCore(supabase, cycleId) {
+  const hit = coreCache.get(cycleId)
+  if (hit && Date.now() - hit.at < CORE_TTL_MS) return hit.data
+
+  const [vendorsRes, categoriesRes, productsRes] = await Promise.all([
+    supabase
+      .from('exhibition_vendors')
+      .select('id, name, code, phone, address')
+      .eq('cycle_id', cycleId)
+      .eq('status', 'active')
+      .order('name'),
+    supabase
+      .from('exhibition_categories')
+      .select('id, name')
+      .eq('cycle_id', cycleId)
+      .order('sort_order', { ascending: true })
+      .order('name', { ascending: true }),
+    supabase
+      .from('exhibition_products')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, admin_markup, qty, image_url, status, vendors:vendor_id(name, code), categories:category_id(name)')
+      .eq('cycle_id', cycleId)
+      .eq('status', 'active')
+      .order('name'),
+  ])
+
+  const data = { vendorsRes, categoriesRes, productsRes }
+  if (!productsRes.error) {
+    coreCache.set(cycleId, { at: Date.now(), data })
+    if (coreCache.size > 50) coreCache.delete(coreCache.keys().next().value)
+  }
+  return data
+}
+
+
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url)
@@ -48,80 +91,46 @@ export async function GET(req) {
       }
       return NextResponse.json({ ok: false, error: mErr.message }, { status: 500 })
     }
-    if (!member) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })    // Optional branch_code filter — when the member picks a delivery
-    // location from the dropdown, the catalog scopes to that branch's cycle.
+    if (!member) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
+
+    // The season is org-wide (one cycle for every branch, like Food/RAM).
+    // The branch decides which market's goods the member browses and collects.
     const branchCodeFilter = String(searchParams.get('branch_code') || '').trim().toUpperCase()
 
-    // ── Find all LIVE cycles across ALL branches ─────────────────
-    // A cycle is "live" when status = 'active' AND its date window is open
-    // (auto-closes when ends_at passes, even without admin action).
-    const { data: allActive } = await supabase
+    // ── The active season ────────────────────────────────────────
+    // "Live" = status 'active' AND its date window is open (auto-closes when
+    // ends_at passes, even without admin action).
+    const { data: activeRows } = await supabase
       .from('exhibition_cycles')
-      .select('id, name, code, status, starts_at, ends_at, loan_interest_rate_pct, branch_id, branches:branch_id(code, name)')
+      .select('id, name, code, status, starts_at, ends_at, loan_interest_rate_pct')
       .eq('status', 'active')
       .order('created_at', { ascending: false })
+      .limit(2)
 
     // Fallback to the latest cycle (any status) so the UI can still show
     // draft/closed season info (e.g. "opens on …").
     const { data: latest } = await supabase
       .from('exhibition_cycles')
-      .select('id, name, code, status, starts_at, ends_at, loan_interest_rate_pct, branch_id, branches:branch_id(code, name)')
+      .select('id, name, code, status, starts_at, ends_at, loan_interest_rate_pct')
       .order('created_at', { ascending: false })
       .maybeSingle()
 
-    // Filter active cycles by date window (auto-close expired, skip not-yet-started).
     const now = Date.now()
-    const liveActive = (allActive || []).filter((c) => {
+    const live = (activeRows || []).find((c) => {
       if (c.starts_at && new Date(c.starts_at).getTime() > now) return false
       if (c.ends_at && new Date(c.ends_at).getTime() <= now) return false
       return true
     })
 
-    // Build the available delivery locations list from live cycles.
-    const seenBranches = new Map()
-    for (const c of liveActive) {
-      const code = c.branches?.code
-      if (code && !seenBranches.has(code)) {
-        seenBranches.set(code, { code, name: c.branches?.name || code, cycleName: c.name || '' })
-      }
-    }
-    const availableBranches = Array.from(seenBranches.values())
-
-    // Pick the active cycle — scoped to the selected branch if provided.
-    const active = branchCodeFilter
-      ? liveActive.find((c) => c.branches?.code === branchCodeFilter) || null
-      : liveActive[0] || null
-
-    const cycle = active || latest
+    const cycle = live || latest
     if (!cycle) {
       return NextResponse.json({ ok: true, open: false, branch: '', availableBranches: [] })
     }
 
-    let cycleOpen = !!active
+    const cycleOpen = !!live
     const cycleId = Number(cycle.id)
-    const cycleBranchId = Number(cycle.branch_id)
-    const deliveryBranch = cycle.branches?.name || ''
 
-    const [vendorsRes, categoriesRes, productsRes] = await Promise.all([
-      supabase
-        .from('exhibition_vendors')
-        .select('id, name, code, phone, address')
-        .eq('cycle_id', cycleId)
-        .eq('status', 'active')
-        .order('name'),
-      supabase
-        .from('exhibition_categories')
-        .select('id, name')
-        .eq('cycle_id', cycleId)
-        .order('sort_order', { ascending: true })
-        .order('name', { ascending: true }),
-      supabase
-        .from('exhibition_products')
-        .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, admin_markup, qty, image_url, status, vendors:vendor_id(name, code), categories:category_id(name)')
-        .eq('cycle_id', cycleId)
-        .eq('status', 'active')
-        .order('name'),
-    ])
+    const { vendorsRes, categoriesRes, productsRes } = await loadCatalogCore(supabase, cycleId)
 
     if (productsRes.error && isMissingTable(productsRes.error, 'exhibition')) {
       return NextResponse.json(
@@ -131,7 +140,29 @@ export async function GET(req) {
     }
     if (productsRes.error) return NextResponse.json({ ok: false, error: productsRes.error.message }, { status: 500 })
 
-    const products = productsRes.data || []
+    // Only the selected branch's market is browsable. Every branch has its own
+    // vendors and stock, but they all belong to the one season.
+    const allProducts = productsRes.data || []
+    const branchIdsInCycle = [...new Set(allProducts.map((p) => Number(p.branch_id)).filter((n) => Number.isFinite(n) && n > 0))]
+    const { data: branchRows } = branchIdsInCycle.length
+      ? await supabase.from('branches').select('id, code, name').in('id', branchIdsInCycle)
+      : { data: [] }
+    const branchById = new Map((branchRows || []).map((b) => [Number(b.id), b]))
+    const availableBranches = branchIdsInCycle
+      .map((bid) => branchById.get(bid))
+      .filter(Boolean)
+      .map((b) => ({ code: b.code, name: b.name || b.code, cycleName: cycle.name || '' }))
+
+    const requestedBranch = branchCodeFilter
+      ? (branchRows || []).find((b) => String(b.code || '').toUpperCase() === branchCodeFilter)
+      : null
+    const selectedBranchId =
+      Number(requestedBranch?.id) ||
+      Number(member.branch_id) ||
+      branchIdsInCycle[0] ||
+      0
+    const selectedBranch = branchById.get(selectedBranchId) || null
+    const products = allProducts.filter((p) => Number(p.branch_id) === selectedBranchId)
     const productIds = products.map((p) => p.id)
 
     // Per-member negotiated prices for this member's products (the person who
@@ -169,10 +200,20 @@ export async function GET(req) {
       }
     })
 
+    // Optional window for very large catalogues. The default stays the full
+    // list so existing clients keep working unchanged.
+    const limitParam = Math.trunc(Number(searchParams.get('limit') || 0))
+    const offsetParam = Math.max(0, Math.trunc(Number(searchParams.get('offset') || 0)))
+    const total = catalogProducts.length
+    const paged = limitParam > 0
+      ? catalogProducts.slice(offsetParam, offsetParam + limitParam)
+      : catalogProducts
+
     return NextResponse.json({
       ok: true,
       open: cycleOpen,
-      branch: deliveryBranch,
+      total,
+      branch: selectedBranch?.name || '',
       cycle: {
         id: cycleId,
         name: cycle.name || '',
@@ -190,7 +231,7 @@ export async function GET(req) {
         address: v.address || '',
       })),
       categories: (categoriesRes.data || []).map((c) => ({ id: Number(c.id), name: c.name || '' })),
-      products: catalogProducts,
+      products: paged,
       availableBranches,
     })
   } catch (e) {

@@ -31,7 +31,7 @@ export async function GET(req) {
       .select('amount, delivered, orders:order_id(status)')
       .eq('vendor_id', ctx.vendor_id)
 
-    const byStatus = { Pending: 0, Approved: 0, Delivered: 0, Cancelled: 0 }
+    const byStatus = { Pending: 0, Approved: 0, Delivered: 0, Confirmed: 0, Cancelled: 0 }
     let revenue = 0
     let pendingAmount = 0
     let deliveredQty = 0
@@ -40,7 +40,7 @@ export async function GET(req) {
       const status = line.orders?.status || 'Pending'
       if (byStatus[status] !== undefined) byStatus[status]++
       const amt = Number(line.amount || 0)
-      if (status === 'Approved' || status === 'Delivered') revenue += amt
+      if (status === 'Approved' || status === 'Delivered' || status === 'Confirmed') revenue += amt
       if (status === 'Pending') pendingAmount += amt
       if (line.delivered) deliveredQty++
       // Approved lines this vendor still needs to hand over

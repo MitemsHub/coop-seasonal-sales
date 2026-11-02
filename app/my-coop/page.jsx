@@ -548,7 +548,7 @@ function MyCoopContent() {
               value={anyCycleOpen && elig ? naira(Number(elig.loanEligible || 0) + Number(elig.savingsEligible || 0)) : '₦0'}
               delta={anyCycleOpen
                 ? (elig
-                    ? `loan ${naira(Number(elig.loanEligible || 0))} + savings ${naira(Number(elig.savingsEligible || 0))} — reduces as you shop`
+                    ? `${elig.sessionLabel ? elig.sessionLabel + ' — ' : ''}loan ${naira(Number(elig.loanEligible || 0))} + savings ${naira(Number(elig.savingsEligible || 0))} — reduces as you shop`
                     : 'unavailable')
                 : 'No active cycle — resets to the next one that opens'}
               trend={anyCycleOpen && elig && Number(elig.loanEligible || 0) + Number(elig.savingsEligible || 0) > 0 ? 'up' : 'flat'}

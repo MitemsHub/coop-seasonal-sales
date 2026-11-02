@@ -14,18 +14,21 @@ const createConfig = (phase) => {
   // Optimize images
   images: {
     // Allow Supabase storage domain dynamically
-    domains: (() => {
+    // Next 15 prefers remotePatterns; `domains` is deprecated.
+    remotePatterns: (() => {
       try {
-        const host = process.env.NEXT_PUBLIC_SUPABASE_URL ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).host : null
-        return host ? [host] : []
+        const url = process.env.NEXT_PUBLIC_SUPABASE_URL ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL) : null
+        return url ? [{ protocol: url.protocol.replace(':', ''), hostname: url.hostname, pathname: '/**' }] : []
       } catch {
         return []
       }
     })(),
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
-    // Enable Next.js image optimization for remote images
-    unoptimized: false,
+    // Product images are already resized to 900x900 WebP at 30-120KB before
+    // upload, so the optimizer adds a per-image transformation (and a Vercel
+    // quota cliff) on the busiest exhibition days without improving quality.
+    unoptimized: true,
     formats: ['image/avif', 'image/webp']
   },
   

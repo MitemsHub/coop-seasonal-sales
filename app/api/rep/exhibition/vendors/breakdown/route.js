@@ -29,7 +29,6 @@ export async function GET(req) {
       const { data: active } = await supabase
         .from('exhibition_cycles')
         .select('id, name')
-        .eq('branch_id', branchId)
         .eq('status', 'active')
         .order('created_at', { ascending: false })
         .maybeSingle()
@@ -38,7 +37,6 @@ export async function GET(req) {
         const { data: latest } = await supabase
           .from('exhibition_cycles')
           .select('id, name')
-          .eq('branch_id', branchId)
           .order('created_at', { ascending: false })
           .maybeSingle()
         cycleId = Number(latest?.id) || null

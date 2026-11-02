@@ -12,7 +12,7 @@ import { getRepBranch } from '../_session'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const STATUSES = ['Pending', 'Approved', 'Delivered', 'Cancelled']
+const STATUSES = ['Pending', 'Approved', 'Delivered', 'Confirmed', 'Cancelled']
 
 export async function GET(req) {
   try {
@@ -36,7 +36,6 @@ export async function GET(req) {
       const { data: cycleRows } = await supabase
         .from('exhibition_cycles')
         .select('id, name, code, status, starts_at, ends_at')
-        .eq('branch_id', auth.branchId)
         .order('created_at', { ascending: false })
 
       for (const c of cycleRows || []) {

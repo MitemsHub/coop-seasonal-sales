@@ -29,7 +29,8 @@ function isMissingTable(error, table) {
   return msg.includes(String(table || '').toLowerCase()) && (msg.includes('does not exist') || msg.includes('could not find the table'))
 }
 
-const EXHIBITION_STATUSES = ['Pending', 'Approved']
+// Statuses that still consume this cycle's loan allowance. Delivered and
+// Confirmed orders have already been spent — excluding them would free the cap.
 
 function makeOrderId() {
   const y = new Date().getFullYear()
@@ -54,7 +55,7 @@ export async function GET(req) {
       .select(
         statusOnly
           ? 'id, order_id, status'
-          : 'id, order_id, status, payment_option, total_qty, total_amount, created_at, member_name_snapshot, branch:branches(id, name, code), lines:exhibition_order_lines(id, product_id, vendor_id, product_name, sku, unit, final_price, qty, amount, image_url:exhibition_products(image_url), vendor:exhibition_vendors(name))'
+          : 'id, order_id, status, payment_option, total_qty, total_amount, created_at, delivered_at, member_confirmed_at, member_name_snapshot, branch:branches(id, name, code), lines:exhibition_order_lines(id, product_id, vendor_id, product_name, sku, unit, final_price, qty, amount, image_url:exhibition_products(image_url), vendor:exhibition_vendors(name))'
       )
       .eq('member_id', memberId)
       .order('created_at', { ascending: false })
@@ -158,34 +159,14 @@ export async function POST(req) {
       .maybeSingle()
     if (!deliveryBranch) return NextResponse.json({ ok: false, error: 'Delivery branch not found' }, { status: 404 })
 
-    // Delivery is only offered at branches with a LIVE exhibition cycle — the
-    // cart only lists those, so this guards the API directly too.
-    // A cycle is live when status = 'active' AND its date window is open.
-    const { data: openDeliv } = await supabase
-      .from('exhibition_cycles')
-      .select('id, starts_at, ends_at')
-      .eq('branch_id', deliveryBranch.id)
-      .eq('status', 'active')
-      .limit(1)
-    const delivCycle = (openDeliv || [])[0]
-    const delivLive = delivCycle && (() => {
-      const now = Date.now()
-      if (delivCycle.starts_at && new Date(delivCycle.starts_at).getTime() > now) return false
-      if (delivCycle.ends_at && new Date(delivCycle.ends_at).getTime() <= now) return false
-      return true
-    })()
-    if (!delivLive) {
-      return NextResponse.json(
-        { ok: false, error: 'Delivery is only available at branches with an open exhibition.' },
-        { status: 400 }
-      )
-    }
+    // Delivery is only offered where the open season actually has goods —
+    // checked against the cycle's products once the cycle is resolved below.
 
-    // Active cycle for the member's branch
+    // The active season — org-wide now, so a member of any branch orders
+    // from the same cycle and the branch only decides what they can buy.
     const { data: cycle, error: cycErr } = await supabase
       .from('exhibition_cycles')
-      .select('id, name, status, starts_at, ends_at, loan_interest_rate_pct, exh_loan_eligible_amount_cap_pensioner, exh_loan_eligible_amount_cap_retiree, exh_loan_eligible_amount_cap_active, exh_loan_grace_amount_cap_pensioner, exh_loan_grace_amount_cap_retiree, exh_loan_grace_amount_cap_active, exh_loan_cap_include_interest')
-      .eq('branch_id', branchId)
+      .select('id, name, status, starts_at, ends_at, loan_interest_rate_pct, exh_loan_cap_include_interest')
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .maybeSingle()
@@ -210,6 +191,21 @@ export async function POST(req) {
     }
 
     const cycleId = Number(cycle.id)
+
+    // Delivery is only offered where the open season actually has goods.
+    const { count: delivProducts } = await supabase
+      .from('exhibition_products')
+      .select('id', { count: 'exact', head: true })
+      .eq('cycle_id', cycleId)
+      .eq('branch_id', deliveryBranch.id)
+      .eq('status', 'active')
+    if (!delivProducts) {
+      return NextResponse.json(
+        { ok: false, error: 'Delivery is only available at branches taking part in this exhibition.' },
+        { status: 400 }
+      )
+    }
+
     const loanInterestRatePct = Math.max(0, Number(cycle.loan_interest_rate_pct ?? 13))
     const loanInterestRate = loanInterestRatePct / 100
 
@@ -282,38 +278,11 @@ export async function POST(req) {
     const loanExposure = Number(exposureResult.loanExposure || 0)
     const savingsExposure = Number(exposureResult.savingsExposure || 0)
     const savingsEligible = Number(exposureResult.savingsEligible || 0)
+    // loanEligible is what this member can still take this cycle under the
+    // exhibition rules (annual limit minus loans taken, with the category /
+    // pensioner / retiree fallbacks) — computed inside the locked RPC, so the
+    // two never disagree.
     const loanEligible = Number(exposureResult.loanEligible || 0)
-
-    const sumAmt = (rows) => (rows || []).reduce((s, r) => s + Number(r?.total_amount || 0), 0)
-
-    // Cumulative loan amount in THIS cycle for this member (for cycle cap enforcement).
-    let cycleLoanTotal = 0
-    if (cycleId) {
-      const { data: cycleLoanRows } = await supabase
-        .from('exhibition_orders')
-        .select('total_amount')
-        .eq('member_id', memberId)
-        .eq('payment_option', 'Loan')
-        .eq('cycle_id', cycleId)
-        .in('status', EXHIBITION_STATUSES)
-      cycleLoanTotal = sumAmt(cycleLoanRows)
-    }
-
-    const savings = Number(member.savings || 0)
-    const loans = Number(member.loans || 0)
-    const globalLimit = Number(member.global_limit || 0)
-    const outstandingLoansTotal = loans + loanExposure
-
-    // Per-cycle eligible/grace caps by member category (mirrors the Food module's
-    // food_loan_* policy). The eligible cap is the hard ceiling for the cycle;
-    // if the member falls short of the base eligibility but is under the grace
-    // cap, one grace order is allowed per cycle.
-    const memberCategory = String(member.category || '').toLowerCase()
-    const capGroup = memberCategory.includes('pension') ? 'pensioner' : memberCategory.includes('retire') ? 'retiree' : 'active'
-    const eligibleLoanMaxCap = Math.max(0, Math.trunc(Number(cycle[`exh_loan_eligible_amount_cap_${capGroup}`] || 0)))
-    const graceLoanMaxCap = Math.max(0, Math.trunc(Number(cycle[`exh_loan_grace_amount_cap_${capGroup}`] || 0)))
-    const cumulativeCapAmount = cycleLoanTotal + capAmount
-    let useGrace = false
 
     // Enforce limits
     if (paymentOption === 'Savings') {
@@ -324,54 +293,16 @@ export async function POST(req) {
     }
     if (paymentOption === 'Loan') {
       if (loanEligible <= 0) return NextResponse.json({ ok: false, error: 'Loan option is not available for this member.' }, { status: 400 })
-      if (eligibleLoanMaxCap > 0 && cumulativeCapAmount > eligibleLoanMaxCap) {
+      if (capAmount > loanEligible) {
         return NextResponse.json(
           {
             ok: false,
             error: includeInterestInCap
-              ? `Eligible max for this cycle is ₦${eligibleLoanMaxCap.toLocaleString()}. You already have ₦${cycleLoanTotal.toLocaleString()} in this cycle; adding ₦${totalAmount.toLocaleString()} (incl. ${loanInterestRatePct}% interest) would exceed it.`
-              : `Eligible max for this cycle is ₦${eligibleLoanMaxCap.toLocaleString()}. You already have ₦${cycleLoanTotal.toLocaleString()} in this cycle; adding ₦${totalPrincipal.toLocaleString()} would exceed it (interest is excluded from the cap).`,
+              ? `Total (incl. ${loanInterestRatePct}% interest) ₦${totalAmount.toLocaleString()} exceeds Loan available ₦${loanEligible.toLocaleString()}`
+              : `Principal total ₦${totalPrincipal.toLocaleString()} exceeds Loan available ₦${loanEligible.toLocaleString()} (interest is excluded from the cap)`,
           },
           { status: 400 }
         )
-      }
-      if (cumulativeCapAmount > loanEligible) {
-        if (graceLoanMaxCap <= 0) {
-          return NextResponse.json(
-            {
-              ok: false,
-              error: includeInterestInCap
-                ? `Total (incl. ${loanInterestRatePct}% interest) ₦${totalAmount.toLocaleString()} exceeds Loan available ₦${loanEligible.toLocaleString()}`
-                : `Principal total ₦${totalPrincipal.toLocaleString()} exceeds Loan available ₦${loanEligible.toLocaleString()} (interest is excluded from the cap)`,
-            },
-            { status: 400 }
-          )
-        }
-        if (cumulativeCapAmount > graceLoanMaxCap) {
-          return NextResponse.json(
-            {
-              ok: false,
-              error: includeInterestInCap
-                ? `You are currently not eligible for Loan. Grace max for this cycle is ₦${graceLoanMaxCap.toLocaleString()} but you already have ₦${cycleLoanTotal.toLocaleString()} and adding ₦${totalAmount.toLocaleString()} (incl. ${loanInterestRatePct}% interest) would exceed it.`
-                : `You are currently not eligible for Loan. Grace max for this cycle is ₦${graceLoanMaxCap.toLocaleString()} but you already have ₦${cycleLoanTotal.toLocaleString()} and adding ₦${totalPrincipal.toLocaleString()} would exceed it (interest is excluded from the cap).`,
-            },
-            { status: 400 }
-          )
-        }
-        // Grace is allowed once per member per cycle.
-        const { data: usedGrace } = await supabase
-          .from('exhibition_orders')
-          .select('id')
-          .eq('member_id', memberId)
-          .eq('payment_option', 'Loan')
-          .eq('exh_loan_grace_used', true)
-          .eq('cycle_id', cycleId)
-          .in('status', EXHIBITION_STATUSES)
-          .limit(1)
-        if ((usedGrace || []).length > 0) {
-          return NextResponse.json({ ok: false, error: 'Grace has already been used for this member in the current cycle.' }, { status: 400 })
-        }
-        useGrace = true
       }
     }
 
@@ -421,24 +352,34 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: reserveErr.message }, { status: 500 })
     }
 
-    // Create the order + lines + vendor payment rows
-    const orderId = makeOrderId()
-    const { data: inserted, error: insErr } = await supabase
-      .from('exhibition_orders')
-      .insert({
-        order_id: orderId,
-        cycle_id: cycleId,
-        branch_id: branchId,
-        member_id: memberId,
-        member_name_snapshot: member.full_name || '',
-        payment_option: paymentOption,
-        status: 'Pending',
-        total_qty: totalQty,
-        total_amount: totalAmount,
-        exh_loan_grace_used: useGrace,
-      })
-      .select('id')
-      .single()
+    // Create the order + lines + vendor payment rows.
+    // order_id is a short random string behind a UNIQUE constraint, so a
+    // collision must retry instead of surfacing as a checkout failure.
+    let orderId = ''
+    let inserted = null
+    let insErr = null
+    for (let attempt = 0; attempt < 3; attempt++) {
+      orderId = makeOrderId()
+      const res = await supabase
+        .from('exhibition_orders')
+        .insert({
+          order_id: orderId,
+          cycle_id: cycleId,
+          branch_id: branchId,
+          member_id: memberId,
+          member_name_snapshot: member.full_name || '',
+          payment_option: paymentOption,
+          status: 'Pending',
+          total_qty: totalQty,
+          total_amount: totalAmount,
+          exh_loan_grace_used: false,
+        })
+        .select('id')
+        .single()
+      inserted = res.data
+      insErr = res.error
+      if (!insErr || String(insErr?.code || '') !== '23505') break
+    }
     if (insErr) {
       // Roll the reservation back so we never lock stock without an order.
       await supabase.rpc('exhibition_release_stock', { p_items: reserveItems }).catch(() => {})

@@ -10,7 +10,7 @@ import { verify } from '@/lib/signing'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const STATUSES = ['Pending', 'Approved', 'Delivered', 'Cancelled']
+const STATUSES = ['Pending', 'Approved', 'Delivered', 'Confirmed', 'Cancelled']
 
 export async function GET(req) {
   try {
@@ -26,6 +26,8 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url)
     const statusRaw = (searchParams.get('status') || '').trim()
     const status = STATUSES.includes(statusRaw) ? statusRaw : 'Pending'
+    // "Delivered" means handed over, so it includes member-confirmed orders.
+    const statusesToMatch = status === 'Delivered' ? ['Delivered', 'Confirmed'] : [status]
     const payment = (searchParams.get('payment') || '').trim()
     const cycleId = Math.trunc(Number(searchParams.get('cycle_id') || 0))
     const q = (searchParams.get('q') || '').trim()
@@ -33,7 +35,7 @@ export async function GET(req) {
     const offset = Math.max(Number(searchParams.get('offset') || 0), 0)
 
     // Count with the same filters
-    let countQ = supabase.from('exhibition_orders').select('id', { count: 'exact', head: true }).eq('branch_id', branchId).eq('status', status)
+    let countQ = supabase.from('exhibition_orders').select('id', { count: 'exact', head: true }).eq('branch_id', branchId).in('status', statusesToMatch)
     if (cycleId > 0) countQ = countQ.eq('cycle_id', cycleId)
     if (payment && ['Cash', 'Savings', 'Loan'].includes(payment)) countQ = countQ.eq('payment_option', payment)
     if (q) countQ = countQ.or(`order_id.ilike.%${q}%,member_id.ilike.%${q}%,member_name_snapshot.ilike.%${q}%`)
@@ -43,7 +45,7 @@ export async function GET(req) {
       .from('exhibition_orders')
       .select('id, order_id, cycle_id, branch_id, member_id, member_name_snapshot, payment_option, status, total_qty, total_amount, approved_at, delivered_at, cancelled_at, cancelled_reason, restored_at, created_at, branches:branch_id(name, code), cycles:cycle_id(name, code)')
       .eq('branch_id', branchId)
-      .eq('status', status)
+      .in('status', statusesToMatch)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
     if (cycleId > 0) query = query.eq('cycle_id', cycleId)

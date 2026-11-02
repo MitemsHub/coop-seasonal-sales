@@ -23,10 +23,10 @@ export async function GET(request) {
     const supabase = createClient()
 
     const [cyclesRes, vendorsRes, productsRes, ordersRes, payRes] = await Promise.all([
-      supabase.from('exhibition_cycles').select('id, name, code, status, vendor_deduction_rate_pct, created_at, starts_at, ends_at, branch_id, branches:branch_id(name)'),
+      supabase.from('exhibition_cycles').select('id, name, code, status, vendor_deduction_rate_pct, created_at, starts_at, ends_at, branch_id'),
       supabase.from('exhibition_vendors').select('id'),
       supabase.from('exhibition_products').select('id, status'),
-      supabase.from('exhibition_orders').select('id, order_id, status, total_amount, member_id, member_name_snapshot, payment_option, created_at, cycle_id'),
+      supabase.from('exhibition_orders').select('id, order_id, status, total_amount, member_id, member_name_snapshot, payment_option, created_at, cycle_id, branch_id'),
       supabase.from('exhibition_vendor_payment_status').select('id, vendor_id, paid, amount'),
     ])
 
@@ -256,7 +256,7 @@ export async function GET(request) {
               loan_interest_rate_pct: activeCycle.loan_interest_rate_pct ?? 13,
             }
           : null,
-        branches: new Set(cycles.map((c) => c.branch_id)).size,
+        branches: new Set(orders.map((o) => Number(o.branch_id)).filter(Boolean)).size,
         vendors: vendors.length,
         products: products.length,
         active_products: products.filter((p) => p.status === 'active').length,

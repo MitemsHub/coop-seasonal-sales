@@ -1,9 +1,10 @@
 // app/api/exhibition/delivery-branches/route.js
-// Member-facing list of delivery branches that have an OPEN exhibition cycle.
-// The exhibition cart shows only these — members pick up from a branch whose
-// market is actually open this season, not from a list of every branch.
+// Member-facing list of delivery branches taking part in the OPEN season.
+// The exhibition season is org-wide (one cycle for every branch, like Food and
+// RAM), so this list comes from the branches that actually have active products
+// in the live cycle — not from one cycle row per branch.
 //   GET /api/exhibition/delivery-branches
-// Returns [{ code, name }] — one entry per branch with an active cycle.
+// Returns [{ code, name }].
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 
@@ -20,11 +21,13 @@ function isMissingTable(error, table) {
 export async function GET() {
   try {
     const supabase = createClient()
-    const { data, error } = await supabase
+
+    const { data: cycles, error } = await supabase
       .from('exhibition_cycles')
-      .select('id, name, status, starts_at, ends_at, branches:branch_id(code, name)')
+      .select('id, starts_at, ends_at')
       .eq('status', 'active')
       .order('created_at', { ascending: false })
+      .limit(2)
     if (error) {
       if (isMissingTable(error, 'exhibition')) {
         // Module not set up yet — treat as no open delivery locations.
@@ -33,20 +36,37 @@ export async function GET() {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     }
 
-    // One entry per branch — only include branches whose cycle date window
-    // is still open (auto-close expired cycles).
+    // Auto-close: a cycle whose window has passed is not live.
     const now = Date.now()
-    const seen = new Set()
-    const branches = []
-    for (const c of data || []) {
-      if (c.starts_at && new Date(c.starts_at).getTime() > now) continue
-      if (c.ends_at && new Date(c.ends_at).getTime() <= now) continue
-      const b = c.branches
-      if (!b?.code || seen.has(b.code)) continue
-      seen.add(b.code)
-      branches.push({ code: b.code, name: b.name || b.code })
-    }
-    return NextResponse.json({ ok: true, branches })
+    const cycle = (cycles || []).find((c) => {
+      if (c.starts_at && new Date(c.starts_at).getTime() > now) return false
+      if (c.ends_at && new Date(c.ends_at).getTime() <= now) return false
+      return true
+    })
+    if (!cycle) return NextResponse.json({ ok: true, branches: [] })
+
+    // A branch takes part when it has at least one active product this season.
+    const { data: products, error: pErr } = await supabase
+      .from('exhibition_products')
+      .select('branch_id')
+      .eq('cycle_id', cycle.id)
+      .eq('status', 'active')
+    if (pErr) return NextResponse.json({ ok: false, error: pErr.message }, { status: 500 })
+
+    const branchIds = [...new Set((products || []).map((p) => Number(p.branch_id)).filter((n) => Number.isFinite(n) && n > 0))]
+    if (!branchIds.length) return NextResponse.json({ ok: true, branches: [] })
+
+    const { data: branches, error: bErr } = await supabase
+      .from('branches')
+      .select('id, code, name')
+      .in('id', branchIds)
+      .order('name')
+    if (bErr) return NextResponse.json({ ok: false, error: bErr.message }, { status: 500 })
+
+    return NextResponse.json({
+      ok: true,
+      branches: (branches || []).map((b) => ({ code: b.code, name: b.name || b.code })),
+    })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Failed to load delivery branches' }, { status: 500 })
   }

@@ -9,6 +9,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { MessageCircle, Send, ArrowLeft, Paperclip, AlertCircle, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { createClient } from '../../../lib/supabaseClient'
+import { shrinkImageForUpload } from '../../../lib/imageShrink'
 
 const PAGE_SIZE = 20
 
@@ -263,14 +264,14 @@ export default function AdminChatPage() {
 
   // ── Upload file ──
   const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file || !selectedId) return
+    const pick = e.target.files?.[0]
+    if (!pick || !selectedId) return
     e.target.value = ''
 
     setUploading(true)
     try {
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', await shrinkImageForUpload(pick), pick.name || 'attachment')
       formData.append('sender_id', selectedId)
 
       const res = await fetch('/api/chat/upload', { method: 'POST', body: formData })

@@ -79,7 +79,7 @@ export async function POST(req) {
     const now = new Date().toISOString()
     const { error: upErr } = await supabase
       .from('exhibition_orders')
-      .update({ status: 'Pending', approved_at: null, delivered_at: null, cancelled_at: null, cancelled_reason: '', restored_at: now, updated_at: now })
+      .update({ status: 'Pending', approved_at: null, delivered_at: null, member_confirmed_at: null, member_confirmed_by: '', cancelled_at: null, cancelled_reason: '', restored_at: now, updated_at: now })
       .in('id', toRestore)
       .eq('status', 'Cancelled')
       .eq('branch_id', auth.branchId)

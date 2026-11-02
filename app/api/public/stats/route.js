@@ -16,7 +16,7 @@ export async function GET() {
       supabase.from('branches').select('id', { count: 'exact', head: true }),
       supabase.from('orders').select('order_id', { count: 'exact', head: true }).eq('status', 'Delivered'),
       supabase.from('ram_orders').select('id', { count: 'exact', head: true }).eq('status', 'Delivered'),
-      supabase.from('exhibition_orders').select('id', { count: 'exact', head: true }).eq('status', 'Delivered'),
+      supabase.from('exhibition_orders').select('id', { count: 'exact', head: true }).in('status', ['Delivered', 'Confirmed']),
       supabase.from('member_reviews').select('rating', { count: 'exact', head: true }),
     ])
 

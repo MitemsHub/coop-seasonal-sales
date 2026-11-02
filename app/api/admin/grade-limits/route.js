@@ -3,9 +3,9 @@
 // used by the member import when a member's global_limit cell is blank, and
 // by eligibility math when a member row carries no override.
 //
-//   GET   — list grades with their default global limit
-//   PATCH — update defaults: { updates: [{ grade, global_limit }] } (>0 ints only;
-//           0 means "no loan limit for this grade")
+//   GET   — list grades with their annual and default loan limits
+//   PATCH — update either limit: { updates: [{ grade, annual_limit?, global_limit? }] }
+//           (whole ₦, 0 or more; 0 means "no limit set for this grade")
 //
 // Per-member overrides live on members.global_limit and are set from the
 // member import template's global_limit column (blank = use the grade default).
@@ -22,18 +22,21 @@ export async function GET(request) {
 
   try {
     const supabase = createClient()
-    let selectCols = 'grade, global_limit, category, updated_at'
-    let { data, error } = await supabase
-      .from('grade_limits')
-      .select(selectCols)
-      .order('grade', { ascending: true })
-    if (error) {
-      // Older DBs may not have the category column on grade_limits yet
-      selectCols = 'grade, global_limit, updated_at'
+    // Older DBs may be missing annual_limit or category — fall back a column
+    // set at a time instead of failing the whole editor.
+    const COLUMN_SETS = [
+      'grade, global_limit, annual_limit, category, updated_at',
+      'grade, global_limit, category, updated_at',
+      'grade, global_limit, updated_at',
+    ]
+    let data = null
+    let error = null
+    for (const cols of COLUMN_SETS) {
       ;({ data, error } = await supabase
         .from('grade_limits')
-        .select(selectCols)
+        .select(cols)
         .order('grade', { ascending: true }))
+      if (!error) break
     }
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
@@ -55,19 +58,34 @@ export async function PATCH(request) {
     }
 
     // Validate first — one bad row rejects the whole batch, so the table
-    // never ends up half-updated.
+    // never ends up half-updated. A row may carry the annual limit, the
+    // default loan limit, or both.
     const clean = []
     for (const u of updates) {
       const grade = String(u?.grade || '').trim()
-      const n = Number(u?.global_limit)
       if (!grade) return NextResponse.json({ ok: false, error: 'Every update needs a grade' }, { status: 400 })
-      if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
+      const row = { grade }
+      for (const [key, label] of [
+        ['annual_limit', 'Annual limit'],
+        ['global_limit', 'Default loan limit'],
+      ]) {
+        if (u?.[key] === undefined || u?.[key] === null || u?.[key] === '') continue
+        const n = Number(u[key])
+        if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
+          return NextResponse.json(
+            { ok: false, error: `${label} for "${grade}" must be a whole number of ₦, 0 or more` },
+            { status: 400 }
+          )
+        }
+        row[key] = n
+      }
+      if (Object.keys(row).length === 1) {
         return NextResponse.json(
-          { ok: false, error: `Limit for "${grade}" must be a whole number of ₦, 0 or more` },
+          { ok: false, error: `Update for "${grade}" needs an annual_limit or global_limit` },
           { status: 400 }
         )
       }
-      clean.push({ grade, global_limit: n })
+      clean.push(row)
     }
 
     // Verify every grade actually exists — adding/removing grades stays a
@@ -85,10 +103,11 @@ export async function PATCH(request) {
     }
 
     const updatedAt = new Date().toISOString()
-    for (const { grade, global_limit } of clean) {
+    for (const row of clean) {
+      const { grade, ...values } = row
       const { error: uErr } = await supabase
         .from('grade_limits')
-        .update({ global_limit, updated_at: updatedAt })
+        .update({ ...values, updated_at: updatedAt })
         .eq('grade', grade)
       if (uErr) return NextResponse.json({ ok: false, error: uErr.message }, { status: 500 })
     }
@@ -101,6 +120,8 @@ export async function PATCH(request) {
     // pushes the new limit onto all members carrying that grade.
     const spread = []
     for (const { grade, global_limit } of clean) {
+      // Annual limits are per grade, not per member — nothing to spread.
+      if (global_limit === undefined) continue
       const { data: spreadRows, error: sErr } = await supabase
         .from('members')
         .update({ global_limit })

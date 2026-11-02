@@ -130,7 +130,7 @@ function ExhibitionCartContent() {
         }
       } catch {}
       try {
-        const elig = await fetch(`/api/members/eligibility?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null)
+        const elig = await fetch(`/api/exhibition/eligibility?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null)
         if (!cancelled && elig?.ok) {
           setEligibility({
             savingsEligible: Number(elig.eligibility.savingsEligible || 0),

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/system/exhibition/sweep-pending",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}

@@ -21,7 +21,7 @@ function isMissingTable(error, table) {
 // Per-cycle loan caps (Eligible vs Non-Eligible/Grace by member category) —
 // mirrors the food cycle's food_loan_* columns. Included on GET and writable
 // via PUT so the Exhibition Data page can set them per selected cycle.
-const LOAN_LIMIT_COLS = `exh_loan_eligible_amount_cap_pensioner,exh_loan_eligible_amount_cap_retiree,exh_loan_eligible_amount_cap_active,exh_loan_grace_amount_cap_pensioner,exh_loan_grace_amount_cap_retiree,exh_loan_grace_amount_cap_active,exh_loan_cap_include_interest`
+const LOAN_LIMIT_COLS = `exh_loan_eligible_amount_cap_pensioner,exh_loan_eligible_amount_cap_retiree,exh_loan_eligible_amount_cap_active,exh_loan_grace_amount_cap_pensioner,exh_loan_grace_amount_cap_retiree,exh_loan_grace_amount_cap_active,exh_no_space_junior,exh_no_space_senior,exh_no_space_executive,exh_loan_cap_include_interest`
 
 export async function GET(request) {
   const session = await validateSession(request, 'admin')
@@ -91,9 +91,9 @@ export async function POST(request) {
 
   try {
     const body = await request.json().catch(() => ({}))
-    const branchId = Math.trunc(Number(body.branch_id || 0))
-    if (!Number.isFinite(branchId) || branchId <= 0) return NextResponse.json({ ok: false, error: 'Branch is required' }, { status: 400 })
-
+    // A cycle is org-wide: one season serves every branch, exactly like the
+    // Food and RAM modules. The branch now lives on vendors, products and
+    // orders, so no branch is required here.
     const name = sanitizeString(body.name || '', { maxLength: 255, encodeHtml: false })
     if (!name) return NextResponse.json({ ok: false, error: 'Cycle name is required' }, { status: 400 })
 
@@ -109,13 +109,12 @@ export async function POST(request) {
       await supabase
         .from('exhibition_cycles')
         .update({ status: 'closed' })
-        .eq('branch_id', branchId)
+        .eq('status', 'active')
     }
 
     const { data, error } = await supabase
       .from('exhibition_cycles')
       .insert({
-        branch_id: branchId,
         name,
         code,
         status,
@@ -149,7 +148,7 @@ export async function PATCH(request) {
 
     const makeActive = body.status === 'active' || body.activate === true
     if (makeActive) {
-      await supabase.from('exhibition_cycles').update({ status: 'closed' }).eq('branch_id', cycle.branch_id).neq('id', id)
+      await supabase.from('exhibition_cycles').update({ status: 'closed' }).eq('status', 'active').neq('id', id)
       const { error: upErr } = await supabase.from('exhibition_cycles').update({ status: 'active' }).eq('id', id)
       if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 })
       return NextResponse.json({ ok: true, cycle: { id, status: 'active' } })
@@ -185,15 +184,6 @@ export async function PUT(request) {
     if (!current) return NextResponse.json({ ok: false, error: 'Cycle not found' }, { status: 404 })
 
     const updates = {}
-    // The branch is the delivery location this season serves — editable so the
-    // cycle stays tied to the right branch even after creation.
-    if (body.branch_id !== undefined) {
-      const branchId = Math.trunc(Number(body.branch_id))
-      if (!Number.isFinite(branchId) || branchId <= 0) {
-        return NextResponse.json({ ok: false, error: 'Branch must be a valid id' }, { status: 400 })
-      }
-      updates.branch_id = branchId
-    }
     if (body.name !== undefined) {
       const name = sanitizeString(body.name || '', { maxLength: 255, encodeHtml: false })
       if (!name) return NextResponse.json({ ok: false, error: 'Cycle name cannot be empty' }, { status: 400 })
@@ -223,6 +213,9 @@ export async function PUT(request) {
       'exh_loan_grace_amount_cap_pensioner',
       'exh_loan_grace_amount_cap_retiree',
       'exh_loan_grace_amount_cap_active',
+      'exh_no_space_junior',
+      'exh_no_space_senior',
+      'exh_no_space_executive',
     ]
     for (const key of loanCapKeys) {
       if (body[key] !== undefined) {
@@ -243,11 +236,10 @@ export async function PUT(request) {
     // branch — only one active season per branch at a time.
     const finalStatus = updates.status || current.status
     if (finalStatus === 'active') {
-      const targetBranch = updates.branch_id || current.branch_id
       await supabase
         .from('exhibition_cycles')
         .update({ status: 'closed' })
-        .eq('branch_id', targetBranch)
+        .eq('status', 'active')
         .neq('id', idRes.value)
     }
 

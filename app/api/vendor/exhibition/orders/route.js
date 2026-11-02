@@ -6,7 +6,7 @@ import { getVendorContext } from '../../_session'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const STATUS_FILTERS = ['Pending', 'Approved', 'Delivered', 'Cancelled']
+const STATUS_FILTERS = ['Pending', 'Approved', 'Delivered', 'Confirmed', 'Cancelled']
 
 //   GET /api/vendor/exhibition/orders?status=Approved&scope=pending|done|all&q=&limit=&offset=
 // Paginated list of the vendor's orders with their lines. `scope` narrows to
@@ -33,7 +33,7 @@ export async function GET(req) {
     // Status filter derived from the scope; legacy mode keeps the passed status.
     let statusFilter = null
     if (scope === 'pending') statusFilter = ['Approved']
-    else if (scope === 'done' || scope === 'all') statusFilter = ['Approved', 'Delivered']
+    else if (scope === 'done' || scope === 'all') statusFilter = ['Approved', 'Delivered', 'Confirmed']
     else if (status && STATUS_FILTERS.includes(status)) statusFilter = [status]
     else statusFilter = STATUS_FILTERS.filter((s) => s !== 'Cancelled')
 
@@ -163,7 +163,9 @@ export async function POST(req) {
     if (ordErr) return NextResponse.json({ error: ordErr.message }, { status: 500 })
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     if (order.status === 'Cancelled') return NextResponse.json({ error: 'This order is cancelled' }, { status: 409 })
-    if (order.status === 'Delivered') return NextResponse.json({ error: 'This order is already delivered' }, { status: 409 })
+    if (order.status === 'Delivered' || order.status === 'Confirmed') {
+      return NextResponse.json({ error: 'This order is already delivered' }, { status: 409 })
+    }
     if (order.status !== 'Approved') {
       return NextResponse.json({ error: 'Only approved orders can be marked delivered' }, { status: 409 })
     }

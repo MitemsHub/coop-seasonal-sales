@@ -18,7 +18,7 @@ const naira = (v) =>
     Number(v || 0)
   )
 
-const STATUS_TONE = { Pending: 'warning', Approved: 'info', Delivered: 'success', Cancelled: 'danger' }
+const STATUS_TONE = { Pending: 'warning', Approved: 'info', Delivered: 'success', Confirmed: 'success', Cancelled: 'danger' }
 
 const AUDIT_ICON = {
   'Order placed': { Icon: Package, iconCls: 'text-muted', tileCls: 'bg-subtle' },

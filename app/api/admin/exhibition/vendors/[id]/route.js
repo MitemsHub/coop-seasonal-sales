@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
+import { hashPasscode } from '@/lib/passcodeHash'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -29,7 +30,11 @@ export async function PATCH(request, { params }) {
     if (body.passcode !== undefined) {
       const passcode = sanitizeString(body.passcode || '', { maxLength: 50, encodeHtml: false })
       if (!passcode) return NextResponse.json({ ok: false, error: 'Passcode cannot be empty' }, { status: 400 })
-      updates.passcode = passcode
+      if (passcode.length < 4) {
+        return NextResponse.json({ ok: false, error: 'Passcode must be at least 4 characters' }, { status: 400 })
+      }
+      // Admin-initiated reset: re-hashed like any other passcode change.
+      updates.passcode = await hashPasscode(passcode)
     }
     if (body.status !== undefined && ['active', 'suspended'].includes(body.status)) updates.status = body.status
     if (body.cycle_id !== undefined) {

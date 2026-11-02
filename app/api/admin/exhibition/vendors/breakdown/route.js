@@ -33,7 +33,7 @@ export async function GET(req) {
     // Cycle names for the panel subtitle (fetching separately — orders has no
     // FK to exhibition_cycles via PostgREST in this schema).
     const { data: cycleRows } = cycleIds.length
-      ? await supabase.from('exhibition_cycles').select('id, name, branch_id, branches:branch_id(name)').in('id', cycleIds)
+      ? await supabase.from('exhibition_cycles').select('id, name').in('id', cycleIds)
       : { data: [] }
     const cycleNameMap = new Map((cycleRows || []).map((c) => [Number(c.id), c.name || '']))
     const branchNameByCycle = new Map((cycleRows || []).map((c) => [Number(c.id), c.branches?.name || '']))

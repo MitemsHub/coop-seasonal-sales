@@ -151,12 +151,14 @@ function sortGradeLimits(rows) {
 }
 
 function GradeLimitsSection() {
-  // Live editor for the grade_limits table — the per-grade DEFAULT loan limits
-  // the member import picks up when a member's global_limit cell is blank.
-  // Per-member overrides still come from the template's global_limit column.
+  // Live editor for grade_limits.
+  //   annual_limit — the member's yearly ceiling. The Exhibition lends against
+  //     whatever is left of it (annual limit minus loans already taken).
+  //   global_limit — the per-grade loan ceiling used by Food and the global
+  //     limits, and by the member import when a global_limit cell is blank.
   const [limits, setLimits] = useState([])
-  const [drafts, setDrafts] = useState({}) // grade → edited limit (only dirty rows)
-  const [editing, setEditing] = useState({}) // grade → input open while true
+  const [drafts, setDrafts] = useState({}) // grade → { annual_limit?, global_limit? }
+  const [editing, setEditing] = useState({}) // grade → row open while true
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
@@ -179,13 +181,57 @@ function GradeLimitsSection() {
 
   useEffect(() => { load() }, [load])
 
-  const dirty = Object.keys(drafts).length > 0
+  const dirtyRows = Object.keys(drafts)
+  const dirty = dirtyRows.length > 0
+
+  const setField = (grade, key, value) =>
+    setDrafts((d) => ({ ...d, [grade]: { ...d[grade], [key]: value } }))
+
+  // Clear no-op / invalid edits so only real changes get saved
+  const clearNoOp = (grade, key) => {
+    const current = limits.find((x) => x.grade === grade)
+    setDrafts((d) => {
+      const row = d[grade]
+      if (!row) return d
+      const next = { ...row }
+      const raw = next[key]
+      const n = Number(raw)
+      if (
+        raw === undefined ||
+        raw === '' ||
+        !Number.isFinite(n) ||
+        n < 0 ||
+        !Number.isInteger(n) ||
+        n === Number(current?.[key] ?? 0)
+      ) {
+        delete next[key]
+      }
+      const merged = { ...d }
+      if (Object.keys(next).length) merged[grade] = next
+      else delete merged[grade]
+      return merged
+    })
+  }
 
   const save = async () => {
     setSaving(true)
     setMsg('')
     try {
-      const updates = Object.entries(drafts).map(([grade, v]) => ({ grade, global_limit: Number(v) }))
+      const updates = dirtyRows
+        .map((grade) => {
+          const row = drafts[grade] || {}
+          const u = { grade }
+          if (row.annual_limit !== undefined && row.annual_limit !== '') u.annual_limit = Number(row.annual_limit)
+          if (row.global_limit !== undefined && row.global_limit !== '') u.global_limit = Number(row.global_limit)
+          return u
+        })
+        .filter((u) => Object.keys(u).length > 1)
+      if (!updates.length) {
+        setDrafts({})
+        setMsg('No changes to save')
+        setTimeout(() => setMsg(''), 4000)
+        return
+      }
       const res = await fetch('/api/admin/grade-limits', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -208,7 +254,9 @@ function GradeLimitsSection() {
       <Card.Header>
         <Card.Title>Global limits</Card.Title>
         <Card.Description>
-          Default loan limit per grade (₦). Saving applies immediately to every member of the grade — their Global Limit and loan eligibility update together. New member imports with a blank global_limit column also use these.
+          Annual limit is the member's yearly ceiling — the Exhibition lends against what is left of it after
+          loans already taken. Default loan limit stays the per-grade ceiling for Food and the global limits, and
+          new member imports with a blank global_limit use it.
         </Card.Description>
       </Card.Header>
       <Card.Body className="space-y-3">
@@ -222,22 +270,19 @@ function GradeLimitsSection() {
           <>
             <div className="grid grid-cols-[1fr_auto] gap-2 rounded-lg bg-subtle px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted">
               <span>Grade</span>
-              <span>Default limit (₦)</span>
+              <div className="flex items-center gap-1.5">
+                <span className="w-28 text-right sm:w-36">Annual (₦)</span>
+                <span className="w-28 text-right sm:w-36">Loan (₦)</span>
+                <span className="w-8" aria-hidden="true" />
+              </div>
             </div>
             <div className="divide-y divide-line max-h-96 overflow-y-auto rounded-xl border border-line">
               {limits.map((g) => {
-                const draft = drafts[g.grade]
-                const changed = draft != null && Number(draft) !== Number(g.global_limit ?? 0)
+                const rowDraft = drafts[g.grade] || {}
+                const annualChanged = rowDraft.annual_limit != null && Number(rowDraft.annual_limit) !== Number(g.annual_limit ?? 0)
+                const loanChanged = rowDraft.global_limit != null && Number(rowDraft.global_limit) !== Number(g.global_limit ?? 0)
+                const changed = annualChanged || loanChanged
                 const isOpen = Boolean(editing[g.grade])
-                // Clear no-op edits so only real changes get saved
-                const clearNoOp = () =>
-                  setDrafts((d) => {
-                    const next = { ...d }
-                    const cur = Number(next[g.grade])
-                    if (!Number.isFinite(cur) || cur < 0 || !Number.isInteger(cur)) return next
-                    if (cur === Number(g.global_limit ?? 0)) delete next[g.grade]
-                    return next
-                  })
                 return (
                   <div
                     key={g.grade}
@@ -251,15 +296,27 @@ function GradeLimitsSection() {
                           type="number"
                           min="0"
                           step="1"
-                          className="w-44 text-right"
-                          value={draft != null ? draft : (g.global_limit ?? 0)}
-                          onChange={(e) => setDrafts((d) => ({ ...d, [g.grade]: e.target.value }))}
-                          onBlur={clearNoOp}
+                          className="w-28 text-right sm:w-36"
+                          aria-label={`${g.grade} annual limit`}
+                          value={rowDraft.annual_limit != null ? rowDraft.annual_limit : (g.annual_limit ?? 0)}
+                          onChange={(e) => setField(g.grade, 'annual_limit', e.target.value)}
+                          onBlur={() => clearNoOp(g.grade, 'annual_limit')}
+                        />
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          className="w-28 text-right sm:w-36"
+                          aria-label={`${g.grade} default loan limit`}
+                          value={rowDraft.global_limit != null ? rowDraft.global_limit : (g.global_limit ?? 0)}
+                          onChange={(e) => setField(g.grade, 'global_limit', e.target.value)}
+                          onBlur={() => clearNoOp(g.grade, 'global_limit')}
                         />
                         <button
                           type="button"
                           onClick={() => {
-                            clearNoOp()
+                            clearNoOp(g.grade, 'annual_limit')
+                            clearNoOp(g.grade, 'global_limit')
                             setEditing((e) => ({ ...e, [g.grade]: false }))
                           }}
                           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-brand hover:bg-subtle"
@@ -271,15 +328,18 @@ function GradeLimitsSection() {
                       </div>
                     ) : (
                       <div className="flex items-center gap-1.5">
-                        <span className="w-44 text-right text-sm tabular-nums text-fg">
-                          {Number(changed ? draft : g.global_limit ?? 0).toLocaleString()}
+                        <span className="w-28 text-right text-sm tabular-nums text-fg sm:w-36">
+                          {Number(annualChanged ? rowDraft.annual_limit : g.annual_limit ?? 0).toLocaleString()}
+                        </span>
+                        <span className="w-28 text-right text-sm tabular-nums text-fg sm:w-36">
+                          {Number(loanChanged ? rowDraft.global_limit : g.global_limit ?? 0).toLocaleString()}
                         </span>
                         <button
                           type="button"
                           onClick={() => setEditing((e) => ({ ...e, [g.grade]: true }))}
                           className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-subtle hover:text-fg"
-                          aria-label={`Edit ${g.grade}`}
-                          title="Edit limit"
+                          aria-label={`Edit limits for ${g.grade}`}
+                          title="Edit limits"
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
@@ -294,7 +354,7 @@ function GradeLimitsSection() {
             </div>
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <p className="text-xs text-muted">
-                {dirty ? `${Object.keys(drafts).length} change${Object.keys(drafts).length === 1 ? '' : 's'} pending` : 'All graded limits saved'}
+                {dirty ? `${dirtyRows.length} grade${dirtyRows.length === 1 ? '' : 's'} with pending changes` : 'All graded limits saved'}
               </p>
               <div className="flex gap-2">
                 <Button variant="secondary" leftIcon={RefreshCw} onClick={load} loading={loading} disabled={loading}>

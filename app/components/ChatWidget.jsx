@@ -10,6 +10,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { MessageCircle, X, Send, Minus, Paperclip } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { createClient } from '../../lib/supabaseClient'
+import { shrinkImageForUpload } from '../../lib/imageShrink'
 
 export default function ChatWidget() {
   const { user } = useAuth()
@@ -215,14 +216,14 @@ export default function ChatWidget() {
 
   // ── Upload file ──
   const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const pick = e.target.files?.[0]
+    if (!pick) return
     e.target.value = '' // reset input
 
     setUploading(true)
     try {
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', await shrinkImageForUpload(pick), pick.name || 'attachment')
       formData.append('sender_id', senderId)
 
       const res = await fetch('/api/chat/upload', { method: 'POST', body: formData })

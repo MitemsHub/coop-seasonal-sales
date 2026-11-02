@@ -13,6 +13,28 @@ import {
 // Rate limiting store (in production, use Redis or similar)
 const rateLimitStore = new Map()
 
+// Every distinct client IP adds a key here. Without eviction a long-lived Node
+// process grows one entry per IP for as long as it runs, so stale keys are
+// swept periodically and the store refuses to grow past a hard cap.
+const RATE_LIMIT_MAX_KEYS = 10000
+// All callers below use a 60 s window; sweeping at 2x that only removes keys
+// whose newest request is already outside every window.
+const RATE_LIMIT_SWEEP_WINDOW_MS = 120000
+let lastRateLimitSweep = 0
+
+function sweepRateLimitStore(now) {
+  if (now - lastRateLimitSweep < 5000 && rateLimitStore.size <= RATE_LIMIT_MAX_KEYS) return
+  lastRateLimitSweep = now
+  for (const [key, timestamps] of rateLimitStore) {
+    const newest = timestamps.length ? timestamps[timestamps.length - 1] : 0
+    if (newest <= now - RATE_LIMIT_SWEEP_WINDOW_MS) rateLimitStore.delete(key)
+  }
+  // Safety valve: a flood of unique IPs inside one sweep window must not be
+  // able to exhaust memory. Clearing fails open (allows) rather than locking
+  // every user out.
+  if (rateLimitStore.size > RATE_LIMIT_MAX_KEYS) rateLimitStore.clear()
+}
+
 // Security headers configuration
 const isProd = process.env.NODE_ENV === 'production'
 // Allow the browser-side Supabase client to reach a local PostgREST gateway
@@ -57,6 +79,8 @@ function probeHeaders(request) {
 function checkRateLimit(key, maxRequests, windowMs) {
   const now = Date.now()
   const windowStart = now - windowMs
+
+  sweepRateLimitStore(now)
   
   if (!rateLimitStore.has(key)) {
     rateLimitStore.set(key, [])

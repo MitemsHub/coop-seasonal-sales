@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
+import { hashPasscode } from '@/lib/passcodeHash'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -30,7 +31,7 @@ export async function GET(request) {
     const supabase = createClient()
     let query = supabase
       .from('exhibition_vendors')
-      .select('id, cycle_id, branch_id, name, code, passcode, phone, address, status, created_at, branches:branch_id(name, code), cycles:cycle_id(name, code)')
+      .select('id, cycle_id, branch_id, name, code, phone, address, status, created_at, branches:branch_id(name, code), cycles:cycle_id(name, code)')
       .order('name')
 
     if (cycleId > 0) query = query.eq('cycle_id', cycleId)
@@ -79,6 +80,9 @@ export async function POST(request) {
 
     const passcode = sanitizeString(body.passcode || '', { maxLength: 50, encodeHtml: false })
     if (!passcode) return NextResponse.json({ ok: false, error: 'Passcode is required' }, { status: 400 })
+    if (passcode.length < 4) {
+      return NextResponse.json({ ok: false, error: 'Passcode must be at least 4 characters' }, { status: 400 })
+    }
 
     const phone = sanitizeString(body.phone || '', { maxLength: 30, encodeHtml: false })
     const address = sanitizeString(body.address || '', { maxLength: 300, encodeHtml: false })
@@ -91,7 +95,7 @@ export async function POST(request) {
         branch_id: branchId,
         name,
         code,
-        passcode,
+        passcode: await hashPasscode(passcode),
         phone,
         address,
         status: body.status === 'suspended' ? 'suspended' : 'active',

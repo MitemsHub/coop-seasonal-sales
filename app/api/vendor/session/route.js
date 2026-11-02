@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { sign, verify } from '@/lib/signingEdge'
-import crypto from 'crypto'
+import { hashPasscode, verifyPasscode } from '@/lib/passcodeHash'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -55,17 +55,6 @@ function checkBruteForce(ip) {
   return { allowed: true }
 }
 
-// Timing-safe comparison to prevent timing attacks
-function timingSafeEqual(a, b) {
-  if (!a || !b) return false
-  const bufA = Buffer.from(a, 'utf8')
-  const bufB = Buffer.from(b, 'utf8')
-  if (bufA.length !== bufB.length) {
-    crypto.timingSafeEqual(bufA, Buffer.alloc(bufA.length))
-    return false
-  }
-  return crypto.timingSafeEqual(bufA, bufB)
-}
 
 export async function GET(req) {
   try {
@@ -166,9 +155,18 @@ export async function POST(req) {
       console.warn(`Failed vendor login attempt for code=${code} from IP: ${ip}`)
       return NextResponse.json({ ok: false, error: 'Unknown vendor code. Please select your hub and try again.' }, { status: 401 })
     }
-    if (!timingSafeEqual(passcode, String(vendor.passcode || ''))) {
+    const passcodeCheck = await verifyPasscode(passcode, String(vendor.passcode || ''))
+    if (!passcodeCheck.ok) {
       console.warn(`Failed vendor login attempt for code=${code} from IP: ${ip}`)
       return NextResponse.json({ ok: false, error: 'Incorrect passcode. Please check it and try again.' }, { status: 401 })
+    }
+    // Legacy rows still hold the passcode in plaintext — replace it the first
+    // time the vendor signs in successfully so no plaintext credential survives.
+    if (passcodeCheck.needsRehash) {
+      await supabase
+        .from('exhibition_vendors')
+        .update({ passcode: await hashPasscode(passcode) })
+        .eq('id', vendor.id)
     }
     if (vendor.status !== 'active') {
       return NextResponse.json({ ok: false, error: 'This vendor account is not active. Please contact your administrator.' }, { status: 403 })

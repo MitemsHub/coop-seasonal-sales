@@ -37,7 +37,6 @@ function fmtDate(iso) {
 // in one client bundle — the dev-server warned when this was not exported).
 export function ExhibitionCyclesContent() {
   const [cycles, setCycles] = useState([])
-  const [branches, setBranches] = useState([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
@@ -50,13 +49,9 @@ export function ExhibitionCyclesContent() {
     setLoading(true)
     setMsg(null)
     try {
-      const [c, b] = await Promise.all([
-        fetch('/api/admin/exhibition/cycles', { cache: 'no-store' }).then((r) => r.json()),
-        fetch('/api/branches/list').then((r) => r.json()).catch(() => null),
-      ])
+      const c = await fetch('/api/admin/exhibition/cycles', { cache: 'no-store' }).then((r) => r.json())
       if (c?.ok) setCycles(c.cycles || [])
       else setMsg({ type: 'error', text: c?.error || 'Failed to load cycles' })
-      if (b?.ok) setBranches(b.branches || [])
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
     } finally {
@@ -75,7 +70,6 @@ export function ExhibitionCyclesContent() {
 
   const openEdit = (c) => {
     setForm({
-      branch_id: c.branch_id || '',
       name: c.name || '',
       code: c.code || '',
       status: c.status || 'draft',
@@ -95,7 +89,6 @@ export function ExhibitionCyclesContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          branch_id: Number(form.branch_id),
           name: form.name,
           code: form.code,
           status: form.status,
@@ -125,7 +118,6 @@ export function ExhibitionCyclesContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: modal.id,
-          branch_id: Number(form.branch_id),
           name: form.name,
           code: form.code,
           status: form.status,
@@ -190,7 +182,7 @@ export function ExhibitionCyclesContent() {
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-h2 font-bold tracking-tight text-fg">Exhibition Cycles</h1>
-            <p className="mt-0.5 text-sm text-muted">Each branch runs its own exhibition season with its own vendors.</p>
+            <p className="mt-0.5 text-sm text-muted">One exhibition season serves every branch — vendors, products and orders roll up per branch.</p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" leftIcon={RefreshCw} onClick={load} disabled={loading || busy}>
@@ -217,14 +209,13 @@ export function ExhibitionCyclesContent() {
             </div>
           ) : cycles.length === 0 ? (
             <div className="rounded-xl bg-subtle px-4 py-10 text-center text-sm text-muted">
-              No exhibition cycles yet. Create the first one to open a branch's exhibition.
+              No exhibition cycles yet. Create one to open the exhibition for every branch.
             </div>
           ) : (
             <Table>
               <THead>
                 <TR>
                   <TH>Cycle</TH>
-                  <TH>Branch</TH>
                   <TH>Status</TH>
                   <TH className="text-right">Vendors</TH>
                   <TH className="text-right">Products</TH>
@@ -241,7 +232,6 @@ export function ExhibitionCyclesContent() {
                       <div className="font-medium text-fg">{c.name}</div>
                       <div className="text-xs text-muted">{c.code}</div>
                     </TD>
-                    <TD className="text-muted">{c.branch_name || `#${c.branch_id}`}</TD>
                     <TD>
                       <Badge tone={STATUS_STYLES[c.status] || 'neutral'} variant="subtle">
                         {c.status}
@@ -290,23 +280,7 @@ export function ExhibitionCyclesContent() {
           title={modal === 'create' ? 'New exhibition cycle' : 'Edit cycle'}
         >
           <div className="space-y-4">
-            <div>
-              <Label htmlFor="exh-cycle-branch">Branch (delivery location)</Label>
-              <Select
-                id="exh-cycle-branch"
-                value={form.branch_id || ''}
-                onChange={(e) => setForm({ ...form, branch_id: e.target.value })}
-                className="w-full"
-              >
-                <option value="">Select branch</option>
-                {branches.map((b) => (
-                  <option key={b.branch_id || b.id || b.code} value={b.branch_id || b.id || b.code}>
-                    {b.name} ({b.code})
-                  </option>
-                ))}
-              </Select>
-              <p className="mt-1 text-xs text-muted">This exhibition season serves one branch — members of that branch shop and pick up here.</p>
-            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="exh-cycle-name">Cycle name</Label>
