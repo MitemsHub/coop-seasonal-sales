@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
+import { reserveSkus } from '@/lib/skuFormat'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -76,13 +77,29 @@ export async function POST(request) {
 
     const name = sanitizeString(body.name || '', { maxLength: 255, encodeHtml: false })
     if (!name) return NextResponse.json({ ok: false, error: 'Product name is required' }, { status: 400 })
-    const sku = sanitizeString(body.sku || '', { maxLength: 60, encodeHtml: false }).toUpperCase()
-    if (!sku) return NextResponse.json({ ok: false, error: 'SKU is required' }, { status: 400 })
-
     const vendorPrice = Math.max(0, Math.trunc(Number(body.vendor_price || 0)))
     if (vendorPrice <= 0) return NextResponse.json({ ok: false, error: 'Price must be greater than zero' }, { status: 400 })
 
     const supabase = createClient()
+    const { data: vendorRow } = await supabase
+      .from('exhibition_vendors')
+      .select('id, code')
+      .eq('id', vendorId)
+      .maybeSingle()
+    if (!vendorRow) return NextResponse.json({ ok: false, error: 'Vendor not found' }, { status: 404 })
+
+    // Generated SKU, never typed: <vendor><name><sequence>.
+    const { data: existingSkus } = await supabase
+      .from('exhibition_products')
+      .select('sku')
+      .eq('cycle_id', cycleId)
+      .eq('vendor_id', vendorId)
+    const [sku] = reserveSkus({
+      vendorCode: vendorRow.code,
+      names: [name],
+      existingSkus: (existingSkus || []).map((row) => row.sku),
+    })
+
     const { data, error } = await supabase
       .from('exhibition_products')
       .insert({

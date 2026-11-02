@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Package, Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import { Package, Pencil, Plus, Search, Trash2, Upload } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
@@ -12,14 +12,13 @@ import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
 import ImageResizeUpload from '../../components/ImageResizeUpload'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
+import ProductImportModal from '../../components/ProductImportModal'
 
 const fmtNaira = (n) => `NGN ${Number(n || 0).toLocaleString()}`
 
 const emptyForm = () => ({
   name: '',
-  sku: '',
   unit: 'each',
-  category_id: '',
   vendor_price: '',
   admin_markup: '',
   qty: '',
@@ -29,7 +28,7 @@ const emptyForm = () => ({
 
 export default function VendorProductsPage() {
   const [products, setProducts] = useState(null) // null = loading
-  const [categories, setCategories] = useState([])
+  const [importOpen, setImportOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [modalOpen, setModalOpen] = useState(false)
@@ -50,10 +49,6 @@ export default function VendorProductsPage() {
 
   useEffect(() => {
     load()
-    fetch('/api/vendor/exhibition/categories', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((j) => j.ok && setCategories(j.categories))
-      .catch(() => null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load])
 
@@ -68,9 +63,7 @@ export default function VendorProductsPage() {
     setEditing(p)
     setForm({
       name: p.name,
-      sku: p.sku,
       unit: p.unit || 'each',
-      category_id: p.category_id ? String(p.category_id) : '',
       vendor_price: String(p.vendor_price ?? ''),
       admin_markup: p.admin_markup === null || p.admin_markup === undefined ? '' : String(p.admin_markup),
       qty: p.qty === null || p.qty === undefined ? '' : String(p.qty),
@@ -87,12 +80,10 @@ export default function VendorProductsPage() {
     try {
       const payload = {
         name: form.name.trim(),
-        sku: form.sku.trim(),
         unit: form.unit.trim() || 'each',
         vendor_price: Number(form.vendor_price || 0),
         admin_markup: Number(form.admin_markup || 0),
         qty: form.qty === '' ? null : Number(form.qty),
-        category_id: form.category_id ? Number(form.category_id) : null,
         image_url: form.image_url,
         status: form.status,
       }
@@ -176,9 +167,14 @@ export default function VendorProductsPage() {
           <h1 className="text-h1 font-bold tracking-tight text-fg">Products</h1>
           <p className="mt-1 text-sm text-muted">Your stand&apos;s catalog. Prices shown are what members pay before any negotiated deal.</p>
         </div>
-        <Button variant="brand" leftIcon={Plus} onClick={openCreate}>
-          Add product
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="secondary" leftIcon={Upload} onClick={() => setImportOpen(true)}>
+            Import list
+          </Button>
+          <Button variant="brand" leftIcon={Plus} onClick={openCreate}>
+            Add product
+          </Button>
+        </div>
       </div>
 
       {!!msg && <div className="mb-4 rounded-xl border border-danger-border bg-danger-bg px-4 py-3 text-sm text-danger-fg">{msg}</div>}
@@ -240,7 +236,7 @@ export default function VendorProductsPage() {
                     </Badge>
                   </div>
                   <p className="mt-0.5 text-chips text-muted">
-                    {p.category_name || 'Uncategorised'} · {p.qty === null ? 'Unlimited qty' : `${p.qty} in stock`}
+                    {p.unit || 'each'} · {p.qty === null ? 'Unlimited qty' : `${p.qty} in stock`}
                   </p>
                 </div>
                 <div className="flex items-center gap-4 sm:shrink-0">
@@ -327,12 +323,14 @@ export default function VendorProductsPage() {
             <Input id="p-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Handwoven Ankara Tote" />
           </div>
           <div>
-            <Label htmlFor="p-sku">SKU</Label>
-            <Input id="p-sku" value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value.toUpperCase() })} placeholder="e.g. ANK-TOTE-01" disabled={!!editing} />
-          </div>
-          <div>
             <Label htmlFor="p-unit">Unit</Label>
             <Input id="p-unit" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="each, pair, bag…" />
+          </div>
+          <div>
+            <Label>SKU</Label>
+            <p className="rounded-lg border border-line-subtle bg-subtle px-3 py-2 font-mono text-xs text-muted">
+              {editing ? editing.sku : 'Generated when you save — e.g. VND001-TOM-001'}
+            </p>
           </div>
           <div>
             <Label htmlFor="p-price">Price (₦)</Label>
@@ -350,15 +348,6 @@ export default function VendorProductsPage() {
           <div>
             <Label htmlFor="p-qty">Quantity in stock</Label>
             <Input id="p-qty" type="number" min="0" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} placeholder="Leave empty for unlimited" />
-          </div>
-          <div>
-            <Label htmlFor="p-cat">Category</Label>
-            <Select id="p-cat" value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
-              <option value="">Uncategorised</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </Select>
           </div>
           <div>
             <Label htmlFor="p-status">Status</Label>
@@ -388,6 +377,13 @@ export default function VendorProductsPage() {
           : `Delete "${confirmAction?.product?.name}"? This cannot be undone.`}
         confirmLabel={confirmAction?.type === 'archive' ? 'Archive' : 'Delete'}
         variant={confirmAction?.type === 'archive' ? 'secondary' : 'danger'}
+      />
+
+      <ProductImportModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        endpoint="/api/vendor/exhibition/products/import"
+        onDone={load}
       />
     </div>
   )

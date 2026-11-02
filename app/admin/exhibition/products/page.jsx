@@ -6,7 +6,7 @@
 // admin markup, quantities, status, and archive (delete is blocked for
 // products on orders — archive instead).
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Archive, ImageOff, Package, Pencil, Plus, RefreshCw, Search, Store, Trash2 } from 'lucide-react'
+import { Archive, ImageOff, Package, Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
@@ -18,6 +18,7 @@ import Select from '../../../components/ui/Select'
 import DraggableModal from '../../../components/DraggableModal'
 import Skeleton from '../../../components/ui/Skeleton'
 import ConfirmDialog from '../../../components/ui/ConfirmDialog'
+import ProductImportModal from '../../../components/ProductImportModal'
 
 const naira = (v) =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(
@@ -30,7 +31,6 @@ export default function ExhibitionProductsPage() {
   const [products, setProducts] = useState([])
   const [cycles, setCycles] = useState([])
   const [vendors, setVendors] = useState([])
-  const [categories, setCategories] = useState([])
   const [cycleFilter, setCycleFilter] = useState('')
   const [vendorFilter, setVendorFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -39,6 +39,7 @@ export default function ExhibitionProductsPage() {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
   const [modal, setModal] = useState(null) // 'create' | product object (edit)
+  const [importOpen, setImportOpen] = useState(false)
   const [form, setForm] = useState({})
 
   const load = useCallback(async () => {
@@ -50,17 +51,15 @@ export default function ExhibitionProductsPage() {
       if (vendorFilter) params.set('vendor_id', vendorFilter)
       if (statusFilter) params.set('status', statusFilter)
       if (term.trim()) params.set('q', term.trim())
-      const [p, c, v, cat] = await Promise.all([
+      const [p, c, v] = await Promise.all([
         fetch(`/api/admin/exhibition/products?${params}`, { cache: 'no-store' }).then((r) => r.json()),
         fetch('/api/admin/exhibition/cycles', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
         fetch('/api/admin/exhibition/vendors', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
-        fetch('/api/admin/exhibition/categories', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
       ])
       if (p?.ok) setProducts(p.products || [])
       else setMsg({ type: 'error', text: p?.error || 'Failed to load products' })
       if (c?.ok) setCycles(c.cycles || [])
       if (v?.ok) setVendors(v.vendors || [])
-      if (cat?.ok) setCategories(cat.categories || [])
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
     } finally {
@@ -111,9 +110,7 @@ export default function ExhibitionProductsPage() {
           cycle_id: Number(form.cycle_id),
           vendor_id: Number(form.vendor_id),
           branch_id: Number(form.branch_id),
-          category_id: form.category_id ? Number(form.category_id) : null,
           name: form.name,
-          sku: form.sku,
           unit: form.unit,
           vendor_price: Number(form.vendor_price),
           admin_markup: Number(form.admin_markup || 0),
@@ -231,6 +228,9 @@ export default function ExhibitionProductsPage() {
             <Button variant="ghost" size="sm" leftIcon={RefreshCw} onClick={load} disabled={loading || busy}>
               Refresh
             </Button>
+            <Button size="sm" variant="secondary" leftIcon={Upload} onClick={() => setImportOpen(true)}>
+              Import list
+            </Button>
             <Button size="sm" leftIcon={Plus} onClick={openCreate}>
               New Product
             </Button>
@@ -295,7 +295,6 @@ export default function ExhibitionProductsPage() {
                 <TR>
                   <TH>Product</TH>
                   <TH>Vendor</TH>
-                  <TH>Category</TH>
                   <TH className="text-right">Vendor price</TH>
                   <TH className="text-right">Markup</TH>
                   <TH className="text-right">Final</TH>
@@ -324,7 +323,6 @@ export default function ExhibitionProductsPage() {
                       </div>
                     </TD>
                     <TD className="text-muted">{p.vendor_name || `#${p.vendor_id}`}</TD>
-                    <TD className="text-muted">{p.category_name || '—'}</TD>
                     <TD className="text-right tabular-nums">{naira(p.vendor_price)}</TD>
                     <TD className="text-right tabular-nums text-muted">{p.admin_markup ? `+${naira(p.admin_markup)}` : '—'}</TD>
                     <TD className="text-right font-medium tabular-nums text-fg">{naira(p.final_price)}</TD>
@@ -388,8 +386,10 @@ export default function ExhibitionProductsPage() {
                 <Input id="exh-p-name" value={form.name || ''} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Premium rice 50kg" />
               </div>
               <div>
-                <Label htmlFor="exh-p-sku">SKU</Label>
-                <Input id="exh-p-sku" value={form.sku || ''} onChange={(e) => setForm({ ...form, sku: e.target.value.toUpperCase() })} placeholder="e.g. RICE-50" disabled={modal !== 'create'} />
+                <Label>SKU</Label>
+                <p className="rounded-lg border border-line-subtle bg-subtle px-3 py-2 font-mono text-xs text-muted">
+                  {modal === 'create' ? 'Generated automatically' : modal?.sku || '—'}
+                </p>
               </div>
             </div>
             <div className="grid grid-cols-3 gap-3">
@@ -406,20 +406,9 @@ export default function ExhibitionProductsPage() {
                 <Input id="exh-p-qty" type="number" value={form.qty ?? ''} onChange={(e) => setForm({ ...form, qty: e.target.value })} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="exh-p-cat">Category</Label>
-                <Select id="exh-p-cat" value={form.category_id || ''} onChange={(e) => setForm({ ...form, category_id: e.target.value })} className="w-full">
-                  <option value="">No category</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="exh-p-unit">Unit</Label>
-                <Input id="exh-p-unit" value={form.unit || 'each'} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="each / kg / bag" />
-              </div>
+            <div>
+              <Label htmlFor="exh-p-unit">Unit</Label>
+              <Input id="exh-p-unit" value={form.unit || 'each'} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="each / kg / bag" />
             </div>
             {modal === 'create' && form.branch_id && (
               <div className="rounded-lg bg-subtle px-3 py-2 text-xs text-muted">
@@ -443,6 +432,16 @@ export default function ExhibitionProductsPage() {
           message={`Delete "${confirmTarget?.name}"? This cannot be undone.`}
           confirmLabel="Delete"
           variant="danger"
+        />
+
+        <ProductImportModal
+          open={importOpen}
+          onClose={() => setImportOpen(false)}
+          endpoint="/api/admin/exhibition/products/import"
+          cycles={cycles}
+          vendors={vendors}
+          requireTarget
+          onDone={load}
         />
       </div>
     </ProtectedRoute>

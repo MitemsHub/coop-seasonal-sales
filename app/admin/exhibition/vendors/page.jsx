@@ -4,7 +4,7 @@
 // Vendor accounts for the exhibition — admin creates them (code + passcode),
 // vendors sign into /vendor with those credentials. Suspend, edit and delete.
 import { useCallback, useEffect, useState } from 'react'
-import { Pencil, Plus, RefreshCw, Search, Store, Trash2 } from 'lucide-react'
+import { Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
@@ -16,6 +16,7 @@ import Select from '../../../components/ui/Select'
 import DraggableModal from '../../../components/DraggableModal'
 import Skeleton from '../../../components/ui/Skeleton'
 import ConfirmDialog from '../../../components/ui/ConfirmDialog'
+import VendorImportModal from '../../../components/VendorImportModal'
 
 function fmtDate(iso) {
   if (!iso) return '—'
@@ -36,6 +37,7 @@ export default function ExhibitionVendorsPage() {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
   const [modal, setModal] = useState(null) // 'create' | vendor object (edit)
+  const [importOpen, setImportOpen] = useState(false)
   const [form, setForm] = useState({})
 
   const load = useCallback(async () => {
@@ -190,6 +192,9 @@ export default function ExhibitionVendorsPage() {
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" leftIcon={RefreshCw} onClick={load} disabled={loading || busy}>
               Refresh
+            </Button>
+            <Button size="sm" variant="secondary" leftIcon={Upload} onClick={() => setImportOpen(true)}>
+              Import vendors
             </Button>
             <Button size="sm" leftIcon={Plus} onClick={openCreate}>
               New Vendor
@@ -349,6 +354,14 @@ export default function ExhibitionVendorsPage() {
           message={`Delete vendor "${confirmTarget?.name}"? This cannot be undone.`}
           confirmLabel="Delete"
           variant="danger"
+        />
+
+        <VendorImportModal
+          open={importOpen}
+          onClose={() => setImportOpen(false)}
+          cycles={cycles}
+          branches={branches}
+          onDone={load}
         />
       </div>
     </ProtectedRoute>

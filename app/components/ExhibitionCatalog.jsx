@@ -37,6 +37,13 @@ export default function ExhibitionCatalog({
   const vendors = useMemo(() => catalog?.vendors || [], [catalog])
   const categories = useMemo(() => catalog?.categories || [], [catalog])
 
+  // Categories are optional now: if no product on the shelf carries one, the
+  // chip row is dead weight, so the shop shows the stands and search only.
+  const categoriesWithProducts = useMemo(() => {
+    const used = new Set(products.map((p) => p.category_id).filter(Boolean))
+    return categories.filter((c) => used.has(c.id))
+  }, [categories, products])
+
   const filtered = useMemo(() => {
     return products.filter((p) => {
       if (categoryId && p.category_id !== categoryId) return false
@@ -90,7 +97,8 @@ export default function ExhibitionCatalog({
         )}
       </div>
 
-      {/* Category chips */}
+      {/* Category chips — only when products actually carry a category */}
+      {categoriesWithProducts.length > 0 && (
       <div className="mb-2 flex flex-wrap items-center gap-1.5">
         <span className="mr-1 inline-flex items-center gap-1 text-chips font-medium uppercase tracking-wider text-muted">
           <Tag className="h-3 w-3" strokeWidth={2.2} />
@@ -106,7 +114,7 @@ export default function ExhibitionCatalog({
         >
           All
         </button>
-        {categories.map((c) => (
+        {categoriesWithProducts.map((c) => (
           <button
             key={c.id}
             type="button"
@@ -120,6 +128,7 @@ export default function ExhibitionCatalog({
           </button>
         ))}
       </div>
+      )}
 
       {/* Vendor hub selector — a searchable combobox so the filter stays
           usable no matter how many stands the branch has. */}

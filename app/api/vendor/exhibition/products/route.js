@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { getVendorContext } from '../../_session'
+import { reserveSkus } from '@/lib/skuFormat'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -48,7 +49,6 @@ export async function POST(req) {
 
     const body = await req.json().catch(() => ({}))
     const name = String(body?.name || '').trim()
-    const sku = String(body?.sku || '').trim().toUpperCase()
     const unit = String(body?.unit || '').trim() || 'each'
     const vendorPrice = Math.max(0, Number(body?.vendor_price || 0))
     // Vendors set their own markup (₦ on top of their price); the admin can
@@ -59,9 +59,21 @@ export async function POST(req) {
     const imageUrl = String(body?.image_url || '').trim()
     const status = body?.status === 'draft' ? 'draft' : 'active'
 
-    if (!name || !sku) return NextResponse.json({ error: 'Product name and SKU are required' }, { status: 400 })
+    if (!name) return NextResponse.json({ error: 'Product name is required' }, { status: 400 })
     if (vendorPrice <= 0) return NextResponse.json({ error: 'Price must be greater than zero' }, { status: 400 })
     if (!ctx.cycle_id) return NextResponse.json({ error: 'No active exhibition cycle for this vendor' }, { status: 400 })
+
+    // The SKU is generated, never typed: <vendor><name><sequence>.
+    const { data: existingSkus } = await supabase
+      .from('exhibition_products')
+      .select('sku')
+      .eq('cycle_id', ctx.cycle_id)
+      .eq('vendor_id', ctx.vendor_id)
+    const [sku] = reserveSkus({
+      vendorCode: ctx.vendor_code,
+      names: [name],
+      existingSkus: (existingSkus || []).map((row) => row.sku),
+    })
 
     const { data, error } = await supabase
       .from('exhibition_products')
