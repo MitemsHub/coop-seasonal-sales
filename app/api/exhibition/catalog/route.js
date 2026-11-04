@@ -165,6 +165,22 @@ export async function GET(req) {
     const products = allProducts.filter((p) => Number(p.branch_id) === selectedBranchId)
     const productIds = products.map((p) => p.id)
 
+    // Units other members are holding in their carts are not for sale. The
+    // catalogue advertises what is actually left, not the raw shelf count.
+    const { data: holdRows } = productIds.length
+      ? await supabase
+          .from('exhibition_stock_holds')
+          .select('product_id, qty')
+          .in('product_id', productIds)
+          .gt('expires_at', new Date().toISOString())
+          .neq('member_id', memberId)
+      : { data: [] }
+    const heldByOthers = new Map()
+    for (const h of holdRows || []) {
+      const pid = Number(h.product_id)
+      heldByOthers.set(pid, (heldByOthers.get(pid) || 0) + Number(h.qty || 0))
+    }
+
     // Per-member negotiated prices for this member's products (the person who
     // beats a price gets their own price — everyone else sees the catalog).
     let negotiated = new Map()
@@ -195,7 +211,7 @@ export async function GET(req) {
         final_price: base,
         negotiated: !!neg,
         negotiated_note: neg?.note || '',
-        qty: p.qty === null ? null : Number(p.qty),
+        qty: p.qty === null ? null : Math.max(0, Number(p.qty) - (heldByOthers.get(Number(p.id)) || 0)),
         image_url: p.image_url || '',
       }
     })

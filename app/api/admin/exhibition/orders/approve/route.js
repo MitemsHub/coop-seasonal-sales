@@ -30,7 +30,10 @@ export async function POST(req) {
     if (!ids.length) return NextResponse.json({ ok: false, error: 'Invalid order id(s)' }, { status: 400 })
 
     const supabase = createClient()
-    const { data: rows, error: selErr } = await supabase.from('exhibition_orders').select('id, status, cycle_id').in('id', ids)
+    const { data: rows, error: selErr } = await supabase
+      .from('exhibition_orders')
+      .select('id, order_id, member_id, status, cycle_id')
+      .in('id', ids)
     if (selErr) return NextResponse.json({ ok: false, error: selErr.message }, { status: 500 })
 
     const byId = new Map((rows || []).map((r) => [Number(r.id), r]))
@@ -76,6 +79,35 @@ export async function POST(req) {
       .in('id', toApproveFinal)
       .eq('status', 'Pending')
     if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 })
+
+    // An approved order is cleared for collection: stamp the ready time once
+    // and tell the member, so "where is my order?" is answered by the order
+    // page instead of a phone call.
+    const byIdFinal = new Map((rows || []).map((r) => [Number(r.id), r]))
+    await supabase
+      .from('exhibition_orders')
+      .update({ ready_at: now })
+      .in('id', toApproveFinal)
+      .is('ready_at', null)
+
+    try {
+      for (const id of toApproveFinal) {
+        const row = byIdFinal.get(Number(id))
+        if (!row?.member_id || !row?.order_id) continue
+        const memberKey = String(row.member_id).toUpperCase()
+        await supabase.from('member_notifications').insert({
+          member_id: memberKey,
+          module: 'exhibition',
+          event: 'ready',
+          order_id: String(row.order_id),
+          title: 'Ready for pickup',
+          message: `Order ${row.order_id} is approved and ready to collect at your branch.`,
+          dedupe_key: `${memberKey}:exhibition:${row.order_id}:ready`,
+        })
+      }
+    } catch {
+      // A failed notification must never fail the approval.
+    }
 
     await logExhibitionAudit(toApproveFinal, { action: 'Approved', actorType: 'admin', actorLabel: 'System admin' })
 

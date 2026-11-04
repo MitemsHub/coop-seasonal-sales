@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   Banknote,
   Check,
+  Clock,
   CreditCard,
   Info,
   MapPin,
@@ -56,6 +57,8 @@ function ExhibitionCartContent() {
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(true)
+  const [holdExpiresAt, setHoldExpiresAt] = useState(null)
+  const [holdError, setHoldError] = useState('')
 
   const emitToast = (type, text) => {
     try {
@@ -142,6 +145,52 @@ function ExhibitionCartContent() {
     })()
     return () => { cancelled = true }
   }, [memberId])
+
+  // ── 10-minute cart hold ─────────────────────────────────────────────
+  // Reserve these units while the member finishes checkout, so nobody else
+  // takes them. It is a courtesy hold: the order's atomic decrement at
+  // checkout is still the real reservation.
+  useEffect(() => {
+    if (!memberId) return
+    if (!cart.length) {
+      setHoldExpiresAt(null)
+      setHoldError('')
+      fetch('/api/exhibition/holds', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ member_id: memberId }),
+      }).catch(() => {})
+      return
+    }
+    const timer = setTimeout(async () => {
+      try {
+        let branch = deliveryBranch
+        if (!branch) {
+          try { branch = localStorage.getItem(`exhibitionDeliveryBranch_${memberId}`) || '' } catch {}
+        }
+        const res = await fetch('/api/exhibition/holds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            member_id: memberId,
+            branch_code: branch || '',
+            lines: cart.map((l) => ({ product_id: l.product_id, qty: l.qty })),
+          }),
+        })
+        const json = await res.json().catch(() => null)
+        if (json?.ok) {
+          setHoldExpiresAt(json.expires_at || null)
+          setHoldError('')
+        } else {
+          setHoldExpiresAt(null)
+          setHoldError(json?.error || 'Could not hold these items right now.')
+        }
+      } catch {
+        // Offline — checkout will still reject if stock has gone.
+      }
+    }, 700)
+    return () => clearTimeout(timer)
+  }, [memberId, deliveryBranch, cart])
 
   // Cross-tab freshness — the hook delivers the stored cart on mount and on
   // every external change (the shop, a vendor hub, another tab), skipping our
@@ -553,6 +602,24 @@ function ExhibitionCartContent() {
                     <div className="text-chips font-medium text-brand-fg">Limit ({paymentOption})</div>
                   </div>
                 </div>
+
+                {holdError ? (
+                  <div className="mt-3 flex items-start gap-2 rounded-lg border border-warning-border bg-warning-bg/60 p-2.5">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning-fg" strokeWidth={2} />
+                    <p className="text-chips text-warning-fg">{holdError}</p>
+                  </div>
+                ) : holdExpiresAt ? (
+                  <div className="mt-3 flex items-center gap-1.5 rounded-lg bg-success-bg/50 px-2.5 py-2 text-chips text-success-fg">
+                    <Clock className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
+                    <span>
+                      Held for you until{' '}
+                      <strong className="font-semibold tabular-nums">
+                        {new Date(holdExpiresAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                      </strong>{' '}
+                      — finish checkout to keep the stock.
+                    </span>
+                  </div>
+                ) : null}
 
                 {paymentOption === 'Loan' && (
                   <div className="mt-3 flex items-start gap-2 rounded-lg border border-warning-border bg-warning-bg/60 p-3">

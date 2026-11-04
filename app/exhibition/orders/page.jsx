@@ -20,7 +20,8 @@ import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
-import { ExhibitionOrderStepper, EXHIBITION_STATUS_META } from '../../components/ui/OrderStepper'
+import { EXHIBITION_STATUS_META } from '../../components/ui/OrderStepper'
+import ExhibitionOrderTimeline from '../../components/ExhibitionOrderTimeline'
 
 const naira = (v) => `₦${Number(v || 0).toLocaleString()}`
 
@@ -221,7 +222,7 @@ function ExhibitionOrdersContent() {
 
                     {/* Progress */}
                     <div className="border-b border-line px-4 py-4">
-                      <ExhibitionOrderStepper status={o.status} />
+                      <ExhibitionOrderTimeline order={o} />
                     </div>
 
                     {/* Member confirmation — the final step of the transaction */}

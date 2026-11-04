@@ -55,7 +55,7 @@ export async function GET(req) {
       .select(
         statusOnly
           ? 'id, order_id, status'
-          : 'id, order_id, status, payment_option, total_qty, total_amount, created_at, delivered_at, member_confirmed_at, member_name_snapshot, branch:branches(id, name, code), lines:exhibition_order_lines(id, product_id, vendor_id, product_name, sku, unit, final_price, qty, amount, image_url:exhibition_products(image_url), vendor:exhibition_vendors(name))'
+          : 'id, order_id, status, payment_option, total_qty, total_amount, created_at, approved_at, ready_at, delivered_at, cancelled_at, cancelled_reason, member_confirmed_at, member_name_snapshot, branch:branches(id, name, code), lines:exhibition_order_lines(id, product_id, vendor_id, product_name, sku, unit, final_price, qty, amount, image_url:exhibition_products(image_url), vendor:exhibition_vendors(name))'
       )
       .eq('member_id', memberId)
       .order('created_at', { ascending: false })
@@ -343,6 +343,15 @@ export async function POST(req) {
     // above is a friendly fast-fail; this RPC is the real oversell guard (a
     // single guarded UPDATE per product inside one transaction — if any line
     // can't be covered, everything rolls back and nothing is decremented).
+    // Drop this member's courtesy cart holds first: the order's atomic
+    // decrement is the real reservation, and keeping both would count the same
+    // units twice when the catalogue subtracted them.
+    await supabase
+      .from('exhibition_stock_holds')
+      .delete()
+      .eq('member_id', memberId)
+      .in('product_id', ids)
+
     const reserveItems = priced.map((l) => ({ product_id: l.product_id, qty: l.qty }))
     const { error: reserveErr } = await supabase.rpc('exhibition_reserve_stock', { p_items: reserveItems })
     if (reserveErr) {

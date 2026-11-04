@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
+import { notifyStandFollowers } from '@/lib/notifyStandFollowers'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -27,7 +28,7 @@ export async function PATCH(request, { params }) {
     if (approvalAction) {
       const { data: row } = await supabase
         .from('exhibition_products')
-        .select('id, pending_vendor_price, pending_admin_markup')
+        .select('id, name, status, vendor_id, pending_vendor_price, pending_admin_markup')
         .eq('id', id)
         .maybeSingle()
       if (!row) return NextResponse.json({ ok: false, error: 'Product not found' }, { status: 404 })
@@ -48,6 +49,17 @@ export async function PATCH(request, { params }) {
           })
           .eq('id', id)
         if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+
+        // First publish only: members following this stand hear about a new
+        // product, but an approved price change is not a new product.
+        if (row.status !== 'active') {
+          await notifyStandFollowers(supabase, {
+            vendorId: row.vendor_id,
+            productId: id,
+            productName: row.name,
+          })
+        }
+
         return NextResponse.json({ ok: true, approved: true })
       }
 

@@ -7,7 +7,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { MapPin, Phone, Store } from 'lucide-react'
+import { Bell, MapPin, Phone, Store } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import CartStickyBar from '../../../components/CartStickyBar'
 import ExhibitionCycleHint from '../../../components/ExhibitionCycleHint'
@@ -42,6 +42,40 @@ function VendorHubContent() {
 
   const { catalog, error, loading } = useExhibitionCatalog(branchCode)
   const { addToCart, qtyOf, cartCount, cartTotal } = useExhibitionCart()
+  const [following, setFollowing] = useState(false)
+  const [followBusy, setFollowBusy] = useState(false)
+
+  // Following a stand — one row per member+vendor. Followers are told when the
+  // admin approves this stand's next product.
+  useEffect(() => {
+    if (!memberId || !vendorId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/exhibition/follows?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' })
+        const json = await res.json().catch(() => null)
+        if (!cancelled && json?.ok) {
+          setFollowing((json.vendors || []).some((v) => Number(v.vendor_id) === vendorId))
+        }
+      } catch {}
+    })()
+    return () => { cancelled = true }
+  }, [memberId, vendorId])
+
+  const toggleFollow = async () => {
+    if (!memberId || followBusy) return
+    setFollowBusy(true)
+    try {
+      const res = await fetch('/api/exhibition/follows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ member_id: memberId, vendor_id: vendorId, follow: !following }),
+      })
+      const json = await res.json().catch(() => null)
+      if (json?.ok) setFollowing(!!json.following)
+    } catch {}
+    setFollowBusy(false)
+  }
 
   const vendor = useMemo(() => catalog?.vendors?.find((v) => v.id === vendorId) || null, [catalog, vendorId])
   const products = useMemo(
@@ -129,6 +163,21 @@ function VendorHubContent() {
                       )}
                     </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={toggleFollow}
+                    disabled={followBusy || !memberId}
+                    aria-pressed={following}
+                    className={[
+                      'inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-chips font-semibold transition-colors duration-200 ease-sakani disabled:opacity-60',
+                      following
+                        ? 'border-brand bg-brand-subtle text-brand-fg'
+                        : 'border-line bg-surface text-fg hover:border-line-strong',
+                    ].join(' ')}
+                  >
+                    <Bell className="h-3.5 w-3.5" strokeWidth={2.2} />
+                    {following ? 'Following' : 'Follow stand'}
+                  </button>
                   <div className="shrink-0 rounded-xl border border-line bg-canvas/60 px-4 py-2 text-center">
                     <div className="text-xl font-bold text-fg">{products.length}</div>
                     <div className="text-chips font-medium text-muted">Products</div>
