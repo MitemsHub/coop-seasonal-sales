@@ -62,8 +62,8 @@ export async function GET(req) {
         .select('id,branch_id,cycle_id,bank_name,account_name,account_number,is_current,created_at,created_by_role,created_by_code')
         .eq('branch_id', branchId)
         .eq('cycle_id', cycle.id)
-        .eq('is_current', true)
-        .maybeSingle(),
+        .order('is_current', { ascending: false })
+        .order('created_at', { ascending: false }),
       supabase.from('food_vendor_invoices').select('id,branch_id,cycle_id').eq('branch_id', branchId).eq('cycle_id', cycle.id),
       paidStatus(supabase, branchId, cycle.id),
     ])
@@ -75,12 +75,15 @@ export async function GET(req) {
       return NextResponse.json({ ok: false, error: invRes.error.message }, { status: 500 })
     }
 
+    const banks = Array.isArray(bankRes.data) ? bankRes.data : []
+    const currentBank = banks.find((b) => b.is_current) || null
     const invoiceCount = (invRes.data || []).length
     return NextResponse.json({
       ok: true,
       cycle: { id: cycle.id, code: cycle.code || '', name: cycle.name || '' },
       branch: { id: branch.id, code: branch.code || '', name: branch.name || '' },
-      bank: bankRes.data || null,
+      bank: currentBank,
+      banks,
       invoice_count: invoiceCount,
       paid,
     })

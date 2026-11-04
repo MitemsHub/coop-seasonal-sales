@@ -44,15 +44,21 @@ function RepFoodBanksContent() {
   const [msg, setMsg] = useState(null)
   const [cycle, setCycle] = useState(null)
   const [branch, setBranch] = useState(null)
-  const [bank, setBank] = useState(null)
+  const [banks, setBanks] = useState([])
   const [invoiceCount, setInvoiceCount] = useState(0)
   const [paid, setPaid] = useState({ is_paid: false, paid_at: null })
 
   const [bankModalOpen, setBankModalOpen] = useState(false)
+  const [bankEditId, setBankEditId] = useState(null)
   const [bankName, setBankName] = useState('')
   const [accountName, setAccountName] = useState('')
   const [accountNumber, setAccountNumber] = useState('')
+  const [makePrimary, setMakePrimary] = useState(false)
   const [savingBank, setSavingBank] = useState(false)
+
+  const [bankDeleteOpen, setBankDeleteOpen] = useState(false)
+  const [bankDeleteRow, setBankDeleteRow] = useState(null)
+  const [deletingBank, setDeletingBank] = useState(false)
 
   const [invoiceListOpen, setInvoiceListOpen] = useState(false)
   const [invoiceUploadOpen, setInvoiceUploadOpen] = useState(false)
@@ -90,14 +96,15 @@ function RepFoodBanksContent() {
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to load')
       setCycle(json.cycle || null)
       setBranch(json.branch || null)
-      setBank(json.bank || null)
+      const list = Array.isArray(json.banks) ? json.banks : json.bank ? [json.bank] : []
+      setBanks(list)
       setInvoiceCount(Number(json.invoice_count || 0))
       setPaid(json.paid || { is_paid: false, paid_at: null })
     } catch (e) {
       if (e?.name !== 'AbortError') setMsg({ type: 'error', text: e?.message || 'Failed to load' })
       setCycle(null)
       setBranch(null)
-      setBank(null)
+      setBanks([])
       setInvoiceCount(0)
       setPaid({ is_paid: false, paid_at: null })
     } finally {
@@ -113,10 +120,16 @@ function RepFoodBanksContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const openBank = () => {
-    setBankName(String(bank?.bank_name || ''))
-    setAccountName(String(bank?.account_name || ''))
-    setAccountNumber(String(bank?.account_number || ''))
+  const openBank = (row = null) => {
+    if (paid?.is_paid) {
+      setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
+      return
+    }
+    setBankEditId(row?.id ? Number(row.id) : null)
+    setBankName(String(row?.bank_name || ''))
+    setAccountName(String(row?.account_name || ''))
+    setAccountNumber(String(row?.account_number || ''))
+    setMakePrimary(row ? !!row.is_current : banks.length === 0)
     setBankModalOpen(true)
   }
 
@@ -126,27 +139,102 @@ function RepFoodBanksContent() {
       return
     }
     if (savingBank) return
+    if (!bankName.trim() || !accountName.trim() || !accountNumber.trim()) {
+      setMsg({ type: 'error', text: 'Bank name, account name and account number are all required.' })
+      return
+    }
     setSavingBank(true)
     setMsg(null)
     try {
-      const res = await fetch('/api/rep/food/vendor-banks/set-account', {
+      const editing = Number.isFinite(bankEditId) && bankEditId > 0
+      const url = editing
+        ? '/api/rep/food/vendor-banks/accounts/update'
+        : '/api/rep/food/vendor-banks/accounts/add'
+      const payload = {
+        bank_name: bankName,
+        account_name: accountName,
+        account_number: accountNumber,
+        make_current: makePrimary,
+      }
+      if (editing) payload.account_id = bankEditId
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-          bank_name: bankName,
-          account_name: accountName,
-          account_number: accountNumber,
-        }),
+        body: JSON.stringify(payload),
       })
-      const json = await safeJson(res, '/api/rep/food/vendor-banks/set-account')
+      const json = await safeJson(res, url)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to save')
-      setBank(json.bank || null)
-      setMsg({ type: 'success', text: 'Bank details saved' })
       setBankModalOpen(false)
+      setBankEditId(null)
+      await fetchLocation()
+      setMsg({ type: 'success', text: editing ? 'Bank account updated' : 'Bank account added' })
     } catch (e) {
       setMsg({ type: 'error', text: e?.message || 'Failed to save' })
     } finally {
       setSavingBank(false)
+    }
+  }
+
+  const markPrimary = async (row) => {
+    const id = Number(row?.id)
+    if (!Number.isFinite(id) || id <= 0) return
+    if (paid?.is_paid) {
+      setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
+      return
+    }
+    setMsg(null)
+    try {
+      const url = '/api/rep/food/vendor-banks/accounts/update'
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ account_id: id, make_current: true }),
+      })
+      const json = await safeJson(res, url)
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to update')
+      await fetchLocation()
+      setMsg({ type: 'success', text: 'Primary bank account updated' })
+    } catch (e) {
+      setMsg({ type: 'error', text: e?.message || 'Failed to update' })
+    }
+  }
+
+  const openDeleteBank = (row) => {
+    if (paid?.is_paid) {
+      setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
+      return
+    }
+    setBankDeleteRow(row || null)
+    setBankDeleteOpen(true)
+  }
+
+  const deleteBank = async () => {
+    const id = Number(bankDeleteRow?.id)
+    if (!Number.isFinite(id) || id <= 0) return
+    if (paid?.is_paid) {
+      setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
+      return
+    }
+    if (deletingBank) return
+    setDeletingBank(true)
+    setMsg(null)
+    try {
+      const url = '/api/rep/food/vendor-banks/accounts/delete'
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ account_id: id }),
+      })
+      const json = await safeJson(res, url)
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to remove account')
+      setBankDeleteOpen(false)
+      setBankDeleteRow(null)
+      await fetchLocation()
+      setMsg({ type: 'success', text: 'Bank account removed' })
+    } catch (e) {
+      setMsg({ type: 'error', text: e?.message || 'Failed to remove account' })
+    } finally {
+      setDeletingBank(false)
     }
   }
 
@@ -355,18 +443,72 @@ function RepFoodBanksContent() {
 
               <div className="mt-4 grid gap-2 sm:grid-cols-2">
                 <div className="border rounded-lg p-3">
-                  <div className="text-sm font-medium text-fg mb-1">Bank Details</div>
-                  <div className="text-xs text-muted">Bank: {bank?.bank_name || '—'}</div>
-                  <div className="text-xs text-muted">Account Name: {bank?.account_name || '—'}</div>
-                  <div className="text-xs text-muted">Account No.: {maskAccountNumber(bank?.account_number || '')}</div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-medium text-fg">Bank Accounts</div>
+                    <div className="text-xs text-muted">{banks.length} attached</div>
+                  </div>
+                  {banks.length === 0 ? (
+                    <div className="mt-1 text-xs text-muted">
+                      No bank account attached yet. Add one so this branch&apos;s payout has somewhere to land.
+                    </div>
+                  ) : (
+                    <div className="mt-2 space-y-2">
+                      {banks.map((b) => (
+                        <div key={b.id} className="rounded-lg border border-line bg-surface px-3 py-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-fg truncate">{b.bank_name || 'Bank'}</span>
+                                {b.is_current ? (
+                                  <span className="shrink-0 rounded-full bg-success-bg px-2 py-0.5 text-[10px] font-semibold text-success-fg">
+                                    Primary
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="text-xs text-muted truncate">{b.account_name || '—'}</div>
+                              <div className="text-xs text-muted">{maskAccountNumber(b.account_number || '')}</div>
+                            </div>
+                            <div className="shrink-0 flex flex-wrap items-center justify-end gap-1.5">
+                              {!b.is_current ? (
+                                <button
+                                  type="button"
+                                  onClick={() => markPrimary(b)}
+                                  disabled={paid?.is_paid}
+                                  className="inline-flex items-center rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+                                >
+                                  Set primary
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => openBank(b)}
+                                disabled={paid?.is_paid}
+                                className="inline-flex items-center rounded-lg bg-accent px-2.5 py-1.5 text-xs font-semibold text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openDeleteBank(b)}
+                                disabled={paid?.is_paid}
+                                className="inline-flex items-center rounded-lg bg-danger-fg px-2.5 py-1.5 text-xs font-semibold text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="mt-2">
                     <button
                       type="button"
-                      onClick={openBank}
-                      disabled={paid?.is_paid}
+                      onClick={() => openBank(null)}
+                      disabled={paid?.is_paid || banks.length >= 10}
                       className="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
                     >
-                      Edit Bank Details
+                      Add Account
                     </button>
                   </div>
                 </div>
@@ -401,8 +543,15 @@ function RepFoodBanksContent() {
         </div>
       </div>
 
-      <DraggableModal open={bankModalOpen} onClose={() => setBankModalOpen(false)} title="Bank Details">
+      <DraggableModal
+        open={bankModalOpen}
+        onClose={() => setBankModalOpen(false)}
+        title={bankEditId ? 'Edit Bank Account' : 'Add Bank Account'}
+      >
         <div className="space-y-3">
+          <div className="text-xs text-muted">
+            A branch can hold several bank accounts. The primary account is the one this branch&apos;s food payout is sent to.
+          </div>
           <input
             value={bankName}
             onChange={(e) => setBankName(e.target.value)}
@@ -424,6 +573,16 @@ function RepFoodBanksContent() {
             className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             disabled={savingBank || paid?.is_paid}
           />
+          <label className="flex items-center gap-2 text-sm text-fg">
+            <input
+              type="checkbox"
+              checked={makePrimary}
+              onChange={(e) => setMakePrimary(e.target.checked)}
+              disabled={savingBank || paid?.is_paid}
+              className="h-4 w-4 rounded border border-line"
+            />
+            <span>Use as primary payout account</span>
+          </label>
           <button
             type="button"
             onClick={saveBank}
@@ -434,6 +593,38 @@ function RepFoodBanksContent() {
             {savingBank && <Spinner className="h-4 w-4 text-on-accent" />}
             <span>{savingBank ? 'Saving…' : 'Save'}</span>
           </button>
+        </div>
+      </DraggableModal>
+
+      <DraggableModal open={bankDeleteOpen} onClose={() => setBankDeleteOpen(false)} title="Remove Bank Account">
+        <div className="space-y-3">
+          <div className="text-sm text-subtext">
+            Remove <span className="font-medium">{bankDeleteRow?.bank_name || 'this account'}</span> (
+            {maskAccountNumber(bankDeleteRow?.account_number || '') || '—'})?
+            {bankDeleteRow?.is_current
+              ? ' It is the primary account, so the newest remaining account becomes primary.'
+              : ''}
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={deleteBank}
+              disabled={deletingBank || paid?.is_paid}
+              className="inline-flex items-center gap-2 rounded-lg bg-danger-fg px-3 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+              aria-busy={deletingBank}
+            >
+              {deletingBank && <Spinner className="h-4 w-4 text-on-accent" />}
+              <span>{deletingBank ? 'Removing…' : 'Remove'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setBankDeleteOpen(false)}
+              disabled={deletingBank}
+              className="rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       </DraggableModal>
 
