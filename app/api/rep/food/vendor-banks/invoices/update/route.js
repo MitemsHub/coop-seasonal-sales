@@ -76,6 +76,10 @@ export async function POST(req) {
     if (body?.notes !== undefined) payload.notes = cleanText(body.notes, 1000) || null
     if (body?.invoice_date !== undefined) payload.invoice_date = cleanDate(body.invoice_date)
     if (body?.amount !== undefined) payload.amount = cleanAmount(body.amount)
+    if (body?.bank_account_id !== undefined) {
+      const raw = Math.trunc(Number(body.bank_account_id || 0))
+      payload.bank_account_id = Number.isFinite(raw) && raw > 0 ? raw : null
+    }
 
     if (!Object.keys(payload).length) return NextResponse.json({ ok: false, error: 'Nothing to update' }, { status: 400 })
 
@@ -95,11 +99,27 @@ export async function POST(req) {
     if (!inv) return NextResponse.json({ ok: false, error: 'Invoice not found' }, { status: 404 })
     if (Number(inv.branch_id) !== Number(branchId)) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
 
+    if (payload.bank_account_id) {
+      const { data: acct, error: acctErr } = await supabase
+        .from('food_vendor_bank_accounts')
+        .select('id')
+        .eq('id', payload.bank_account_id)
+        .eq('branch_id', branchId)
+        .eq('cycle_id', cycleId)
+        .maybeSingle()
+      if (acctErr && !isMissingTable(acctErr, 'food_vendor_bank_accounts')) {
+        return NextResponse.json({ ok: false, error: acctErr.message }, { status: 500 })
+      }
+      if (!acct?.id) {
+        return NextResponse.json({ ok: false, error: 'That bank account does not belong to this branch' }, { status: 400 })
+      }
+    }
+
     const { data: updated, error } = await supabase
       .from('food_vendor_invoices')
       .update(payload)
       .eq('id', invoiceId)
-      .select('id,branch_id,cycle_id,invoice_ref,invoice_date,amount,notes,storage_bucket,storage_path,file_name,mime_type,file_size,created_by_role,created_by_code,created_at')
+      .select('id,branch_id,cycle_id,bank_account_id,invoice_ref,invoice_date,amount,notes,storage_bucket,storage_path,file_name,mime_type,file_size,created_by_role,created_by_code,created_at')
       .single()
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 

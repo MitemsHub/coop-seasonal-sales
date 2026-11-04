@@ -35,12 +35,23 @@ export async function GET(req) {
     const cycleId = await resolveActiveCycleId(supabase)
     if (!cycleId) return NextResponse.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
 
-    const { data: invoices, error } = await supabase
+    // ?bank_account_id=<id> narrows the list to one account. Without it every
+    // invoice for the branch/cycle is returned, including legacy rows that
+    // predate account filing.
+    const { searchParams } = new URL(req.url)
+    const bankAccountId = Math.trunc(Number(searchParams.get('bank_account_id') || 0))
+
+    let query = supabase
       .from('food_vendor_invoices')
-      .select('id,branch_id,cycle_id,invoice_ref,invoice_date,amount,notes,storage_bucket,storage_path,file_name,mime_type,file_size,created_by_role,created_by_code,created_at')
+      .select('id,branch_id,cycle_id,bank_account_id,invoice_ref,invoice_date,amount,notes,storage_bucket,storage_path,file_name,mime_type,file_size,created_by_role,created_by_code,created_at')
       .eq('branch_id', branchId)
       .eq('cycle_id', cycleId)
-      .order('created_at', { ascending: false })
+
+    if (Number.isFinite(bankAccountId) && bankAccountId > 0) {
+      query = query.eq('bank_account_id', bankAccountId)
+    }
+
+    const { data: invoices, error } = await query.order('created_at', { ascending: false })
     if (error) {
       if (isMissingTable(error, 'food_vendor_invoices')) return NextResponse.json({ ok: true, invoices: [], cycle_id: cycleId })
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 })

@@ -64,7 +64,11 @@ export async function GET(req) {
         .eq('cycle_id', cycle.id)
         .order('is_current', { ascending: false })
         .order('created_at', { ascending: false }),
-      supabase.from('food_vendor_invoices').select('id,branch_id,cycle_id').eq('branch_id', branchId).eq('cycle_id', cycle.id),
+      supabase
+        .from('food_vendor_invoices')
+        .select('id,branch_id,cycle_id,bank_account_id')
+        .eq('branch_id', branchId)
+        .eq('cycle_id', cycle.id),
       paidStatus(supabase, branchId, cycle.id),
     ])
 
@@ -75,9 +79,22 @@ export async function GET(req) {
       return NextResponse.json({ ok: false, error: invRes.error.message }, { status: 500 })
     }
 
-    const banks = Array.isArray(bankRes.data) ? bankRes.data : []
+    const invoiceRows = Array.isArray(invRes.data) ? invRes.data : []
+    const invoiceCountByBank = new Map()
+    for (const inv of invoiceRows) {
+      const bid = Number(inv?.bank_account_id)
+      if (!Number.isFinite(bid) || bid <= 0) continue
+      invoiceCountByBank.set(bid, (invoiceCountByBank.get(bid) || 0) + 1)
+    }
+
+    // Each account carries how many invoices are filed against it, so the page
+    // can show the relationship without a second round trip.
+    const banks = (Array.isArray(bankRes.data) ? bankRes.data : []).map((b) => ({
+      ...b,
+      invoice_count: invoiceCountByBank.get(Number(b.id)) || 0,
+    }))
     const currentBank = banks.find((b) => b.is_current) || null
-    const invoiceCount = (invRes.data || []).length
+    const invoiceCount = invoiceRows.length
     return NextResponse.json({
       ok: true,
       cycle: { id: cycle.id, code: cycle.code || '', name: cycle.name || '' },

@@ -68,6 +68,37 @@ export async function POST(req) {
     if (locked) return NextResponse.json({ ok: false, error: 'Branch is marked as Paid. Editing is locked.' }, { status: 403 })
 
     const fd = await req.formData()
+
+    // Every invoice belongs to one of the branch's accounts. If the caller did
+    // not name one, fall back to the account currently on file.
+    const requestedBankId = Math.trunc(Number(fd.get('bank_account_id') || 0))
+    let bankAccountId = null
+    if (Number.isFinite(requestedBankId) && requestedBankId > 0) {
+      const { data: acct, error: acctErr } = await supabase
+        .from('food_vendor_bank_accounts')
+        .select('id')
+        .eq('id', requestedBankId)
+        .eq('branch_id', branchId)
+        .eq('cycle_id', cycleId)
+        .maybeSingle()
+      if (acctErr && !isMissingTable(acctErr, 'food_vendor_bank_accounts')) {
+        return NextResponse.json({ ok: false, error: acctErr.message }, { status: 500 })
+      }
+      if (!acct?.id) {
+        return NextResponse.json({ ok: false, error: 'That bank account does not belong to this branch' }, { status: 400 })
+      }
+      bankAccountId = Number(acct.id)
+    } else {
+      const { data: current } = await supabase
+        .from('food_vendor_bank_accounts')
+        .select('id')
+        .eq('branch_id', branchId)
+        .eq('cycle_id', cycleId)
+        .eq('is_current', true)
+        .maybeSingle()
+      bankAccountId = current?.id ? Number(current.id) : null
+    }
+
     const file = fd.get('file')
     if (!file || typeof file.arrayBuffer !== 'function') {
       return NextResponse.json({ ok: false, error: 'file required' }, { status: 400 })
@@ -99,6 +130,7 @@ export async function POST(req) {
       .insert({
         branch_id: branchId,
         cycle_id: cycleId,
+        bank_account_id: bankAccountId,
         invoice_ref: invoiceRef || null,
         notes: notes || null,
         storage_bucket: bucket,
@@ -109,7 +141,7 @@ export async function POST(req) {
         created_by_role: 'rep',
         created_by_code: createdByCode,
       })
-      .select('id,branch_id,cycle_id,invoice_ref,invoice_date,amount,notes,storage_bucket,storage_path,file_name,mime_type,file_size,created_by_role,created_by_code,created_at')
+      .select('id,branch_id,cycle_id,bank_account_id,invoice_ref,invoice_date,amount,notes,storage_bucket,storage_path,file_name,mime_type,file_size,created_by_role,created_by_code,created_at')
       .single()
     if (insErr) return NextResponse.json({ ok: false, error: insErr.message }, { status: 500 })
 

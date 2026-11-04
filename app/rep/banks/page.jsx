@@ -53,7 +53,6 @@ function RepFoodBanksContent() {
   const [bankName, setBankName] = useState('')
   const [accountName, setAccountName] = useState('')
   const [accountNumber, setAccountNumber] = useState('')
-  const [makePrimary, setMakePrimary] = useState(false)
   const [savingBank, setSavingBank] = useState(false)
 
   const [bankDeleteOpen, setBankDeleteOpen] = useState(false)
@@ -64,6 +63,8 @@ function RepFoodBanksContent() {
   const [invoiceUploadOpen, setInvoiceUploadOpen] = useState(false)
   const [invoiceLoading, setInvoiceLoading] = useState(false)
   const [invoices, setInvoices] = useState([])
+  const [invoiceBankId, setInvoiceBankId] = useState('')
+  const [invoiceFilterBankId, setInvoiceFilterBankId] = useState(null)
   const [invoiceRef, setInvoiceRef] = useState('')
   const [invoiceNotes, setInvoiceNotes] = useState('')
   const [invoiceFile, setInvoiceFile] = useState(null)
@@ -129,7 +130,6 @@ function RepFoodBanksContent() {
     setBankName(String(row?.bank_name || ''))
     setAccountName(String(row?.account_name || ''))
     setAccountNumber(String(row?.account_number || ''))
-    setMakePrimary(row ? !!row.is_current : banks.length === 0)
     setBankModalOpen(true)
   }
 
@@ -154,7 +154,6 @@ function RepFoodBanksContent() {
         bank_name: bankName,
         account_name: accountName,
         account_number: accountNumber,
-        make_current: makePrimary,
       }
       if (editing) payload.account_id = bankEditId
       const res = await fetch(url, {
@@ -175,30 +174,6 @@ function RepFoodBanksContent() {
     }
   }
 
-  const markPrimary = async (row) => {
-    const id = Number(row?.id)
-    if (!Number.isFinite(id) || id <= 0) return
-    if (paid?.is_paid) {
-      setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
-      return
-    }
-    setMsg(null)
-    try {
-      const url = '/api/rep/food/vendor-banks/accounts/update'
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ account_id: id, make_current: true }),
-      })
-      const json = await safeJson(res, url)
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to update')
-      await fetchLocation()
-      setMsg({ type: 'success', text: 'Primary bank account updated' })
-    } catch (e) {
-      setMsg({ type: 'error', text: e?.message || 'Failed to update' })
-    }
-  }
-
   const openDeleteBank = (row) => {
     if (paid?.is_paid) {
       setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
@@ -206,6 +181,14 @@ function RepFoodBanksContent() {
     }
     setBankDeleteRow(row || null)
     setBankDeleteOpen(true)
+  }
+
+  // Which account an invoice was filed against — shown on every row so the
+  // "All Invoices" list never leaves the rep guessing.
+  const invoiceBankLabel = (inv) => {
+    const acct = banks.find((b) => Number(b.id) === Number(inv?.bank_account_id))
+    if (!acct) return 'Unassigned account'
+    return `${acct.bank_name || 'Bank'} · ${acct.account_name || ''} · ${maskAccountNumber(acct.account_number || '')}`
   }
 
   const deleteBank = async () => {
@@ -238,11 +221,14 @@ function RepFoodBanksContent() {
     }
   }
 
-  const loadInvoices = async () => {
+  const loadInvoices = async (bank = null) => {
+    const bankId = Number(bank?.id) || null
+    setInvoiceFilterBankId(bankId)
     setInvoiceLoading(true)
     setMsg(null)
     try {
-      const res = await fetch('/api/rep/food/vendor-banks/invoices/list', { cache: 'no-store' })
+      const qs = bankId ? `?bank_account_id=${encodeURIComponent(bankId)}` : ''
+      const res = await fetch(`/api/rep/food/vendor-banks/invoices/list${qs}`, { cache: 'no-store' })
       const json = await safeJson(res, '/api/rep/food/vendor-banks/invoices/list')
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to load invoices')
       setInvoices(json.invoices || [])
@@ -255,11 +241,17 @@ function RepFoodBanksContent() {
     }
   }
 
-  const openUpload = () => {
+  const openUpload = (bank = null) => {
     if (paid?.is_paid) {
       setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
       return
     }
+    if (!banks.length) {
+      setMsg({ type: 'error', text: 'Add a bank account first — every invoice is filed against an account.' })
+      return
+    }
+    const preset = bank?.id ? String(bank.id) : banks.length === 1 ? String(banks[0].id) : ''
+    setInvoiceBankId(preset)
     setInvoiceRef('')
     setInvoiceNotes('')
     setInvoiceFile(null)
@@ -272,11 +264,16 @@ function RepFoodBanksContent() {
       return
     }
     if (!invoiceFile) return
+    if (!invoiceBankId) {
+      setMsg({ type: 'error', text: 'Choose the bank account this invoice belongs to.' })
+      return
+    }
     if (uploading) return
     setUploading(true)
     setMsg(null)
     try {
       const fd = new FormData()
+      fd.set('bank_account_id', String(invoiceBankId))
       fd.set('invoice_ref', invoiceRef)
       fd.set('notes', invoiceNotes)
       fd.set('file', invoiceFile)
@@ -286,7 +283,8 @@ function RepFoodBanksContent() {
       setInvoiceUploadOpen(false)
       setInvoiceFile(null)
       setInvoiceCount((n) => n + 1)
-      await loadInvoices()
+      await fetchLocation()
+      await loadInvoices(invoiceFilterBankId ? { id: invoiceFilterBankId } : null)
       setMsg({ type: 'success', text: 'Invoice uploaded' })
     } catch (e) {
       setMsg({ type: 'error', text: e?.message || 'Upload failed' })
@@ -459,26 +457,30 @@ function RepFoodBanksContent() {
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="text-sm font-medium text-fg truncate">{b.bank_name || 'Bank'}</span>
-                                {b.is_current ? (
-                                  <span className="shrink-0 rounded-full bg-success-bg px-2 py-0.5 text-[10px] font-semibold text-success-fg">
-                                    Primary
-                                  </span>
-                                ) : null}
+                                <span className="shrink-0 rounded-full bg-subtle px-2 py-0.5 text-[10px] font-semibold text-muted">
+                                  {Number(b.invoice_count || 0)} invoice{Number(b.invoice_count || 0) === 1 ? '' : 's'}
+                                </span>
                               </div>
                               <div className="text-xs text-muted truncate">{b.account_name || '—'}</div>
                               <div className="text-xs text-muted">{maskAccountNumber(b.account_number || '')}</div>
                             </div>
                             <div className="shrink-0 flex flex-wrap items-center justify-end gap-1.5">
-                              {!b.is_current ? (
-                                <button
-                                  type="button"
-                                  onClick={() => markPrimary(b)}
-                                  disabled={paid?.is_paid}
-                                  className="inline-flex items-center rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
-                                >
-                                  Set primary
-                                </button>
-                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => loadInvoices(b)}
+                                disabled={invoiceLoading}
+                                className="inline-flex items-center rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+                              >
+                                Invoices
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openUpload(b)}
+                                disabled={paid?.is_paid}
+                                className="inline-flex items-center rounded-lg bg-brand px-2.5 py-1.5 text-xs font-semibold text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
+                              >
+                                Upload
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => openBank(b)}
@@ -516,21 +518,25 @@ function RepFoodBanksContent() {
                 <div className="border rounded-lg p-3">
                   <div className="text-sm font-medium text-fg mb-1">Invoices</div>
                   <div className="text-xs text-muted">Uploaded: {Number(invoiceCount || 0).toLocaleString()}</div>
+                  <div className="mt-1 text-xs text-muted">
+                    Each invoice is filed against the account it was paid into. Use an account&apos;s
+                    <span className="font-medium"> Invoices</span> button to see only that account.
+                  </div>
                   <div className="mt-2 flex gap-2 flex-wrap">
                     <button
                       type="button"
-                      onClick={loadInvoices}
+                      onClick={() => loadInvoices(null)}
                       disabled={invoiceLoading}
                       className="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
                       aria-busy={invoiceLoading}
                     >
                       {invoiceLoading && <Spinner className="h-4 w-4 text-on-accent" />}
-                      <span>{invoiceLoading ? 'Loading…' : 'View Invoices'}</span>
+                      <span>{invoiceLoading ? 'Loading…' : 'View All Invoices'}</span>
                     </button>
                     <button
                       type="button"
-                      onClick={openUpload}
-                      disabled={paid?.is_paid}
+                      onClick={() => openUpload(null)}
+                      disabled={paid?.is_paid || banks.length === 0}
                       className="inline-flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
                     >
                       Upload Invoice
@@ -550,7 +556,7 @@ function RepFoodBanksContent() {
       >
         <div className="space-y-3">
           <div className="text-xs text-muted">
-            A branch can hold several bank accounts. The primary account is the one this branch&apos;s food payout is sent to.
+            A branch can hold several bank accounts. Each one keeps its own invoices.
           </div>
           <input
             value={bankName}
@@ -573,16 +579,6 @@ function RepFoodBanksContent() {
             className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             disabled={savingBank || paid?.is_paid}
           />
-          <label className="flex items-center gap-2 text-sm text-fg">
-            <input
-              type="checkbox"
-              checked={makePrimary}
-              onChange={(e) => setMakePrimary(e.target.checked)}
-              disabled={savingBank || paid?.is_paid}
-              className="h-4 w-4 rounded border border-line"
-            />
-            <span>Use as primary payout account</span>
-          </label>
           <button
             type="button"
             onClick={saveBank}
@@ -601,8 +597,11 @@ function RepFoodBanksContent() {
           <div className="text-sm text-subtext">
             Remove <span className="font-medium">{bankDeleteRow?.bank_name || 'this account'}</span> (
             {maskAccountNumber(bankDeleteRow?.account_number || '') || '—'})?
+            {Number(bankDeleteRow?.invoice_count || 0) > 0
+              ? ` Its ${Number(bankDeleteRow.invoice_count)} invoice${Number(bankDeleteRow.invoice_count) === 1 ? '' : 's'} stay on record, but become unassigned.`
+              : ''}
             {bankDeleteRow?.is_current
-              ? ' It is the primary account, so the newest remaining account becomes primary.'
+              ? ' It is also the account currently used for payouts, so the newest remaining account takes over.'
               : ''}
           </div>
           <div className="flex gap-2">
@@ -628,7 +627,15 @@ function RepFoodBanksContent() {
         </div>
       </DraggableModal>
 
-      <DraggableModal open={invoiceListOpen} onClose={() => setInvoiceListOpen(false)} title="Invoices">
+      <DraggableModal
+        open={invoiceListOpen}
+        onClose={() => setInvoiceListOpen(false)}
+        title={
+          invoiceFilterBankId
+            ? `Invoices · ${banks.find((b) => Number(b.id) === Number(invoiceFilterBankId))?.bank_name || 'Account'}`
+            : 'All Invoices'
+        }
+      >
         <div className="space-y-3">
           {invoiceLoading ? (
             <div className="space-y-2">
@@ -649,6 +656,7 @@ function RepFoodBanksContent() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-fg truncate">{inv.file_name || 'Invoice'}</div>
+                      <div className="text-xs text-muted truncate">{invoiceBankLabel(inv)}</div>
                       <div className="text-xs text-muted">
                         Ref: {inv.invoice_ref || '—'} • Date: {inv.invoice_date || '—'} • Amount:{' '}
                         {inv.amount != null && inv.amount !== '' ? `₦${Number(inv.amount || 0).toLocaleString()}` : '—'}
@@ -695,6 +703,19 @@ function RepFoodBanksContent() {
 
       <DraggableModal open={invoiceUploadOpen} onClose={() => setInvoiceUploadOpen(false)} title="Upload Invoice">
         <div className="space-y-3">
+          <select
+            value={invoiceBankId}
+            onChange={(e) => setInvoiceBankId(e.target.value)}
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-brand focus:outline-none"
+            disabled={uploading || paid?.is_paid}
+          >
+            <option value="">Select the bank account…</option>
+            {banks.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.bank_name || 'Bank'} · {b.account_name || ''} · {maskAccountNumber(b.account_number || '')}
+              </option>
+            ))}
+          </select>
           <input
             value={invoiceRef}
             onChange={(e) => setInvoiceRef(e.target.value)}
