@@ -31,39 +31,50 @@ const LOGOUT_ENDPOINTS = {
  * role's introspection endpoint. Returns the user object or null.
  */
 async function introspectSession() {
-  for (const [role, endpoint] of Object.entries(SESSION_ENDPOINTS)) {
+  // Probe every role at once. This used to run sequentially, so every cold
+  // load of a protected page paid up to four round trips before the portal
+  // could render anything; in parallel it costs one. Priority is preserved by
+  // taking the first hit in declaration order (admin → rep → vendor → member).
+  const probes = Object.entries(SESSION_ENDPOINTS).map(async ([role, endpoint]) => {
     try {
       const res = await fetch(endpoint, { cache: 'no-store', credentials: 'include' })
-      if (!res.ok) continue
-      const json = await res.json()
-      if (!json?.ok) continue
-
-      // Admin/rep/vendor return flat claims; member nests them under `member`.
-      const memberClaims = json.member && typeof json.member === 'object' ? json.member : {}
-      const branchId = json.branch_id ?? memberClaims.branch_id
-      const branchCode = json.branch_code ?? memberClaims.branch_code
-      const branchName = json.branch_name ?? memberClaims.branch_name
-      const department = json.department ?? memberClaims.department
-      const id = json.id || memberClaims.member_id || memberClaims.id || role
-
-      return {
-        type: role,
-        id,
-        authenticated: true,
-        ...(json.module ? { module: json.module } : {}),
-        ...(branchId != null ? { branchId } : {}),
-        ...(branchCode ? { branchCode } : {}),
-        ...(branchName ? { branchName } : {}),
-        // A department rep's scope lives in the httpOnly cookie — without it
-        // a reload would silently widen the view back to the whole branch.
-        ...(department ? { department } : {}),
-        ...(memberClaims.name ? { name: memberClaims.name } : {}),
-      }
+      if (!res.ok) return null
+      const json = await res.json().catch(() => null)
+      if (!json?.ok) return null
+      return { role, json }
     } catch {
-      // Try the next role
+      // A failed probe just means that role is not signed in.
+      return null
     }
+  })
+
+  const results = await Promise.all(probes)
+  const hit = results.find(Boolean)
+  if (!hit) return null
+
+  const { role, json } = hit
+
+  // Admin/rep/vendor return flat claims; member nests them under `member`.
+  const memberClaims = json.member && typeof json.member === 'object' ? json.member : {}
+  const branchId = json.branch_id ?? memberClaims.branch_id
+  const branchCode = json.branch_code ?? memberClaims.branch_code
+  const branchName = json.branch_name ?? memberClaims.branch_name
+  const department = json.department ?? memberClaims.department
+  const id = json.id || memberClaims.member_id || memberClaims.id || role
+
+  return {
+    type: role,
+    id,
+    authenticated: true,
+    ...(json.module ? { module: json.module } : {}),
+    ...(branchId != null ? { branchId } : {}),
+    ...(branchCode ? { branchCode } : {}),
+    ...(branchName ? { branchName } : {}),
+    // A department rep's scope lives in the httpOnly cookie — without it
+    // a reload would silently widen the view back to the whole branch.
+    ...(department ? { department } : {}),
+    ...(memberClaims.name ? { name: memberClaims.name } : {}),
   }
-  return null
 }
 
 function AuthProviderContent({ children }) {

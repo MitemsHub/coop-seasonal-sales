@@ -87,84 +87,81 @@ function MyCoopContent() {
       setLoading(true)
       setError('')
 
+      // Every request below is started up front: the dashboard used to await
+      // them one at a time, so a cold load paid eight round trips end to end.
+      // They now overlap, and results are still applied in reading order. Each
+      // request carries its own .catch so one failure can never leave an
+      // unhandled rejection, and a null result simply leaves that section
+      // showing its placeholder.
+      const request = (url) =>
+        fetch(url, { cache: 'no-store' })
+          .then(async (res) => ({ ok: res.ok, json: await res.json().catch(() => null) }))
+          .catch(() => null)
+
+      const profileReq = request(`/api/members/lookup?member_id=${encodeURIComponent(memberId)}`)
+      const eligibilityReq = request(`/api/members/eligibility?member_id=${encodeURIComponent(memberId)}`)
+      const ordersReq = request(`/api/orders/member?member_id=${encodeURIComponent(memberId)}`)
+      const cyclesReq = request('/api/cycles/active')
+      const ramOrdersReq = request(`/api/ram/orders?member_id=${encodeURIComponent(memberId)}`)
+      const shoppingReq = request('/api/system/shopping')
+      const ramShoppingReq = request('/api/system/ram-shopping')
+      const catalogReq = request('/api/exhibition/availability')
+
       // 1) Member profile snapshot (via the server API — the browser no
-      // longer queries the members table directly)
-      try {
-        const res = await fetch(`/api/members/lookup?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' })
-        const json = await res.json().catch(() => null)
-        if (!cancelled) setProfile(json?.ok ? json.member : null)
-      } catch {
-        if (!cancelled) setError('Could not reach the Coop right now. Check your connection and refresh to retry.')
+      // longer queries the members table directly). A network failure here is
+      // what shows the retry banner.
+      const profileRes = await profileReq
+      if (!cancelled) {
+        if (!profileRes) {
+          setError('Could not reach the Coop right now. Check your connection and refresh to retry.')
+        } else {
+          setProfile(profileRes.json?.ok ? profileRes.json.member : null)
+        }
       }
 
       // 2) Eligibility (savings/loan exposure + credit)
-      try {
-        const eligRes = await fetch(`/api/members/eligibility?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' })
-        const eligJson = await eligRes.json().catch(() => null)
-        if (!cancelled) setElig(eligJson?.ok ? eligJson.eligibility : null)
-      } catch (e) {
-        console.error('Failed to load eligibility:', e.message)
-      }
+      const eligibilityRes = await eligibilityReq
+      if (!cancelled) setElig(eligibilityRes?.json?.ok ? eligibilityRes.json.eligibility : null)
 
       // 3) Food orders (enriched with principal + interest)
-      try {
-        const ordRes = await fetch(`/api/orders/member?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' })
-        const ordJson = await ordRes.json().catch(() => null)
-        if (!cancelled) setOrders(ordJson?.ok ? (ordJson.orders || []) : [])
-      } catch (e) {
-        console.error('Failed to load food orders:', e.message)
+      const ordersRes = await ordersReq
+      if (!cancelled) setOrders(ordersRes?.json?.ok ? (ordersRes.json.orders || []) : [])
+
+      // 4) Active food cycle + active ram cycle
+      const cyclesRes = await cyclesReq
+      const fc = cyclesRes?.json?.ok ? cyclesRes.json.food : null
+      const rc = cyclesRes?.json?.ok ? cyclesRes.json.ram : null
+      if (!cancelled) {
+        setFoodCycle(fc || null)
+        setRamCycle(rc || null)
       }
 
-      // 4) Active food cycle + 5) Active ram cycle (both via the server API)
-      let rc = null
-      try {
-        const cycRes = await fetch('/api/cycles/active', { cache: 'no-store' })
-        const cycJson = await cycRes.json().catch(() => null)
-        const fc = cycJson?.ok ? cycJson.food : null
-        rc = cycJson?.ok ? cycJson.ram : null
-        if (!cancelled) setFoodCycle(fc || null)
-        if (!cancelled) setRamCycle(rc || null)
-      } catch (e) {
-        console.error('Failed to load cycles:', e.message)
+      // 5) RAM order totals — this cycle's count needs the cycle above, but the
+      // request itself was already in flight with the rest.
+      const ramRes = await ramOrdersReq
+      if (!cancelled) {
+        const rows = (Array.isArray(ramRes?.json?.orders) ? ramRes.json.orders : []).filter((r) => r.status !== 'Cancelled')
+        const cycleRows = rc ? rows.filter((r) => Number(r.ram_cycle_id) === Number(rc.id)) : []
+        setRamStats({
+          count: rows.length,
+          total: rows.reduce((s, r) => s + Number(r.total_amount || 0), 0),
+          cycleCount: cycleRows.length,
+          cycleTotal: cycleRows.reduce((s, r) => s + Number(r.total_amount || 0), 0),
+        })
       }
 
-      // 5b) RAM order totals for this member (via the server API)
-      try {
-        const ramRes = await fetch(`/api/ram/orders?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' })
-        const ramJson = await ramRes.json().catch(() => null)
-        if (!cancelled) {
-          const rows = (Array.isArray(ramJson?.orders) ? ramJson.orders : []).filter((r) => r.status !== 'Cancelled')
-          const cycleRows = rc ? rows.filter((r) => Number(r.ram_cycle_id) === Number(rc.id)) : []
-          setRamStats({
-            count: rows.length,
-            total: rows.reduce((s, r) => s + Number(r.total_amount || 0), 0),
-            cycleCount: cycleRows.length,
-            cycleTotal: cycleRows.reduce((s, r) => s + Number(r.total_amount || 0), 0),
-          })
-        }
-      } catch (e) {
-        console.error('Failed to load ram data:', e.message)
-      }
-
-      // 6) Shopping availability for quick actions (food, ram, exhibition)
-      const [f, r, e] = await Promise.allSettled([
-        fetch('/api/system/shopping', { cache: 'no-store' }),
-        fetch('/api/system/ram-shopping', { cache: 'no-store' }),
-        fetch(`/api/exhibition/catalog?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' }),
+      // 6) Module availability for the three shop cards
+      const [shoppingRes, ramShoppingRes, exhibitionRes] = await Promise.all([
+        shoppingReq,
+        ramShoppingReq,
+        catalogReq,
       ])
-      if (f.status === 'fulfilled') {
-        const j = await f.value.json().catch(() => null)
-        if (!cancelled && j) setShoppingOpen(!!j.open)
-      }
-      if (r.status === 'fulfilled') {
-        const j = await r.value.json().catch(() => null)
-        if (!cancelled && j) setRamOpen(!!j.open)
-      }
-      if (e.status === 'fulfilled') {
-        const j = await e.value.json().catch(() => null)
-        if (!cancelled && j?.ok) {
-          setExhibitionOpen(!!j.open)
-          setExhibitionCycle(j.cycle || null)
+      if (!cancelled) {
+        if (shoppingRes?.json) setShoppingOpen(!!shoppingRes.json.open)
+        if (ramShoppingRes?.json) setRamOpen(!!ramShoppingRes.json.open)
+        if (exhibitionRes?.json?.ok) {
+          setExhibitionOpen(!!exhibitionRes.json.open)
+          setExhibitionCycle(exhibitionRes.json.cycle || null)
         }
       }
 

@@ -156,7 +156,7 @@ export default function Navbar() {
           fetch('/api/system/shopping', { cache: 'no-store' }),
           fetch('/api/system/ram-shopping', { cache: 'no-store' }),
           memberIdKey
-            ? fetch(`/api/exhibition/catalog?member_id=${encodeURIComponent(memberIdKey)}`, { cache: 'no-store' })
+            ? fetch('/api/exhibition/availability', { cache: 'no-store' })
             : Promise.reject(new Error('no member')),
         ])
         if (f.status === 'fulfilled') {
