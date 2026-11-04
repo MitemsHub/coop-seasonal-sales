@@ -31,7 +31,7 @@ export async function GET(request) {
     const supabase = createClient()
     let query = supabase
       .from('exhibition_products')
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, admin_markup, qty, image_url, status, created_at, vendors:vendor_id(name, code), categories:category_id(name), branches:branch_id(name)')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, admin_markup, qty, image_url, status, approval_status, pending_vendor_price, pending_admin_markup, approval_requested_at, created_at, vendors:vendor_id(name, code), categories:category_id(name), branches:branch_id(name)')
       .order('created_at', { ascending: false })
 
     if (cycleId > 0) query = query.eq('cycle_id', cycleId)

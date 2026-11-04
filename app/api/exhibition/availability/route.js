@@ -40,10 +40,14 @@ export async function GET() {
       return NextResponse.json({ ok: false, error: activeErr.message }, { status: 500 })
     }
 
+    // `.limit(1)` before `.maybeSingle()` is required: maybeSingle() errors when
+    // more than one row matches, which would 500 the probe during a moment when
+    // two seasons overlap — exactly when the "is it open?" answer matters.
     const { data: latest, error: latestErr } = await supabase
       .from('exhibition_cycles')
       .select('id, name, code, status, starts_at, ends_at')
       .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle()
 
     if (latestErr && !isMissingTable(latestErr, 'exhibition')) {

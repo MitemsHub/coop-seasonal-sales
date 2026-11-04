@@ -5,7 +5,7 @@
 // so this page can never drift from the shop or the all-products page).
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { MapPin, Phone, Store } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
@@ -19,12 +19,28 @@ import Badge from '../../../components/ui/Badge'
 import Skeleton from '../../../components/ui/Skeleton'
 import EmptyState from '../../../components/ui/EmptyState'
 import ExhibitionProductCard from '../../../components/ExhibitionProductCard'
+import { useAuth } from '../../../contexts/AuthContext'
 
 function VendorHubContent() {
   const router = useRouter()
   const params = useParams()
   const vendorId = Number(params?.id)
-  const { catalog, error, loading } = useExhibitionCatalog()
+  const { user } = useAuth()
+  const memberId = String(user?.id || '').trim().toUpperCase()
+
+  // The stand belongs to the delivery location the member is shopping, and
+  // that is what the shop persists. Without it this page fell back to the
+  // member's own branch, so a stand from another branch showed "0 products"
+  // even though the hub card it was opened from listed them.
+  const [branchCode, setBranchCode] = useState('')
+  useEffect(() => {
+    if (!memberId) return
+    try {
+      setBranchCode(localStorage.getItem(`exhibitionDeliveryBranch_${memberId}`) || '')
+    } catch {}
+  }, [memberId])
+
+  const { catalog, error, loading } = useExhibitionCatalog(branchCode)
   const { addToCart, qtyOf, cartCount, cartTotal } = useExhibitionCart()
 
   const vendor = useMemo(() => catalog?.vendors?.find((v) => v.id === vendorId) || null, [catalog, vendorId])

@@ -234,6 +234,12 @@ export default function VendorProductsPage() {
                     <Badge tone={p.status === 'active' ? 'success' : p.status === 'draft' ? 'warning' : 'muted'}>
                       {p.status}
                     </Badge>
+                    {p.approval_status === 'pending' && (
+                      <Badge tone="warning" variant="subtle">Pending approval</Badge>
+                    )}
+                    {p.approval_status === 'rejected' && (
+                      <Badge tone="danger" variant="subtle">Rejected</Badge>
+                    )}
                   </div>
                   <p className="mt-0.5 text-chips text-muted">
                     {p.unit || 'each'} · {p.qty === null ? 'Unlimited qty' : `${p.qty} in stock`}
@@ -337,12 +343,15 @@ export default function VendorProductsPage() {
             <Input id="p-price" type="number" min="1" value={form.vendor_price} onChange={(e) => setForm({ ...form, vendor_price: e.target.value })} placeholder="0" />
           </div>
           <div>
-            <Label htmlFor="p-markup">Markup (₦)</Label>
+            <Label htmlFor="p-markup">Discount (₦)</Label>
             <Input id="p-markup" type="number" min="0" value={form.admin_markup} onChange={(e) => setForm({ ...form, admin_markup: e.target.value })} placeholder="0" />
           </div>
           <div className="sm:col-span-2">
             <p className="rounded-lg bg-subtle px-3 py-2 text-chips text-muted">
-              Members pay <span className="font-semibold text-fg">{fmtNaira(Number(form.vendor_price || 0) + Number(form.admin_markup || 0))}</span> — your price plus markup.
+              Members pay <span className="font-semibold text-fg">{fmtNaira(Number(form.vendor_price || 0) + Number(form.admin_markup || 0))}</span> — your price plus the co-op discount.
+            </p>
+            <p className="rounded-lg border border-warning-border bg-warning-bg/60 px-3 py-2 text-chips text-warning-fg">
+              New products, and any price change on a product that is already on sale, are reviewed by the co-op before members see them.
             </p>
           </div>
           <div>

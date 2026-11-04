@@ -119,7 +119,7 @@ export default function VendorDashboardPage() {
       hint: 'Approved items still to deliver',
     },
     {
-      label: 'Prices & markups',
+      label: 'Prices & discounts',
       value: 'Manage',
       icon: BadgePercent,
       href: '/vendor/markups',

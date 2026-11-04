@@ -173,54 +173,63 @@ function RamShopPageContent() {
       setLoading(true)
       setMessage(null)
       try {
-        const shoppingRes = await fetch('/api/system/ram-shopping', { cache: 'no-store' })
-        const shoppingJson = await shoppingRes.json().catch(() => null)
-        const open = !!(shoppingRes.ok && shoppingJson?.ok && shoppingJson.open)
-        if (!cancelled) setShoppingOpen(open)
+        // These four used to run one after another — the page waited on the
+        // shopping gate, then the member, then eligibility, then the delivery
+        // locations, so a cold load cost four round trips. They do not depend
+        // on each other, so they now overlap; the gate is still what decides
+        // whether the rest is applied.
+        const request = (url) =>
+          fetch(url, { cache: 'no-store' })
+            .then(async (res) => ({ ok: res.ok, json: await res.json().catch(() => null) }))
+            .catch(() => null)
+
+        const [shoppingRes, lookupRes, eligibilityRes, locationsRes] = await Promise.all([
+          request('/api/system/ram-shopping'),
+          request(`/api/members/lookup?member_id=${encodeURIComponent(memberId)}`),
+          request(`/api/ram/eligibility?member_id=${encodeURIComponent(memberId)}`),
+          request('/api/ram/delivery-locations'),
+        ])
+
+        if (cancelled) return
+
+        const shoppingJson = shoppingRes?.json
+        const open = !!(shoppingRes?.ok && shoppingJson?.ok && shoppingJson.open)
+        setShoppingOpen(open)
         if (!open) {
-          if (!cancelled) setMessage({ type: 'error', text: 'Ram shopping is currently closed. Please check back later.' })
-          if (!cancelled) setMember(null)
-          if (!cancelled) setEligibility(null)
-          if (!cancelled) setDeliveryLocations([])
+          setMessage({ type: 'error', text: 'Ram shopping is currently closed. Please check back later.' })
+          setMember(null)
+          setEligibility(null)
+          setDeliveryLocations([])
           return
         }
 
-        const lookupRes = await fetch(`/api/members/lookup?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' })
-        const lookupJson = await lookupRes.json().catch(() => null)
-        const memberData = lookupJson?.ok ? lookupJson.member : null
-
+        const memberData = lookupRes?.json?.ok ? lookupRes.json.member : null
         if (!memberData) {
-          if (!cancelled) setMessage({ type: 'error', text: 'Member not found' })
-          if (!cancelled) setMember(null)
+          setMessage({ type: 'error', text: 'Member not found' })
+          setMember(null)
           return
         }
-        if (!cancelled) setMember(memberData)
-        if (!cancelled) setPhoneDraft(String(memberData?.phone || ''))
+        setMember(memberData)
+        setPhoneDraft(String(memberData?.phone || ''))
 
-        const res = await fetch(`/api/ram/eligibility?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' })
-        const json = await res.json().catch(() => null)
-        if (!res.ok || !json?.ok) {
-          if (!cancelled) setMessage({ type: 'error', text: json?.error || 'Failed to load ram eligibility' })
-          if (!cancelled) setEligibility(null)
+        if (!eligibilityRes?.ok || !eligibilityRes?.json?.ok) {
+          setMessage({ type: 'error', text: eligibilityRes?.json?.error || 'Failed to load ram eligibility' })
+          setEligibility(null)
           return
         }
-        if (!cancelled) {
-          setEligibility(json)
-          setSelectedRamCategory(String(json?.member?.ram_category || ''))
-          setCategoryTouched(false)
-        }
+        setEligibility(eligibilityRes.json)
+        setSelectedRamCategory(String(eligibilityRes.json?.member?.ram_category || ''))
+        setCategoryTouched(false)
 
-        const locRes = await fetch('/api/ram/delivery-locations', { cache: 'no-store' })
-        const locJson = await locRes.json().catch(() => null)
-        if (locRes.ok && locJson?.ok && Array.isArray(locJson.locations)) {
-          const list = locJson.locations
-          if (!cancelled) {
-            setDeliveryLocations(list)
-            if (list.length === 0) setMessage({ type: 'error', text: 'No ram delivery locations configured yet.' })
+        const locJson = locationsRes?.json
+        if (locationsRes?.ok && locJson?.ok && Array.isArray(locJson.locations)) {
+          setDeliveryLocations(locJson.locations)
+          if (locJson.locations.length === 0) {
+            setMessage({ type: 'error', text: 'No ram delivery locations configured yet.' })
           }
         } else {
-          if (!cancelled) setDeliveryLocations([])
-          if (!cancelled) setMessage({ type: 'error', text: 'Failed to load ram delivery locations.' })
+          setDeliveryLocations([])
+          setMessage({ type: 'error', text: 'Failed to load ram delivery locations.' })
         }
       } catch (e) {
         if (!cancelled) setMessage({ type: 'error', text: e.message || 'Failed to load' })
@@ -642,14 +651,26 @@ function RamShopPageContent() {
                 <label className="block text-sm font-medium mb-1">How do you want to pay</label>
                 <select
                   value={paymentOption}
-                  onChange={(e) => setPaymentOption(e.target.value)}
+                  onChange={(e) => {
+                    const next = e.target.value
+                    // An outstanding loan closes the savings option for this
+                    // cycle — say so instead of silently disabling it.
+                    if (next === 'Savings' && savingsEligible <= 0) {
+                      setPaymentOption('')
+                      setPopupText(
+                        'Savings is not available while you have an outstanding loan. Please choose Loan or Cash for this purchase.'
+                      )
+                      return
+                    }
+                    setPaymentOption(next)
+                  }}
                   className="w-full border-2 border-line-subtle rounded-xl px-3 py-2 focus:border-green-600 transition-all duration-200 text-sm"
                 >
                   <option value="" disabled>
                     Select payment option
                   </option>
                   <option value="Loan">Loan ({interestRatePct}% interest)</option>
-                  <option value="Savings" disabled={savingsEligible <= 0}>Savings {savingsEligible <= 0 ? '(Not eligible)' : ''}</option>
+                  <option value="Savings">Savings {savingsEligible <= 0 ? '(Not available)' : ''}</option>
                   <option value="Cash">Cash (Unlimited)</option>
                 </select>
                 <div className="mt-2 text-xs text-muted">

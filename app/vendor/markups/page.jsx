@@ -135,7 +135,7 @@ export default function VendorMarkupsPage() {
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-6">
-        <h1 className="text-h1 font-bold tracking-tight text-fg">Prices & Markups</h1>
+        <h1 className="text-h1 font-bold tracking-tight text-fg">Prices & Discounts</h1>
         <p className="mt-1 text-sm text-muted">
           Like a real market, members who negotiate get their own price. Pick a product, then set that member&apos;s price.
         </p>
@@ -165,7 +165,7 @@ export default function VendorMarkupsPage() {
             <p className="mt-1 text-xl font-bold text-fg">{fmtNaira(selectedProduct.final_price)}</p>
             {adminAdjusted ? (
               <p className="mt-0.5 text-chips text-muted">
-                base {fmtNaira(selectedProduct.vendor_price)} · admin adj {fmtNaira(selectedProduct.admin_markup)}
+                base {fmtNaira(selectedProduct.vendor_price)} · co-op discount {fmtNaira(selectedProduct.admin_markup)}
               </p>
             ) : (
               <p className="mt-0.5 text-chips text-muted">No admin adjustment</p>

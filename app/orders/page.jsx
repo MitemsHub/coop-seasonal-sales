@@ -72,22 +72,14 @@ function OrdersPageContent() {
   const { announceCart: announceOrdersCount } = useCartCount('orders', { memberId })
   const { announceCart: announceExhPending } = useCartCount('exhibitionPending', { memberId })
 
+  // Routing + gating only. This used to share the effect that loads the order
+  // lists, and the tab param sat in its dependency list — so every Food/RAM/
+  // Exhibition tab click re-fetched all three lists and dropped the page back
+  // to its full-screen loader.
   useEffect(() => {
-    // The ProtectedRoute gate above mounts this page only after AuthContext
-    // has restored the stored member session, so a cold refresh of /orders no
-    // longer races the null-user first render (which used to bounce members
-    // straight back to /shop). This effect now only routes the admin-mode
-    // view and loads the order lists.
     if (authLoading) return
     if (isAdmin) {
-      if (!memberId) {
-        router.push('/admin')
-      } else {
-        // Admin member-orders view — load the target member's orders so
-        // deep-links like /orders?admin=true&member_id=A12345&status=Pending
-        // render the filtered list instead of hanging on the loader.
-        loadAll()
-      }
+      if (!memberId) router.push('/admin')
       return
     }
     if (!memberId) {
@@ -102,9 +94,16 @@ function OrdersPageContent() {
       if (VALID_STATUSES.includes(statusParam)) parts.push(`status=${encodeURIComponent(statusParam)}`)
       router.replace(parts.length ? `/orders?${parts.join('&')}` : '/orders')
     }
+  }, [isAdmin, memberId, authLoading, searchParams, tabParam, statusParam, router])
+
+  // The lists load once per member (and per admin target). Tab switches then
+  // filter data that is already in memory instead of re-fetching it.
+  useEffect(() => {
+    if (authLoading) return
+    if (!memberId) return
     loadAll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin, memberId, router, searchParams, tabParam, authLoading])
+  }, [memberId, authLoading, isAdmin])
 
   useEffect(() => {
     setActiveTab(tabParam === 'ram' ? 'ram' : tabParam === 'exhibition' ? 'exhibition' : 'food')
@@ -183,16 +182,23 @@ function OrdersPageContent() {
 
   const loadRamOrders = async () => {
     try {
-      const res = await fetch(`/api/ram/orders?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' })
-      const json = await res.json().catch(() => null)
+      // Both requests start together: the locations list does not depend on the
+      // orders response, only the filtering does. Each carries its own catch so
+      // losing one never discards the other.
+      const [ordersRes, locRes] = await Promise.all([
+        fetch(`/api/ram/orders?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' }).catch(() => null),
+        fetch('/api/ram/delivery-locations', { cache: 'no-store' }).catch(() => null),
+      ])
+      if (!ordersRes) throw new Error('Failed to load ram orders')
+
+      const json = await ordersRes.json().catch(() => null)
       if (!json?.ok) throw new Error(json?.error || 'Failed to load ram orders')
       const rows = Array.isArray(json.orders) ? json.orders : []
       setRamOrders(rows)
 
-      // Delivery locations now come from the shared server endpoint so the
-      // browser never reads `ram_delivery_locations` directly.
-      const locRes = await fetch('/api/ram/delivery-locations', { cache: 'no-store' })
-      const locJson = await locRes.json().catch(() => null)
+      // Delivery locations come from the shared server endpoint so the browser
+      // never reads `ram_delivery_locations` directly.
+      const locJson = locRes ? await locRes.json().catch(() => null) : null
       const allLocs = Array.isArray(locJson?.locations) ? locJson.locations : []
       const ids = new Set(rows.map((r) => r?.ram_delivery_location_id).filter((x) => x != null))
       setRamLocations(allLocs.filter((l) => ids.has(l.id)))

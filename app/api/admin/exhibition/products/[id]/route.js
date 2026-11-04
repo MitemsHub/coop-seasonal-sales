@@ -19,6 +19,55 @@ export async function PATCH(request, { params }) {
 
     const body = await request.json().catch(() => ({}))
     const supabase = createClient()
+
+    // ── Vendor approval ──────────────────────────────────────────────
+    // approve: publish the product (and apply any pending price change).
+    // reject:  clear the request; a live product keeps its approved price.
+    const approvalAction = String(body.approval_action || '').toLowerCase()
+    if (approvalAction) {
+      const { data: row } = await supabase
+        .from('exhibition_products')
+        .select('id, pending_vendor_price, pending_admin_markup')
+        .eq('id', id)
+        .maybeSingle()
+      if (!row) return NextResponse.json({ ok: false, error: 'Product not found' }, { status: 404 })
+
+      if (approvalAction === 'approve') {
+        const applied = {}
+        if (row.pending_vendor_price != null) applied.vendor_price = Math.max(0, Math.trunc(Number(row.pending_vendor_price)))
+        if (row.pending_admin_markup != null) applied.admin_markup = Math.max(0, Math.trunc(Number(row.pending_admin_markup)))
+        const { error } = await supabase
+          .from('exhibition_products')
+          .update({
+            ...applied,
+            status: 'active',
+            approval_status: 'approved',
+            pending_vendor_price: null,
+            pending_admin_markup: null,
+            approval_requested_at: null,
+          })
+          .eq('id', id)
+        if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+        return NextResponse.json({ ok: true, approved: true })
+      }
+
+      if (approvalAction === 'reject') {
+        const { error } = await supabase
+          .from('exhibition_products')
+          .update({
+            approval_status: 'rejected',
+            pending_vendor_price: null,
+            pending_admin_markup: null,
+            approval_requested_at: null,
+          })
+          .eq('id', id)
+        if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+        return NextResponse.json({ ok: true, rejected: true })
+      }
+
+      return NextResponse.json({ ok: false, error: 'approval_action must be approve or reject' }, { status: 400 })
+    }
+
     const updates = {}
 
     if (body.name !== undefined) {

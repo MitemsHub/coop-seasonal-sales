@@ -228,11 +228,19 @@ export async function GET(req) {
       loanEligible = baseEligible + facility
     }
 
+    // A credit facility only exists while a cycle is open. With no active food
+    // cycle (and no live exhibition season, which returns earlier) there is
+    // nothing to spend this cycle, so report zero instead of the savings-based
+    // numbers that used to linger after a module closed.
+    const hasLiveCycle = !!activeCycleId
+
     return NextResponse.json({
       ok: true,
+      session: hasLiveCycle ? 'food' : 'none',
       eligibility: {
-        savingsEligible,
-        loanEligible,
+        session: hasLiveCycle ? 'food' : 'none',
+        savingsEligible: hasLiveCycle ? savingsEligible : 0,
+        loanEligible: hasLiveCycle ? loanEligible : 0,
         baseEligible,  // savings×5 - outstanding (before cycle cap)
         outstandingLoansTotal,
         savingsExposure,

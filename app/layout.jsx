@@ -12,6 +12,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import PageTransition from './components/PageTransition'
 import ChatWidget from './components/ChatWidget'
 import PwaRegister from './components/PwaRegister'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 import { siteMetadata } from '../lib/siteMetadata'
 import { structuredData } from '../lib/schema'
 
@@ -73,6 +74,9 @@ if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches))d
               </main>
               <ChatWidget />
               <PwaRegister />
+              {/* Real-user Core Web Vitals — reports to Vercel for members and
+                  staff alike, so slow pages are measured rather than guessed. */}
+              <SpeedInsights />
             </ToastProvider>
           </ThemeProvider>
         </AuthProvider>

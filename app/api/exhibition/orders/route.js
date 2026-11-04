@@ -209,13 +209,17 @@ export async function POST(req) {
     const loanInterestRatePct = Math.max(0, Number(cycle.loan_interest_rate_pct ?? 13))
     const loanInterestRate = loanInterestRatePct / 100
 
-    // Resolve products + per-member prices
+    // Resolve products + per-member prices.
+    // The products must come from the DELIVERY branch — the same branch the
+    // catalog served the cart from. Filtering by the member's home branch here
+    // rejected every cart line when the member shopped a stand at another
+    // location ("A product in your cart is no longer available").
     const ids = lines.map((l) => l.product_id)
     const { data: productRows, error: pErr } = await supabase
       .from('exhibition_products')
       .select('id, vendor_id, name, sku, unit, vendor_price, admin_markup, qty, status')
       .eq('cycle_id', cycleId)
-      .eq('branch_id', branchId)
+      .eq('branch_id', deliveryBranch.id)
       .in('id', ids)
     if (pErr) return NextResponse.json({ ok: false, error: pErr.message }, { status: 500 })
 

@@ -1,12 +1,6 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import ProtectedRoute from '../../../components/ProtectedRoute'
-import RepExhibitionOrdersContent from '../orders-content'
-
+// Reps no longer have a Pending queue: approval belongs to the admin.
 export default function RepExhibitionPendingPage() {
-  return (
-    <ProtectedRoute allowedRoles={['rep']}>
-      <RepExhibitionOrdersContent status="Pending" />
-    </ProtectedRoute>
-  )
+  redirect('/rep/exhibition/approved')
 }

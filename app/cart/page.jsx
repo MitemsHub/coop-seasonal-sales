@@ -544,15 +544,18 @@ function CartPageContent() {
     )
   }
 
+  // Savings closes as soon as the member carries a loan (the eligibility API
+  // already returns 0 spendable in that case). It stays clickable so tapping
+  // it explains why, instead of a dead greyed-out button.
   const paymentOptions = [
     {
       key: 'Savings',
       icon: Banknote,
-      disabled: savingsEligible <= 0,
-      title: savingsEligible <= 0 ? 'Savings unavailable (insufficient balance)' : 'Pay from your savings balance',
+      unavailable: savingsEligible <= 0,
+      title: savingsEligible <= 0 ? 'Savings is not available — choose Loan or Cash' : 'Pay from your savings balance',
     },
-    { key: 'Loan', icon: Wallet, disabled: false, title: 'Pay on loan (interest applies)' },
-    { key: 'Cash', icon: CreditCard, disabled: false, title: 'Pay in cash on delivery' },
+    { key: 'Loan', icon: Wallet, unavailable: false, title: 'Pay on loan (interest applies)' },
+    { key: 'Cash', icon: CreditCard, unavailable: false, title: 'Pay in cash on delivery' },
   ]
 
   return (
@@ -661,9 +664,16 @@ function CartPageContent() {
                       type="button"
                       role="radio"
                       aria-checked={paymentOption === opt.key}
-                      disabled={opt.disabled}
                       title={opt.title}
                       onClick={() => {
+                        if (opt.unavailable) {
+                          setMessage({
+                            type: 'error',
+                            text: 'Savings is not available while you have an outstanding loan. Please choose Loan or Cash for this purchase.',
+                          })
+                          emitToast('error', 'Choose Loan or Cash — Savings is not available.')
+                          return
+                        }
                         setPaymentOption(opt.key)
                         persistPaymentOption(opt.key)
                       }}
@@ -672,8 +682,8 @@ function CartPageContent() {
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
                         paymentOption === opt.key
                           ? 'bg-brand text-on-accent shadow-xs'
-                          : opt.disabled
-                            ? 'cursor-not-allowed text-muted opacity-50'
+                          : opt.unavailable
+                            ? 'text-muted opacity-50 hover:bg-surface'
                             : 'text-muted hover:bg-surface hover:text-fg',
                       ].join(' ')}
                     >

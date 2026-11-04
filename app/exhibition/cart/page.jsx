@@ -268,10 +268,19 @@ function ExhibitionCartContent() {
     )
   }
 
+  // Savings is unavailable the moment the member carries a loan. Keep the
+  // button tappable so it can say why ("use Loan or Cash") instead of being a
+  // dead grey control the member cannot query.
+  const savingsUnavailable = Number(eligibility.savingsEligible || 0) <= 0
   const paymentOptions = [
-    { key: 'Savings', icon: Banknote, disabled: Number(eligibility.savingsEligible || 0) <= 0, title: 'Pay from your savings balance' },
-    { key: 'Loan', icon: Wallet, disabled: false, title: `Pay on loan (${loanRatePct}% interest applies)` },
-    { key: 'Cash', icon: CreditCard, disabled: false, title: 'Pay in cash on delivery' },
+    {
+      key: 'Savings',
+      icon: Banknote,
+      unavailable: savingsUnavailable,
+      title: savingsUnavailable ? 'Savings is not available — choose Loan or Cash' : 'Pay from your savings balance',
+    },
+    { key: 'Loan', icon: Wallet, unavailable: false, title: `Pay on loan (${loanRatePct}% interest applies)` },
+    { key: 'Cash', icon: CreditCard, unavailable: false, title: 'Pay in cash on delivery' },
   ]
 
   return (
@@ -372,9 +381,15 @@ function ExhibitionCartContent() {
                       type="button"
                       role="radio"
                       aria-checked={paymentOption === opt.key}
-                      disabled={opt.disabled}
                       title={opt.title}
                       onClick={() => {
+                        if (opt.unavailable) {
+                          setMessage({
+                            type: 'error',
+                            text: 'Savings is not available while you have an outstanding loan. Please choose Loan or Cash for this purchase.',
+                          })
+                          return
+                        }
                         setPaymentOption(opt.key)
                         persist(`exhibitionPaymentOption_${memberId}`, opt.key)
                       }}
@@ -383,8 +398,8 @@ function ExhibitionCartContent() {
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
                         paymentOption === opt.key
                           ? 'bg-brand text-on-accent shadow-xs'
-                          : opt.disabled
-                            ? 'cursor-not-allowed text-muted opacity-50'
+                          : opt.unavailable
+                            ? 'text-muted opacity-50 hover:bg-surface'
                             : 'text-muted hover:bg-surface hover:text-fg',
                       ].join(' ')}
                     >

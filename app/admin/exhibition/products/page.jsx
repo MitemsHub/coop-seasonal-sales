@@ -99,6 +99,31 @@ export default function ExhibitionProductsPage() {
     setModal(p)
   }
 
+  // Vendor approval — publish a submitted product (and any pending price
+  // change) or reject it. Rejecting a live product keeps its approved price.
+  const setApproval = async (p, action) => {
+    setBusy(true)
+    setMsg(null)
+    try {
+      const res = await fetch(`/api/admin/exhibition/products/${p.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approval_action: action }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to update approval')
+      setMsg({
+        type: 'success',
+        text: action === 'approve' ? `"${p.name}" approved and published.` : `"${p.name}" rejected.`,
+      })
+      await load()
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const saveCreate = async () => {
     setBusy(true)
     setMsg(null)
@@ -296,7 +321,7 @@ export default function ExhibitionProductsPage() {
                   <TH>Product</TH>
                   <TH>Vendor</TH>
                   <TH className="text-right">Vendor price</TH>
-                  <TH className="text-right">Markup</TH>
+                  <TH className="text-right">Discount</TH>
                   <TH className="text-right">Final</TH>
                   <TH className="text-right">Qty</TH>
                   <TH>Status</TH>
@@ -323,15 +348,38 @@ export default function ExhibitionProductsPage() {
                       </div>
                     </TD>
                     <TD className="text-muted">{p.vendor_name || `#${p.vendor_id}`}</TD>
-                    <TD className="text-right tabular-nums">{naira(p.vendor_price)}</TD>
+                    <TD className="text-right tabular-nums">
+                      {naira(p.vendor_price)}
+                      {p.pending_vendor_price != null && (
+                        <div className="text-chips text-warning-fg">→ {naira(p.pending_vendor_price)}</div>
+                      )}
+                    </TD>
                     <TD className="text-right tabular-nums text-muted">{p.admin_markup ? `+${naira(p.admin_markup)}` : '—'}</TD>
                     <TD className="text-right font-medium tabular-nums text-fg">{naira(p.final_price)}</TD>
                     <TD className="text-right tabular-nums">{p.qty == null ? '∞' : Number(p.qty).toLocaleString()}</TD>
                     <TD>
-                      <Badge tone={STATUS_STYLES[p.status] || 'neutral'} variant="subtle">{p.status}</Badge>
+                      <div className="flex flex-col items-start gap-1">
+                        <Badge tone={STATUS_STYLES[p.status] || 'neutral'} variant="subtle">{p.status}</Badge>
+                        {p.approval_status === 'pending' && (
+                          <Badge tone="warning" variant="subtle">Pending approval</Badge>
+                        )}
+                        {p.approval_status === 'rejected' && (
+                          <Badge tone="danger" variant="subtle">Rejected</Badge>
+                        )}
+                      </div>
                     </TD>
                     <TD>
                       <div className="flex items-center gap-1">
+                        {p.approval_status === 'pending' && (
+                          <>
+                            <Button size="sm" variant="success" onClick={() => setApproval(p, 'approve')} disabled={busy}>
+                              Approve
+                            </Button>
+                            <Button size="sm" variant="danger" onClick={() => setApproval(p, 'reject')} disabled={busy}>
+                              Reject
+                            </Button>
+                          </>
+                        )}
                         <Button size="sm" variant="ghost" leftIcon={Pencil} onClick={() => openEdit(p)} disabled={busy}>
                           Edit
                         </Button>
@@ -398,7 +446,7 @@ export default function ExhibitionProductsPage() {
                 <Input id="exh-p-vprice" type="number" value={form.vendor_price ?? ''} onChange={(e) => setForm({ ...form, vendor_price: e.target.value })} />
               </div>
               <div>
-                <Label htmlFor="exh-p-markup">Admin markup (₦)</Label>
+                <Label htmlFor="exh-p-markup">Discount (₦)</Label>
                 <Input id="exh-p-markup" type="number" value={form.admin_markup ?? 0} onChange={(e) => setForm({ ...form, admin_markup: e.target.value })} />
               </div>
               <div>

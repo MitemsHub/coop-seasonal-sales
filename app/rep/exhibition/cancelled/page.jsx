@@ -1,12 +1,6 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import ProtectedRoute from '../../../components/ProtectedRoute'
-import RepExhibitionOrdersContent from '../orders-content'
-
+// Reps cannot cancel or restore, so there is no cancelled queue for them.
 export default function RepExhibitionCancelledPage() {
-  return (
-    <ProtectedRoute allowedRoles={['rep']}>
-      <RepExhibitionOrdersContent status="Cancelled" />
-    </ProtectedRoute>
-  )
+  redirect('/rep/exhibition/approved')
 }

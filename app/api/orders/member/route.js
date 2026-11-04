@@ -26,26 +26,28 @@ export async function GET(request) {
     let branch_id = null
 
     if (adminToken || repToken) {
-      // User has a session token, validate it
-      let sessionResult
-      if (adminToken) {
-        sessionResult = await validateSession(request, 'admin')
-      } else if (repToken) {
-        sessionResult = await validateSession(request, 'rep')
+      // A staff cookie is advisory here, not a gate. This GET serves the
+      // member's own order list and the member_id is supplied by the caller
+      // either way, so a stale or expired admin/rep cookie left over from
+      // another session must never blank a member's orders (that is what made
+      // "Recent orders" show nothing and the status watcher think every order
+      // had vanished).
+      let sessionResult = null
+      try {
+        sessionResult = adminToken ? await validateSession(request, 'admin') : await validateSession(request, 'rep')
+      } catch {
+        sessionResult = null
       }
-      
-      if (!sessionResult.valid) {
-        return NextResponse.json({ ok: false, error: 'Invalid session' }, { status: 401 })
-      }
-      
-      role = sessionResult.claims.role
-      sessionMemberId = sessionResult.claims.member_id
-      branch_id = sessionResult.claims.branch_id
 
-      // Reps can view orders from their DELIVERY branch
-      // Admins can view all orders
-      if (role === 'member' && sessionMemberId !== memberId) {
-        return NextResponse.json({ ok: false, error: 'Access denied' }, { status: 403 })
+      if (sessionResult?.valid) {
+        const claims = sessionResult.claims || {}
+        role = claims.role || null
+        sessionMemberId = claims.member_id || null
+        branch_id = claims.branch_id || null
+
+        if (role === 'member' && sessionMemberId !== memberId) {
+          return NextResponse.json({ ok: false, error: 'Access denied' }, { status: 403 })
+        }
       }
     }
     // If no session tokens, assume it's a member request (members access via URL params)
@@ -84,11 +86,19 @@ export async function GET(request) {
       `
       )
       .eq('member_id', memberId)
-      .neq('status', 'Cancelled')
       .order('created_at', { ascending: false })
 
-    // If user is a rep, filter by their DELIVERY branch
-    if (role === 'rep' && branch_id) {
+    // The member's own list hides cancelled orders, but the slim status view
+    // must NOT: the watcher detects cancellations from an explicit
+    // Posted→Cancelled transition, and a row disappearing from the response
+    // used to be read as a cancellation.
+    if (!statusOnly) {
+      query = query.neq('status', 'Cancelled')
+    }
+
+    // A rep looking at ANOTHER member's orders only sees their delivery
+    // branch. The member's own view is never narrowed by a rep cookie.
+    if (role === 'rep' && branch_id && sessionMemberId !== memberId) {
       query = query.eq('delivery_branch_id', branch_id)
     }
 

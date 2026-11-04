@@ -83,8 +83,7 @@ function MyCoopContent() {
     if (!memberId) return
     let cancelled = false
 
-    ;(async () => {
-      setLoading(true)
+      setLoading({ profile: true, elig: true, orders: true, cycles: true, ram: true, modules: true })
       setError('')
 
       // Every request below is started up front: the dashboard used to await
@@ -107,39 +106,40 @@ function MyCoopContent() {
       const ramShoppingReq = request('/api/system/ram-shopping')
       const catalogReq = request('/api/exhibition/availability')
 
-      // 1) Member profile snapshot (via the server API — the browser no
-      // longer queries the members table directly). A network failure here is
-      // what shows the retry banner.
-      const profileRes = await profileReq
-      if (!cancelled) {
-        if (!profileRes) {
+      // Each section below resolves and paints on its own. Every request still
+      // starts together, but the dashboard no longer sits blank behind the
+      // slowest one: profile, credit, orders, cycles and module status each
+      // drop their own skeleton the moment their own response lands.
+      profileReq.then((res) => {
+        if (cancelled) return
+        if (!res) {
           setError('Could not reach the Coop right now. Check your connection and refresh to retry.')
         } else {
-          setProfile(profileRes.json?.ok ? profileRes.json.member : null)
+          setProfile(res.json?.ok ? res.json.member : null)
         }
-      }
+        setLoading((s) => ({ ...s, profile: false }))
+      })
 
-      // 2) Eligibility (savings/loan exposure + credit)
-      const eligibilityRes = await eligibilityReq
-      if (!cancelled) setElig(eligibilityRes?.json?.ok ? eligibilityRes.json.eligibility : null)
+      eligibilityReq.then((res) => {
+        if (cancelled) return
+        setElig(res?.json?.ok ? res.json.eligibility : null)
+        setLoading((s) => ({ ...s, elig: false }))
+      })
 
-      // 3) Food orders (enriched with principal + interest)
-      const ordersRes = await ordersReq
-      if (!cancelled) setOrders(ordersRes?.json?.ok ? (ordersRes.json.orders || []) : [])
+      ordersReq.then((res) => {
+        if (cancelled) return
+        setOrders(res?.json?.ok ? (res.json.orders || []) : [])
+        setLoading((s) => ({ ...s, orders: false }))
+      })
 
-      // 4) Active food cycle + active ram cycle
-      const cyclesRes = await cyclesReq
-      const fc = cyclesRes?.json?.ok ? cyclesRes.json.food : null
-      const rc = cyclesRes?.json?.ok ? cyclesRes.json.ram : null
-      if (!cancelled) {
+      // RAM totals need the cycle id, so this pair resolves together — and only
+      // the cycle + RAM sections wait on it.
+      Promise.all([cyclesReq, ramOrdersReq]).then(([cyclesRes, ramRes]) => {
+        if (cancelled) return
+        const fc = cyclesRes?.json?.ok ? cyclesRes.json.food : null
+        const rc = cyclesRes?.json?.ok ? cyclesRes.json.ram : null
         setFoodCycle(fc || null)
         setRamCycle(rc || null)
-      }
-
-      // 5) RAM order totals — this cycle's count needs the cycle above, but the
-      // request itself was already in flight with the rest.
-      const ramRes = await ramOrdersReq
-      if (!cancelled) {
         const rows = (Array.isArray(ramRes?.json?.orders) ? ramRes.json.orders : []).filter((r) => r.status !== 'Cancelled')
         const cycleRows = rc ? rows.filter((r) => Number(r.ram_cycle_id) === Number(rc.id)) : []
         setRamStats({
@@ -148,25 +148,23 @@ function MyCoopContent() {
           cycleCount: cycleRows.length,
           cycleTotal: cycleRows.reduce((s, r) => s + Number(r.total_amount || 0), 0),
         })
-      }
+        setLoading((s) => ({ ...s, cycles: false, ram: false }))
+      })
 
-      // 6) Module availability for the three shop cards
-      const [shoppingRes, ramShoppingRes, exhibitionRes] = await Promise.all([
-        shoppingReq,
-        ramShoppingReq,
-        catalogReq,
-      ])
-      if (!cancelled) {
-        if (shoppingRes?.json) setShoppingOpen(!!shoppingRes.json.open)
-        if (ramShoppingRes?.json) setRamOpen(!!ramShoppingRes.json.open)
-        if (exhibitionRes?.json?.ok) {
-          setExhibitionOpen(!!exhibitionRes.json.open)
-          setExhibitionCycle(exhibitionRes.json.cycle || null)
+      // Module availability for the three shop cards.
+      Promise.all([shoppingReq, ramShoppingReq, catalogReq]).then(
+        ([shoppingRes, ramShoppingRes, exhibitionRes]) => {
+          if (cancelled) return
+          if (shoppingRes?.json) setShoppingOpen(!!shoppingRes.json.open)
+          if (ramShoppingRes?.json) setRamOpen(!!ramShoppingRes.json.open)
+          if (exhibitionRes?.json?.ok) {
+            setExhibitionOpen(!!exhibitionRes.json.open)
+            setExhibitionCycle(exhibitionRes.json.cycle || null)
+          }
+          setLoading((s) => ({ ...s, modules: false }))
         }
-      }
+      )
 
-      if (!cancelled) setLoading(false)
-    })()
 
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -268,40 +266,6 @@ function MyCoopContent() {
   const formatDate = (d) =>
     new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 
-  // ── Loading state ─────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <ProtectedRoute allowedRoles={['member']}>
-        <div className="min-h-screen bg-canvas">
-          <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
-            <div className="absolute -top-32 -left-24 h-80 w-80 rounded-full bg-brand/10 blur-3xl" />
-            <div className="absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-accent/10 blur-3xl" />
-          </div>
-          <div className="relative mx-auto max-w-6xl p-3 pb-16 sm:p-4 md:p-6">
-            <Skeleton className="h-5 w-32 rounded-full" />
-            <Skeleton className="mt-3 h-9 w-64 rounded-xl" />
-            <Skeleton className="mt-2 h-4 w-40 rounded-md" />
-            <Skeleton className="mt-6 h-5 w-16 rounded-md" />
-            <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {[0, 1].map((i) => (
-                <Skeleton key={i} className="h-40 rounded-2xl" />
-              ))}
-            </div>
-            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              {[0, 1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-28 rounded-xl" />
-              ))}
-            </div>
-            <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
-              <Skeleton className="h-64 rounded-2xl xl:col-span-2" />
-              <Skeleton className="h-64 rounded-2xl" />
-            </div>
-          </div>
-        </div>
-      </ProtectedRoute>
-    )
-  }
-
   // ── Render ────────────────────────────────────────────────────────
   return (
     <ProtectedRoute allowedRoles={['member']}>
@@ -372,6 +336,7 @@ function MyCoopContent() {
                 onClick={() => {
                   // Sync the shared ?module= param first, then head to the module —
                   // or open the shared closed panel when the module is closed.
+                  if (loading.modules) return
                   setModule('food')
                   if (shoppingOpen) router.push('/shop')
                   else setClosedModule('food')
@@ -392,7 +357,7 @@ function MyCoopContent() {
                   <Badge tone={shoppingOpen ? 'success' : 'warning'} variant="subtle" icon={shoppingOpen ? null : Clock}>
                     <span className="inline-flex items-center gap-1">
                       <span className={['h-1.5 w-1.5 rounded-full', shoppingOpen ? 'bg-success-fg' : 'bg-warning'].join(' ')} />
-                      {shoppingOpen ? 'Opened' : 'Closed'}
+                      {loading.modules ? 'Checking…' : shoppingOpen ? 'Opened' : 'Closed'}
                     </span>
                   </Badge>
                 </div>
@@ -422,6 +387,7 @@ function MyCoopContent() {
                 onClick={() => {
                   // Sync the shared ?module= param first, then head to the module —
                   // or open the shared closed panel when the module is closed.
+                  if (loading.modules) return
                   setModule('ram')
                   if (ramOpen) router.push('/ram/shop')
                   else setClosedModule('ram')
@@ -442,7 +408,7 @@ function MyCoopContent() {
                   <Badge tone={ramOpen ? 'success' : 'warning'} variant="subtle">
                     <span className="inline-flex items-center gap-1">
                       <span className={['h-1.5 w-1.5 rounded-full', ramOpen ? 'bg-success-fg' : 'bg-warning'].join(' ')} />
-                      {ramOpen ? 'Opened' : 'Closed'}
+                      {loading.modules ? 'Checking…' : ramOpen ? 'Opened' : 'Closed'}
                     </span>
                   </Badge>
                 </div>
@@ -470,6 +436,7 @@ function MyCoopContent() {
               <button
                 type="button"
                 onClick={() => {
+                  if (loading.modules) return
                   setModule('exhibition')
                   if (exhibitionOpen) router.push('/exhibition')
                   else setClosedModule('exhibition')
@@ -490,7 +457,7 @@ function MyCoopContent() {
                   <Badge tone={exhibitionOpen ? 'success' : 'warning'} variant="subtle">
                     <span className="inline-flex items-center gap-1">
                       <span className={['h-1.5 w-1.5 rounded-full', exhibitionOpen ? 'bg-success-fg' : 'bg-warning'].join(' ')} />
-                      {exhibitionOpen ? 'Opened' : 'Closed'}
+                      {loading.modules ? 'Checking…' : exhibitionOpen ? 'Opened' : 'Closed'}
                     </span>
                   </Badge>
                 </div>
@@ -516,8 +483,13 @@ function MyCoopContent() {
             </div>
           </div>
 
-          {/* KPI row */}
+          {/* KPI row — the four cards resolve with profile + eligibility, not
+              with the whole dashboard. */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {loading.profile || loading.elig ? (
+              [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28 rounded-xl" />)
+            ) : (
+              <>
             <StatCard
               featured
               icon={PiggyBank}
@@ -543,13 +515,13 @@ function MyCoopContent() {
               icon={TrendingUp}
               title="Available credit"
               value={anyCycleOpen && elig ? naira(Number(elig.loanEligible || 0) + Number(elig.savingsEligible || 0)) : '₦0'}
-              delta={anyCycleOpen
-                ? (elig
-                    ? `${elig.sessionLabel ? elig.sessionLabel + ' — ' : ''}loan ${naira(Number(elig.loanEligible || 0))} + savings ${naira(Number(elig.savingsEligible || 0))} — reduces as you shop`
-                    : 'unavailable')
-                : 'No active cycle — resets to the next one that opens'}
+              delta={anyCycleOpen && elig && elig.session !== 'none'
+                ? `${elig.sessionLabel ? elig.sessionLabel + ' — ' : ''}loan ${naira(Number(elig.loanEligible || 0))} + savings ${naira(Number(elig.savingsEligible || 0))} — reduces as you shop`
+                : 'No active cycle — the facility reopens with the next season'}
               trend={anyCycleOpen && elig && Number(elig.loanEligible || 0) + Number(elig.savingsEligible || 0) > 0 ? 'up' : 'flat'}
             />
+              </>
+            )}
           </div>
 
           {/* Charts row */}
@@ -565,12 +537,16 @@ function MyCoopContent() {
                 </span>
               </div>
               <div className="mt-4">
-                <LineChart
-                  height={230}
-                  data={spendSeries.some((p) => p.value > 0) ? spendSeries : []}
-                  formatValue={naira}
-                  empty="No food orders yet. Start shopping to see your spending trend"
-                />
+                {loading.orders ? (
+                  <Skeleton className="h-[230px] rounded-lg" />
+                ) : (
+                  <LineChart
+                    height={230}
+                    data={spendSeries.some((p) => p.value > 0) ? spendSeries : []}
+                    formatValue={naira}
+                    empty="No food orders yet. Start shopping to see your spending trend"
+                  />
+                )}
               </div>
             </div>
 
@@ -580,18 +556,22 @@ function MyCoopContent() {
                 <p className="mt-0.5 text-chips text-muted">How you've paid across orders</p>
               </div>
               <div className="mt-4">
-                <BarChart
-                  height={200}
-                  data={paymentMix}
-                  series={[{ key: 'Amount', label: 'Spend' }]}
-                  formatValue={naira}
-                  empty="No payment data yet"
-                />
+                {loading.orders ? (
+                  <Skeleton className="h-[200px] rounded-lg" />
+                ) : (
+                  <BarChart
+                    height={200}
+                    data={paymentMix}
+                    series={[{ key: 'Amount', label: 'Spend' }]}
+                    formatValue={naira}
+                    empty="No payment data yet"
+                  />
+                )}
               </div>
               <div className="mt-3 flex items-center justify-between rounded-lg bg-subtle/60 px-3 py-2">
                 <span className="text-chips font-medium text-muted">Total spend</span>
                 <span className="text-sm font-bold tabular-nums text-fg">
-                  {naira(paymentMix.reduce((s, p) => s + p.Amount, 0))}
+                  {loading.orders ? <Skeleton className="h-4 w-20" /> : naira(paymentMix.reduce((s, p) => s + p.Amount, 0))}
                 </span>
               </div>
             </div>
@@ -612,6 +592,13 @@ function MyCoopContent() {
               </div>
 
               <div className="mt-4 flex-1 space-y-3">
+                {loading.cycles ? (
+                  <>
+                    <Skeleton className="h-[86px] rounded-xl" />
+                    <Skeleton className="h-[86px] rounded-xl" />
+                  </>
+                ) : (
+                  <>
                 <div className="rounded-xl border border-line-subtle bg-subtle/50 p-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="inline-flex items-center gap-1.5 text-chips font-medium text-muted">
@@ -655,6 +642,8 @@ function MyCoopContent() {
                       : 'Waiting for the next Ram season to open'}
                   </p>
                 </div>
+                  </>
+                )}
               </div>
             </div>
 
@@ -670,7 +659,11 @@ function MyCoopContent() {
                 </Button>
               </div>
 
-              {recentOrders.length === 0 ? (
+              {loading.orders ? (
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {[0, 1].map((i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
+                </div>
+              ) : recentOrders.length === 0 ? (
                 <EmptyState
                   icon={ClipboardList}
                   title="No orders yet"

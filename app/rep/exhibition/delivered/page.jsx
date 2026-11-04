@@ -1,12 +1,6 @@
-'use client'
+import { redirect } from 'next/navigation'
 
-import ProtectedRoute from '../../../components/ProtectedRoute'
-import RepExhibitionOrdersContent from '../orders-content'
-
+// Reps work the Approved queue; delivery history lives with the admin.
 export default function RepExhibitionDeliveredPage() {
-  return (
-    <ProtectedRoute allowedRoles={['rep']}>
-      <RepExhibitionOrdersContent status="Delivered" />
-    </ProtectedRoute>
-  )
+  redirect('/rep/exhibition/approved')
 }

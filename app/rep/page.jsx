@@ -23,7 +23,6 @@ import {
   Sparkles,
   Store,
   Truck,
-  XCircle,
 } from 'lucide-react'
 import StatCard from '../components/ui/StatCard'
 import Card from '../components/ui/Card'
@@ -68,10 +67,7 @@ const QUICK_LINKS = {
     { href: '/rep/ram/banks', label: 'Banks', icon: Landmark, desc: 'Vendor bank accounts' },
   ],
   exhibition: [
-    { href: '/rep/exhibition/pending', label: 'Pending', icon: Clock, desc: 'Orders awaiting approval' },
-    { href: '/rep/exhibition/approved', label: 'Approved', icon: CheckCircle2, desc: 'Ready for vendor handover' },
-    { href: '/rep/exhibition/delivered', label: 'Delivered', icon: Truck, desc: 'Delivered to members' },
-    { href: '/rep/exhibition/cancelled', label: 'Cancelled', icon: XCircle, desc: 'Review and restore' },
+    { href: '/rep/exhibition/approved', label: 'Approved', icon: CheckCircle2, desc: 'Deliver approved orders' },
     { href: '/rep/exhibition/banks', label: 'Banks', icon: Landmark, desc: 'Vendor bank accounts' },
   ],
 }

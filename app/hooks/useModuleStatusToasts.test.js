@@ -2,7 +2,7 @@
 // Unit tests for the shared config-driven status-toast watcher:
 //   1. First poll baselines silently (no toast for pre-existing statuses).
 //   2. A real transition fires the module's toast and records the notification.
-//   3. Food's `missingOrderMeansCancelled` treats a vanished order as cancelled.
+//   3. A vanished order is NOT a cancellation; an explicit Cancelled status is.
 //   4. Each module keeps its own snapshot key (storage isolation).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
@@ -72,20 +72,35 @@ describe('useModuleStatusToasts', () => {
     unmount()
   })
 
-  it("food treats an order that vanishes from the view as cancelled", async () => {
+  it("does not treat an order that vanishes from the view as cancelled", async () => {
     global.fetch = vi
       .fn()
       .mockResolvedValueOnce(okRes([{ order_id: 7, status: 'Posted' }]))
       .mockResolvedValueOnce(okRes([]))
     const { unmount } = renderHook(() => useModuleStatusToasts('food', 'A12345'))
     await flush()
-    expect(toasts.warning).not.toHaveBeenCalled()
     await act(async () => {
-      // Active cadence: the fixtures below all return an order to watch.
       vi.advanceTimersByTime(30_000)
     })
     await flush()
-    // The transition uses the status-specific copy (Posted → Cancelled).
+    // A partial/filtered response must never be read as a cancellation — that
+    // bug cancelled every order at once and wrote a false notification.
+    expect(toasts.warning).not.toHaveBeenCalled()
+    expect(record).not.toHaveBeenCalled()
+    unmount()
+  })
+
+  it('fires a cancellation when the API reports Cancelled explicitly', async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(okRes([{ order_id: 7, status: 'Posted' }]))
+      .mockResolvedValueOnce(okRes([{ order_id: 7, status: 'Cancelled' }]))
+    const { unmount } = renderHook(() => useModuleStatusToasts('food', 'A12345'))
+    await flush()
+    await act(async () => {
+      vi.advanceTimersByTime(30_000)
+    })
+    await flush()
     expect(toasts.warning).toHaveBeenCalledWith(
       'Your posted food order 7 was cancelled. Contact your branch rep if this was unexpected.'
     )

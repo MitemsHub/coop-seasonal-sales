@@ -57,7 +57,7 @@ export default function ExhibitionMarkupsPage() {
         fetch('/api/admin/exhibition/cycles', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
       ])
       if (m?.ok) setProducts(m.products || [])
-      else setMsg({ type: 'error', text: m?.error || 'Failed to load markups' })
+      else setMsg({ type: 'error', text: m?.error || 'Failed to load discounts' })
       if (c?.ok) setCycles(c.cycles || [])
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
@@ -135,7 +135,7 @@ export default function ExhibitionMarkupsPage() {
 
   const saveAdminMarkup = async () => {
     const markup = Math.trunc(Number(markupForm.admin_markup ?? 0))
-    if (!Number.isFinite(markup)) return setMsg({ type: 'error', text: 'Invalid markup' })
+    if (!Number.isFinite(markup)) return setMsg({ type: 'error', text: 'Invalid discount' })
     setBusy(true)
     setMsg(null)
     try {
@@ -145,7 +145,7 @@ export default function ExhibitionMarkupsPage() {
         body: JSON.stringify({ admin_markup: markup }),
       })
       const json = await res.json()
-      if (!json.ok) throw new Error(json.error || 'Failed to update markup')
+      if (!json.ok) throw new Error(json.error || 'Failed to update discount')
       await openDetail(detail)
       await load()
     } catch (e) {
@@ -160,7 +160,7 @@ export default function ExhibitionMarkupsPage() {
       <div className="p-4 sm:p-6 lg:p-8">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-h2 font-bold tracking-tight text-fg">Exhibition Markups</h1>
+            <h1 className="text-h2 font-bold tracking-tight text-fg">Exhibition Discounts</h1>
             <p className="mt-0.5 text-sm text-muted">
               Per-member negotiated prices. Like the market, whoever beats a price gets their own.
             </p>
@@ -216,7 +216,7 @@ export default function ExhibitionMarkupsPage() {
                   <TH>Vendor</TH>
                   <TH className="text-right">Final price</TH>
                   <TH className="text-right">Negotiated</TH>
-                  <TH className="text-right">Markup</TH>
+                  <TH className="text-right">Discount</TH>
                   <TH>Actions</TH>
                 </TR>
               </THead>
@@ -254,16 +254,16 @@ export default function ExhibitionMarkupsPage() {
             <div className="space-y-5">
               {/* General admin markup */}
               <div className="rounded-xl border border-line bg-subtle p-4">
-                <div className="mb-2 text-sm font-semibold text-fg">General markup</div>
+                <div className="mb-2 text-sm font-semibold text-fg">General discount</div>
                 <div className="text-xs text-muted">
-                  Base price {naira(detail.vendor_price)} · final for everyone {naira(detail.final_price)}. Adjust the general markup here.
+                  Base price {naira(detail.vendor_price)} · final for everyone {naira(detail.final_price)}. Adjust the general discount here.
                 </div>
                 <div className="mt-3 flex items-end gap-2">
                   <div className="flex-1">
-                    <Label htmlFor="exh-m-general">Admin markup (₦)</Label>
+                    <Label htmlFor="exh-m-general">Discount (₦)</Label>
                     <Input id="exh-m-general" type="number" value={markupForm.admin_markup ?? 0} onChange={(e) => setMarkupForm({ admin_markup: e.target.value })} />
                   </div>
-                  <Button loading={busy} onClick={saveAdminMarkup}>Save markup</Button>
+                  <Button loading={busy} onClick={saveAdminMarkup}>Save discount</Button>
                 </div>
               </div>
 

@@ -17,8 +17,10 @@
 //     transitions are detected across reloads and tabs without re-toasting.
 //   - The first poll baselines silently (no toast for pre-existing statuses);
 //     toasts only fire for transitions observed after that baseline.
-//   - `missingOrderMeansCancelled` (food): the food API filters Cancelled rows
-//     out of the member view, so an order that disappears was cancelled.
+//   - Cancellations are only read from an explicit `… → Cancelled` status
+//     change. A row missing from one response is never treated as a
+//     cancellation: a filtered or partial list used to cancel every order at
+//     once and flood the inbox with false alerts.
 import { useEffect, useRef } from 'react'
 import { useToast } from '../components/ui/Toast'
 import recordMemberNotification from '@/lib/recordMemberNotification'
@@ -46,7 +48,6 @@ export const MODULE_STATUS_CONFIG = {
     pollUrl: (memberId) => `/api/orders/member?member_id=${encodeURIComponent(memberId)}&status_only=1`,
     orderKey: (o) => o.order_id,
     snapshotKey: (memberId) => `foodStatus_${memberId}`,
-    missingOrderMeansCancelled: true,
     transitions: {
       'Pending→Posted': {
         tone: 'success',
@@ -233,19 +234,11 @@ export default function useModuleStatusToasts(moduleName, memberId, opts = {}) {
             })
           }
 
-          // Modules whose API filters Cancelled rows out of the member view
-          // (food): an order that previously existed and is now missing was
-          // cancelled.
-          if (cfg.missingOrderMeansCancelled) {
-            for (const [orderId, oldStatus] of Object.entries(prev)) {
-              if (current[orderId] !== undefined) continue
-              if (oldStatus === 'Cancelled') continue
-              const transition = cfg.transitions[`${oldStatus}→Cancelled`]
-              if (!transition) continue
-              fire(transition, orderId)
-            }
-          }
-
+          // Cancellations are only ever read from an explicit
+          // `status → Cancelled` transition in the response. Treating a row
+          // that is simply absent as cancelled was wrong: one filtered or
+          // partial response (another branch's rep cookie, a scoped list) used
+          // to mark every order cancelled at once.
           for (const [orderId, newStatus] of Object.entries(current)) {
             const oldStatus = prev[orderId]
             if (!oldStatus || oldStatus === newStatus) continue

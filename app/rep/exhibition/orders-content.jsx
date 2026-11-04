@@ -316,11 +316,13 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
     setMsg(null)
     try {
       const path =
-        type === 'approve'
-          ? '/api/rep/exhibition/orders/approve'
-          : type === 'cancel'
-            ? '/api/rep/exhibition/orders/cancel'
-            : '/api/rep/exhibition/orders/restore'
+        type === 'deliver'
+          ? '/api/rep/exhibition/orders/deliver'
+          : type === 'approve'
+            ? '/api/rep/exhibition/orders/approve'
+            : type === 'cancel'
+              ? '/api/rep/exhibition/orders/cancel'
+              : '/api/rep/exhibition/orders/restore'
       const res = await fetch(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -328,7 +330,7 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
       })
       const json = await safeJson(res, path)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Action failed')
-      const done = (json.approved || json.cancelled || json.restored || [])
+      const done = (json.approved || json.cancelled || json.restored || json.delivered || [])
       const failed = json.failed || []
       setOrders((prev) => (prev || []).filter((o) => !done.includes(o.id)))
       setSelected(new Set())
@@ -336,7 +338,8 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
       setCancelReason('')
       setMsg({
         type: 'success',
-        text: `${done.length} order(s) ${type === 'approve' ? 'approved' : type === 'cancel' ? 'cancelled' : 'restored'}`,
+        text: `${done.length} order(s) ${type === 'deliver' ? 'delivered' : type === 'approve' ? 'approved' : type === 'cancel' ? 'cancelled' : 'restored'}`,
+
         skipped: failed.length,
         reasons: summarizeFailed(failed),
       })
@@ -486,9 +489,13 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
     }
   }
 
-  const canCancel = status === 'Pending' || status === 'Approved'
-  const canApprove = status === 'Pending'
-  const canRestore = status === 'Cancelled'
+  // Reps only fulfil: they see APPROVED orders and mark them delivered.
+  // Approving, cancelling and restoring are admin actions, enforced in the API
+  // as well as hidden here.
+  const canDeliver = status === 'Approved'
+  const canCancel = false
+  const canApprove = false
+  const canRestore = false
 
   return (
     <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
@@ -510,7 +517,7 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
             {status === 'Pending'
               ? 'Approve or cancel orders placed by members at your branch.'
               : status === 'Approved'
-                ? 'Approved orders waiting for vendors to hand over the goods.'
+                ? 'Approved orders ready to hand to members — mark each one delivered once collected.'
                 : status === 'Delivered'
                   ? 'Orders the vendors have delivered to members.'
                   : 'Cancelled orders. Restore any that were cancelled by mistake.'}
@@ -822,6 +829,21 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
             >
               {allSelectedOnPage ? 'Deselect All' : 'Select All'}
             </button>
+            {canDeliver && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!selectedCount) return
+                  if (!window.confirm(`Mark ${selectedCount} approved order(s) as delivered?`)) return
+                  runAction('deliver', Array.from(selected))
+                }}
+                disabled={!selectedCount || bulkBusy}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-success-fg px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+              >
+                <Truck className="h-3.5 w-3.5" />
+                Deliver ({selectedCount})
+              </button>
+            )}
             {canApprove && (
               <button
                 type="button"
@@ -1019,6 +1041,12 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
                             const v = e.target.value
                             e.target.value = ''
                             if (!v) return
+                            if (v === 'deliver') {
+                              if (window.confirm(`Mark order ${o.order_id || o.id} as delivered?`)) {
+                                runAction('deliver', [o.id])
+                              }
+                              return
+                            }
                             if (v === 'approve') setModal({ type: 'approve', ids: [o.id] })
                             if (v === 'cancel') setModal({ type: 'cancel', ids: [o.id] })
                             if (v === 'restore') setModal({ type: 'restore', ids: [o.id] })
@@ -1027,6 +1055,7 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
                           }}
                         >
                           <option value="" disabled>Actions</option>
+                          {canDeliver && <option value="deliver">Mark delivered</option>}
                           {canApprove && <option value="approve">Approve</option>}
                           {canCancel && <option value="cancel">Cancel</option>}
                           {canRestore && <option value="restore">Restore</option>}

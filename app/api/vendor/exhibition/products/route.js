@@ -18,7 +18,7 @@ export async function GET(req) {
 
     let query = supabase
       .from('exhibition_products')
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, admin_markup, qty, image_url, status, created_at, categories:category_id(name)')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, admin_markup, qty, image_url, status, approval_status, pending_vendor_price, pending_admin_markup, categories:category_id(name)')
       .eq('vendor_id', ctx.vendor_id)
       .order('created_at', { ascending: false })
 
@@ -57,7 +57,9 @@ export async function POST(req) {
     const qty = body?.qty === '' || body?.qty === null || body?.qty === undefined ? null : Math.max(0, Number(body?.qty))
     const categoryId = body?.category_id ? Number(body.category_id) : null
     const imageUrl = String(body?.image_url || '').trim()
-    const status = body?.status === 'draft' ? 'draft' : 'active'
+    // A vendor's submission never goes live directly: it lands as a draft and
+    // waits in the admin's approval queue.
+    const status = 'draft'
 
     if (!name) return NextResponse.json({ error: 'Product name is required' }, { status: 400 })
     if (vendorPrice <= 0) return NextResponse.json({ error: 'Price must be greater than zero' }, { status: 400 })
@@ -90,8 +92,10 @@ export async function POST(req) {
         qty,
         image_url: imageUrl,
         status,
+        approval_status: 'pending',
+        approval_requested_at: new Date().toISOString(),
       })
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, admin_markup, qty, image_url, status, created_at')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, admin_markup, qty, image_url, status, approval_status, pending_vendor_price, pending_admin_markup, created_at')
       .single()
 
     if (error) {

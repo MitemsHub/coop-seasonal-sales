@@ -15,7 +15,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ClipboardList,
-  Clock,
   Landmark,
   LayoutDashboard,
   LogOut,
@@ -25,7 +24,6 @@ import {
   Send,
   Truck,
   X,
-  XCircle,
 } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -467,10 +465,8 @@ export default function RepLayout({ children }) {
               <GroupToggle open={exhOpen} onToggle={() => toggleModule('exhibition')} label="Coop Exhibition" collapsed={isCollapsed} onNavigate={() => setSidebarVisible(true)} />
               {!isCollapsed && exhOpen && (
                 <div className="mt-1 space-y-0.5">
-                  <NavLink href="/rep/exhibition/pending" label="Pending" icon={Clock} active={activeKey === 'exh_pending'} collapsed={false} onNavigate={navOnClick} count={exhLive === false ? 0 : pendingCounts.exhibition} />
+                  {/* Reps fulfil only: approved orders to deliver, plus vendor banks. */}
                   <NavLink href="/rep/exhibition/approved" label="Approved" icon={CheckCircle2} active={activeKey === 'exh_approved'} collapsed={false} onNavigate={navOnClick} />
-                  <NavLink href="/rep/exhibition/delivered" label="Delivered" icon={Truck} active={activeKey === 'exh_delivered'} collapsed={false} onNavigate={navOnClick} />
-                  <NavLink href="/rep/exhibition/cancelled" label="Cancelled" icon={XCircle} active={activeKey === 'exh_cancelled'} collapsed={false} onNavigate={navOnClick} />
                   <NavLink href="/rep/exhibition/banks" label="Banks" icon={Landmark} active={activeKey === 'exh_banks'} collapsed={false} onNavigate={navOnClick} />
                 </div>
               )}
