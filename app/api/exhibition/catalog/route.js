@@ -40,7 +40,7 @@ async function loadCatalogCore(supabase, cycleId) {
   const [vendorsRes, categoriesRes, productsRes] = await Promise.all([
     supabase
       .from('exhibition_vendors')
-      .select('id, name, code, phone, address')
+      .select('id, name, code, phone, address, banner_url, stand_number, hall, opening_hours, whatsapp, min_order, pickup_instructions')
       .eq('cycle_id', cycleId)
       .eq('status', 'active')
       .order('name'),
@@ -245,6 +245,13 @@ export async function GET(req) {
         code: v.code || '',
         phone: v.phone || '',
         address: v.address || '',
+        banner_url: v.banner_url || '',
+        stand_number: v.stand_number || '',
+        hall: v.hall || '',
+        opening_hours: v.opening_hours || '',
+        whatsapp: v.whatsapp || '',
+        min_order: Number(v.min_order || 0),
+        pickup_instructions: v.pickup_instructions || '',
       })),
       categories: (categoriesRes.data || []).map((c) => ({ id: Number(c.id), name: c.name || '' })),
       products: paged,

@@ -119,6 +119,21 @@ function ExhibitionShopContent() {
     availableBranches.find((b) => b.code === servedBranchCode)?.name || catalog?.branch || ''
   const searching = !!q || !!categoryId
 
+  // A search that finds nothing is the market telling us what is missing.
+  // Logged once per settled query, and it can never block the page.
+  useEffect(() => {
+    if (!q || loading) return undefined
+    if (stands.length > 0 || matchedProducts.length > 0) return undefined
+    const t = setTimeout(() => {
+      fetch('/api/exhibition/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ member_id: memberId, type: 'search', query: q, results: 0 }),
+      }).catch(() => {})
+    }, 900)
+    return () => clearTimeout(t)
+  }, [q, loading, stands.length, matchedProducts.length, memberId])
+
   // ── Closed state ─────────────────────────────────────────────────
   if (!loading && catalog && !catalog.open) {
     return (

@@ -5,7 +5,7 @@
 // so this page can never drift from the shop or the all-products page).
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Bell, MapPin, Phone, Store } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
@@ -83,6 +83,23 @@ function VendorHubContent() {
     [catalog, vendorId]
   )
 
+  // Insight only: record that this stand's products were seen, once per visit.
+  // Never allowed to affect rendering.
+  const trackedRef = useRef('')
+  useEffect(() => {
+    if (!vendorId || !products.length) return
+    const key = `${vendorId}:${products.length}`
+    if (trackedRef.current === key) return
+    trackedRef.current = key
+    try {
+      fetch('/api/exhibition/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ member_id: memberId, type: 'view', product_ids: products.slice(0, 40).map((p) => p.id) }),
+      }).catch(() => {})
+    } catch {}
+  }, [vendorId, products, memberId])
+
   if (!loading && catalog && !catalog.open) {
     return (
       <ProtectedRoute allowedRoles={['member']}>
@@ -137,6 +154,10 @@ function VendorHubContent() {
             <>
               {/* Vendor header */}
               <div className="ui-card mb-fluid-lg overflow-hidden">
+                {vendor.banner_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={vendor.banner_url} alt={`${vendor.name} banner`} className="h-32 w-full object-cover sm:h-44" />
+                )}
                 <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:p-6">
                   <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-accent-subtle text-accent">
                     <Store className="h-7 w-7" strokeWidth={2} />
@@ -162,6 +183,27 @@ function VendorHubContent() {
                         </span>
                       )}
                     </p>
+                    {(vendor.stand_number || vendor.hall || vendor.opening_hours || Number(vendor.min_order || 0) > 0) && (
+                      <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-chips text-muted">
+                        {vendor.stand_number && <span>Stand {vendor.stand_number}</span>}
+                        {vendor.hall && <span>{vendor.hall}</span>}
+                        {vendor.opening_hours && <span>{vendor.opening_hours}</span>}
+                        {Number(vendor.min_order || 0) > 0 && (
+                          <span>Min order ₦{Number(vendor.min_order).toLocaleString()}</span>
+                        )}
+                      </p>
+                    )}
+                    {vendor.whatsapp && (
+                      <a
+                        href={`https://wa.me/${String(vendor.whatsapp).replace(/\D/g, '')}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 inline-flex items-center gap-1 text-chips font-medium text-brand hover:underline"
+                      >
+                        <Phone className="h-3 w-3" strokeWidth={2} />
+                        WhatsApp the stand
+                      </a>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -184,6 +226,13 @@ function VendorHubContent() {
                   </div>
                 </div>
               </div>
+
+              {vendor.pickup_instructions && (
+                <div className="mb-fluid-lg rounded-xl border border-line bg-surface p-4">
+                  <h2 className="text-sm font-semibold text-fg">Pickup instructions</h2>
+                  <p className="mt-1 whitespace-pre-line text-chips text-muted">{vendor.pickup_instructions}</p>
+                </div>
+              )}
 
               {/* Products */}
               {products.length === 0 ? (

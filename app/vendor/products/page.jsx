@@ -241,6 +241,11 @@ export default function VendorProductsPage() {
                       <Badge tone="danger" variant="subtle">Rejected</Badge>
                     )}
                   </div>
+                  {p.approval_note && (
+                    <p className="mt-1 rounded-lg border border-danger-border bg-danger-bg/40 px-2 py-1 text-chips text-danger-fg">
+                      Admin note: {p.approval_note}
+                    </p>
+                  )}
                   <p className="mt-0.5 text-chips text-muted">
                     {p.unit || 'each'} · {p.qty === null ? 'Unlimited qty' : `${p.qty} in stock`}
                   </p>
@@ -255,6 +260,12 @@ export default function VendorProductsPage() {
                     )}
                   </div>
                   <div className="flex gap-1.5">
+                    <a
+                      href={`/vendor/products/${p.id}/history`}
+                      className="inline-flex items-center rounded-lg px-2 text-chips font-medium text-muted transition-colors hover:bg-subtle hover:text-fg"
+                    >
+                      History
+                    </a>
                     <Button variant="ghost" size="sm" leftIcon={Pencil} onClick={() => openEdit(p)} aria-label={`Edit ${p.name}`} />
                     {p.status === 'archived' ? (
                       <Button variant="ghost" size="sm" leftIcon={Trash2} onClick={() => { setConfirmAction({ type: 'delete', product: p }); setConfirmOpen(true) }} aria-label={`Delete ${p.name}`} />

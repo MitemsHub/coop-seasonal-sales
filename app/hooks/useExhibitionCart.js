@@ -47,6 +47,17 @@ export default function useExhibitionCart() {
   }
 
   const addToCart = (p, delta) => {
+    // Insight only — never allowed to affect the cart. Powers the vendor's
+    // "adds vs views" numbers.
+    if (delta > 0) {
+      try {
+        fetch('/api/exhibition/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ member_id: memberId, type: 'add', product_id: p.id }),
+        }).catch(() => {})
+      } catch {}
+    }
     const existing = cart.find((l) => l.product_id === p.id)
     const current = existing?.qty || 0
     const nextQty = Math.max(0, current + delta)

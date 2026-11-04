@@ -99,6 +99,16 @@ export default function ExhibitionProductsPage() {
     setModal(p)
   }
 
+  // How long a product has been waiting — the queue is worked oldest first.
+  const ageLabel = (iso) => {
+    if (!iso) return ''
+    const hours = Math.floor((Date.now() - new Date(iso).getTime()) / 3_600_000)
+    if (!Number.isFinite(hours) || hours < 0) return ''
+    if (hours < 1) return 'just now'
+    if (hours < 24) return `${hours}h waiting`
+    return `${Math.floor(hours / 24)}d waiting`
+  }
+
   // Vendor approval — publish a submitted product (and any pending price
   // change) or reject it. Rejecting a live product keeps its approved price.
   const setApproval = async (p, action) => {
@@ -108,7 +118,12 @@ export default function ExhibitionProductsPage() {
       const res = await fetch(`/api/admin/exhibition/products/${p.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ approval_action: action }),
+        body: JSON.stringify({
+          approval_action: action,
+          ...(action === 'reject'
+            ? { approval_note: String(window.prompt('Why is this product being rejected? The vendor sees this.') || '') }
+            : {}),
+        }),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to update approval')
@@ -116,6 +131,30 @@ export default function ExhibitionProductsPage() {
         type: 'success',
         text: action === 'approve' ? `"${p.name}" approved and published.` : `"${p.name}" rejected.`,
       })
+      await load()
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // One decision for the whole queue, so fifty products don't cost fifty
+  // round trips.
+  const approveAllPending = async () => {
+    const ids = products.filter((p) => p.approval_status === 'pending').map((p) => p.id)
+    if (!ids.length) return
+    setBusy(true)
+    setMsg(null)
+    try {
+      const res = await fetch('/api/admin/exhibition/products/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve', ids }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Bulk approval failed')
+      setMsg({ type: 'success', text: `${(json.approved || []).length} product(s) approved and published.` })
       await load()
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
@@ -302,6 +341,17 @@ export default function ExhibitionProductsPage() {
           </div>
         </div>
 
+        {products.some((p) => p.approval_status === 'pending') && (
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-warning-border bg-warning-bg/40 px-3 py-2">
+            <p className="text-chips font-medium text-warning-fg">
+              {products.filter((p) => p.approval_status === 'pending').length} product(s) waiting for approval
+            </p>
+            <Button size="sm" variant="success" onClick={approveAllPending} disabled={busy}>
+              Approve all pending
+            </Button>
+          </div>
+        )}
+
         <Card className="p-0">
           {loading ? (
             <div className="space-y-3 p-4">
@@ -361,7 +411,14 @@ export default function ExhibitionProductsPage() {
                       <div className="flex flex-col items-start gap-1">
                         <Badge tone={STATUS_STYLES[p.status] || 'neutral'} variant="subtle">{p.status}</Badge>
                         {p.approval_status === 'pending' && (
-                          <Badge tone="warning" variant="subtle">Pending approval</Badge>
+                          <>
+                            <Badge tone="warning" variant="subtle">Pending approval</Badge>
+                            {p.approval_requested_at && (
+                              <span className="text-[10px] font-medium text-warning-fg">
+                                {ageLabel(p.approval_requested_at)}
+                              </span>
+                            )}
+                          </>
                         )}
                         {p.approval_status === 'rejected' && (
                           <Badge tone="danger" variant="subtle">Rejected</Badge>

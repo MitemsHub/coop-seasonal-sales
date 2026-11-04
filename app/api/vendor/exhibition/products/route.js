@@ -18,7 +18,7 @@ export async function GET(req) {
 
     let query = supabase
       .from('exhibition_products')
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, admin_markup, qty, image_url, status, approval_status, pending_vendor_price, pending_admin_markup, categories:category_id(name)')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, admin_markup, qty, image_url, status, approval_status, approval_note, approval_requested_at, pending_vendor_price, pending_admin_markup, categories:category_id(name)')
       .eq('vendor_id', ctx.vendor_id)
       .order('created_at', { ascending: false })
 

@@ -28,7 +28,7 @@ export async function PATCH(request, { params }) {
     if (approvalAction) {
       const { data: row } = await supabase
         .from('exhibition_products')
-        .select('id, name, status, vendor_id, pending_vendor_price, pending_admin_markup')
+        .select('id, name, status, vendor_id, cycle_id, vendor_price, admin_markup, pending_vendor_price, pending_admin_markup')
         .eq('id', id)
         .maybeSingle()
       if (!row) return NextResponse.json({ ok: false, error: 'Product not found' }, { status: 404 })
@@ -50,6 +50,21 @@ export async function PATCH(request, { params }) {
           .eq('id', id)
         if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
+        if (Object.keys(applied).length) {
+          await supabase.from('exhibition_price_history').insert({
+            product_id: id,
+            cycle_id: row.cycle_id || null,
+            vendor_id: row.vendor_id || null,
+            old_vendor_price: Number(row.vendor_price || 0),
+            new_vendor_price: applied.vendor_price !== undefined ? Number(applied.vendor_price) : Number(row.vendor_price || 0),
+            old_admin_markup: Number(row.admin_markup || 0),
+            new_admin_markup: applied.admin_markup !== undefined ? Number(applied.admin_markup) : Number(row.admin_markup || 0),
+            changed_by: 'admin',
+            changed_by_label: 'Admin approval',
+            note: 'Pending price applied on approval',
+          })
+        }
+
         // First publish only: members following this stand hear about a new
         // product, but an approved price change is not a new product.
         if (row.status !== 'active') {
@@ -68,6 +83,8 @@ export async function PATCH(request, { params }) {
           .from('exhibition_products')
           .update({
             approval_status: 'rejected',
+            approval_note: String(body.approval_note || '').trim().slice(0, 300),
+            approval_reviewed_at: new Date().toISOString(),
             pending_vendor_price: null,
             pending_admin_markup: null,
             approval_requested_at: null,

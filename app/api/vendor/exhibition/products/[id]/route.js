@@ -44,7 +44,7 @@ export async function PATCH(req, { params }) {
 
     const { data: existing } = await supabase
       .from('exhibition_products')
-      .select('id, status, approval_status')
+      .select('id, status, approval_status, vendor_price, admin_markup')
       .eq('id', id)
       .eq('vendor_id', ctx.vendor_id)
       .maybeSingle()
@@ -87,6 +87,30 @@ export async function PATCH(req, { params }) {
       .select(SELECT_COLS)
       .single()
     if (error) return NextResponse.json({ error: error.message || 'Failed to update product' }, { status: 500 })
+
+    // Every price edit is written down, so a dispute has a record of what was
+    // asked for, when, and by whom.
+    if (Object.keys(priceChanges).length) {
+      await supabase.from('exhibition_price_history').insert({
+        product_id: id,
+        cycle_id: ctx.cycle_id || null,
+        vendor_id: ctx.vendor_id,
+        old_vendor_price: Number(existing.vendor_price || 0),
+        new_vendor_price:
+          priceChanges.vendor_price !== undefined
+            ? Math.trunc(priceChanges.vendor_price)
+            : Number(existing.vendor_price || 0),
+        old_admin_markup: Number(existing.admin_markup || 0),
+        new_admin_markup:
+          priceChanges.admin_markup !== undefined
+            ? Math.trunc(priceChanges.admin_markup)
+            : Number(existing.admin_markup || 0),
+        changed_by: 'vendor',
+        changed_by_label:
+          data.approval_status === 'pending' ? 'Vendor request (pending approval)' : 'Vendor edit',
+        note: data.approval_status === 'pending' ? 'Price change awaiting admin approval' : '',
+      })
+    }
 
     return NextResponse.json({
       ok: true,
