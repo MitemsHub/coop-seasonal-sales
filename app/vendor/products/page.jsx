@@ -38,6 +38,7 @@ export default function VendorProductsPage() {
   // Optional services (installation …) attached to the product being edited.
   const [addons, setAddons] = useState([])
   const [addonForm, setAddonForm] = useState({ name: '', price: '' })
+  const [editingAddon, setEditingAddon] = useState(null) // { id, name, price } while a service is being edited in place
 
   const load = useCallback(async () => {
     const qs = new URLSearchParams()
@@ -78,6 +79,7 @@ export default function VendorProductsPage() {
   // Services belong to a saved product, so they load when the edit modal opens.
   useEffect(() => {
     setAddonForm({ name: '', price: '' })
+    setEditingAddon(null)
     if (!editing) {
       setAddons([])
       return
@@ -135,6 +137,36 @@ export default function VendorProductsPage() {
       setAddons((prev) => prev.filter((a) => a.id !== addon.id))
     } catch (e) {
       setMsg(e.message || 'Failed to remove service')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Edit in place: a vendor correcting a service price should not have to
+  // remove it (which retires the row members may already have bought).
+  const startEditService = (a) =>
+    setEditingAddon({ id: a.id, name: a.name || '', price: String(a.price ?? '') })
+
+  const saveServiceEdit = async () => {
+    if (!editing || !editingAddon) return
+    const name = String(editingAddon.name || '').trim()
+    if (!name) return setMsg('Give the service a name, e.g. Installation.')
+    const price = Math.trunc(Number(editingAddon.price))
+    if (!Number.isFinite(price) || price < 0) return setMsg('Enter the service price.')
+    setSaving(true)
+    setMsg('')
+    try {
+      const res = await fetch(`/api/vendor/exhibition/products/${editing.id}/addons`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addon_id: editingAddon.id, name, price }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to update service')
+      setAddons((prev) => prev.map((a) => (a.id === json.addon.id ? json.addon : a)))
+      setEditingAddon(null)
+    } catch (e) {
+      setMsg(e.message || 'Failed to update service')
     } finally {
       setSaving(false)
     }
@@ -449,15 +481,47 @@ export default function VendorProductsPage() {
               </p>
               {addons.length > 0 ? (
                 <div className="mt-2 space-y-1">
-                  {addons.map((a) => (
-                    <div key={a.id} className="flex items-center gap-2 rounded-lg bg-subtle px-2.5 py-1.5 text-xs">
-                      <span className="min-w-0 flex-1 truncate font-medium text-fg">{a.name}</span>
-                      <span className="font-semibold tabular-nums text-fg">{fmtNaira(a.price)}</span>
-                      <Button variant="danger" size="sm" onClick={() => removeService(a)} disabled={saving}>
-                        Remove
-                      </Button>
-                    </div>
-                  ))}
+                  {addons.map((a) =>
+                    editingAddon?.id === a.id ? (
+                      <div
+                        key={a.id}
+                        className="flex flex-col gap-2 rounded-lg border border-brand/40 bg-brand-subtle/40 p-2 text-xs sm:flex-row sm:items-center"
+                      >
+                        <Input
+                          value={editingAddon.name}
+                          onChange={(e) => setEditingAddon({ ...editingAddon, name: e.target.value })}
+                          placeholder="Service name"
+                          className="sm:flex-1"
+                        />
+                        <Input
+                          type="number"
+                          value={editingAddon.price}
+                          onChange={(e) => setEditingAddon({ ...editingAddon, price: e.target.value })}
+                          placeholder="Price (₦)"
+                          className="sm:w-32"
+                        />
+                        <div className="flex gap-1.5">
+                          <Button variant="brand" size="sm" onClick={saveServiceEdit} loading={saving}>
+                            Save
+                          </Button>
+                          <Button variant="secondary" size="sm" onClick={() => setEditingAddon(null)} disabled={saving}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div key={a.id} className="flex items-center gap-2 rounded-lg bg-subtle px-2.5 py-1.5 text-xs">
+                        <span className="min-w-0 flex-1 truncate font-medium text-fg">{a.name}</span>
+                        <span className="font-semibold tabular-nums text-fg">{fmtNaira(a.price)}</span>
+                        <Button variant="secondary" size="sm" onClick={() => startEditService(a)} disabled={saving}>
+                          Edit
+                        </Button>
+                        <Button variant="danger" size="sm" onClick={() => removeService(a)} disabled={saving}>
+                          Remove
+                        </Button>
+                      </div>
+                    )
+                  )}
                 </div>
               ) : (
                 <p className="mt-2 rounded-lg bg-subtle px-2.5 py-2 text-chips text-muted">

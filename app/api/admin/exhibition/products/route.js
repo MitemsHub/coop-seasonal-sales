@@ -47,14 +47,32 @@ export async function GET(request) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     }
 
+    // How many services each product carries, so the admin list shows which
+    // items have add-ons without opening every edit dialog.
+    const rows = data || []
+    const countByProduct = new Map()
+    if (rows.length) {
+      const { data: addonRows, error: addonErr } = await supabase
+        .from('exhibition_product_addons')
+        .select('product_id')
+        .in('product_id', rows.map((p) => p.id))
+        .eq('active', true)
+      if (!addonErr) {
+        for (const a of addonRows || []) {
+          countByProduct.set(Number(a.product_id), (countByProduct.get(Number(a.product_id)) || 0) + 1)
+        }
+      }
+    }
+
     return NextResponse.json({
       ok: true,
-      products: (data || []).map((p) => ({
+      products: rows.map((p) => ({
         ...p,
         vendor_name: p.vendors?.name || '',
         category_name: p.categories?.name || '',
         branch_name: p.branches?.name || '',
         final_price: Number(p.vendor_price || 0),
+        service_count: countByProduct.get(Number(p.id)) || 0,
       })),
     })
   } catch (e) {

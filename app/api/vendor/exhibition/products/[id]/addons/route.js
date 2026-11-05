@@ -84,6 +84,50 @@ export async function POST(req, { params }) {
   }
 }
 
+export async function PATCH(req, { params }) {
+  try {
+    const ctx = await getVendorContext(req)
+    if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const id = Math.trunc(Number(params?.id || 0))
+    const body = await req.json().catch(() => ({}))
+    const addonId = Math.trunc(Number(body.addon_id || 0))
+    if (!Number.isFinite(id) || id <= 0 || !Number.isFinite(addonId) || addonId <= 0) {
+      return NextResponse.json({ error: 'Product and addon_id are required' }, { status: 400 })
+    }
+
+    const patch = { updated_at: new Date().toISOString() }
+    if (body.name !== undefined) {
+      const name = String(body.name || '').trim().slice(0, 120)
+      if (!name) return NextResponse.json({ error: 'Service name is required' }, { status: 400 })
+      patch.name = name
+    }
+    if (body.price !== undefined) {
+      const price = Math.trunc(Number(body.price))
+      if (!Number.isFinite(price) || price < 0) return NextResponse.json({ error: 'Service price cannot be negative' }, { status: 400 })
+      patch.price = price
+    }
+    if (Object.keys(patch).length <= 1) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
+
+    const supabase = createClient()
+    const product = await ownProduct(supabase, ctx, id)
+    if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+
+    const { data, error } = await supabase
+      .from('exhibition_product_addons')
+      .update(patch)
+      .eq('id', addonId)
+      .eq('product_id', id)
+      .eq('vendor_id', ctx.vendor_id)
+      .select('id, product_id, name, price, unit, active, sort_order')
+      .maybeSingle()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!data) return NextResponse.json({ error: 'Service not found' }, { status: 404 })
+    return NextResponse.json({ ok: true, addon: data })
+  } catch (e) {
+    return NextResponse.json({ error: e.message || 'Failed to update service' }, { status: 500 })
+  }
+}
+
 export async function DELETE(req, { params }) {
   try {
     const ctx = await getVendorContext(req)

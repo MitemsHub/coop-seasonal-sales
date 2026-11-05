@@ -460,7 +460,14 @@ export default function ExhibitionProductsPage() {
                         )}
                         <div className="min-w-0">
                           <div className="truncate font-medium text-fg">{p.name}</div>
-                          <div className="font-mono text-xs text-muted">{p.sku}</div>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                            <span className="font-mono text-xs text-muted">{p.sku}</span>
+                            {p.service_count > 0 && (
+                              <Badge tone="accent" variant="subtle">
+                                {p.service_count} service{p.service_count === 1 ? '' : 's'}
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </TD>
