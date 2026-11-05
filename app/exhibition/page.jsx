@@ -364,7 +364,7 @@ function ExhibitionShopContent() {
                     key={p.id}
                     p={p}
                     qty={qtyOf(p.id)}
-                    onAdd={(d) => addToCart(p, d)}
+                    onAdd={(d, addons) => addToCart(p, d, addons)}
                   />
                 ))}
               </div>

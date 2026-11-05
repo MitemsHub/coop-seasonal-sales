@@ -170,6 +170,30 @@ export async function GET(req) {
     const products = allProducts.filter((p) => Number(p.branch_id) === selectedBranchId)
     const productIds = products.map((p) => p.id)
 
+    // Optional services sold with a product (installation, assembly …). They
+    // carry no stock of their own, so they ride along with the product line
+    // rather than appearing as separate shelf items.
+    const addonsByProduct = new Map()
+    if (productIds.length) {
+      const { data: addonRows } = await supabase
+        .from('exhibition_product_addons')
+        .select('id, product_id, name, price, unit')
+        .in('product_id', productIds)
+        .eq('active', true)
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true })
+      for (const a of addonRows || []) {
+        const pid = Number(a.product_id)
+        if (!addonsByProduct.has(pid)) addonsByProduct.set(pid, [])
+        addonsByProduct.get(pid).push({
+          id: Number(a.id),
+          name: a.name || 'Service',
+          price: Number(a.price || 0),
+          unit: a.unit || 'service',
+        })
+      }
+    }
+
     // Units other members are holding in their carts are not for sale. The
     // catalogue advertises what is actually left, not the raw shelf count.
     const { data: holdRows } = productIds.length
@@ -218,6 +242,7 @@ export async function GET(req) {
         negotiated_note: neg?.note || '',
         qty: p.qty === null ? null : Math.max(0, Number(p.qty) - (heldByOthers.get(Number(p.id)) || 0)),
         image_url: p.image_url || '',
+        addons: addonsByProduct.get(Number(p.id)) || [],
       }
     })
 

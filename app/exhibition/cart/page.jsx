@@ -174,7 +174,11 @@ function ExhibitionCartContent() {
           body: JSON.stringify({
             member_id: memberId,
             branch_code: branch || '',
-            lines: cart.map((l) => ({ product_id: l.product_id, qty: l.qty })),
+            lines: cart.map((l) => ({
+            product_id: l.product_id,
+            qty: l.qty,
+            addon_ids: (l.addons || []).map((a) => a.id),
+          })),
           }),
         })
         const json = await res.json().catch(() => null)
@@ -208,7 +212,8 @@ function ExhibitionCartContent() {
               prev[i]?.product_id === l.product_id &&
               Number(prev[i]?.qty) === Number(l.qty) &&
               Number(prev[i]?.price) === Number(l.price) &&
-              !!prev[i]?.negotiated === !!l.negotiated
+              !!prev[i]?.negotiated === !!l.negotiated &&
+              (prev[i]?.addons || []).map((a) => a.id).join() === (l.addons || []).map((a) => a.id).join()
           )
         return same ? prev : next
       })
@@ -250,7 +255,12 @@ function ExhibitionCartContent() {
     persistCart(next)
   }
 
-  const cartTotal = cart.reduce((s, l) => s + l.price * l.qty, 0)
+  // A line costs the product plus any services ticked for it, per unit.
+  const lineTotal = (l) => {
+    const addonPerUnit = (l.addons || []).reduce((t, a) => t + Number(a?.price || 0), 0)
+    return (Number(l.price || 0) + addonPerUnit) * Number(l.qty || 0)
+  }
+  const cartTotal = cart.reduce((s, l) => s + lineTotal(l), 0)
   const loanInterest = paymentOption === 'Loan' ? Math.round(cartTotal * (loanRatePct / 100)) : 0
   const totalWithInterest = paymentOption === 'Loan' ? cartTotal + loanInterest : cartTotal
 
@@ -281,7 +291,11 @@ function ExhibitionCartContent() {
           delivery_branch_code: deliveryBranch,
           department_name: department,
           payment_option: paymentOption,
-          lines: cart.map((l) => ({ product_id: l.product_id, qty: l.qty })),
+          lines: cart.map((l) => ({
+            product_id: l.product_id,
+            qty: l.qty,
+            addon_ids: (l.addons || []).map((a) => a.id),
+          })),
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -529,6 +543,15 @@ function ExhibitionCartContent() {
                             {item.negotiated && <span className="ml-1.5 font-semibold text-accent">your negotiated price</span>}
                           </div>
                           <div className="mt-0.5 text-sm font-bold tabular-nums text-brand">{naira(item.price)}</div>
+                          {(item.addons || []).length > 0 && (
+                            <div className="mt-1 space-y-0.5">
+                              {item.addons.map((a) => (
+                                <div key={a.id} className="text-chips font-medium text-accent">
+                                  + {a.name} · {naira(a.price)} per {item.unit}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex items-center justify-between gap-3 sm:justify-end">
@@ -552,7 +575,7 @@ function ExhibitionCartContent() {
                             </button>
                           </div>
                           <div className="w-24 text-right">
-                            <div className="text-sm font-bold tabular-nums text-fg">{naira(item.price * item.qty)}</div>
+                            <div className="text-sm font-bold tabular-nums text-fg">{naira(lineTotal(item))}</div>
                           </div>
                           <button
                             type="button"

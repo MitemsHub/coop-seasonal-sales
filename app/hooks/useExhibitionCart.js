@@ -30,7 +30,8 @@ export default function useExhibitionCart() {
           next.every(
             (l, i) =>
               prev[i]?.product_id === l.product_id &&
-              Number(prev[i]?.qty) === Number(l.qty)
+              Number(prev[i]?.qty) === Number(l.qty) &&
+              (prev[i]?.addons || []).map((a) => a.id).join() === (l.addons || []).map((a) => a.id).join()
           )
         return same ? prev : next
       })
@@ -46,7 +47,10 @@ export default function useExhibitionCart() {
     announceCart(next.reduce((s, l) => s + (Number(l?.qty) || 0), 0))
   }
 
-  const addToCart = (p, delta) => {
+  // `addons` are the optional services the member ticked for this product
+  // (installation, assembly …). They are priced per unit alongside the item and
+  // travel with the line into the order.
+  const addToCart = (p, delta, addons = null) => {
     // Insight only — never allowed to affect the cart. Powers the vendor's
     // "adds vs views" numbers.
     if (delta > 0) {
@@ -65,6 +69,11 @@ export default function useExhibitionCart() {
       persistCart(cart.filter((l) => l.product_id !== p.id))
       return
     }
+    const chosen = Array.isArray(addons)
+      ? addons
+          .map((a) => ({ id: Number(a?.id), name: String(a?.name || 'Service'), price: Math.max(0, Number(a?.price || 0)) }))
+          .filter((a) => Number.isFinite(a.id) && a.id > 0)
+      : existing?.addons || []
     persistCart([
       ...cart.filter((l) => l.product_id !== p.id),
       {
@@ -78,13 +87,21 @@ export default function useExhibitionCart() {
         negotiated: p.negotiated,
         image_url: p.image_url,
         qty: nextQty,
+        addons: chosen,
       },
     ])
   }
 
   const qtyOf = (id) => cart.find((l) => l.product_id === id)?.qty || 0
   const cartCount = useMemo(() => cart.reduce((s, l) => s + l.qty, 0), [cart])
-  const cartTotal = useMemo(() => cart.reduce((s, l) => s + l.price * l.qty, 0), [cart])
+  const cartTotal = useMemo(
+    () =>
+      cart.reduce((s, l) => {
+        const addonPerUnit = (l.addons || []).reduce((t, a) => t + Number(a?.price || 0), 0)
+        return s + (Number(l.price || 0) + addonPerUnit) * Number(l.qty || 0)
+      }, 0),
+    [cart]
+  )
 
   return { cart, addToCart, qtyOf, cartCount, cartTotal }
 }

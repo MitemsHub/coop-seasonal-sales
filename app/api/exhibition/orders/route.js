@@ -109,7 +109,15 @@ export async function POST(req) {
       }
       const qtyRes = validateNumber(l?.qty, { min: 1, max: 9999, integer: true })
       if (!qtyRes.isValid) return NextResponse.json({ ok: false, error: `Invalid quantity for a product: ${qtyRes.error}` }, { status: 400 })
-      lines.push({ product_id: pid, qty: qtyRes.value })
+      // Services ticked for this product (installation …). Only the ids are
+      // trusted; the prices come from the database below.
+      const addonIds = []
+      for (const raw of Array.isArray(l?.addon_ids) ? l.addon_ids : []) {
+        const aid = Number(raw)
+        if (Number.isFinite(aid) && aid > 0 && !addonIds.includes(aid)) addonIds.push(aid)
+      }
+      if (addonIds.length > 10) return NextResponse.json({ ok: false, error: 'Too many services on one item' }, { status: 400 })
+      lines.push({ product_id: pid, qty: qtyRes.value, addon_ids: addonIds })
     }
 
     const memberId = memberIdRes.sanitized.toUpperCase()
@@ -260,7 +268,44 @@ export async function POST(req) {
       }
     })
 
-    const totalPrincipal = priced.reduce((s, l) => s + l.amount, 0)
+    // Optional services become their own lines, tied to the product's vendor,
+    // so the delivery pack shows the work owed and the vendor is paid for it.
+    const requestedAddonIds = [...new Set(lines.flatMap((l) => l.addon_ids || []))]
+    const addonById = new Map()
+    if (requestedAddonIds.length) {
+      const { data: addonRows, error: addonErr } = await supabase
+        .from('exhibition_product_addons')
+        .select('id, product_id, name, price, active')
+        .in('id', requestedAddonIds)
+        .eq('active', true)
+      if (addonErr) return NextResponse.json({ ok: false, error: addonErr.message }, { status: 500 })
+      for (const a of addonRows || []) addonById.set(Number(a.id), a)
+    }
+
+    const serviceLines = []
+    for (const l of priced) {
+      const line = lines.find((x) => x.product_id === l.product_id)
+      for (const addonId of line?.addon_ids || []) {
+        const addon = addonById.get(Number(addonId))
+        if (!addon || Number(addon.product_id) !== Number(l.product_id)) {
+          return NextResponse.json({ ok: false, error: 'A service in your cart is no longer available.' }, { status: 400 })
+        }
+        const servicePrice = Math.max(0, Number(addon.price || 0))
+        serviceLines.push({
+          product_id: l.product_id,
+          vendor_id: l.vendor_id,
+          product_name: `${l.product_name} — ${addon.name}`,
+          sku: `${l.sku}-SVC`,
+          unit: 'service',
+          vendor_price: 0,
+          final_price: servicePrice,
+          qty: l.qty,
+          amount: servicePrice * l.qty,
+        })
+      }
+    }
+
+    const totalPrincipal = [...priced, ...serviceLines].reduce((s, l) => s + l.amount, 0)
     const totalQty = priced.reduce((s, l) => s + l.qty, 0)
     const loanInterest = paymentOption === 'Loan' ? Math.round(totalPrincipal * loanInterestRate) : 0
     const totalAmount = paymentOption === 'Loan' ? totalPrincipal + loanInterest : totalPrincipal
@@ -401,7 +446,7 @@ export async function POST(req) {
     const orderDbId = inserted.id
 
     const { error: lineErr } = await supabase.from('exhibition_order_lines').insert(
-      priced.map((l) => ({
+      [...priced, ...serviceLines].map((l) => ({
         order_id: orderDbId,
         vendor_id: l.vendor_id,
         product_id: l.product_id,
@@ -421,7 +466,7 @@ export async function POST(req) {
 
     // One payment row per vendor in this order (co-op pays vendors later)
     const byVendor = new Map()
-    for (const l of priced) {
+    for (const l of [...priced, ...serviceLines]) {
       byVendor.set(l.vendor_id, (byVendor.get(l.vendor_id) || 0) + l.amount)
     }
     const { error: payErr } = await supabase.from('exhibition_vendor_payment_status').insert(
