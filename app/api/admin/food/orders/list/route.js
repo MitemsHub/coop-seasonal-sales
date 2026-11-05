@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '../../../../../../lib/supabaseServer'
+import { resolveOrderCycle } from '../../../../../../lib/orderCycle'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -19,7 +20,10 @@ async function resolveCycleId(supabase, searchParams, ordersHasCycle) {
   }
   const { data, error } = await supabase.from('cycles').select('id').eq('is_active', true).maybeSingle()
   if (error) throw new Error(error.message)
-  return data?.id ?? null
+  if (data?.id) return data.id
+  // A closed season still has orders to administer: read the newest cycle that
+  // actually has orders instead of returning an empty list (lib/orderCycle).
+  return resolveOrderCycle(supabase)
 }
 
 function applyOrderFilters({

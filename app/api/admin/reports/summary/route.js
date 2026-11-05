@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '../../../../../lib/supabaseServer'
 import { queryDirect } from '../../../../../lib/directDb'
+import { resolveOrderCycle } from '../../../../../lib/orderCycle'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -21,7 +22,10 @@ async function resolveCycleId(supabase, searchParams, ordersHasCycle) {
   }
   const { data, error } = await supabase.from('cycles').select('id').eq('is_active', true).maybeSingle()
   if (error) throw new Error('Failed to resolve active cycle')
-  return data?.id ?? null
+  if (data?.id) return data.id
+  // A closed season still has figures worth showing: fall back to the newest
+  // cycle that has orders instead of zeroing the whole dashboard.
+  return resolveOrderCycle(supabase)
 }
 
 export async function GET(request) {

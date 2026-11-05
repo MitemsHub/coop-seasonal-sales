@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '../../../../../lib/supabaseServer'
 import { verify } from '@/lib/signing'
-import { resolveRepCycleId } from '@/lib/repCycle'
+import { resolveOrderCycle } from '@/lib/orderCycle'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -42,8 +42,8 @@ export async function GET(req) {
     const ordersHasCycle = await hasColumn(supabase, 'orders', 'cycle_id')
     // A closed season must not hide the orders the rep still has to deliver:
     // with nothing active this reads the newest cycle their branch has orders
-    // in (see lib/repCycle) instead of refusing to list anything.
-    const cycleId = ordersHasCycle ? await resolveRepCycleId(supabase, claim.branch_id) : null
+    // in (see lib/orderCycle) instead of refusing to list anything.
+    const cycleId = ordersHasCycle ? await resolveOrderCycle(supabase, claim.branch_id) : null
 
     const selectCols = `
       order_id, created_at, posted_at, status, payment_option, total_amount,

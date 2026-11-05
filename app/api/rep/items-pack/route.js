@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '../../../../lib/supabaseServer'
 import { verify } from '@/lib/signing'
-import { resolveRepCycleId } from '@/lib/repCycle'
+import { resolveOrderCycle } from '@/lib/orderCycle'
 import { queryDirect } from '../../../../lib/directDb'
 
 export const runtime = 'nodejs'
@@ -137,11 +137,11 @@ export async function GET(req) {
     const pricesHasCycle = !pricesColErr
     const markupsHasCycle = !markupsColErr
 
-    // Same rule as the order list and dashboard (lib/repCycle): once the
+    // Same rule as the order list and dashboard (lib/orderCycle): once the
     // season closes, summarize the newest cycle this branch has orders in
     // instead of failing the export outright.
     const cycleScoped = ordersHasCycle || pricesHasCycle || markupsHasCycle
-    const activeCycleId = cycleScoped ? await resolveRepCycleId(supabase, claim.branch_id) : null
+    const activeCycleId = cycleScoped ? await resolveOrderCycle(supabase, claim.branch_id) : null
     if (cycleScoped && !activeCycleId) {
       return NextResponse.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
     }

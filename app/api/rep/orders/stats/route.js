@@ -9,7 +9,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { verify } from '@/lib/signing'
-import { resolveRepCycleId } from '@/lib/repCycle'
+import { resolveOrderCycle } from '@/lib/orderCycle'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -33,8 +33,8 @@ export async function GET(req) {
     // The cycle these figures describe: the active one, or — once the season
     // has closed — the newest cycle this branch has orders in. Without that
     // fallback a closed season showed zeros on every card and on the dashboard
-    // while the orders were still sitting there (see lib/repCycle).
-    const cycleId = await resolveRepCycleId(supabase, branchId)
+    // while the orders were still sitting there (see lib/orderCycle).
+    const cycleId = await resolveOrderCycle(supabase, branchId)
 
     const ordersQuery = supabase
       .from('orders')
