@@ -482,9 +482,10 @@ function RepPostedPageContent() {
       for (const r of sorted) {
         sn += 1
         const original = Number(r.original_price || 0)
-        const markup = Number(r.markup || 0)
         const qty = Number(r.quantity || 0)
-        const price = original + markup
+        // The branch items pack quotes the shelf price the rep buys at — the
+        // branch markup is the co-op's margin and does not belong on this sheet.
+        const price = original
         const amount = price * qty
         totalQty += qty
         totalAmount += amount
@@ -584,9 +585,10 @@ function RepPostedPageContent() {
       const body = sorted.map(r => {
         sn += 1
         const original = Number(r.original_price || 0)
-        const markup = Number(r.markup || 0)
         const qty = Number(r.quantity || 0)
-        const price = original + markup
+        // The branch items pack quotes the shelf price the rep buys at — the
+        // branch markup is the co-op's margin and does not belong on this sheet.
+        const price = original
         const amount = price * qty
         totalQty += qty
         totalAmount += amount

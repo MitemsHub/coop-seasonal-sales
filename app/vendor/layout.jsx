@@ -12,7 +12,7 @@ const NAV = [
   { href: '/vendor/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/vendor/deliveries', label: 'Deliveries', icon: ClipboardCheck },
   { href: '/vendor/products', label: 'Products', icon: Package },
-  { href: '/vendor/markups', label: 'Prices & Markups', icon: BadgePercent },
+  { href: '/vendor/markups', label: 'Prices & Discounts', icon: BadgePercent },
   { href: '/vendor/orders', label: 'Orders', icon: ShoppingBag },
   { href: '/vendor/banks', label: 'Banks', icon: Landmark },
   { href: '/vendor/reports', label: 'Report', icon: BarChart3 },

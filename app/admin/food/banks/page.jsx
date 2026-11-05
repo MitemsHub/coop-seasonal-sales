@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import DraggableModal from '../../../components/DraggableModal'
 import Button from '../../../components/ui/Button'
+import FilePicker from '../../../components/ui/FilePicker'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 
 function safeJsonFactory() {
@@ -433,10 +434,10 @@ function AdminFoodBanksContent() {
             rows={3}
             disabled={invoiceUploading}
           />
-          <input
-            type="file"
-            onChange={(e) => setInvoiceFile(e.target.files?.[0] || null)}
-            className="w-full text-sm"
+          <FilePicker
+            value={invoiceFile}
+            onChange={setInvoiceFile}
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/*"
             disabled={invoiceUploading}
           />
           <Button

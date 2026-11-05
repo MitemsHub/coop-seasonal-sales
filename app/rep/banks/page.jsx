@@ -120,6 +120,9 @@ function RepFoodBanksContent() {
   const [invoiceFile, setInvoiceFile] = useState(null)
   const [invoiceDragActive, setInvoiceDragActive] = useState(false)
   const [uploading, setUploading] = useState(false)
+  // Set when the upload is a re-file of an existing invoice: the new file is
+  // uploaded first, then the old row (and its stored file) is removed.
+  const [replaceInvoiceId, setReplaceInvoiceId] = useState(null)
   const invoiceFileInputRef = useRef(null)
 
   const [invoiceEditOpen, setInvoiceEditOpen] = useState(false)
@@ -293,7 +296,7 @@ function RepFoodBanksContent() {
     }
   }
 
-  const openUpload = (bank = null) => {
+  const openUpload = (bank = null, replaceInv = null) => {
     if (paid?.is_paid) {
       setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
       return
@@ -304,13 +307,27 @@ function RepFoodBanksContent() {
     }
     const preset = bank?.id
       ? String(bank.id)
-      : String((banks.find((b) => b.is_current) || banks[0])?.id || '')
+      : replaceInv?.bank_account_id
+        ? String(replaceInv.bank_account_id)
+        : String((banks.find((b) => b.is_current) || banks[0])?.id || '')
     setInvoiceBankId(preset)
-    setInvoiceRef('')
-    setInvoiceNotes('')
+    setReplaceInvoiceId(replaceInv?.id ? Number(replaceInv.id) : null)
+    setInvoiceRef(replaceInv?.invoice_ref || '')
+    setInvoiceNotes(replaceInv?.notes || '')
     setInvoiceFile(null)
     setInvoiceDragActive(false)
     setInvoiceUploadOpen(true)
+  }
+
+  // Re-file an invoice without hunting for the account: the upload modal opens
+  // on that invoice's account, and the old file is retired once the new one is in.
+  const replaceInvoiceFile = (inv) => {
+    if (paid?.is_paid) {
+      setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
+      return
+    }
+    const acct = banks.find((b) => Number(b.id) === Number(inv?.bank_account_id)) || null
+    openUpload(acct, inv)
   }
 
   const uploadInvoice = async () => {
@@ -344,9 +361,30 @@ function RepFoodBanksContent() {
       setInvoiceUploadOpen(false)
       setInvoiceFile(null)
       setInvoiceCount((n) => n + 1)
+      let replacedOld = false
+      if (replaceInvoiceId) {
+        const oldId = replaceInvoiceId
+        setReplaceInvoiceId(null)
+        try {
+          const delRes = await fetch(
+            `/api/rep/food/vendor-banks/invoices/delete?invoice_id=${encodeURIComponent(oldId)}`,
+            { method: 'DELETE' }
+          )
+          replacedOld = delRes.ok
+        } catch {
+          replacedOld = false
+        }
+      }
       await fetchLocation()
       await loadInvoices(invoiceFilterBankId ? { id: invoiceFilterBankId } : null)
-      setMsg({ type: 'success', text: 'Invoice uploaded' })
+      if (replaceInvoiceId && !replacedOld) {
+        setMsg({
+          type: 'error',
+          text: 'The new file is uploaded, but the old version is still listed — delete it from the list.',
+        })
+      } else {
+        setMsg({ type: 'success', text: replaceInvoiceId ? 'Invoice file replaced' : 'Invoice uploaded' })
+      }
     } catch (e) {
       setMsg({ type: 'error', text: e?.message || 'Upload failed' })
     } finally {
@@ -737,6 +775,14 @@ function RepFoodBanksContent() {
                       ) : (
                         <span className="text-xs text-muted">No link</span>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => replaceInvoiceFile(inv)}
+                        disabled={paid?.is_paid}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
+                      >
+                        Replace
+                      </button>
                       <button
                         type="button"
                         onClick={() => openEditInvoice(inv)}

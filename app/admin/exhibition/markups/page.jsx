@@ -1,9 +1,9 @@
 'use client'
 
 // app/admin/exhibition/markups/page.jsx
-// Exhibition markups — like a real market, the person who beats a price gets
-// their own negotiated price. Admin sets/removes per-member prices on any
-// product at a negotiated price.
+// Exhibition discounts — like a real market, the person who beats a price gets
+// their own negotiated price. Admin sets/removes per-member discount prices on
+// any product at a negotiated price.
 import { useCallback, useEffect, useState } from 'react'
 import { Percent, Plus, RefreshCw, Search, Trash2, UserRound } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
@@ -136,9 +136,9 @@ export default function ExhibitionMarkupsPage() {
       <div className="p-4 sm:p-6 lg:p-8">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-h2 font-bold tracking-tight text-fg">Exhibition Prices</h1>
+            <h1 className="text-h2 font-bold tracking-tight text-fg">Exhibition Discounts</h1>
             <p className="mt-0.5 text-sm text-muted">
-              Per-member negotiated prices. Like the market, whoever beats a price gets their own.
+              Per-member discount prices. Like the market, whoever beats a price gets their own.
             </p>
           </div>
           <Button variant="ghost" size="sm" leftIcon={RefreshCw} onClick={load} disabled={loading || busy}>
@@ -212,8 +212,8 @@ export default function ExhibitionMarkupsPage() {
                       )}
                     </TD>
                     <TD>
-                      <Button size="sm" variant="ghost" leftIcon={UserRound} onClick={() => openDetail(p)} disabled={busy}>
-                        Prices
+                      <Button size="sm" variant="brand" leftIcon={UserRound} onClick={() => openDetail(p)} disabled={busy}>
+                        Set discount
                       </Button>
                     </TD>
                   </TR>
@@ -223,12 +223,12 @@ export default function ExhibitionMarkupsPage() {
           )}
         </Card>
 
-        <DraggableModal open={!!detail} onClose={() => setDetail(null)} title={`Prices · ${detail?.name || ''}`} widthClass="max-w-2xl w-full mx-4">
+        <DraggableModal open={!!detail} onClose={() => setDetail(null)} title={`Discounts · ${detail?.name || ''}`} widthClass="max-w-2xl w-full mx-4">
           {detail && (
             <div className="space-y-5">
               {/* Per-member negotiated prices */}
               <div>
-                <div className="mb-2 text-sm font-semibold text-fg">Negotiated prices</div>
+                <div className="mb-2 text-sm font-semibold text-fg">Negotiated discount prices</div>
                 {pricesLoading ? (
                   <div className="space-y-2">
                     {[0, 1].map((i) => (
