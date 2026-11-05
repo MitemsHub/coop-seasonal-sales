@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense, useEffect, useRef, useState } from 'react'
+import CycleTag from '../components/CycleTag'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { ArrowRight, BadgePercent, BarChart3, ChevronDown, ClipboardCheck, Landmark, LayoutDashboard, LineChart, LogOut, Menu, Package, PanelLeftClose, PanelLeftOpen, ShoppingBag, Store, X } from 'lucide-react'
@@ -349,6 +350,7 @@ export default function VendorLayout({ children }) {
               {sidebarVisible ? <PanelLeftClose className="h-4.5 w-4.5" /> : <PanelLeftOpen className="h-4.5 w-4.5" />}
             </button>
             <Breadcrumbs items={crumbs} />
+            <CycleTag className="ml-1 hidden sm:inline-flex" />
             <button
               type="button"
               onClick={doLogout}

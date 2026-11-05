@@ -3,6 +3,7 @@
 // app/admin/layout.jsx
 // Sakani admin shell — sidebar (icons + active accent pill, collapsible rail) + topbar.
 import Link from 'next/link'
+import CycleTag from '../components/CycleTag'
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '../contexts/AuthContext'
@@ -754,6 +755,7 @@ export default function AdminLayout({ children }) {
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">
+            <CycleTag className="mr-1 hidden md:inline-flex" />
             <ThemeToggle />
             <button
               type="button"

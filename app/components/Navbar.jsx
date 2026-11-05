@@ -2,6 +2,7 @@
 'use client'
 
 import Link from 'next/link'
+import CycleTag from './CycleTag'
 import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
@@ -542,6 +543,8 @@ export default function Navbar() {
           )}
         </nav>
 
+        <CycleTag className="mr-1 hidden sm:inline-flex" />
+
         {/* Notification bell — members only */}
         {userType === 'member' && <NotificationBell memberId={memberIdKey} />}
 
@@ -610,6 +613,7 @@ export default function Navbar() {
                   </span>
                   <span className="text-sm font-bold text-brand dark:text-fg">CBN Coop</span>
                 </span>
+                <CycleTag className="ml-auto mr-1 sm:hidden" />
                 <button
                   onClick={closeMobileMenu}
                   className="inline-flex items-center justify-center p-2 rounded-lg text-fg hover:bg-subtle focus:outline-none focus:ring-2 focus:ring-brand/40"

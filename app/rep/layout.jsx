@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import CycleTag from '../components/CycleTag'
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '../contexts/AuthContext'
@@ -547,6 +548,7 @@ export default function RepLayout({ children }) {
           )}
 
           <div className="flex shrink-0 items-center gap-1.5">
+            <CycleTag className="mr-1 hidden md:inline-flex" />
             <ThemeToggle />
             <button
               type="button"
