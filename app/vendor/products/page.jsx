@@ -35,6 +35,9 @@ export default function VendorProductsPage() {
   const [form, setForm] = useState(emptyForm())
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
+  // Optional services (installation …) attached to the product being edited.
+  const [addons, setAddons] = useState([])
+  const [addonForm, setAddonForm] = useState({ name: '', price: '' })
 
   const load = useCallback(async () => {
     const qs = new URLSearchParams()
@@ -70,6 +73,71 @@ export default function VendorProductsPage() {
     })
     setMsg('')
     setModalOpen(true)
+  }
+
+  // Services belong to a saved product, so they load when the edit modal opens.
+  useEffect(() => {
+    setAddonForm({ name: '', price: '' })
+    if (!editing) {
+      setAddons([])
+      return
+    }
+    let cancelled = false
+    fetch(`/api/vendor/exhibition/products/${editing.id}/addons`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!cancelled) setAddons(j?.ok ? j.addons || [] : [])
+      })
+      .catch(() => {
+        if (!cancelled) setAddons([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [editing])
+
+  const addService = async () => {
+    if (!editing) return
+    const name = String(addonForm.name || '').trim()
+    if (!name) return setMsg('Give the service a name, e.g. Installation.')
+    const price = Math.trunc(Number(addonForm.price))
+    if (!Number.isFinite(price) || price < 0) return setMsg('Enter the service price.')
+    setSaving(true)
+    setMsg('')
+    try {
+      const res = await fetch(`/api/vendor/exhibition/products/${editing.id}/addons`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, price }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to add service')
+      setAddons((prev) => [...prev, json.addon])
+      setAddonForm({ name: '', price: '' })
+    } catch (e) {
+      setMsg(e.message || 'Failed to add service')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const removeService = async (addon) => {
+    if (!editing) return
+    setSaving(true)
+    setMsg('')
+    try {
+      const res = await fetch(
+        `/api/vendor/exhibition/products/${editing.id}/addons?addon_id=${encodeURIComponent(addon.id)}`,
+        { method: 'DELETE' }
+      )
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to remove service')
+      setAddons((prev) => prev.filter((a) => a.id !== addon.id))
+    } catch (e) {
+      setMsg(e.message || 'Failed to remove service')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const save = async () => {
@@ -372,6 +440,48 @@ export default function VendorProductsPage() {
               onImageUploaded={(url) => setForm((f) => ({ ...f, image_url: url }))}
             />
           </div>
+          {editing && (
+            <div className="rounded-xl border border-line p-3 sm:col-span-2">
+              <div className="text-sm font-semibold text-fg">Services (add-ons)</div>
+              <p className="mt-0.5 text-chips text-muted">
+                Optional extras bought with this item — installation, assembly, set-up. Priced per unit;
+                members tick them when they add the product, and each one lands on the order as its own line.
+              </p>
+              {addons.length > 0 ? (
+                <div className="mt-2 space-y-1">
+                  {addons.map((a) => (
+                    <div key={a.id} className="flex items-center gap-2 rounded-lg bg-subtle px-2.5 py-1.5 text-xs">
+                      <span className="min-w-0 flex-1 truncate font-medium text-fg">{a.name}</span>
+                      <span className="font-semibold tabular-nums text-fg">{fmtNaira(a.price)}</span>
+                      <Button variant="danger" size="sm" onClick={() => removeService(a)} disabled={saving}>
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 rounded-lg bg-subtle px-2.5 py-2 text-chips text-muted">
+                  No services yet. Add one below if this item needs fitting or installation.
+                </p>
+              )}
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_120px_auto]">
+                <Input
+                  value={addonForm.name}
+                  onChange={(e) => setAddonForm({ ...addonForm, name: e.target.value })}
+                  placeholder="Service name, e.g. Installation"
+                />
+                <Input
+                  type="number"
+                  value={addonForm.price}
+                  onChange={(e) => setAddonForm({ ...addonForm, price: e.target.value })}
+                  placeholder="Price (₦)"
+                />
+                <Button variant="brand" size="sm" onClick={addService} loading={saving}>
+                  Add service
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </Modal>
 
