@@ -315,6 +315,12 @@ function ReportsPageContent() {
   const [summaryItemsPackLoading, setSummaryItemsPackLoading] = useState(false)
   const [summaryItemsPackProgress, setSummaryItemsPackProgress] = useState({ current: 0, total: 0 })
 
+  // Summary of Orders from All Delivery Locations
+  const [locationSummaryRows, setLocationSummaryRows] = useState([])
+  const [locationSummaryTotals, setLocationSummaryTotals] = useState({ amount_with_markup: 0, amount_without_markup: 0, markup: 0 })
+  const [locationSummaryLoading, setLocationSummaryLoading] = useState(true)
+  const [locationSummaryErr, setLocationSummaryErr] = useState(null)
+
   // Summary of Items: selection state
   const [summarySelectedItems, setSummarySelectedItems] = useState([])
   const summaryItemOptions = useMemo(() => {
@@ -390,6 +396,26 @@ function ReportsPageContent() {
       }
     })()
   }, [summarySelectedDeliveryCode, summarySelectedDepartmentId])
+
+  // Load the per-delivery-location order summary (amounts with/without markup)
+  useEffect(() => {
+    ;(async () => {
+      try {
+        setLocationSummaryLoading(true)
+        setLocationSummaryErr(null)
+        const res = await fetch('/api/admin/reports/delivery-location-summary', { cache: 'no-store' })
+        const json = await res.json()
+        if (!json.ok) throw new Error(json.error || 'Failed to load delivery location summary')
+        setLocationSummaryRows(json.rows || [])
+        setLocationSummaryTotals(json.totals || { amount_with_markup: 0, amount_without_markup: 0, markup: 0 })
+      } catch (e) {
+        setLocationSummaryErr(e.message)
+        setLocationSummaryRows([])
+      } finally {
+        setLocationSummaryLoading(false)
+      }
+    })()
+  }, [])
 
   const exportSummaryExcel = () => {
     const selectedSet = new Set(summarySelectedItems)
@@ -468,6 +494,54 @@ function ReportsPageContent() {
       totals: { labelKey: 'items', label: 'TOTAL', sumKeys: ['qty', 'amount'], rawRows, currencyPrefix: '' },
       footer: true,
       footerColumnIndex: 2
+    })
+  }
+
+  // Summary of Orders from All Delivery Locations — totals per delivery location
+  const locationSummaryExportRows = () =>
+    locationSummaryRows.map((r, idx) => ({
+      sn: idx + 1,
+      'delivery location': r.delivery_location || '',
+      'amount with markup': Number(r.amount_with_markup || 0),
+      'amount without markup': Number(r.amount_without_markup || 0),
+    }))
+
+  const exportLocationSummaryExcel = () => {
+    if (!locationSummaryRows.length) return
+    const rawRows = locationSummaryExportRows()
+    const rows = rawRows.map((r) => ({
+      ...r,
+      'amount with markup': Number(r['amount with markup']).toLocaleString(),
+      'amount without markup': Number(r['amount without markup']).toLocaleString(),
+    }))
+    exportExcel(rows, 'summary_of_orders_all_delivery_locations.xlsx', {
+      heading: 'Summary of Orders from All Delivery Locations',
+      totals: {
+        labelKey: 'delivery location',
+        label: 'TOTAL',
+        sumKeys: ['amount with markup', 'amount without markup'],
+        rawRows,
+        currencyPrefix: '',
+      },
+    })
+  }
+
+  const exportLocationSummaryPDF = () => {
+    if (!locationSummaryRows.length) return
+    const rawRows = locationSummaryExportRows()
+    const rows = rawRows.map((r) => ({
+      ...r,
+      'amount with markup': Number(r['amount with markup']).toLocaleString(),
+      'amount without markup': Number(r['amount without markup']).toLocaleString(),
+    }))
+    exportPDF(rows, 'Summary of Orders from All Delivery Locations', {
+      totals: {
+        labelKey: 'delivery location',
+        label: 'TOTAL',
+        sumKeys: ['amount with markup', 'amount without markup'],
+        rawRows,
+        currencyPrefix: '',
+      },
     })
   }
 
@@ -1853,6 +1927,56 @@ function ReportsPageContent() {
           />
         )
       })()}
+
+      {/* Summary of Orders from All Delivery Locations */}
+      <Section
+        title="Summary of Orders from All Delivery Locations"
+        onExportExcel={exportLocationSummaryExcel}
+        onExportPDF={exportLocationSummaryPDF}
+      >
+        {locationSummaryErr ? (
+          <div className="p-4 text-sm text-danger-fg">{locationSummaryErr}</div>
+        ) : locationSummaryLoading ? (
+          <div className="p-4 text-sm text-muted">Loading…</div>
+        ) : locationSummaryRows.length === 0 ? (
+          <div className="p-4 text-sm text-muted text-center">No orders for this cycle yet.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs sm:text-sm min-w-full">
+              <thead className="bg-subtle border-b border-line-subtle">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs sm:text-sm font-medium text-muted uppercase tracking-wider">SN</th>
+                  <th className="px-4 py-3 text-left text-xs sm:text-sm font-medium text-muted uppercase tracking-wider">Delivery Location</th>
+                  <th className="px-4 py-3 text-right text-xs sm:text-sm font-medium text-muted uppercase tracking-wider">Amount With Markup</th>
+                  <th className="px-4 py-3 text-right text-xs sm:text-sm font-medium text-muted uppercase tracking-wider">Amount Without Markup</th>
+                </tr>
+              </thead>
+              <tbody className="bg-surface divide-y divide-gray-200">
+                {locationSummaryRows.map((r, idx) => (
+                  <tr key={`${r.branch_code || 'loc'}_${idx}`} className="hover:bg-subtle transition-colors duration-150">
+                    <td className="px-4 py-2 text-fg">{idx + 1}</td>
+                    <td className="px-4 py-2 text-fg">{r.delivery_location}</td>
+                    <td className="px-4 py-2 text-fg text-right tabular-nums">{Number(r.amount_with_markup || 0).toLocaleString()}</td>
+                    <td className="px-4 py-2 text-fg text-right tabular-nums">{Number(r.amount_without_markup || 0).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-subtle border-t-2 border-line font-semibold">
+                  <td className="px-4 py-3" />
+                  <td className="px-4 py-3 text-fg">TOTAL</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-fg">{Number(locationSummaryTotals.amount_with_markup || 0).toLocaleString()}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-fg">{Number(locationSummaryTotals.amount_without_markup || 0).toLocaleString()}</td>
+                </tr>
+              </tfoot>
+            </table>
+            <div className="flex items-center justify-between gap-4 border-t border-line-subtle px-4 py-3 text-sm">
+              <span className="font-semibold text-fg">TOTAL MARKUP</span>
+              <span className="font-semibold text-fg tabular-nums">{Number(locationSummaryTotals.markup || 0).toLocaleString()}</span>
+            </div>
+          </div>
+        )}
+      </Section>
 
       {/* Branch Item Prices Matrix removed */}
 
