@@ -54,6 +54,11 @@ export async function GET(request) {
         const activeCycleRes = await queryDirect(`SELECT id FROM cycles WHERE is_active = TRUE LIMIT 1;`)
         activeCycleId = activeCycleRes.rows?.[0]?.id ?? null
         if (!activeCycleId) {
+          // Closed season: read the newest cycle that has orders.
+          const latestCycleRes = await queryDirect(`SELECT cycle_id FROM orders WHERE cycle_id IS NOT NULL ORDER BY order_id DESC LIMIT 1;`)
+          activeCycleId = latestCycleRes.rows?.[0]?.cycle_id ?? null
+        }
+        if (!activeCycleId) {
           return NextResponse.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
         }
       }
@@ -120,8 +125,19 @@ export async function GET(request) {
           .eq('is_active', true)
           .maybeSingle()
         if (cycleErr) return NextResponse.json({ ok: false, error: cycleErr.message }, { status: 500 })
-        if (!activeCycle?.id) return NextResponse.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
-        activeCycleId = activeCycle.id
+        activeCycleId = activeCycle?.id || null
+        if (!activeCycleId) {
+          // Closed season: read the newest cycle that has orders.
+          const { data: latestCycle } = await supabase
+            .from('orders')
+            .select('cycle_id')
+            .not('cycle_id', 'is', null)
+            .order('order_id', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          activeCycleId = latestCycle?.cycle_id || null
+        }
+        if (!activeCycleId) return NextResponse.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
       }
 
       // Fetch base branch-item prices

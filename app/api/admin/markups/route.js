@@ -397,8 +397,19 @@ export async function PATCH(request) {
         .eq('is_active', true)
         .maybeSingle()
       if (activeErr) return NextResponse.json({ ok: false, error: activeErr.message }, { status: 500 })
-      if (!active?.id) return NextResponse.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
-      cycleId = active.id
+      cycleId = active?.id || null
+      if (!cycleId) {
+        // Closed season: default to the newest cycle that has orders.
+        const { data: latestCycle } = await supabase
+          .from('orders')
+          .select('cycle_id')
+          .not('cycle_id', 'is', null)
+          .order('order_id', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        cycleId = latestCycle?.cycle_id || null
+      }
+      if (!cycleId) return NextResponse.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
     }
 
     const { data: branch, error: brErr } = await supabase

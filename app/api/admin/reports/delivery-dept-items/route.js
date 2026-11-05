@@ -214,8 +214,19 @@ export async function GET(req) {
         .eq('is_active', true)
         .maybeSingle()
       if (cycleErr) throw new Error(cycleErr.message)
-      if (!activeCycle?.id) return NextResponse.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
-      activeCycleId = activeCycle.id
+      activeCycleId = activeCycle?.id || null
+      if (!activeCycleId) {
+        // Closed season: report on the newest cycle that has orders.
+        const { data: latestCycle } = await supabase
+          .from('orders')
+          .select('cycle_id')
+          .not('cycle_id', 'is', null)
+          .order('order_id', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        activeCycleId = latestCycle?.cycle_id || null
+      }
+      if (!activeCycleId) return NextResponse.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
     }
 
     // Primary path: direct SQL across core tables with prices and configured markups

@@ -30,8 +30,19 @@ export async function GET(req) {
         .eq('is_active', true)
         .maybeSingle()
       if (cycleErr) throw new Error(cycleErr.message)
-      if (!activeCycle?.id) throw new Error('No active cycle found')
-      effectiveCycleId = activeCycle.id
+      effectiveCycleId = activeCycle?.id || null
+      if (!effectiveCycleId) {
+        // Closed season: pack from the newest cycle that has orders.
+        const { data: latestCycle } = await supabase
+          .from('orders')
+          .select('cycle_id')
+          .not('cycle_id', 'is', null)
+          .order('order_id', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        effectiveCycleId = latestCycle?.cycle_id || null
+      }
+      if (!effectiveCycleId) throw new Error('No active cycle found')
     }
 
     // v_master_sheet now exposes:

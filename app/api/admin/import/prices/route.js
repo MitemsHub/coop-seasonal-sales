@@ -99,12 +99,23 @@ export async function POST(req) {
     }
 
     // Get active cycle
-    const { data: activeCycle, error: cycleErr } = await supabase
+    let { data: activeCycle, error: cycleErr } = await supabase
       .from('cycles')
       .select('id')
       .eq('is_active', true)
       .maybeSingle()
     if (cycleErr) return NextResponse.json({ ok: false, error: cycleErr.message }, { status: 500 })
+    if (!activeCycle?.id) {
+      // Closed season: price imports target the newest cycle that has orders.
+      const { data: latestCycle } = await supabase
+        .from('orders')
+        .select('cycle_id')
+        .not('cycle_id', 'is', null)
+        .order('order_id', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (latestCycle?.cycle_id) activeCycle = { id: latestCycle.cycle_id }
+    }
     if (!activeCycle?.id) return NextResponse.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
 
     const pricesHasCycle = await hasColumn('branch_item_prices', 'cycle_id')

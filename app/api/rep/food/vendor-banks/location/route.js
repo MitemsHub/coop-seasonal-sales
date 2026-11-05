@@ -17,7 +17,19 @@ function isMissingTable(error, tableName) {
 async function resolveActiveCycleId(supabase) {
   const { data, error } = await supabase.from('cycles').select('id,code,name').eq('is_active', true).maybeSingle()
   if (error) throw new Error(error.message)
-  return data || null
+  if (data) return data
+  // Closed season: keep bank details reachable by reading the newest cycle
+  // that actually has orders, not nothing at all.
+  const { data: latestCycle } = await supabase
+    .from('orders')
+    .select('cycle_id')
+    .not('cycle_id', 'is', null)
+    .order('order_id', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (!latestCycle?.cycle_id) return null
+  const { data: fallback } = await supabase.from('cycles').select('id,code,name').eq('id', latestCycle.cycle_id).maybeSingle()
+  return fallback || null
 }
 
 async function paidStatus(supabase, branchId, cycleId) {

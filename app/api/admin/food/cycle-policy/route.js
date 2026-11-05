@@ -40,8 +40,16 @@ async function resolveCycleId(supabase, searchParams) {
   }
   const { data, error } = await supabase.from('cycles').select('id').eq('is_active', true).maybeSingle()
   if (error) throw new Error(error.message)
-  if (!data?.id) return null
-  return data.id
+  if (data?.id) return data.id
+  // Closed season: fall back to the newest cycle that has orders.
+  const { data: latestCycle } = await supabase
+    .from('orders')
+    .select('cycle_id')
+    .not('cycle_id', 'is', null)
+    .order('order_id', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return latestCycle?.cycle_id ?? null
 }
 
 export async function GET(req) {

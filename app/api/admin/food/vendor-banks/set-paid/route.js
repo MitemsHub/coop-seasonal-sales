@@ -18,7 +18,17 @@ async function resolveActiveCycleId(supabase, cycleIdRaw) {
   }
   const { data, error } = await supabase.from('cycles').select('id').eq('is_active', true).maybeSingle()
   if (error) throw new Error(error.message)
-  return data?.id ?? null
+  if (data?.id) return data.id
+    // A closed season must not block this screen: fall back to the newest
+    // cycle that actually has orders (lib/orderCycle does the same for lists).
+    const { data: latestCycle } = await supabase
+      .from('orders')
+      .select('cycle_id')
+      .not('cycle_id', 'is', null)
+      .order('order_id', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    return latestCycle?.cycle_id ?? null
 }
 
 function cleanText(v, maxLen = 500) {
