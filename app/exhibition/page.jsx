@@ -289,7 +289,7 @@ function ExhibitionShopContent() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => router.push('/exhibition/all')}
+                    onClick={() => router.push('/exhibition/stands')}
                     className="inline-flex h-8 items-center rounded-lg border border-line bg-surface px-3 text-chips font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
                   >
                     View all
