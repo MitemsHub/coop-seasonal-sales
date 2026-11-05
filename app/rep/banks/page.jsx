@@ -1,6 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion } from 'framer-motion'
+import { Upload } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import DraggableModal from '../../components/DraggableModal'
 import ProtectedRoute from '../../components/ProtectedRoute'
@@ -117,7 +118,9 @@ function RepFoodBanksContent() {
   const [invoiceRef, setInvoiceRef] = useState('')
   const [invoiceNotes, setInvoiceNotes] = useState('')
   const [invoiceFile, setInvoiceFile] = useState(null)
+  const [invoiceDragActive, setInvoiceDragActive] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const invoiceFileInputRef = useRef(null)
 
   const [invoiceEditOpen, setInvoiceEditOpen] = useState(false)
   const [invoiceEditRow, setInvoiceEditRow] = useState(null)
@@ -306,6 +309,7 @@ function RepFoodBanksContent() {
     setInvoiceRef('')
     setInvoiceNotes('')
     setInvoiceFile(null)
+    setInvoiceDragActive(false)
     setInvoiceUploadOpen(true)
   }
 
@@ -788,22 +792,84 @@ function RepFoodBanksContent() {
             rows={3}
             disabled={uploading || paid?.is_paid}
           />
-          <input
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/*"
-            onChange={(e) => {
-              setInvoiceFile(e.target.files?.[0] || null)
-              e.target.value = ''
+          {/* Designed picker instead of the browser's bare "Choose File" text —
+              reps (and the admin) did not recognise the native control as a button. */}
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label="Choose the invoice file to upload"
+            aria-disabled={uploading || !!paid?.is_paid}
+            onClick={() => {
+              if (uploading || paid?.is_paid) return
+              invoiceFileInputRef.current?.click()
             }}
-            className="w-full text-sm"
-            disabled={uploading || paid?.is_paid}
-          />
-          <div className="text-xs text-muted">
-            {invoiceFile
-              ? `Selected: ${invoiceFile.name}${prettySize(invoiceFile.size) ? ` · ${prettySize(invoiceFile.size)}` : ''}`
-              : 'PDF or a photo of the invoice (JPG, PNG, WEBP, HEIC). Large photos are shrunk before upload.'}
-            {!invoiceBankId ? ' Choose the bank account above to enable Upload.' : ''}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter' && e.key !== ' ') return
+              e.preventDefault()
+              if (uploading || paid?.is_paid) return
+              invoiceFileInputRef.current?.click()
+            }}
+            onDragOver={(e) => {
+              e.preventDefault()
+              if (!uploading && !paid?.is_paid) setInvoiceDragActive(true)
+            }}
+            onDragLeave={() => setInvoiceDragActive(false)}
+            onDrop={(e) => {
+              e.preventDefault()
+              setInvoiceDragActive(false)
+              if (uploading || paid?.is_paid) return
+              const dropped = e.dataTransfer?.files?.[0]
+              if (dropped) setInvoiceFile(dropped)
+            }}
+            className={[
+              'rounded-lg border-2 border-dashed px-4 py-5 text-center transition-colors duration-200 ease-sakani',
+              invoiceDragActive ? 'border-brand bg-brand-subtle' : 'border-line-strong bg-subtle/50 hover:border-brand',
+              uploading || paid?.is_paid
+                ? 'cursor-not-allowed opacity-60'
+                : 'cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
+            ].join(' ')}
+          >
+            <input
+              ref={invoiceFileInputRef}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/*"
+              className="hidden"
+              disabled={uploading || paid?.is_paid}
+              onChange={(e) => {
+                const picked = e.target.files?.[0]
+                if (picked) setInvoiceFile(picked)
+                e.target.value = ''
+              }}
+            />
+            {invoiceFile ? (
+              <div className="flex items-center justify-between gap-3 text-left">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-fg">{invoiceFile.name}</div>
+                  <div className="text-xs text-muted">
+                    {prettySize(invoiceFile.size)}
+                    {prettySize(invoiceFile.size) ? ' · ' : ''}ready to upload
+                  </div>
+                </div>
+                <span className="shrink-0 rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs font-semibold text-brand">
+                  Change
+                </span>
+              </div>
+            ) : (
+              <>
+                <Upload className="mx-auto h-6 w-6 text-muted" strokeWidth={1.75} />
+                <div className="mt-2 text-sm">
+                  <span className="font-semibold text-brand">Choose file</span>{' '}
+                  <span className="text-muted">or drag &amp; drop</span>
+                </div>
+                <div className="mt-1 text-xs text-muted">
+                  PDF, JPG, PNG, WEBP or HEIC · large photos are shrunk before upload
+                </div>
+              </>
+            )}
           </div>
+          {!invoiceBankId ? (
+            <div className="text-xs text-muted">Choose the bank account above to enable Upload.</div>
+          ) : null}
           <button
             type="button"
             onClick={uploadInvoice}
