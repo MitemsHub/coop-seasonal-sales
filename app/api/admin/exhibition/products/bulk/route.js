@@ -58,9 +58,7 @@ export async function POST(req) {
     for (const row of rows || []) {
       const applied = {}
       const newVendorPrice = row.pending_vendor_price != null ? Math.max(0, Math.trunc(Number(row.pending_vendor_price))) : null
-      const newMarkup = row.pending_admin_markup != null ? Math.trunc(Number(row.pending_admin_markup)) : null
       if (newVendorPrice != null) applied.vendor_price = newVendorPrice
-      if (newMarkup != null) applied.admin_markup = newMarkup
 
       const { error } = await supabase
         .from('exhibition_products')
@@ -77,7 +75,7 @@ export async function POST(req) {
         .eq('id', row.id)
       if (error) continue
 
-      if (newVendorPrice != null || newMarkup != null) {
+      if (newVendorPrice != null) {
         await supabase.from('exhibition_price_history').insert({
           product_id: Number(row.id),
           cycle_id: row.cycle_id ? Number(row.cycle_id) : null,
@@ -85,7 +83,7 @@ export async function POST(req) {
           old_vendor_price: Number(row.vendor_price || 0),
           new_vendor_price: newVendorPrice != null ? newVendorPrice : Number(row.vendor_price || 0),
           old_admin_markup: Number(row.admin_markup || 0),
-          new_admin_markup: newMarkup != null ? newMarkup : Number(row.admin_markup || 0),
+          new_admin_markup: Number(row.admin_markup || 0),
           changed_by: 'admin',
           changed_by_label: 'Admin approval',
           note: 'Pending price applied on approval',

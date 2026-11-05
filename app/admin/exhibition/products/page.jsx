@@ -73,7 +73,7 @@ export default function ExhibitionProductsPage() {
   }, [cycleFilter, vendorFilter, statusFilter])
 
   const openCreate = () => {
-    setForm({ status: 'active', unit: 'each', admin_markup: 0 })
+    setForm({ status: 'active', unit: 'each' })
     setModal('create')
   }
 
@@ -91,7 +91,6 @@ export default function ExhibitionProductsPage() {
       name: p.name || '',
       unit: p.unit || 'each',
       vendor_price: p.vendor_price,
-      admin_markup: p.admin_markup ?? 0,
       qty: p.qty ?? '',
       status: p.status || 'active',
       image_url: p.image_url || '',
@@ -177,7 +176,6 @@ export default function ExhibitionProductsPage() {
           name: form.name,
           unit: form.unit,
           vendor_price: Number(form.vendor_price),
-          admin_markup: Number(form.admin_markup || 0),
           qty: form.qty,
           image_url: form.image_url,
           status: form.status,
@@ -186,6 +184,7 @@ export default function ExhibitionProductsPage() {
       const json = await res.json()
       if (!json.ok) throw new Error(json.error || 'Failed to create product')
       setModal(null)
+      setMsg({ type: 'success', text: `"${form.name}" created — press Approve on its row to publish it to members.` })
       await load()
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
@@ -205,7 +204,6 @@ export default function ExhibitionProductsPage() {
           name: form.name,
           unit: form.unit,
           vendor_price: Number(form.vendor_price),
-          admin_markup: Number(form.admin_markup || 0),
           qty: form.qty,
           status: form.status,
           ...(form.image_url !== undefined ? { image_url: form.image_url } : {}),
@@ -273,7 +271,7 @@ export default function ExhibitionProductsPage() {
   const totals = useMemo(
     () => ({
       active: products.filter((p) => p.status === 'active').length,
-      value: products.reduce((s, p) => s + Number(p.vendor_price || 0) + Number(p.admin_markup || 0), 0),
+      value: products.reduce((s, p) => s + Number(p.vendor_price || 0), 0),
     }),
     [products]
   )
@@ -371,7 +369,6 @@ export default function ExhibitionProductsPage() {
                   <TH>Product</TH>
                   <TH>Vendor</TH>
                   <TH className="text-right">Vendor price</TH>
-                  <TH className="text-right">Discount</TH>
                   <TH className="text-right">Final</TH>
                   <TH className="text-right">Qty</TH>
                   <TH>Status</TH>
@@ -404,7 +401,6 @@ export default function ExhibitionProductsPage() {
                         <div className="text-chips text-warning-fg">→ {naira(p.pending_vendor_price)}</div>
                       )}
                     </TD>
-                    <TD className="text-right tabular-nums text-muted">{p.admin_markup ? `+${naira(p.admin_markup)}` : '—'}</TD>
                     <TD className="text-right font-medium tabular-nums text-fg">{naira(p.final_price)}</TD>
                     <TD className="text-right tabular-nums">{p.qty == null ? '∞' : Number(p.qty).toLocaleString()}</TD>
                     <TD>
@@ -503,10 +499,6 @@ export default function ExhibitionProductsPage() {
                 <Input id="exh-p-vprice" type="number" value={form.vendor_price ?? ''} onChange={(e) => setForm({ ...form, vendor_price: e.target.value })} />
               </div>
               <div>
-                <Label htmlFor="exh-p-markup">Discount (₦)</Label>
-                <Input id="exh-p-markup" type="number" value={form.admin_markup ?? 0} onChange={(e) => setForm({ ...form, admin_markup: e.target.value })} />
-              </div>
-              <div>
                 <Label htmlFor="exh-p-qty">Qty (blank = ∞)</Label>
                 <Input id="exh-p-qty" type="number" value={form.qty ?? ''} onChange={(e) => setForm({ ...form, qty: e.target.value })} />
               </div>
@@ -519,6 +511,11 @@ export default function ExhibitionProductsPage() {
               <div className="rounded-lg bg-subtle px-3 py-2 text-xs text-muted">
                 Branch {vendors.find((v) => String(v.id) === String(form.vendor_id))?.branch_name || `#${form.branch_id}`}, taken from the vendor&apos;s account.
               </div>
+            )}
+            {modal === 'create' && (
+              <p className="rounded-lg bg-subtle px-3 py-2 text-chips text-muted">
+                New products wait for approval: create it, then approve it on the list to publish.
+              </p>
             )}
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="secondary" onClick={() => setModal(null)}>Cancel</Button>

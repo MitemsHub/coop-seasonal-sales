@@ -33,7 +33,7 @@ export default function ProductHistoryPage() {
   return (
     <div className="mx-auto max-w-2xl p-4">
       <h1 className="font-display text-h2 font-semibold text-fg">Price history</h1>
-      <p className="mt-1 text-sm text-muted">Changes to your price and the co-op discount, newest first.</p>
+      <p className="mt-1 text-sm text-muted">Changes to your price, newest first.</p>
 
       {error && <p className="mt-4 text-sm text-danger-fg">{error}</p>}
       {!rows && !error && <p className="mt-4 text-sm text-muted">Loading…</p>}
@@ -52,9 +52,6 @@ export default function ProductHistoryPage() {
             </div>
             <p className="mt-0.5 text-chips text-muted">
               {r.changed_by_label || r.changed_by || 'Price change'}
-              {Number(r.old_admin_markup || 0) !== Number(r.new_admin_markup || 0)
-                ? ` · discount ${naira(r.old_admin_markup)} → ${naira(r.new_admin_markup)}`
-                : ''}
               {r.note ? ` · ${r.note}` : ''}
             </p>
           </div>

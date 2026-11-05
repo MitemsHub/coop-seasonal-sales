@@ -7,7 +7,7 @@
 // Business rules (mirrors the Food + Ram modules):
 //   - The member's branch determines the cycle + catalog.
 //   - Each product price = negotiated per-member price if present, else
-//     vendor_price + admin_markup.
+//     vendor_price.
 //   - Savings/Loan limits reuse the shared eligibility numbers, reduced by the
 //     member's open exhibition exposure (Pending/Approved orders).
 //   - Loan orders accrue interest at the cycle's loan_interest_rate_pct.
@@ -217,7 +217,7 @@ export async function POST(req) {
     const ids = lines.map((l) => l.product_id)
     const { data: productRows, error: pErr } = await supabase
       .from('exhibition_products')
-      .select('id, vendor_id, name, sku, unit, vendor_price, admin_markup, qty, status')
+      .select('id, vendor_id, name, sku, unit, vendor_price, qty, status')
       .eq('cycle_id', cycleId)
       .eq('branch_id', deliveryBranch.id)
       .in('id', ids)
@@ -245,7 +245,7 @@ export async function POST(req) {
     // Price each line
     const priced = lines.map((l) => {
       const p = byId.get(l.product_id)
-      const base = Number(p.vendor_price || 0) + Number(p.admin_markup || 0)
+      const base = Number(p.vendor_price || 0)
       const price = negByProduct.has(l.product_id) ? Math.max(0, negByProduct.get(l.product_id)) : base
       return {
         product_id: l.product_id,

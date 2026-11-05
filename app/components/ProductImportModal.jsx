@@ -14,16 +14,15 @@ import Select from './ui/Select'
 import { parseCsv, pick } from '../../lib/csvParse'
 
 const TEMPLATE = [
-  'name,price,unit,qty,markup,image_url',
-  'Handwoven Ankara Tote,15000,each,25,0,',
-  'Fresh tomatoes (basket),8500,basket,40,500,',
+  'name,price,unit,qty,image_url',
+  'Handwoven Ankara Tote,15000,each,25,',
+  'Fresh tomatoes (basket),8500,basket,40,',
 ].join('\n')
 
 const NAME_KEYS = ['name', 'product', 'product name', 'item', 'description']
 const PRICE_KEYS = ['price', 'amount', 'vendor_price', 'vendor price', 'unit price']
 const UNIT_KEYS = ['unit', 'uom', 'measure']
 const QTY_KEYS = ['qty', 'quantity', 'stock', 'quantity in stock']
-const MARKUP_KEYS = ['markup', 'admin_markup', 'admin markup']
 const IMAGE_KEYS = ['image_url', 'image', 'photo', 'image url', 'picture']
 
 function saveFile(filename, text) {
@@ -49,7 +48,6 @@ export default function ProductImportModal({
   const [vendorId, setVendorId] = useState('')
   const [fileName, setFileName] = useState('')
   const [rows, setRows] = useState([])
-  const [asDraft, setAsDraft] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
@@ -60,7 +58,6 @@ export default function ProductImportModal({
     setVendorId('')
     setFileName('')
     setRows([])
-    setAsDraft(false)
     setBusy(false)
     setError('')
     setResult(null)
@@ -99,7 +96,6 @@ export default function ProductImportModal({
         price: pick(record, PRICE_KEYS),
         unit: pick(record, UNIT_KEYS) || 'each',
         qty: pick(record, QTY_KEYS),
-        markup: pick(record, MARKUP_KEYS),
         image_url: pick(record, IMAGE_KEYS),
       }))
     )
@@ -113,7 +109,7 @@ export default function ProductImportModal({
     }
     setBusy(true)
     try {
-      const payload = { rows, status: asDraft ? 'draft' : 'active' }
+      const payload = { rows }
       if (requireTarget) {
         payload.cycle_id = Number(cycleId)
         payload.vendor_id = Number(vendorId)
@@ -255,7 +251,7 @@ export default function ProductImportModal({
           <div className="rounded-xl border border-dashed border-line bg-subtle px-4 py-6 text-center">
             <FileSpreadsheet className="mx-auto mb-2 h-7 w-7 text-muted" strokeWidth={1.6} />
             <p className="text-sm font-medium text-fg">{fileName || 'Choose a CSV file'}</p>
-            <p className="mt-0.5 text-xs text-muted">Columns: name, price, unit, qty, markup, image_url (only name and price are required).</p>
+            <p className="mt-0.5 text-xs text-muted">Columns: name, price, unit, qty, image_url (only name and price are required).</p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
               <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-on-accent">
                 <Upload className="h-3.5 w-3.5" />
@@ -301,10 +297,9 @@ export default function ProductImportModal({
             </div>
           )}
 
-          <label className="flex items-center gap-2 text-xs text-muted">
-            <input type="checkbox" checked={asDraft} onChange={(e) => setAsDraft(e.target.checked)} className="h-4 w-4 rounded border-line" />
-            Import as drafts — review and publish them one by one
-          </label>
+          <p className="text-xs text-muted">
+            Imported products wait for approval before they appear on the member shop.
+          </p>
         </div>
       )}
     </Modal>

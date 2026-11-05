@@ -31,7 +31,7 @@ export async function GET(request) {
     const supabase = createClient()
     let query = supabase
       .from('exhibition_products')
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, admin_markup, qty, image_url, status, approval_status, pending_vendor_price, pending_admin_markup, approval_requested_at, created_at, vendors:vendor_id(name, code), categories:category_id(name), branches:branch_id(name)')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, approval_status, pending_vendor_price, approval_requested_at, created_at, vendors:vendor_id(name, code), categories:category_id(name), branches:branch_id(name)')
       .order('created_at', { ascending: false })
 
     if (cycleId > 0) query = query.eq('cycle_id', cycleId)
@@ -54,7 +54,7 @@ export async function GET(request) {
         vendor_name: p.vendors?.name || '',
         category_name: p.categories?.name || '',
         branch_name: p.branches?.name || '',
-        final_price: Number(p.vendor_price || 0) + Number(p.admin_markup || 0),
+        final_price: Number(p.vendor_price || 0),
       })),
     })
   } catch (e) {
@@ -111,12 +111,15 @@ export async function POST(request) {
         sku,
         unit: sanitizeString(body.unit || 'each', { maxLength: 30, encodeHtml: false }),
         vendor_price: vendorPrice,
-        admin_markup: Math.max(0, Math.trunc(Number(body.admin_markup || 0))),
         qty: body.qty === '' || body.qty === null || body.qty === undefined ? null : Math.max(0, Math.trunc(Number(body.qty))),
         image_url: sanitizeString(body.image_url || '', { maxLength: 500, encodeHtml: false }),
-        status: body.status === 'draft' ? 'draft' : 'active',
+        // Nothing reaches the member shop without an approval click, including
+        // products created here on the admin side.
+        status: 'draft',
+        approval_status: 'pending',
+        approval_requested_at: new Date().toISOString(),
       })
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, admin_markup, qty, image_url, status, created_at')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, approval_status, created_at')
       .single()
     if (error) {
       if (String(error.code || '') === '23505') {
@@ -124,7 +127,7 @@ export async function POST(request) {
       }
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     }
-    return NextResponse.json({ ok: true, product: { ...data, final_price: vendorPrice + Number(data.admin_markup || 0) } })
+    return NextResponse.json({ ok: true, product: { ...data, final_price: vendorPrice } })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Failed to create product' }, { status: 500 })
   }

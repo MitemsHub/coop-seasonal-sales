@@ -34,6 +34,33 @@ function safeName(name) {
     .slice(0, 120)
 }
 
+// Phones are inconsistent about the MIME type they attach: iPhone photos are
+// HEIC, some Android file pickers send application/octet-stream or an empty
+// string. Trust the extension first and only fall back to what the browser
+// declared, so a real invoice is never refused because of its label.
+const EXT_TO_MIME = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  heic: 'image/heic',
+  heif: 'image/heif',
+}
+
+// Matches the vendor-invoices bucket limit, checked here so the rep gets a
+// readable reason instead of a storage error.
+const MAX_INVOICE_BYTES = 10 * 1024 * 1024
+
+function resolveInvoiceMime(file) {
+  const name = String(file?.name || '')
+  const ext = (name.match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase()
+  if (EXT_TO_MIME[ext]) return EXT_TO_MIME[ext]
+  const declared = String(file?.type || '').toLowerCase()
+  if (!declared || declared === 'application/octet-stream') return ''
+  return declared
+}
+
 async function isPaidLocked(supabase, branchId, cycleId) {
   if (!cycleId) return false
   const { data, error } = await supabase
@@ -104,10 +131,21 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: 'file required' }, { status: 400 })
     }
 
-    const mime = String(file.type || '').toLowerCase()
-    const allowedTypes = new Set(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'])
+    const mime = resolveInvoiceMime(file)
+    const allowedTypes = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'])
     if (!allowedTypes.has(mime)) {
-      return NextResponse.json({ ok: false, error: 'Only PDF/JPG/PNG/WEBP allowed' }, { status: 400 })
+      return NextResponse.json(
+        { ok: false, error: 'Attach the invoice as a PDF or a photo (JPG, PNG, WEBP or HEIC).' },
+        { status: 400 }
+      )
+    }
+
+    const declaredSize = Number(file.size || 0)
+    if (Number.isFinite(declaredSize) && declaredSize > MAX_INVOICE_BYTES) {
+      return NextResponse.json(
+        { ok: false, error: 'That file is larger than 10MB — take a smaller photo or send the PDF again.' },
+        { status: 400 }
+      )
     }
 
     const invoiceRef = cleanText(fd.get('invoice_ref'), 120)
@@ -121,8 +159,17 @@ export async function POST(req) {
     const path = `food/${branchId}/${cycleId}/${day}/${Date.now()}_${rand}_${filename}`
 
     const buffer = Buffer.from(await file.arrayBuffer())
+    if (buffer.length > MAX_INVOICE_BYTES) {
+      return NextResponse.json(
+        { ok: false, error: 'That file is larger than 10MB — take a smaller photo or send the PDF again.' },
+        { status: 400 }
+      )
+    }
     const { error: upErr } = await supabase.storage.from(bucket).upload(path, buffer, { contentType: mime, upsert: false })
-    if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 })
+    if (upErr) {
+      console.error('[rep/food invoices upload] storage failed', { branchId, cycleId, mime, size: buffer.length, message: upErr.message })
+      return NextResponse.json({ ok: false, error: `Could not store the file: ${upErr.message}` }, { status: 500 })
+    }
 
     const createdByCode = cleanText(session?.claims?.branch_code || session?.claims?.rep_code || '', 120) || null
     const { data: inserted, error: insErr } = await supabase
@@ -143,7 +190,16 @@ export async function POST(req) {
       })
       .select('id,branch_id,cycle_id,bank_account_id,invoice_ref,invoice_date,amount,notes,storage_bucket,storage_path,file_name,mime_type,file_size,created_by_role,created_by_code,created_at')
       .single()
-    if (insErr) return NextResponse.json({ ok: false, error: insErr.message }, { status: 500 })
+    if (insErr) {
+      console.error('[rep/food invoices upload] insert failed', {
+        branchId,
+        cycleId,
+        bankAccountId,
+        message: insErr.message,
+        code: insErr.code,
+      })
+      return NextResponse.json({ ok: false, error: `Could not save the invoice: ${insErr.message}` }, { status: 500 })
+    }
 
     const { data: urlData } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60)
     return NextResponse.json({ ok: true, invoice: { ...inserted, url: urlData?.signedUrl || null } })

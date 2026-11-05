@@ -29,7 +29,7 @@ export async function GET(req) {
 
     const { data: products } = await supabase
       .from('exhibition_products')
-      .select('id, name, vendor_price, admin_markup')
+      .select('id, name, vendor_price')
       .eq('vendor_id', ctx.vendor_id)
 
     const byProduct = new Map()
@@ -51,7 +51,7 @@ export async function GET(req) {
     const productRows = (products || [])
       .map((p) => {
         const s = byProduct.get(Number(p.id)) || { views: 0, adds: 0 }
-        const price = Number(p.vendor_price || 0) + Number(p.admin_markup || 0)
+        const price = Number(p.vendor_price || 0)
         return {
           id: Number(p.id),
           name: p.name,

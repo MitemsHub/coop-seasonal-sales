@@ -3,7 +3,7 @@
 // app/admin/exhibition/markups/page.jsx
 // Exhibition markups — like a real market, the person who beats a price gets
 // their own negotiated price. Admin sets/removes per-member prices on any
-// product, and can also tweak the general admin markup.
+// product at a negotiated price.
 import { useCallback, useEffect, useState } from 'react'
 import { Percent, Plus, RefreshCw, Search, Trash2, UserRound } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
@@ -43,7 +43,6 @@ export default function ExhibitionMarkupsPage() {
   const [prices, setPrices] = useState([])
   const [pricesLoading, setPricesLoading] = useState(false)
   const [priceForm, setPriceForm] = useState({ member_id: '', price: '', note: '' })
-  const [markupForm, setMarkupForm] = useState({})
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -57,7 +56,7 @@ export default function ExhibitionMarkupsPage() {
         fetch('/api/admin/exhibition/cycles', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
       ])
       if (m?.ok) setProducts(m.products || [])
-      else setMsg({ type: 'error', text: m?.error || 'Failed to load discounts' })
+      else setMsg({ type: 'error', text: m?.error || 'Failed to load prices' })
       if (c?.ok) setCycles(c.cycles || [])
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
@@ -75,7 +74,6 @@ export default function ExhibitionMarkupsPage() {
     setDetail(p)
     setPricesLoading(true)
     setPriceForm({ member_id: '', price: '', note: '' })
-    setMarkupForm({ admin_markup: p.admin_markup ?? 0 })
     try {
       const res = await fetch(`/api/admin/exhibition/markups?product_id=${p.id}`, { cache: 'no-store' })
       const json = await res.json()
@@ -133,34 +131,12 @@ export default function ExhibitionMarkupsPage() {
     }
   }
 
-  const saveAdminMarkup = async () => {
-    const markup = Math.trunc(Number(markupForm.admin_markup ?? 0))
-    if (!Number.isFinite(markup)) return setMsg({ type: 'error', text: 'Invalid discount' })
-    setBusy(true)
-    setMsg(null)
-    try {
-      const res = await fetch(`/api/admin/exhibition/products/${detail.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ admin_markup: markup }),
-      })
-      const json = await res.json()
-      if (!json.ok) throw new Error(json.error || 'Failed to update discount')
-      await openDetail(detail)
-      await load()
-    } catch (e) {
-      setMsg({ type: 'error', text: e.message })
-    } finally {
-      setBusy(false)
-    }
-  }
-
   return (
     <ProtectedRoute allowedRoles={['admin']}>
       <div className="p-4 sm:p-6 lg:p-8">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-h2 font-bold tracking-tight text-fg">Exhibition Discounts</h1>
+            <h1 className="text-h2 font-bold tracking-tight text-fg">Exhibition Prices</h1>
             <p className="mt-0.5 text-sm text-muted">
               Per-member negotiated prices. Like the market, whoever beats a price gets their own.
             </p>
@@ -216,7 +192,6 @@ export default function ExhibitionMarkupsPage() {
                   <TH>Vendor</TH>
                   <TH className="text-right">Final price</TH>
                   <TH className="text-right">Negotiated</TH>
-                  <TH className="text-right">Discount</TH>
                   <TH>Actions</TH>
                 </TR>
               </THead>
@@ -236,7 +211,6 @@ export default function ExhibitionMarkupsPage() {
                         <span className="text-muted">—</span>
                       )}
                     </TD>
-                    <TD className="text-right tabular-nums text-muted">{p.admin_markup ? `+${naira(p.admin_markup)}` : '—'}</TD>
                     <TD>
                       <Button size="sm" variant="ghost" leftIcon={UserRound} onClick={() => openDetail(p)} disabled={busy}>
                         Prices
@@ -252,21 +226,6 @@ export default function ExhibitionMarkupsPage() {
         <DraggableModal open={!!detail} onClose={() => setDetail(null)} title={`Prices · ${detail?.name || ''}`} widthClass="max-w-2xl w-full mx-4">
           {detail && (
             <div className="space-y-5">
-              {/* General admin markup */}
-              <div className="rounded-xl border border-line bg-subtle p-4">
-                <div className="mb-2 text-sm font-semibold text-fg">General discount</div>
-                <div className="text-xs text-muted">
-                  Base price {naira(detail.vendor_price)} · final for everyone {naira(detail.final_price)}. Adjust the general discount here.
-                </div>
-                <div className="mt-3 flex items-end gap-2">
-                  <div className="flex-1">
-                    <Label htmlFor="exh-m-general">Discount (₦)</Label>
-                    <Input id="exh-m-general" type="number" value={markupForm.admin_markup ?? 0} onChange={(e) => setMarkupForm({ admin_markup: e.target.value })} />
-                  </div>
-                  <Button loading={busy} onClick={saveAdminMarkup}>Save discount</Button>
-                </div>
-              </div>
-
               {/* Per-member negotiated prices */}
               <div>
                 <div className="mb-2 text-sm font-semibold text-fg">Negotiated prices</div>

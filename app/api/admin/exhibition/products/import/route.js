@@ -30,7 +30,9 @@ export async function POST(request) {
     if (!Number.isFinite(vendorId) || vendorId <= 0) return NextResponse.json({ ok: false, error: 'Vendor is required' }, { status: 400 })
 
     const rawRows = Array.isArray(body?.rows) ? body.rows : []
-    const status = body?.status === 'draft' ? 'draft' : 'active'
+    // Imports wait for approval too — nothing lands on the member shop until
+    // an admin approves it.
+    const status = 'draft'
     if (!rawRows.length) return NextResponse.json({ ok: false, error: 'No rows to import' }, { status: 400 })
     if (rawRows.length > MAX_ROWS) {
       return NextResponse.json({ ok: false, error: `Import at most ${MAX_ROWS} products at a time` }, { status: 400 })
@@ -59,11 +61,9 @@ export async function POST(request) {
         failed.push({ row: line, error: `"${name}" needs a price greater than zero` })
         return
       }
-      const markup = Math.trunc(Number(row?.markup ?? row?.admin_markup ?? 0))
       clean.push({
         name: name.slice(0, 255),
         vendor_price: price,
-        admin_markup: Number.isFinite(markup) && markup > 0 ? markup : 0,
         unit: String(row?.unit || 'each').trim().slice(0, 30) || 'each',
         qty: toQty(row?.qty),
         image_url: String(row?.image_url || '').trim().slice(0, 500),
@@ -93,10 +93,11 @@ export async function POST(request) {
       sku: skus[index],
       unit: row.unit,
       vendor_price: row.vendor_price,
-      admin_markup: row.admin_markup,
       qty: row.qty,
       image_url: row.image_url,
       status,
+      approval_status: 'pending',
+      approval_requested_at: new Date().toISOString(),
     }))
 
     const { data, error } = await supabase.from('exhibition_products').insert(payload).select('id, name, sku')

@@ -130,12 +130,10 @@ export default function VendorMarkupsPage() {
     setConfirmTarget(null)
   }
 
-  const adminAdjusted = Number(selectedProduct?.admin_markup || 0) !== 0
-
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-6">
-        <h1 className="text-h1 font-bold tracking-tight text-fg">Prices & Discounts</h1>
+        <h1 className="text-h1 font-bold tracking-tight text-fg">Prices</h1>
         <p className="mt-1 text-sm text-muted">
           Like a real market, members who negotiate get their own price. Pick a product, then set that member&apos;s price.
         </p>
@@ -163,13 +161,7 @@ export default function VendorMarkupsPage() {
           <div className="rounded-xl border border-line bg-surface p-4">
             <p className="text-chips text-muted">Listed price (all members)</p>
             <p className="mt-1 text-xl font-bold text-fg">{fmtNaira(selectedProduct.final_price)}</p>
-            {adminAdjusted ? (
-              <p className="mt-0.5 text-chips text-muted">
-                base {fmtNaira(selectedProduct.vendor_price)} · co-op discount {fmtNaira(selectedProduct.admin_markup)}
-              </p>
-            ) : (
-              <p className="mt-0.5 text-chips text-muted">No admin adjustment</p>
-            )}
+            <p className="mt-0.5 text-chips text-muted">Members pay this unless you agree a lower price for one of them.</p>
           </div>
         )}
       </div>

@@ -1,6 +1,5 @@
 // app/api/admin/exhibition/products/[id]/route.js
-// PATCH — update a product (the admin markup page uses admin_markup here,
-//         plus qty, status, price, category…)
+// PATCH — update a product (price, qty, status, category, image…).
 // DELETE — remove a product (blocked when on an order — archive instead)
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
@@ -36,7 +35,6 @@ export async function PATCH(request, { params }) {
       if (approvalAction === 'approve') {
         const applied = {}
         if (row.pending_vendor_price != null) applied.vendor_price = Math.max(0, Math.trunc(Number(row.pending_vendor_price)))
-        if (row.pending_admin_markup != null) applied.admin_markup = Math.max(0, Math.trunc(Number(row.pending_admin_markup)))
         const { error } = await supabase
           .from('exhibition_products')
           .update({
@@ -58,7 +56,7 @@ export async function PATCH(request, { params }) {
             old_vendor_price: Number(row.vendor_price || 0),
             new_vendor_price: applied.vendor_price !== undefined ? Number(applied.vendor_price) : Number(row.vendor_price || 0),
             old_admin_markup: Number(row.admin_markup || 0),
-            new_admin_markup: applied.admin_markup !== undefined ? Number(applied.admin_markup) : Number(row.admin_markup || 0),
+            new_admin_markup: Number(row.admin_markup || 0),
             changed_by: 'admin',
             changed_by_label: 'Admin approval',
             note: 'Pending price applied on approval',
@@ -110,11 +108,6 @@ export async function PATCH(request, { params }) {
       if (price <= 0) return NextResponse.json({ ok: false, error: 'Price must be greater than zero' }, { status: 400 })
       updates.vendor_price = price
     }
-    if (body.admin_markup !== undefined) {
-      const markup = Math.trunc(Number(body.admin_markup))
-      if (!Number.isFinite(markup)) return NextResponse.json({ ok: false, error: 'Invalid markup' }, { status: 400 })
-      updates.admin_markup = markup
-    }
     if (body.qty !== undefined) updates.qty = body.qty === '' || body.qty === null ? null : Math.max(0, Math.trunc(Number(body.qty)))
     if (body.category_id !== undefined) updates.category_id = body.category_id ? Math.trunc(Number(body.category_id)) : null
     if (body.image_url !== undefined) updates.image_url = sanitizeString(body.image_url || '', { maxLength: 500, encodeHtml: false })
@@ -126,13 +119,13 @@ export async function PATCH(request, { params }) {
       .from('exhibition_products')
       .update(updates)
       .eq('id', id)
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, admin_markup, qty, image_url, status, created_at')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, created_at')
       .single()
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
     return NextResponse.json({
       ok: true,
-      product: { ...data, final_price: Number(data.vendor_price || 0) + Number(data.admin_markup || 0) },
+      product: { ...data, final_price: Number(data.vendor_price || 0) },
     })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Failed to update product' }, { status: 500 })

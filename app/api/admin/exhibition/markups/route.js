@@ -1,7 +1,7 @@
 // app/api/admin/exhibition/markups/route.js
-// Admin markup page — per-member negotiated prices (the person who beats a
-// price gets their own price) + the general admin_markup adjustment.
-//   GET    — products (with admin_markup + negotiated-price counts) and, when
+// Admin prices page — per-member negotiated prices (the person who beats a
+// price gets their own price). The old general "discount" is retired.
+//   GET    — products (with negotiated-price counts) and, when
 //            ?product_id is given, that product's per-member prices
 //   PUT    — upsert a per-member price { product_id, member_id, price, note }
 //   DELETE — remove a per-member price { product_id, member_id }
@@ -39,7 +39,7 @@ export async function GET(request) {
     // All products with negotiated-price counts (for the markup list)
     let query = supabase
       .from('exhibition_products')
-      .select('id, cycle_id, vendor_id, name, sku, unit, vendor_price, admin_markup, status, vendors:vendor_id(name)')
+      .select('id, cycle_id, vendor_id, name, sku, unit, vendor_price, status, vendors:vendor_id(name)')
       .order('name')
     if (cycleId > 0) query = query.eq('cycle_id', cycleId)
     if (q) query = query.or(`name.ilike.%${q}%,sku.ilike.%${q}%`)
@@ -65,7 +65,7 @@ export async function GET(request) {
       products: products.map((p) => ({
         ...p,
         vendor_name: p.vendors?.name || '',
-        final_price: Number(p.vendor_price || 0) + Number(p.admin_markup || 0),
+        final_price: Number(p.vendor_price || 0),
         negotiated_count: countByProduct.get(Number(p.id)) || 0,
       })),
     })

@@ -542,6 +542,13 @@ function ReportsPageContent() {
         rawRows,
         currencyPrefix: '',
       },
+      // Same line the table shows on screen: with-markup less without-markup.
+      summaryLines: [
+        {
+          label: 'TOTAL MARKUP',
+          value: Number(locationSummaryTotals.markup || 0).toLocaleString(),
+        },
+      ],
     })
   }
 
@@ -1048,6 +1055,23 @@ function ReportsPageContent() {
           }
         },
       })
+
+      // Optional summary lines drawn straight under the table, for figures
+      // that are not a column (e.g. the TOTAL MARKUP line on the on-screen
+      // delivery-location summary).
+      const summaryLines = Array.isArray(options.summaryLines) ? options.summaryLines.filter(Boolean) : []
+      if (summaryLines.length) {
+        let summaryY = (doc.lastAutoTable && doc.lastAutoTable.finalY ? doc.lastAutoTable.finalY : 40) + 8
+        doc.setFontSize(10)
+        doc.setFont(undefined, 'bold')
+        for (const line of summaryLines) {
+          const label = String(line.label ?? '').replace(/\u20A6|₦/g, 'NGN ')
+          const value = String(line.value ?? '').replace(/\u20A6|₦/g, 'NGN ')
+          doc.text(`${label}: ${value}`, 14, summaryY)
+          summaryY += 6
+        }
+        doc.setFont(undefined, 'normal')
+      }
 
       // Optional footer section appended after the table
       if (options.footer) {

@@ -20,7 +20,6 @@ const emptyForm = () => ({
   name: '',
   unit: 'each',
   vendor_price: '',
-  admin_markup: '',
   qty: '',
   status: 'active',
   image_url: '',
@@ -65,7 +64,6 @@ export default function VendorProductsPage() {
       name: p.name,
       unit: p.unit || 'each',
       vendor_price: String(p.vendor_price ?? ''),
-      admin_markup: p.admin_markup === null || p.admin_markup === undefined ? '' : String(p.admin_markup),
       qty: p.qty === null || p.qty === undefined ? '' : String(p.qty),
       status: p.status || 'active',
       image_url: p.image_url || '',
@@ -82,7 +80,6 @@ export default function VendorProductsPage() {
         name: form.name.trim(),
         unit: form.unit.trim() || 'each',
         vendor_price: Number(form.vendor_price || 0),
-        admin_markup: Number(form.admin_markup || 0),
         qty: form.qty === '' ? null : Number(form.qty),
         image_url: form.image_url,
         status: form.status,
@@ -253,11 +250,6 @@ export default function VendorProductsPage() {
                 <div className="flex items-center gap-4 sm:shrink-0">
                   <div className="text-right">
                     <p className="text-sm font-bold text-fg">{fmtNaira(p.final_price)}</p>
-                    {Number(p.admin_markup || 0) !== 0 && (
-                      <p className="text-chips text-muted">
-                        base {fmtNaira(p.vendor_price)} {Number(p.admin_markup) > 0 ? '+' : ''}{fmtNaira(p.admin_markup)}
-                      </p>
-                    )}
                   </div>
                   <div className="flex gap-1.5">
                     <a
@@ -353,13 +345,9 @@ export default function VendorProductsPage() {
             <Label htmlFor="p-price">Price (₦)</Label>
             <Input id="p-price" type="number" min="1" value={form.vendor_price} onChange={(e) => setForm({ ...form, vendor_price: e.target.value })} placeholder="0" />
           </div>
-          <div>
-            <Label htmlFor="p-markup">Discount (₦)</Label>
-            <Input id="p-markup" type="number" min="0" value={form.admin_markup} onChange={(e) => setForm({ ...form, admin_markup: e.target.value })} placeholder="0" />
-          </div>
           <div className="sm:col-span-2">
             <p className="rounded-lg bg-subtle px-3 py-2 text-chips text-muted">
-              Members pay <span className="font-semibold text-fg">{fmtNaira(Number(form.vendor_price || 0) + Number(form.admin_markup || 0))}</span> — your price plus the co-op discount.
+              Members pay <span className="font-semibold text-fg">{fmtNaira(Number(form.vendor_price || 0))}</span> — your listed price.
             </p>
             <p className="rounded-lg border border-warning-border bg-warning-bg/60 px-3 py-2 text-chips text-warning-fg">
               New products, and any price change on a product that is already on sale, are reviewed by the co-op before members see them.

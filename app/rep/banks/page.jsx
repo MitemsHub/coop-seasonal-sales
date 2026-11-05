@@ -39,6 +39,55 @@ function maskAccountNumber(s) {
   return `${'*'.repeat(Math.max(0, v.length - 4))}${v.slice(-4)}`
 }
 
+const isPdfFile = (file) => /pdf$/i.test(String(file?.name || '')) || file?.type === 'application/pdf'
+
+function prettySize(bytes) {
+  const n = Number(bytes || 0)
+  if (!n) return ''
+  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
+// Downscale phone photos before they leave the device: a 6MB camera shot goes
+// out as ~200–500KB, so flaky mobile data and server limits stop mattering.
+// Falls back to the original file when the browser cannot decode it (HEIC in
+// Chrome), which the upload route accepts by extension.
+function compressPhoto(file, maxDim = 1800, quality = 0.82) {
+  return new Promise((resolve) => {
+    if (!file || !String(file.type || '').startsWith('image/')) return resolve(file)
+    const img = new Image()
+    const objectUrl = URL.createObjectURL(file)
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height))
+        const w = Math.max(1, Math.round(img.width * scale))
+        const h = Math.max(1, Math.round(img.height * scale))
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+        canvas.toBlob((blob) => {
+          URL.revokeObjectURL(objectUrl)
+          if (blob && blob.size < file.size) {
+            const name = String(file.name || 'invoice').replace(/\.\w+$/, '')
+            resolve(new File([blob], `${name}.jpg`, { type: 'image/jpeg' }))
+          } else {
+            resolve(file)
+          }
+        }, 'image/jpeg', quality)
+      } catch {
+        URL.revokeObjectURL(objectUrl)
+        resolve(file)
+      }
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      resolve(file)
+    }
+    img.src = objectUrl
+  })
+}
+
 function RepFoodBanksContent() {
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState(null)
@@ -250,7 +299,9 @@ function RepFoodBanksContent() {
       setMsg({ type: 'error', text: 'Add a bank account first — every invoice is filed against an account.' })
       return
     }
-    const preset = bank?.id ? String(bank.id) : banks.length === 1 ? String(banks[0].id) : ''
+    const preset = bank?.id
+      ? String(bank.id)
+      : String((banks.find((b) => b.is_current) || banks[0])?.id || '')
     setInvoiceBankId(preset)
     setInvoiceRef('')
     setInvoiceNotes('')
@@ -272,11 +323,17 @@ function RepFoodBanksContent() {
     setUploading(true)
     setMsg(null)
     try {
+      // PDFs go out untouched; photos are shrunk first so a camera-sized image
+      // does not stall on mobile data.
+      const prepared = isPdfFile(invoiceFile) ? invoiceFile : await compressPhoto(invoiceFile)
+      if (prepared.size > 10 * 1024 * 1024) {
+        throw new Error('That file is larger than 10MB — take a smaller photo or send the PDF again.')
+      }
       const fd = new FormData()
       fd.set('bank_account_id', String(invoiceBankId))
       fd.set('invoice_ref', invoiceRef)
       fd.set('notes', invoiceNotes)
-      fd.set('file', invoiceFile)
+      fd.set('file', prepared, prepared.name || 'invoice')
       const res = await fetch('/api/rep/food/vendor-banks/invoices/upload', { method: 'POST', body: fd })
       const json = await safeJson(res, '/api/rep/food/vendor-banks/invoices/upload')
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Upload failed')
@@ -733,14 +790,24 @@ function RepFoodBanksContent() {
           />
           <input
             type="file"
-            onChange={(e) => setInvoiceFile(e.target.files?.[0] || null)}
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/*"
+            onChange={(e) => {
+              setInvoiceFile(e.target.files?.[0] || null)
+              e.target.value = ''
+            }}
             className="w-full text-sm"
             disabled={uploading || paid?.is_paid}
           />
+          <div className="text-xs text-muted">
+            {invoiceFile
+              ? `Selected: ${invoiceFile.name}${prettySize(invoiceFile.size) ? ` · ${prettySize(invoiceFile.size)}` : ''}`
+              : 'PDF or a photo of the invoice (JPG, PNG, WEBP, HEIC). Large photos are shrunk before upload.'}
+            {!invoiceBankId ? ' Choose the bank account above to enable Upload.' : ''}
+          </div>
           <button
             type="button"
             onClick={uploadInvoice}
-            disabled={uploading || paid?.is_paid || !invoiceFile}
+            disabled={uploading || paid?.is_paid || !invoiceFile || !invoiceBankId}
             className="inline-flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50 inline-flex items-center gap-2"
             aria-busy={uploading}
           >

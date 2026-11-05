@@ -6,7 +6,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const SELECT_COLS =
-  'id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, admin_markup, qty, image_url, status, approval_status, pending_vendor_price, pending_admin_markup, approval_requested_at, created_at'
+  'id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, approval_status, pending_vendor_price, approval_requested_at, created_at'
 
 export async function PATCH(req, { params }) {
   try {
@@ -30,11 +30,6 @@ export async function PATCH(req, { params }) {
       const price = Math.max(0, Number(body.vendor_price))
       if (price <= 0) return NextResponse.json({ error: 'Price must be greater than zero' }, { status: 400 })
       priceChanges.vendor_price = price
-    }
-    if (body.admin_markup !== undefined) {
-      const markup = Math.max(0, Number(body.admin_markup))
-      if (!Number.isFinite(markup)) return NextResponse.json({ error: 'Invalid discount' }, { status: 400 })
-      priceChanges.admin_markup = markup
     }
     if (body.qty !== undefined) {
       patch.qty = body.qty === '' || body.qty === null ? null : Math.max(0, Number(body.qty))
@@ -70,7 +65,6 @@ export async function PATCH(req, { params }) {
     // approves the new one. Drafts can be edited freely.
     if (Object.keys(priceChanges).length && existing.status === 'active') {
       if (priceChanges.vendor_price !== undefined) patch.pending_vendor_price = priceChanges.vendor_price
-      if (priceChanges.admin_markup !== undefined) patch.pending_admin_markup = priceChanges.admin_markup
       patch.approval_status = 'pending'
       patch.approval_requested_at = new Date().toISOString()
     } else {
@@ -101,10 +95,7 @@ export async function PATCH(req, { params }) {
             ? Math.trunc(priceChanges.vendor_price)
             : Number(existing.vendor_price || 0),
         old_admin_markup: Number(existing.admin_markup || 0),
-        new_admin_markup:
-          priceChanges.admin_markup !== undefined
-            ? Math.trunc(priceChanges.admin_markup)
-            : Number(existing.admin_markup || 0),
+        new_admin_markup: Number(existing.admin_markup || 0),
         changed_by: 'vendor',
         changed_by_label:
           data.approval_status === 'pending' ? 'Vendor request (pending approval)' : 'Vendor edit',
@@ -115,7 +106,7 @@ export async function PATCH(req, { params }) {
     return NextResponse.json({
       ok: true,
       pending_approval: data.approval_status === 'pending',
-      product: { ...data, final_price: Number(data.vendor_price || 0) + Number(data.admin_markup || 0) },
+      product: { ...data, final_price: Number(data.vendor_price || 0) },
     })
   } catch (e) {
     return NextResponse.json({ error: e.message || 'Failed to update product' }, { status: 500 })

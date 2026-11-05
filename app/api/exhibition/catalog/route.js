@@ -6,7 +6,7 @@
 // browse and shop from any open exhibition.  The cycle's branch is the
 // delivery/pickup location, not a visibility filter.
 // Each product carries:
-//   - final_price  = vendor_price + admin_markup (the catalog price)
+//   - final_price  = vendor_price (the catalog price)
 //   - price        = the price THIS member pays (their negotiated price wins)
 //   - negotiated   = true when a per-member price overrides the catalog
 // When no cycle is active, returns { ok: true, open: false } so the shop
@@ -52,7 +52,7 @@ async function loadCatalogCore(supabase, cycleId) {
       .order('name', { ascending: true }),
     supabase
       .from('exhibition_products')
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, admin_markup, qty, image_url, status, vendors:vendor_id(name, code), categories:category_id(name)')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, vendors:vendor_id(name, code), categories:category_id(name)')
       .eq('cycle_id', cycleId)
       .eq('status', 'active')
       .order('name'),
@@ -200,7 +200,7 @@ export async function GET(req) {
     }
 
     const catalogProducts = products.map((p) => {
-      const base = Number(p.vendor_price || 0) + Number(p.admin_markup || 0)
+      const base = Number(p.vendor_price || 0)
       const neg = negotiated.get(Number(p.id))
       const price = neg ? Math.max(0, Number(neg.price || 0)) : base
       return {
