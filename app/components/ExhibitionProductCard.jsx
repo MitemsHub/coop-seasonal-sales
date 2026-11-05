@@ -14,37 +14,42 @@ const naira = (v) => `₦${Number(v || 0).toLocaleString()}`
 export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true }) {
   const router = useRouter()
 
-  const image = (
-    <Image
-      src={p.image_url || '/images/items/placeholder.svg'}
-      alt={p.name}
-      fill
-      sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 18vw"
-      className="object-cover transition-transform duration-500 ease-sakani group-hover:scale-[1.05]"
-      loading="lazy"
-      onError={(e) => {
-        e.currentTarget.src = '/images/items/placeholder.svg'
-      }}
-    />
+  // Stand artwork is usually a square emblem on a plain background; cropping
+  // it to 4:3 sliced off the top and bottom, so the image is contained inside
+  // the frame instead of covering it.
+  const imageBox = (
+    <div className="relative aspect-[4/3] w-full overflow-hidden bg-subtle">
+      <div className="absolute inset-2">
+        <Image
+          src={p.image_url || '/images/items/placeholder.svg'}
+          alt={p.name}
+          fill
+          sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 18vw"
+          className="object-contain transition-transform duration-500 ease-sakani group-hover:scale-[1.04]"
+          loading="lazy"
+          onError={(e) => {
+            e.currentTarget.src = '/images/items/placeholder.svg'
+          }}
+        />
+      </div>
+    </div>
   )
 
   return (
     <div className="group flex flex-col overflow-hidden rounded-xl border border-line bg-surface transition-all duration-200 ease-sakani hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md">
-      {/* Uniform 4:3 image — keeps the card compact so more fit per row */}
+      {/* Uniform 4:3 frame — the whole artwork stays visible, and no stand
+          label sits on top of it. */}
       {showVendor ? (
         <button
           type="button"
           onClick={() => router.push(`/exhibition/vendor/${p.vendor_id}`)}
           aria-label={`View ${p.vendor_name || 'vendor'} hub`}
-          className="relative block aspect-[4/3] w-full overflow-hidden bg-subtle"
+          className="block w-full"
         >
-          {image}
-          <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
-            {p.vendor_name}
-          </span>
+          {imageBox}
         </button>
       ) : (
-        <div className="relative block aspect-[4/3] w-full overflow-hidden bg-subtle">{image}</div>
+        imageBox
       )}
 
       <div className="flex flex-1 flex-col p-2">

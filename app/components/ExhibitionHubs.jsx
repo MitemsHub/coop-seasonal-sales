@@ -149,14 +149,11 @@ export default function ExhibitionHubs({ vendors = [], vendorCounts = {} }) {
 
   if (count === 0) return null
 
-  // A market with one or two stands shouldn't leave a mostly empty row: give
-  // each card a sensible share of the width until there are enough to slide.
+  // Cards per view: 2 phones, 3 small tablets, 4 tablets, 5 laptops, 6 wide
+  // screens — so a single stand never stretches across the rail while a full
+  // market still packs plenty in at a glance.
   const slideWidth =
-    count === 1
-      ? 'w-full sm:w-[calc(50%-6px)] lg:w-[calc(33.333%-8px)]'
-      : count <= 3
-        ? 'w-[calc(50%-6px)] sm:w-[calc(33.333%-8px)] lg:w-[calc(25%-9px)]'
-        : 'w-[calc(50%-6px)] sm:w-[calc(33.333%-8px)] lg:w-[calc(25%-9px)] xl:w-[calc(20%-9.6px)]'
+    'w-[calc(50%-6px)] sm:w-[calc(33.333%-8px)] md:w-[calc(25%-9px)] lg:w-[calc(20%-9.6px)] xl:w-[calc(16.666%-10px)]'
 
   return (
     <section aria-label="Featured stands" className="mb-6">
@@ -168,7 +165,7 @@ export default function ExhibitionHubs({ vendors = [], vendorCounts = {} }) {
         onTouchEnd={() => resumeAfter(1800)}
         onFocusCapture={() => setPaused(true)}
         onBlurCapture={() => resumeAfter(250)}
-        className="scrollbar-hide -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-1"
+        className="scrollbar-hide -mx-2 flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-2 pb-3 pt-2"
       >
         {slides.map((v, idx) => (
           <div

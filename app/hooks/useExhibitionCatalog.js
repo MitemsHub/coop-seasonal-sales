@@ -23,14 +23,26 @@ export default function useExhibitionCatalog(branchCode) {
 
   useEffect(() => {
     if (!memberId) return
-    if (branchCode && loadedBranchRef.current.code === branchCode) return
+    // Pages other than the shop don't pass a branch, so fall back to the
+    // delivery location the member picked (the shop persists it). Without
+    // this, /exhibition/all and the stand pages fell back to the member's own
+    // branch — which often stocks nothing — and showed an empty catalogue.
+    let requested = branchCode
+    if (!requested) {
+      try {
+        requested = localStorage.getItem(`exhibitionDeliveryBranch_${memberId}`) || ''
+      } catch {
+        requested = ''
+      }
+    }
+    if (requested && loadedBranchRef.current.code === requested) return
     let cancelled = false
     ;(async () => {
       setLoading(true)
       setError('')
       try {
         const qs = new URLSearchParams({ member_id: memberId })
-        if (branchCode) qs.set('branch_code', branchCode)
+        if (requested) qs.set('branch_code', requested)
         const res = await fetch(`/api/exhibition/catalog?${qs.toString()}`, { cache: 'no-store' })
         const json = await res.json().catch(() => null)
         if (cancelled) return
@@ -41,7 +53,7 @@ export default function useExhibitionCatalog(branchCode) {
         } else {
           setCatalog(json)
           const served = (json.availableBranches || []).find((b) => b && b.name && b.name === json.branch)
-          loadedBranchRef.current = { code: served?.code || branchCode || '' }
+          loadedBranchRef.current = { code: served?.code || requested || '' }
         }
       } catch {
         if (!cancelled) setError('Could not reach the Coop right now. Refresh to retry.')

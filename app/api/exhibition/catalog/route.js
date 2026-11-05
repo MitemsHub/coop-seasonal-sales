@@ -156,11 +156,16 @@ export async function GET(req) {
     const requestedBranch = branchCodeFilter
       ? (branchRows || []).find((b) => String(b.code || '').toUpperCase() === branchCodeFilter)
       : null
+    // The location that actually has stock wins: the requested branch when it
+    // sells something, else the member's own branch, else any stocked branch.
+    // Falling back to the member's branch even when it stocks nothing is what
+    // left /exhibition/all showing an empty market.
+    const stocked = (id) => {
+      const n = Number(id)
+      return n > 0 && allProducts.some((p) => Number(p.branch_id) === n)
+    }
     const selectedBranchId =
-      Number(requestedBranch?.id) ||
-      Number(member.branch_id) ||
-      branchIdsInCycle[0] ||
-      0
+      [requestedBranch?.id, member.branch_id, ...branchIdsInCycle].map(Number).find(stocked) || 0
     const selectedBranch = branchById.get(selectedBranchId) || null
     const products = allProducts.filter((p) => Number(p.branch_id) === selectedBranchId)
     const productIds = products.map((p) => p.id)

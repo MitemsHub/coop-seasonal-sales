@@ -273,7 +273,7 @@ function ExhibitionShopContent() {
           {loading ? (
             <div className="mb-6 flex gap-3 overflow-hidden">
               {[0, 1, 2].map((i) => (
-                <Skeleton key={i} className="h-[104px] w-[calc(50%-6px)] shrink-0 rounded-2xl sm:w-[calc(33.333%-8px)] lg:w-[calc(25%-9px)] xl:w-[calc(20%-9.6px)]" />
+                <Skeleton key={i} className="h-[104px] w-[calc(50%-6px)] shrink-0 rounded-2xl sm:w-[calc(33.333%-8px)] md:w-[calc(25%-9px)] lg:w-[calc(20%-9.6px)] xl:w-[calc(16.666%-10px)]" />
               ))}
             </div>
           ) : showStands ? (

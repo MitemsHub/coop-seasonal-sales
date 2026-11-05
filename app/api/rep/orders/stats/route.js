@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { verify } from '@/lib/signing'
+import { resolveRepCycleId } from '@/lib/repCycle'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -29,15 +30,11 @@ export async function GET(req) {
     // same scope is applied here as in /api/rep/orders/list.
     const deptId = Number(claim.department_id) > 0 ? Math.trunc(Number(claim.department_id)) : null
 
-    // The active food cycle (orders carry cycle_id). If the column or the
-    // table is missing, cycle-scoped figures just read 0.
-    let cycleId = null
-    try {
-      const { data: active } = await supabase.from('cycles').select('id').eq('is_active', true).maybeSingle()
-      cycleId = Number(active?.id) || null
-    } catch {
-      // No cycles table — cycle-scoped figures read 0.
-    }
+    // The cycle these figures describe: the active one, or — once the season
+    // has closed — the newest cycle this branch has orders in. Without that
+    // fallback a closed season showed zeros on every card and on the dashboard
+    // while the orders were still sitting there (see lib/repCycle).
+    const cycleId = await resolveRepCycleId(supabase, branchId)
 
     const ordersQuery = supabase
       .from('orders')
@@ -47,11 +44,9 @@ export async function GET(req) {
     const { data, error } = await ordersQuery
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
-    // Per-status cards mirroring the exhibition strip. Scoped to the active
-    // food cycle when one exists so old cycles' figures (e.g. a delivered
-    // backlog carried over from before the cycle rollover) never inflate the
-    // cards; without an active cycle they fall back to all-time so they
-    // aren't silently zero.
+    // Per-status cards mirroring the exhibition strip. Scoped to the resolved
+    // cycle so old cycles' figures (e.g. a delivered backlog carried over from
+    // before the rollover) never inflate the cards.
     const STATUSES = ['Pending', 'Posted', 'Delivered', 'Cancelled']
     const statuses = {}
     for (const s of STATUSES) statuses[s] = { count: 0, total: 0 }
