@@ -72,7 +72,6 @@ export async function GET(req) {
         let q = supabase
           .from('food_vendor_bank_accounts')
           .select('id,branch_id,cycle_id,bank_name,account_name,account_number,is_current,created_at,created_by_role,created_by_code')
-          .eq('is_current', true)
           .in('branch_id', branchIds)
           .eq('cycle_id', cycleId)
         return q
@@ -107,7 +106,19 @@ export async function GET(req) {
       }
     }
 
-    const bankByBranchId = new Map((banksRes.data || []).map((b) => [Number(b.branch_id), b]))
+    // Every account on file, not just the current one: a branch can keep a
+    // second account and switch which one payouts use.
+    const banksByBranchId = new Map()
+    for (const b of banksRes.data || []) {
+      const id = Number(b?.branch_id)
+      if (!Number.isFinite(id) || id <= 0) continue
+      const list = banksByBranchId.get(id) || []
+      list.push(b)
+      banksByBranchId.set(id, list)
+    }
+    for (const list of banksByBranchId.values()) {
+      list.sort((a, b) => Number(b.is_current) - Number(a.is_current) || new Date(b.created_at) - new Date(a.created_at))
+    }
     const invoiceCountByBranchId = new Map()
     for (const inv of invoicesRes.data || []) {
       const id = Number(inv?.branch_id)
@@ -124,11 +135,13 @@ export async function GET(req) {
 
     const out = (branches || []).map((b) => {
       const id = Number(b.id)
+      const banks = banksByBranchId.get(id) || []
       return {
         id,
         code: b.code || '',
         name: b.name || '',
-        bank: bankByBranchId.get(id) || null,
+        bank: banks.find((x) => x.is_current) || banks[0] || null,
+        banks,
         invoice_count: invoiceCountByBranchId.get(id) || 0,
         paid: paidByBranchId.get(id) || { is_paid: false, paid_at: null, cycle_id: cycleId },
       }

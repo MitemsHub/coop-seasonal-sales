@@ -13,6 +13,7 @@ import Button from '../../../components/ui/Button'
 import Select from '../../../components/ui/Select'
 import Skeleton from '../../../components/ui/Skeleton'
 import FilePicker from '../../../components/ui/FilePicker'
+import AdminBankAccountsModal from '../../../components/AdminBankAccountsModal'
 
 const PAGE_SIZE = 15
 
@@ -45,6 +46,7 @@ function AdminExhibitionBanksContent() {
   const [bankName, setBankName] = useState('')
   const [accountName, setAccountName] = useState('')
   const [accountNumber, setAccountNumber] = useState('')
+  const [banksFor, setBanksFor] = useState(null)
 
   // Invoice state (mirrors the ram banks page)
   const [invoiceListOpen, setInvoiceListOpen] = useState(false)
@@ -403,7 +405,25 @@ function AdminExhibitionBanksContent() {
                     <div className="text-xs text-subtext">{v.phone || ''}</div>
                   </td>
                   <td className="px-3 py-2 border-b text-muted">{v.branch_name || '—'}</td>
-                  <td className="px-3 py-2 border-b">{v.bank?.bank_name || '—'}</td>
+                  <td className="px-3 py-2 border-b">
+                    {v.banks?.length ? (
+                      <div className="space-y-0.5">
+                        {v.banks.slice(0, 2).map((b) => (
+                          <div key={b.id} className="flex items-center gap-1.5">
+                            <span>{b.bank_name || '—'}</span>
+                            {b.is_current && (
+                              <span className="rounded-full bg-success-bg px-1.5 py-0.5 text-[10px] font-semibold text-success-fg">
+                                primary
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                        {v.banks.length > 2 && (
+                          <div className="text-xs text-subtext">+{v.banks.length - 2} more</div>
+                        )}
+                      </div>
+                    ) : '—'}
+                  </td>
                   <td className="px-3 py-2 border-b">{v.bank?.account_name || '—'}</td>
                   <td className="px-3 py-2 border-b">{maskAccountNumber(v.bank?.account_number || '')}</td>
                   <td className="px-3 py-2 border-b text-center">
@@ -430,12 +450,14 @@ function AdminExhibitionBanksContent() {
                         e.target.value = ''
                         if (!act) return
                         if (act === 'bank') openBank(v)
+                        if (act === 'banks') setBanksFor(v)
                         if (act === 'upload') openUpload(v)
                         if (act === 'invoices') loadInvoices(v)
                       }}
                     >
                       <option value="" disabled>Actions</option>
                       <option value="bank">{v.bank ? 'Edit bank' : 'Set bank'}</option>
+                      <option value="banks">Manage banks ({v.banks?.length || 0})</option>
                       <option value="upload">Upload Invoice</option>
                       <option value="invoices">View Invoices</option>
                     </select>
@@ -497,6 +519,15 @@ function AdminExhibitionBanksContent() {
           </div>
         </div>
       </DraggableModal>
+
+      <AdminBankAccountsModal
+        open={!!banksFor}
+        onClose={() => setBanksFor(null)}
+        module="exhibition"
+        ownerId={banksFor?.id}
+        ownerName={banksFor?.name}
+        onChanged={load}
+      />
 
       {/* Invoices list */}
       <DraggableModal

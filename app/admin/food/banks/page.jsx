@@ -6,6 +6,7 @@ import DraggableModal from '../../../components/DraggableModal'
 import Button from '../../../components/ui/Button'
 import FilePicker from '../../../components/ui/FilePicker'
 import ProtectedRoute from '../../../components/ProtectedRoute'
+import AdminBankAccountsModal from '../../../components/AdminBankAccountsModal'
 
 function safeJsonFactory() {
   return async (res, label) => {
@@ -42,6 +43,7 @@ function AdminFoodBanksContent() {
   const [accountName, setAccountName] = useState('')
   const [accountNumber, setAccountNumber] = useState('')
   const [bankSaving, setBankSaving] = useState(false)
+  const [banksFor, setBanksFor] = useState(null)
 
   const [invoiceListOpen, setInvoiceListOpen] = useState(false)
   const [invoiceLoc, setInvoiceLoc] = useState(null)
@@ -299,7 +301,25 @@ function AdminFoodBanksContent() {
                     <div className="font-medium text-fg">{r.name || '—'}</div>
                     <div className="text-xs text-subtext">{r.code || ''}</div>
                   </td>
-                  <td className="px-3 py-2 border-b">{r.bank?.bank_name || '—'}</td>
+                  <td className="px-3 py-2 border-b">
+                    {r.banks?.length ? (
+                      <div className="space-y-0.5">
+                        {r.banks.slice(0, 2).map((b) => (
+                          <div key={b.id} className="flex items-center gap-1.5">
+                            <span>{b.bank_name || '—'}</span>
+                            {b.is_current && (
+                              <span className="rounded-full bg-success-bg px-1.5 py-0.5 text-[10px] font-semibold text-success-fg">
+                                primary
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                        {r.banks.length > 2 && (
+                          <div className="text-xs text-subtext">+{r.banks.length - 2} more</div>
+                        )}
+                      </div>
+                    ) : '—'}
+                  </td>
                   <td className="px-3 py-2 border-b">{r.bank?.account_name || '—'}</td>
                   <td className="px-3 py-2 border-b">{maskAccountNumber(r.bank?.account_number || '')}</td>
                   <td className="px-3 py-2 border-b text-right">{Number(r.invoice_count || 0).toLocaleString()}</td>
@@ -322,6 +342,7 @@ function AdminFoodBanksContent() {
                           e.target.value = ''
                           if (!v) return
                           if (v === 'bank') openBankModal(r)
+                          if (v === 'banks') setBanksFor(r)
                           if (v === 'upload') openInvoiceUpload(r)
                           if (v === 'invoices') loadInvoices(r)
                           if (v === 'paid') togglePaid(r, true)
@@ -332,6 +353,7 @@ function AdminFoodBanksContent() {
                           Actions
                         </option>
                         <option value="bank">Set Bank</option>
+                        <option value="banks">Manage banks ({r.banks?.length || 0})</option>
                         <option value="upload">Upload Invoice</option>
                         <option value="invoices">View Invoices</option>
                         {r?.paid?.is_paid ? <option value="unpaid">Mark Unpaid</option> : <option value="paid">Mark Paid</option>}
@@ -449,6 +471,15 @@ function AdminFoodBanksContent() {
           </Button>
         </div>
       </DraggableModal>
+
+      <AdminBankAccountsModal
+        open={!!banksFor}
+        onClose={() => setBanksFor(null)}
+        module="food"
+        ownerId={banksFor?.id}
+        ownerName={banksFor?.name}
+        onChanged={fetchRows}
+      />
     </div>
   )
 }

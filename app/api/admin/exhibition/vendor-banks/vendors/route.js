@@ -52,11 +52,23 @@ export async function GET(request) {
       return NextResponse.json({ ok: false, error: bErr.message }, { status: 500 })
     }
 
-    const byVendorCycle = new Map((bankRows || []).map((b) => [`${b.vendor_id}:${b.cycle_id}`, b]))
-    const byVendor = new Map()
+    // Group every account per vendor, so the admin screen can show the
+    // alternates too. Without a cycle filter, only the newest season's accounts
+    // are listed — older seasons stay in the table for the record.
+    const banksByVendor = new Map()
     for (const b of bankRows || []) {
-      const cur = byVendor.get(String(b.vendor_id))
-      if (!cur || new Date(b.created_at) > new Date(cur.created_at)) byVendor.set(String(b.vendor_id), b)
+      const key = String(b.vendor_id)
+      const list = banksByVendor.get(key) || []
+      list.push(b)
+      banksByVendor.set(key, list)
+    }
+    const banksForVendor = (vendorId) => {
+      let list = banksByVendor.get(String(vendorId)) || []
+      if (cycleId <= 0 && list.length) {
+        const newestCycle = list.reduce((acc, b) => (new Date(b.created_at) > new Date(acc.created_at) ? b : acc), list[0])?.cycle_id
+        list = list.filter((b) => String(b.cycle_id) === String(newestCycle))
+      }
+      return list.sort((a, b) => Number(b.is_current) - Number(a.is_current) || new Date(b.created_at) - new Date(a.created_at))
     }
 
     // Invoice counts per vendor (best-effort — the invoices table may not
@@ -72,8 +84,8 @@ export async function GET(request) {
     }
 
     const pick = (v) => {
-      if (cycleId > 0) return byVendorCycle.get(`${v.id}:${cycleId}`)
-      return byVendor.get(String(v.id))
+      const list = banksForVendor(v.id)
+      return list.find((b) => b.is_current) || list[0] || null
     }
 
     return NextResponse.json({
@@ -81,9 +93,11 @@ export async function GET(request) {
       cycle_id: cycleId > 0 ? cycleId : null,
       vendors: (vendors || []).map((v) => {
         const bank = pick(v)
+        const banks = banksForVendor(v.id)
         return {
           ...v,
           invoice_count: invoiceCounts.get(String(v.id)) || 0,
+          banks,
           branch_name: v.branches?.name || '',
           branch_code: v.branches?.code || '',
           cycle_name: v.cycles?.name || '',

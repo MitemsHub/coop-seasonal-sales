@@ -98,7 +98,6 @@ export async function GET(req) {
           .from('ram_vendor_bank_accounts')
           .select('id,ram_delivery_location_id,ram_cycle_id,bank_name,account_name,account_number,is_current,created_at,created_by_role,created_by_code')
           .in('ram_delivery_location_id', ids)
-          .eq('is_current', true)
         if (bankHasCycle && cycleId) bq = bq.eq('ram_cycle_id', cycleId)
         return bq
       })(),
@@ -124,7 +123,19 @@ export async function GET(req) {
       }
     }
 
-    const bankByLocId = new Map((banksRes.data || []).map((b) => [Number(b.ram_delivery_location_id), b]))
+    // Keep every account per location so admin can see the alternate accounts,
+    // not only the one currently used for payouts.
+    const banksByLocId = new Map()
+    for (const b of banksRes.data || []) {
+      const id = Number(b?.ram_delivery_location_id)
+      if (!Number.isFinite(id) || id <= 0) continue
+      const list = banksByLocId.get(id) || []
+      list.push(b)
+      banksByLocId.set(id, list)
+    }
+    for (const list of banksByLocId.values()) {
+      list.sort((a, b) => Number(b.is_current) - Number(a.is_current) || new Date(b.created_at) - new Date(a.created_at))
+    }
     const invoiceCountByLocId = new Map()
     for (const inv of invoicesRes.data || []) {
       const id = Number(inv?.ram_delivery_location_id)
@@ -141,7 +152,8 @@ export async function GET(req) {
 
     const out = (locations || []).map((l) => {
       const id = Number(l.id)
-      const bank = bankByLocId.get(id) || null
+      const banks = banksByLocId.get(id) || []
+      const bank = banks.find((x) => x.is_current) || banks[0] || null
       const paid = paidByLocId.get(id) || { is_paid: false, paid_at: null, ram_cycle_id: cycleId ?? null }
       return {
         id,
@@ -151,6 +163,7 @@ export async function GET(req) {
         rep_code: l.rep_code || '',
         is_active: l.is_active !== false,
         bank,
+        banks,
         invoice_count: invoiceCountByLocId.get(id) || 0,
         paid,
       }
