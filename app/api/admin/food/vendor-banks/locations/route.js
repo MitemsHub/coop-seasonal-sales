@@ -71,7 +71,7 @@ export async function GET(req) {
       (() => {
         let q = supabase
           .from('food_vendor_bank_accounts')
-          .select('id,branch_id,cycle_id,bank_name,account_name,account_number,is_current,created_at,created_by_role,created_by_code')
+          .select('id,branch_id,cycle_id,bank_name,account_name,account_number,purpose,is_paid,paid_at,is_current,created_at,created_by_role,created_by_code')
           .in('branch_id', branchIds)
           .eq('cycle_id', cycleId)
         return q

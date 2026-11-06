@@ -68,22 +68,8 @@ export async function POST(req) {
       patch.account_number = accountNumber
     }
 
-    const wantsPrimary = body.make_current === true || body.make_current === 'true'
-    if (!Object.keys(patch).length && !wantsPrimary) {
+    if (!Object.keys(patch).length) {
       return NextResponse.json({ ok: false, error: 'Nothing to update' }, { status: 400 })
-    }
-
-    if (wantsPrimary && !row.is_current) {
-      const { error: clearErr } = await supabase
-        .from('food_vendor_bank_accounts')
-        .update({ is_current: false })
-        .eq('branch_id', branchId)
-        .eq('cycle_id', cycleId)
-        .eq('is_current', true)
-      if (clearErr && !isMissingTable(clearErr, 'food_vendor_bank_accounts')) {
-        return NextResponse.json({ ok: false, error: clearErr.message }, { status: 500 })
-      }
-      patch.is_current = true
     }
 
     const { data: bank, error } = await supabase

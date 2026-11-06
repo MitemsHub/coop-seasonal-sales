@@ -1,11 +1,11 @@
 // app/api/admin/vendor-banks/accounts/route.js
 // Admin management of the bank accounts attached to one payout owner.
-//   GET    ?module=food|ram|exhibition&owner_id=NNN   — every account, not just the current one
-//   POST   { module, owner_id, bank_name, account_name, account_number, make_current? }
-//   PATCH  { module, owner_id, account_id, ...fields, make_current? }
+//   GET    ?module=food|ram|exhibition&owner_id=NNN
+//   POST   { module, owner_id, bank_name, account_name, account_number, purpose? }
+//   PATCH  { module, owner_id, account_id, ...fields, purpose?, paid? }
 //   DELETE ?module=...&owner_id=...&account_id=...
-// A payout owner can hold several accounts (food and ram already do); exactly
-// one of them is current and is the one payouts point at.
+// Every account stands on its own: it has a purpose, the invoices filed against
+// it, and a paid status. There is no primary account.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession } from '@/lib/validation'
@@ -19,25 +19,26 @@ const MAX_ACCOUNTS = 10
 const MODULES = {
   food: {
     table: 'food_vendor_bank_accounts',
+    invoiceTable: 'food_vendor_invoices',
     ownerCol: 'branch_id',
     cycleCol: 'cycle_id',
-    label: 'branch',
   },
   ram: {
     table: 'ram_vendor_bank_accounts',
+    invoiceTable: 'ram_vendor_invoices',
     ownerCol: 'ram_delivery_location_id',
     cycleCol: 'ram_cycle_id',
-    label: 'delivery location',
   },
   exhibition: {
     table: 'exhibition_vendor_bank_accounts',
+    invoiceTable: 'exhibition_vendor_invoices',
     ownerCol: 'vendor_id',
     cycleCol: 'cycle_id',
-    label: 'vendor',
   },
 }
 
-const SELECT = 'id,bank_name,account_name,account_number,is_current,created_at,created_by_role,created_by_code'
+const SELECT =
+  'id,bank_name,account_name,account_number,purpose,is_paid,paid_at,paid_by,created_at,created_by_role,created_by_code'
 
 function isMissingTable(error, tableName) {
   const code = String(error?.code || '')
@@ -104,15 +105,14 @@ async function resolveRamCycleId(supabase) {
   return latest?.id || null
 }
 
-// Resolves the owner row, its payout cycle and whether the season is locked
-// (a paid vendor's bank details must not move underneath the payment).
 async function loadContext(supabase, module, ownerId) {
   const meta = MODULES[module]
   if (!meta) return { error: 'Unknown module', status: 400 }
 
   let owner = null
   let cycleId = null
-  let extra = {}
+  let branchId = null
+  let paidLock = false
 
   if (module === 'food') {
     const { data, error } = await supabase.from('branches').select('id,name,code').eq('id', ownerId).maybeSingle()
@@ -127,7 +127,7 @@ async function loadContext(supabase, module, ownerId) {
       .eq('branch_id', ownerId)
       .eq('cycle_id', cycleId)
       .maybeSingle()
-    extra.paid = !!paid?.is_paid
+    paidLock = !!paid?.is_paid
   } else if (module === 'ram') {
     const { data, error } = await supabase
       .from('ram_delivery_locations')
@@ -138,16 +138,6 @@ async function loadContext(supabase, module, ownerId) {
     if (!data) return { error: 'Delivery location not found', status: 404 }
     owner = data
     cycleId = await resolveRamCycleId(supabase)
-    if (cycleId) {
-      const { data: paid, error: pErr } = await supabase
-        .from('ram_vendor_payment_status')
-        .select('is_paid')
-        .eq('ram_delivery_location_id', ownerId)
-        .eq('ram_cycle_id', cycleId)
-        .maybeSingle()
-      if (pErr && !isMissingTable(pErr, 'ram_vendor_payment_status')) throw pErr
-      extra.paid = !!paid?.is_paid
-    }
   } else {
     const { data, error } = await supabase
       .from('exhibition_vendors')
@@ -158,14 +148,14 @@ async function loadContext(supabase, module, ownerId) {
     if (!data) return { error: 'Vendor not found', status: 404 }
     owner = data
     cycleId = data.cycle_id ? Number(data.cycle_id) : null
-    extra.branch_id = data.branch_id || null
+    branchId = data.branch_id || null
   }
 
   const bankHasCycle = module === 'food' || module === 'exhibition'
     ? true
     : await hasColumn(supabase, meta.table, meta.cycleCol).catch(() => false)
 
-  return { meta, owner, cycleId, bankHasCycle, extra }
+  return { meta, owner, cycleId, branchId, bankHasCycle, paidLock }
 }
 
 function scoped(query, ctx, ownerId) {
@@ -176,27 +166,63 @@ function scoped(query, ctx, ownerId) {
 }
 
 async function listAccounts(supabase, ctx, ownerId) {
-  const { meta } = ctx
-  let q = supabase.from(meta.table).select(SELECT)
+  let q = supabase.from(ctx.meta.table).select(SELECT)
   q = scoped(q, ctx, ownerId).order('created_at', { ascending: false })
   const { data, error } = await q
   if (error) {
-    if (isMissingTable(error, meta.table)) return []
+    if (isMissingTable(error, ctx.meta.table)) return []
     throw error
   }
-  // Current account first, then newest.
-  return (data || []).sort((a, b) => Number(b.is_current) - Number(a.is_current))
+  return data || []
 }
 
-async function promoteNewest(supabase, ctx, ownerId) {
-  const { meta } = ctx
-  let q = supabase.from(meta.table).select('id')
-  q = scoped(q, ctx, ownerId).order('created_at', { ascending: false }).limit(1)
-  const { data, error } = await q
-  if (error || !data?.length) return null
-  const nextId = Number(data[0].id)
-  const { error: upErr } = await supabase.from(meta.table).update({ is_current: true }).eq('id', nextId)
-  return upErr ? null : nextId
+// The invoices filed against each account, with short-lived links so the admin
+// can open the actual file. Older databases may not have the link column yet.
+async function withInvoices(supabase, ctx, accounts) {
+  if (!accounts.length) return accounts
+  const table = ctx.meta.invoiceTable
+  const linked = await hasColumn(supabase, table, 'bank_account_id').catch(() => false)
+  if (!linked) return accounts.map((a) => ({ ...a, invoices: [], invoice_total: 0 }))
+
+  const { data, error } = await supabase
+    .from(table)
+    .select('id,bank_account_id,invoice_ref,invoice_date,amount,notes,storage_bucket,storage_path,file_name,mime_type,file_size,created_by_role,created_by_code,created_at')
+    .in('bank_account_id', accounts.map((a) => a.id))
+    .order('created_at', { ascending: false })
+  if (error) return accounts.map((a) => ({ ...a, invoices: [], invoice_total: 0 }))
+
+  const byAccount = new Map()
+  for (const inv of data || []) {
+    const key = Number(inv.bank_account_id)
+    const list = byAccount.get(key) || []
+    list.push(inv)
+    byAccount.set(key, list)
+  }
+
+  return Promise.all(
+    accounts.map(async (account) => {
+      const rows = byAccount.get(Number(account.id)) || []
+      const invoices = await Promise.all(
+        rows.map(async (inv) => {
+          const bucket = String(inv.storage_bucket || '')
+          const path = String(inv.storage_path || '')
+          let url = null
+          if (bucket && path) {
+            const { data: signed } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60)
+            url = signed?.signedUrl || null
+          }
+          return { ...inv, url }
+        })
+      )
+      const total = rows.reduce((sum, inv) => sum + Number(inv.amount || 0), 0)
+      return { ...account, invoices, invoice_total: total }
+    })
+  )
+}
+
+async function respondWithAccounts(supabase, ctx, ownerId, extra = {}) {
+  const accounts = await withInvoices(supabase, ctx, await listAccounts(supabase, ctx, ownerId))
+  return NextResponse.json({ ok: true, accounts, cycle_id: ctx.cycleId, paid_lock: ctx.paidLock, ...extra })
 }
 
 export async function GET(req) {
@@ -214,15 +240,7 @@ export async function GET(req) {
     const ctx = await loadContext(supabase, module, ownerId)
     if (ctx.error) return NextResponse.json({ ok: false, error: ctx.error }, { status: ctx.status || 400 })
 
-    const accounts = await listAccounts(supabase, ctx, ownerId)
-    return NextResponse.json({
-      ok: true,
-      module,
-      owner_id: ownerId,
-      cycle_id: ctx.cycleId,
-      locked: !!ctx.extra?.paid,
-      accounts,
-    })
+    return respondWithAccounts(supabase, ctx, ownerId, { module, owner_id: ownerId })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e?.message || 'Failed to load bank accounts' }, { status: 500 })
   }
@@ -249,26 +267,14 @@ export async function POST(req) {
     const supabase = createClient()
     const ctx = await loadContext(supabase, module, ownerId)
     if (ctx.error) return NextResponse.json({ ok: false, error: ctx.error }, { status: ctx.status || 400 })
-    if (ctx.extra?.paid) return NextResponse.json({ ok: false, error: 'Vendor is marked as Paid. Editing is locked.' }, { status: 403 })
+    if (ctx.paidLock) return NextResponse.json({ ok: false, error: 'Branch is marked as Paid. Editing is locked.' }, { status: 403 })
 
     const existing = await listAccounts(supabase, ctx, ownerId)
     if (existing.length >= MAX_ACCOUNTS) {
       return NextResponse.json({ ok: false, error: `Up to ${MAX_ACCOUNTS} bank accounts per vendor. Remove one first.` }, { status: 400 })
     }
-    const target = normalizeAccountNumber(accountNumber)
-    if (existing.some((a) => normalizeAccountNumber(a.account_number) === target)) {
+    if (existing.some((a) => normalizeAccountNumber(a.account_number) === normalizeAccountNumber(accountNumber))) {
       return NextResponse.json({ ok: false, error: 'That account number is already attached.' }, { status: 409 })
-    }
-
-    const wantsPrimary = body.make_current === true || body.make_current === 'true'
-    const hasPrimary = existing.some((a) => a.is_current)
-    const setPrimary = wantsPrimary || !hasPrimary
-
-    if (setPrimary && hasPrimary) {
-      let clearQ = supabase.from(ctx.meta.table).update({ is_current: false })
-      clearQ = scoped(clearQ, ctx, ownerId).eq('is_current', true)
-      const { error: clearErr } = await clearQ
-      if (clearErr) return NextResponse.json({ ok: false, error: clearErr.message }, { status: 500 })
     }
 
     const createdByCode = cleanText(session?.claims?.email || session?.claims?.user || 'admin', 120) || 'admin'
@@ -277,22 +283,17 @@ export async function POST(req) {
       bank_name: bankName,
       account_name: accountName,
       account_number: accountNumber,
-      is_current: setPrimary,
+      purpose: cleanText(body.purpose, 160) || null,
+      is_current: false,
       created_by_role: 'admin',
       created_by_code: createdByCode,
     }
     if (ctx.bankHasCycle && ctx.cycleId) row[ctx.meta.cycleCol] = ctx.cycleId
-    if (module === 'exhibition' && ctx.extra?.branch_id) row.branch_id = ctx.extra.branch_id
+    if (module === 'exhibition' && ctx.branchId) row.branch_id = ctx.branchId
 
     const { data, error } = await supabase.from(ctx.meta.table).insert(row).select(SELECT).single()
-    if (error) {
-      if (String(error.code || '') === '23505') {
-        return NextResponse.json({ ok: false, error: 'Only one account can be current — retry, or mark another account current.' }, { status: 409 })
-      }
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ ok: true, account: data, accounts: await listAccounts(supabase, ctx, ownerId) })
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    return respondWithAccounts(supabase, ctx, ownerId, { account: data })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e?.message || 'Failed to add bank account' }, { status: 500 })
   }
@@ -313,7 +314,6 @@ export async function PATCH(req) {
     const supabase = createClient()
     const ctx = await loadContext(supabase, module, ownerId)
     if (ctx.error) return NextResponse.json({ ok: false, error: ctx.error }, { status: ctx.status || 400 })
-    if (ctx.extra?.paid) return NextResponse.json({ ok: false, error: 'Vendor is marked as Paid. Editing is locked.' }, { status: 403 })
 
     const accounts = await listAccounts(supabase, ctx, ownerId)
     const row = accounts.find((a) => Number(a.id) === accountId)
@@ -333,25 +333,25 @@ export async function PATCH(req) {
     if (body.account_number !== undefined) {
       const accountNumber = cleanText(body.account_number, 40)
       if (!accountNumber) return NextResponse.json({ ok: false, error: 'Account number is required' }, { status: 400 })
-      const next = normalizeAccountNumber(accountNumber)
-      if (accounts.some((a) => Number(a.id) !== accountId && normalizeAccountNumber(a.account_number) === next)) {
+      if (accounts.some((a) => Number(a.id) !== accountId && normalizeAccountNumber(a.account_number) === normalizeAccountNumber(accountNumber))) {
         return NextResponse.json({ ok: false, error: 'That account number is already attached.' }, { status: 409 })
       }
       patch.account_number = accountNumber
     }
+    if (body.purpose !== undefined) patch.purpose = cleanText(body.purpose, 160) || null
 
-    const wantsPrimary = body.make_current === true || body.make_current === 'true'
-    if (!Object.keys(patch).length && !wantsPrimary) {
-      return NextResponse.json({ ok: false, error: 'Nothing to update' }, { status: 400 })
+    const wantsPaid = body.paid !== undefined
+    const paid = body.paid === true || body.paid === 'true'
+    const editingDetails = Object.keys(patch).length > 0
+    if (editingDetails && row.is_paid && !(wantsPaid && !paid)) {
+      return NextResponse.json({ ok: false, error: 'This account is marked as paid. Mark it unpaid before editing it.' }, { status: 403 })
     }
-
-    if (wantsPrimary && !row.is_current) {
-      let clearQ = supabase.from(ctx.meta.table).update({ is_current: false })
-      clearQ = scoped(clearQ, ctx, ownerId).eq('is_current', true)
-      const { error: clearErr } = await clearQ
-      if (clearErr) return NextResponse.json({ ok: false, error: clearErr.message }, { status: 500 })
-      patch.is_current = true
+    if (wantsPaid) {
+      patch.is_paid = paid
+      patch.paid_at = paid ? new Date().toISOString() : null
+      patch.paid_by = paid ? cleanText(session?.claims?.email || session?.claims?.user || 'admin', 120) || 'admin' : null
     }
+    if (!Object.keys(patch).length) return NextResponse.json({ ok: false, error: 'Nothing to update' }, { status: 400 })
 
     const { data, error } = await supabase
       .from(ctx.meta.table)
@@ -360,8 +360,7 @@ export async function PATCH(req) {
       .select(SELECT)
       .single()
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
-
-    return NextResponse.json({ ok: true, account: data, accounts: await listAccounts(supabase, ctx, ownerId) })
+    return respondWithAccounts(supabase, ctx, ownerId, { account: data })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e?.message || 'Failed to update bank account' }, { status: 500 })
   }
@@ -382,24 +381,18 @@ export async function DELETE(req) {
     const supabase = createClient()
     const ctx = await loadContext(supabase, module, ownerId)
     if (ctx.error) return NextResponse.json({ ok: false, error: ctx.error }, { status: ctx.status || 400 })
-    if (ctx.extra?.paid) return NextResponse.json({ ok: false, error: 'Vendor is marked as Paid. Editing is locked.' }, { status: 403 })
 
     const accounts = await listAccounts(supabase, ctx, ownerId)
     const row = accounts.find((a) => Number(a.id) === accountId)
     if (!row) return NextResponse.json({ ok: false, error: 'Bank account not found' }, { status: 404 })
+    if (row.is_paid) {
+      return NextResponse.json({ ok: false, error: 'This account is marked as paid. Mark it unpaid before removing it.' }, { status: 403 })
+    }
 
     const { error } = await supabase.from(ctx.meta.table).delete().eq('id', accountId)
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
-    let promotedId = null
-    if (row.is_current) promotedId = await promoteNewest(supabase, ctx, ownerId).catch(() => null)
-
-    return NextResponse.json({
-      ok: true,
-      deleted_id: accountId,
-      promoted_id: promotedId,
-      accounts: await listAccounts(supabase, ctx, ownerId),
-    })
+    return respondWithAccounts(supabase, ctx, ownerId, { deleted_id: accountId })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e?.message || 'Failed to remove bank account' }, { status: 500 })
   }

@@ -80,6 +80,25 @@ export async function POST(req) {
     const locked = await isPaidLocked(supabase, branchId, cycleId).catch(() => false)
     if (locked) return NextResponse.json({ ok: false, error: 'Branch is marked as Paid. Editing is locked.' }, { status: 403 })
 
+    // Every invoice belongs to one account, so the admin sees which account
+    // the money went into and can pay that account on its own.
+    const requestedBankId = Math.trunc(Number(fd.get('bank_account_id') || 0))
+    if (!Number.isFinite(requestedBankId) || requestedBankId <= 0) {
+      return NextResponse.json({ ok: false, error: 'Choose the bank account this invoice belongs to' }, { status: 400 })
+    }
+    const { data: acct, error: acctErr } = await supabase
+      .from('food_vendor_bank_accounts')
+      .select('id')
+      .eq('id', requestedBankId)
+      .eq('branch_id', branchId)
+      .eq('cycle_id', cycleId)
+      .maybeSingle()
+    if (acctErr && !isMissingTable(acctErr, 'food_vendor_bank_accounts')) {
+      return NextResponse.json({ ok: false, error: acctErr.message }, { status: 500 })
+    }
+    if (!acct?.id) return NextResponse.json({ ok: false, error: 'That bank account does not belong to this branch' }, { status: 400 })
+    const bankAccountId = Number(acct.id)
+
     const file = fd.get('file')
     if (!file || typeof file.arrayBuffer !== 'function') {
       return NextResponse.json({ ok: false, error: 'file required' }, { status: 400 })
@@ -111,6 +130,7 @@ export async function POST(req) {
       .insert({
         branch_id: branchId,
         cycle_id: cycleId,
+        bank_account_id: bankAccountId,
         invoice_ref: invoiceRef || null,
         notes: notes || null,
         storage_bucket: bucket,

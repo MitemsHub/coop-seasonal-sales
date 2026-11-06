@@ -96,7 +96,7 @@ export async function GET(req) {
       (() => {
         let bq = supabase
           .from('ram_vendor_bank_accounts')
-          .select('id,ram_delivery_location_id,ram_cycle_id,bank_name,account_name,account_number,is_current,created_at,created_by_role,created_by_code')
+          .select('id,ram_delivery_location_id,ram_cycle_id,bank_name,account_name,account_number,purpose,is_paid,paid_at,is_current,created_at,created_by_role,created_by_code')
           .in('ram_delivery_location_id', ids)
         if (bankHasCycle && cycleId) bq = bq.eq('ram_cycle_id', cycleId)
         return bq

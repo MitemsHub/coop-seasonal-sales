@@ -52,6 +52,7 @@ function AdminFoodBanksContent() {
 
   const [invoiceUploadOpen, setInvoiceUploadOpen] = useState(false)
   const [invoiceUploadLoc, setInvoiceUploadLoc] = useState(null)
+  const [invoiceUploadBankId, setInvoiceUploadBankId] = useState('')
   const [invoiceRef, setInvoiceRef] = useState('')
   const [invoiceNotes, setInvoiceNotes] = useState('')
   const [invoiceFile, setInvoiceFile] = useState(null)
@@ -173,6 +174,7 @@ function AdminFoodBanksContent() {
 
   const openInvoiceUpload = (loc) => {
     setInvoiceUploadLoc(loc || null)
+    setInvoiceUploadBankId(String(loc?.banks?.[0]?.id || ''))
     setInvoiceRef('')
     setInvoiceNotes('')
     setInvoiceFile(null)
@@ -183,12 +185,17 @@ function AdminFoodBanksContent() {
     const id = Number(invoiceUploadLoc?.id)
     if (!Number.isFinite(id) || id <= 0) return
     if (!invoiceFile) return
+    if (!invoiceUploadBankId) {
+      setMsg({ type: 'error', text: 'Choose the bank account this invoice belongs to.' })
+      return
+    }
     if (invoiceUploading) return
     setInvoiceUploading(true)
     setMsg(null)
     try {
       const fd = new FormData()
       fd.set('branch_id', String(id))
+      fd.set('bank_account_id', String(invoiceUploadBankId))
       fd.set('invoice_ref', invoiceRef)
       fd.set('notes', invoiceNotes)
       fd.set('file', invoiceFile)
@@ -393,9 +400,9 @@ function AdminFoodBanksContent() {
                         {r.banks.slice(0, 2).map((b) => (
                           <div key={b.id} className="flex items-center gap-1.5">
                             <span>{b.bank_name || '—'}</span>
-                            {b.is_current && (
+                            {b.is_paid && (
                               <span className="rounded-full bg-success-bg px-1.5 py-0.5 text-[10px] font-semibold text-success-fg">
-                                primary
+                                paid
                               </span>
                             )}
                           </div>
@@ -629,6 +636,23 @@ function AdminFoodBanksContent() {
 
       <DraggableModal open={invoiceUploadOpen} onClose={() => setInvoiceUploadOpen(false)} title={`Upload Invoice · ${invoiceUploadLoc?.name || ''}`}>
         <div className="space-y-3">
+          <div>
+            <div className="text-xs font-medium text-muted mb-1">Bank account this invoice was paid into</div>
+            <select
+              value={invoiceUploadBankId}
+              onChange={(e) => setInvoiceUploadBankId(e.target.value)}
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-brand focus:outline-none"
+              disabled={invoiceUploading}
+            >
+              <option value="">Select the bank account…</option>
+              {(invoiceUploadLoc?.banks || []).map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.bank_name || 'Bank'} · {b.account_name || ''} · {maskAccountNumber(b.account_number || '')}
+                  {b.purpose ? ` — ${b.purpose}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
           <input
             value={invoiceRef}
             onChange={(e) => setInvoiceRef(e.target.value)}

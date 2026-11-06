@@ -52,21 +52,7 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: 'That account number is already attached.' }, { status: 409 })
     }
 
-    const wantsPrimary = body.make_current === true || body.make_current === 'true'
-    const hasPrimary = rows.some((r) => r.is_current)
-    const setPrimary = wantsPrimary || !hasPrimary
-
-    if (setPrimary && hasPrimary) {
-      const { error: clearErr } = await supabase
-        .from('food_vendor_bank_accounts')
-        .update({ is_current: false })
-        .eq('branch_id', branchId)
-        .eq('cycle_id', cycleId)
-        .eq('is_current', true)
-      if (clearErr && !isMissingTable(clearErr, 'food_vendor_bank_accounts')) {
-        return NextResponse.json({ ok: false, error: clearErr.message }, { status: 500 })
-      }
-    }
+    // Accounts are independent payment destinations — none is "primary".
 
     const { data: bank, error } = await supabase
       .from('food_vendor_bank_accounts')
@@ -76,7 +62,7 @@ export async function POST(req) {
         bank_name: bankName,
         account_name: accountName,
         account_number: accountNumber,
-        is_current: setPrimary,
+        is_current: false,
         created_by_role: 'rep',
         created_by_code: createdByCode,
       })
@@ -85,7 +71,7 @@ export async function POST(req) {
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
-    return NextResponse.json({ ok: true, bank, is_primary: setPrimary })
+    return NextResponse.json({ ok: true, bank })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e?.message || 'Internal server error' }, { status: 500 })
   }

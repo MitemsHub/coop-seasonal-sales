@@ -2,13 +2,13 @@
 
 // app/components/AdminBankAccountsModal.jsx
 // Admin view of every bank account attached to a payout owner — a food branch,
-// a ram delivery location or an exhibition vendor. An owner may hold several
-// accounts; exactly one is primary and that is where payouts land.
+// a ram delivery location or an exhibition vendor. Accounts are independent:
+// each has a purpose, the invoices filed against it, and its own paid status.
 import { useCallback, useEffect, useState } from 'react'
 import DraggableModal from './DraggableModal'
 import Button from './ui/Button'
 
-const EMPTY_FORM = { bank_name: '', account_name: '', account_number: '', make_current: false }
+const EMPTY_FORM = { bank_name: '', account_name: '', account_number: '', purpose: '' }
 
 function maskAccountNumber(value) {
   const raw = String(value || '')
@@ -16,6 +16,10 @@ function maskAccountNumber(value) {
   if (!digits) return raw || '—'
   if (digits.length <= 4) return digits
   return `${'*'.repeat(Math.max(0, digits.length - 4))}${digits.slice(-4)}`
+}
+
+function fmtNaira(n) {
+  return `₦${Number(n || 0).toLocaleString()}`
 }
 
 export default function AdminBankAccountsModal({ open, onClose, module, ownerId, ownerName, onChanged }) {
@@ -27,7 +31,7 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
   const [rowBusy, setRowBusy] = useState(0)
   const [confirmId, setConfirmId] = useState(0)
   const [editId, setEditId] = useState(0)
-  const [editForm, setEditForm] = useState({ bank_name: '', account_name: '', account_number: '' })
+  const [editForm, setEditForm] = useState(EMPTY_FORM)
 
   const load = useCallback(async () => {
     if (!open || !module || !ownerId) return
@@ -57,6 +61,19 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
     load()
   }, [load])
 
+  const send = async (method, payload) => {
+    const res = await fetch('/api/admin/vendor-banks/accounts', {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ module, owner_id: Number(ownerId), ...payload }),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok || !json?.ok) throw new Error(json?.error || 'Request failed')
+    setAccounts(json.accounts || [])
+    onChanged?.()
+    return json
+  }
+
   const add = async () => {
     if (busy) return
     setError('')
@@ -66,48 +83,12 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
     }
     setBusy(true)
     try {
-      const res = await fetch('/api/admin/vendor-banks/accounts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          module,
-          owner_id: Number(ownerId),
-          bank_name: form.bank_name,
-          account_name: form.account_name,
-          account_number: form.account_number,
-          make_current: !!form.make_current,
-        }),
-      })
-      const json = await res.json()
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to add bank account')
-      setAccounts(json.accounts || [])
+      await send('POST', form)
       setForm(EMPTY_FORM)
-      onChanged?.()
     } catch (e) {
       setError(e?.message || 'Failed to add bank account')
     } finally {
       setBusy(false)
-    }
-  }
-
-  const makePrimary = async (account) => {
-    if (rowBusy) return
-    setRowBusy(Number(account.id))
-    setError('')
-    try {
-      const res = await fetch('/api/admin/vendor-banks/accounts', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ module, owner_id: Number(ownerId), account_id: Number(account.id), make_current: true }),
-      })
-      const json = await res.json()
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to update bank account')
-      setAccounts(json.accounts || [])
-      onChanged?.()
-    } catch (e) {
-      setError(e?.message || 'Failed to update bank account')
-    } finally {
-      setRowBusy(0)
     }
   }
 
@@ -117,6 +98,7 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
       bank_name: account.bank_name || '',
       account_name: account.account_name || '',
       account_number: account.account_number || '',
+      purpose: account.purpose || '',
     })
     setConfirmId(0)
     setError('')
@@ -131,18 +113,23 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
     setRowBusy(Number(account.id))
     setError('')
     try {
-      const res = await fetch('/api/admin/vendor-banks/accounts', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ module, owner_id: Number(ownerId), account_id: Number(account.id), ...editForm }),
-      })
-      const json = await res.json()
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to update bank account')
-      setAccounts(json.accounts || [])
+      await send('PATCH', { account_id: Number(account.id), ...editForm })
       setEditId(0)
-      onChanged?.()
     } catch (e) {
       setError(e?.message || 'Failed to update bank account')
+    } finally {
+      setRowBusy(0)
+    }
+  }
+
+  const setPaid = async (account, paid) => {
+    if (rowBusy) return
+    setRowBusy(Number(account.id))
+    setError('')
+    try {
+      await send('PATCH', { account_id: Number(account.id), paid })
+    } catch (e) {
+      setError(e?.message || 'Failed to update paid status')
     } finally {
       setRowBusy(0)
     }
@@ -157,7 +144,7 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
         `/api/admin/vendor-banks/accounts?module=${encodeURIComponent(module)}&owner_id=${encodeURIComponent(ownerId)}&account_id=${encodeURIComponent(account.id)}`,
         { method: 'DELETE' }
       )
-      const json = await res.json()
+      const json = await res.json().catch(() => ({}))
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to remove bank account')
       setAccounts(json.accounts || [])
       setConfirmId(0)
@@ -169,6 +156,8 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
     }
   }
 
+  const field = 'w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none'
+
   return (
     <DraggableModal
       open={open}
@@ -177,7 +166,7 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
         onClose?.()
       }}
       title={`Bank Accounts · ${ownerName || ''}`}
-      description="Every account on file for this vendor. Payouts use the primary account."
+      description="Each account keeps its own invoices and is paid on its own."
       footer={
         <div className="flex justify-end">
           <Button variant="secondary" onClick={onClose} disabled={busy}>
@@ -190,9 +179,7 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
         {!!error && <div className="rounded-lg border border-danger-border bg-danger-bg px-3 py-2 text-sm text-danger-fg">{error}</div>}
 
         <div>
-          <div className="mb-1 text-xs font-medium text-muted">
-            Accounts on file ({accounts.length})
-          </div>
+          <div className="mb-1 text-xs font-medium text-muted">Accounts on file ({accounts.length})</div>
           {loading ? (
             <div className="rounded-lg border border-line px-3 py-4 text-sm text-muted">Loading…</div>
           ) : accounts.length === 0 ? (
@@ -200,36 +187,18 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
               No bank account yet. Add the first one below.
             </div>
           ) : (
-            <div className="divide-y divide-line rounded-lg border border-line">
+            <div className="space-y-2">
               {accounts.map((a) => (
-                <div key={a.id} className="flex flex-col gap-2 p-2.5">
+                <div key={a.id} className="rounded-lg border border-line p-2.5">
                   {editId === Number(a.id) ? (
                     <>
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        <input
-                          value={editForm.bank_name}
-                          onChange={(e) => setEditForm({ ...editForm, bank_name: e.target.value })}
-                          placeholder="Bank name"
-                          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
-                          disabled={!!rowBusy}
-                        />
-                        <input
-                          value={editForm.account_name}
-                          onChange={(e) => setEditForm({ ...editForm, account_name: e.target.value })}
-                          placeholder="Account name"
-                          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
-                          disabled={!!rowBusy}
-                        />
-                        <input
-                          value={editForm.account_number}
-                          onChange={(e) => setEditForm({ ...editForm, account_number: e.target.value })}
-                          placeholder="Account number"
-                          inputMode="numeric"
-                          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
-                          disabled={!!rowBusy}
-                        />
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <input value={editForm.bank_name} onChange={(e) => setEditForm({ ...editForm, bank_name: e.target.value })} placeholder="Bank name" className={field} disabled={!!rowBusy} />
+                        <input value={editForm.account_name} onChange={(e) => setEditForm({ ...editForm, account_name: e.target.value })} placeholder="Account name" className={field} disabled={!!rowBusy} />
+                        <input value={editForm.account_number} onChange={(e) => setEditForm({ ...editForm, account_number: e.target.value })} placeholder="Account number" inputMode="numeric" className={field} disabled={!!rowBusy} />
+                        <input value={editForm.purpose} onChange={(e) => setEditForm({ ...editForm, purpose: e.target.value })} placeholder="Purpose (e.g. transport, balance)" className={field} disabled={!!rowBusy} />
                       </div>
-                      <div className="flex justify-end gap-1.5">
+                      <div className="mt-2 flex justify-end gap-1.5">
                         <Button variant="brand" size="sm" onClick={() => saveEdit(a)} loading={rowBusy === Number(a.id)}>
                           Save changes
                         </Button>
@@ -239,45 +208,93 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
                       </div>
                     </>
                   ) : (
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-1.5 text-sm">
-                          <span className="font-medium text-fg">{a.bank_name || '—'}</span>
-                          {a.is_current && (
-                            <span className="rounded-full bg-success-bg px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success-fg">
-                              Primary
-                            </span>
+                    <>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                            <span className="font-medium text-fg">{a.bank_name || '—'}</span>
+                            {a.is_paid && (
+                              <span className="rounded-full bg-success-bg px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success-fg">
+                                Paid
+                              </span>
+                            )}
+                          </div>
+                          <div className="truncate text-xs text-muted">
+                            {a.account_name || '—'} · <span className="font-mono">{maskAccountNumber(a.account_number)}</span>
+                          </div>
+                          <div className="text-xs text-muted">
+                            {a.purpose ? a.purpose : 'No purpose noted'}
+                            {a.created_by_role || a.created_by_code
+                              ? ` · attached by ${a.created_by_role || 'user'}${a.created_by_code ? ` ${a.created_by_code}` : ''}`
+                              : ''}
+                            {a.created_at ? ` · ${new Date(a.created_at).toLocaleDateString()}` : ''}
+                          </div>
+                          {a.is_paid && a.paid_at && (
+                            <div className="text-xs text-success-fg">Paid {new Date(a.paid_at).toLocaleString()}{a.paid_by ? ` by ${a.paid_by}` : ''}</div>
                           )}
                         </div>
-                        <div className="truncate text-xs text-muted">
-                          {a.account_name || '—'} · <span className="font-mono">{maskAccountNumber(a.account_number)}</span>
+                        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                          <Button
+                            variant={a.is_paid ? 'secondary' : 'brand'}
+                            size="sm"
+                            onClick={() => setPaid(a, !a.is_paid)}
+                            loading={rowBusy === Number(a.id)}
+                          >
+                            {a.is_paid ? 'Mark unpaid' : 'Mark paid'}
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => startEdit(a)} disabled={!!rowBusy || a.is_paid}>
+                            Edit
+                          </Button>
+                          {confirmId === Number(a.id) ? (
+                            <>
+                              <Button variant="danger" size="sm" onClick={() => remove(a)} loading={rowBusy === Number(a.id)}>
+                                Confirm remove
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => setConfirmId(0)} disabled={!!rowBusy}>
+                                Cancel
+                              </Button>
+                            </>
+                          ) : (
+                            <Button variant="ghost" size="sm" onClick={() => setConfirmId(Number(a.id))} disabled={!!rowBusy || a.is_paid}>
+                              Remove
+                            </Button>
+                          )}
                         </div>
                       </div>
-                      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                        {!a.is_current && (
-                          <Button variant="secondary" size="sm" onClick={() => makePrimary(a)} loading={rowBusy === Number(a.id)}>
-                            Make primary
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="sm" onClick={() => startEdit(a)} disabled={!!rowBusy}>
-                          Edit
-                        </Button>
-                        {confirmId === Number(a.id) ? (
-                          <>
-                            <Button variant="danger" size="sm" onClick={() => remove(a)} loading={rowBusy === Number(a.id)}>
-                              Confirm remove
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => setConfirmId(0)} disabled={!!rowBusy}>
-                              Cancel
-                            </Button>
-                          </>
+
+                      <div className="mt-2 rounded-lg bg-subtle/60 p-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-fg">
+                            Invoices ({Array.isArray(a.invoices) ? a.invoices.length : 0})
+                          </span>
+                          <span className="font-semibold text-fg">{fmtNaira(a.invoice_total)}</span>
+                        </div>
+                        {Array.isArray(a.invoices) && a.invoices.length > 0 ? (
+                          <div className="mt-1 space-y-1">
+                            {a.invoices.map((inv) => (
+                              <div key={inv.id} className="flex items-center justify-between gap-2 text-xs">
+                                <div className="min-w-0">
+                                  <div className="truncate text-fg">{inv.file_name || 'Invoice'}</div>
+                                  <div className="truncate text-muted">
+                                    {inv.invoice_ref || 'No ref'}
+                                    {inv.invoice_date ? ` · ${inv.invoice_date}` : ''}
+                                    {inv.amount != null ? ` · ${fmtNaira(inv.amount)}` : ''}
+                                    {inv.created_by_role ? ` · ${inv.created_by_role}${inv.created_by_code ? ` ${inv.created_by_code}` : ''}` : ''}
+                                  </div>
+                                </div>
+                                {inv.url ? (
+                                  <a href={inv.url} target="_blank" rel="noreferrer" className="shrink-0 rounded-md border border-line bg-surface px-2 py-1 font-medium text-fg">
+                                    Open
+                                  </a>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
                         ) : (
-                          <Button variant="ghost" size="sm" onClick={() => setConfirmId(Number(a.id))} disabled={!!rowBusy}>
-                            Remove
-                          </Button>
+                          <div className="mt-0.5 text-xs text-muted">No invoices filed against this account.</div>
                         )}
                       </div>
-                    </div>
+                    </>
                   )}
                 </div>
               ))}
@@ -287,41 +304,13 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
 
         <div className="rounded-lg border border-line bg-subtle/40 p-3">
           <div className="mb-2 text-sm font-semibold text-fg">Add another account</div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <input
-              value={form.bank_name}
-              onChange={(e) => setForm({ ...form, bank_name: e.target.value })}
-              placeholder="Bank name"
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
-              disabled={busy}
-            />
-            <input
-              value={form.account_name}
-              onChange={(e) => setForm({ ...form, account_name: e.target.value })}
-              placeholder="Account name"
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
-              disabled={busy}
-            />
-            <input
-              value={form.account_number}
-              onChange={(e) => setForm({ ...form, account_number: e.target.value })}
-              placeholder="Account number"
-              inputMode="numeric"
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
-              disabled={busy}
-            />
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <input value={form.bank_name} onChange={(e) => setForm({ ...form, bank_name: e.target.value })} placeholder="Bank name" className={field} disabled={busy} />
+            <input value={form.account_name} onChange={(e) => setForm({ ...form, account_name: e.target.value })} placeholder="Account name" className={field} disabled={busy} />
+            <input value={form.account_number} onChange={(e) => setForm({ ...form, account_number: e.target.value })} placeholder="Account number" inputMode="numeric" className={field} disabled={busy} />
+            <input value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} placeholder="Purpose (e.g. transport, balance)" className={field} disabled={busy} />
           </div>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-            <label className="inline-flex items-center gap-2 text-xs text-muted">
-              <input
-                type="checkbox"
-                checked={!!form.make_current}
-                onChange={(e) => setForm({ ...form, make_current: e.target.checked })}
-                className="h-4 w-4 rounded border-line text-brand focus:ring-brand"
-                disabled={busy}
-              />
-              Make this the primary account
-            </label>
+          <div className="mt-2 flex justify-end">
             <Button variant="brand" onClick={add} loading={busy}>
               Add account
             </Button>

@@ -309,7 +309,7 @@ function RepFoodBanksContent() {
       ? String(bank.id)
       : replaceInv?.bank_account_id
         ? String(replaceInv.bank_account_id)
-        : String((banks.find((b) => b.is_current) || banks[0])?.id || '')
+        : String(banks[0]?.id || '')
     setInvoiceBankId(preset)
     setReplaceInvoiceId(replaceInv?.id ? Number(replaceInv.id) : null)
     setInvoiceRef(replaceInv?.invoice_ref || '')
@@ -699,9 +699,7 @@ function RepFoodBanksContent() {
             {Number(bankDeleteRow?.invoice_count || 0) > 0
               ? ` Its ${Number(bankDeleteRow.invoice_count)} invoice${Number(bankDeleteRow.invoice_count) === 1 ? '' : 's'} stay on record, but become unassigned.`
               : ''}
-            {bankDeleteRow?.is_current
-              ? ' It is also the account currently used for payouts, so the newest remaining account takes over.'
-              : ''}
+
           </div>
           <div className="flex gap-2">
             <button

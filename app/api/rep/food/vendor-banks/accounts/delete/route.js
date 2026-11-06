@@ -37,30 +37,7 @@ export async function POST(req) {
       .eq('cycle_id', cycleId)
     if (delErr) return NextResponse.json({ ok: false, error: delErr.message }, { status: 500 })
 
-    // If the primary account was removed, promote the newest remaining one so
-    // the branch still has somewhere for payouts to land.
-    let promotedId = null
-    if (row.is_current) {
-      const { data: rest, error: restErr } = await supabase
-        .from('food_vendor_bank_accounts')
-        .select('id')
-        .eq('branch_id', branchId)
-        .eq('cycle_id', cycleId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-      if (!restErr) {
-        const next = rest?.[0]?.id
-        if (next) {
-          const { error: promoteErr } = await supabase
-            .from('food_vendor_bank_accounts')
-            .update({ is_current: true })
-            .eq('id', next)
-          if (!promoteErr) promotedId = Number(next)
-        }
-      }
-    }
-
-    return NextResponse.json({ ok: true, deleted_id: accountId, promoted_id: promotedId })
+    return NextResponse.json({ ok: true, deleted_id: accountId })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e?.message || 'Internal server error' }, { status: 500 })
   }

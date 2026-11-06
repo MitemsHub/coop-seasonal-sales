@@ -411,9 +411,9 @@ function AdminExhibitionBanksContent() {
                         {v.banks.slice(0, 2).map((b) => (
                           <div key={b.id} className="flex items-center gap-1.5">
                             <span>{b.bank_name || '—'}</span>
-                            {b.is_current && (
+                            {b.is_paid && (
                               <span className="rounded-full bg-success-bg px-1.5 py-0.5 text-[10px] font-semibold text-success-fg">
-                                primary
+                                paid
                               </span>
                             )}
                           </div>

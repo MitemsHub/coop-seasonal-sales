@@ -45,7 +45,7 @@ export async function GET(request) {
 
     let bq = supabase
       .from('exhibition_vendor_bank_accounts')
-      .select('id, vendor_id, cycle_id, branch_id, bank_name, account_name, account_number, is_current, created_at')
+      .select('id, vendor_id, cycle_id, branch_id, bank_name, account_name, account_number, purpose, is_paid, paid_at, is_current, created_at')
     if (cycleId > 0) bq = bq.eq('cycle_id', cycleId)
     const { data: bankRows, error: bErr } = await bq
     if (bErr && !isMissingTable(bErr, 'exhibition_vendor_bank_accounts')) {
