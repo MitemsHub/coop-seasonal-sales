@@ -1593,7 +1593,7 @@ function ReportsPageContent() {
           </div>
 
           <button
-            className={`px-3 py-2 text-on-accent text-sm sm:text-base rounded-lg w-full sm:w-auto flex items-center justify-center gap-2 ${branchPackLoading ? 'bg-subtle text-muted cursor-not-allowed' : 'bg-brand hover:bg-brand-hover'}`}
+            className={`px-3 py-2 text-on-accent text-sm sm:text-base rounded-lg w-full sm:w-auto flex items-center justify-center gap-2 ${branchPackLoading ? 'bg-brand/70 text-on-accent cursor-wait' : 'bg-brand hover:bg-brand-hover'}`}
             disabled={branchPackLoading}
             aria-busy={branchPackLoading}
             onClick={async () => {
@@ -2083,7 +2083,7 @@ function PaginatedSection({ title, data, allData, cols, currentPage, setCurrentP
           {onExportItemsPack && (
             <button
               className={`px-3 py-1.5 rounded-lg text-sm font-medium text-on-accent flex items-center gap-2 ${
-                itemsPackLoading ? 'bg-subtle text-muted cursor-not-allowed' : 'bg-brand hover:bg-brand-hover'
+                itemsPackLoading ? 'bg-brand/70 text-on-accent cursor-wait' : 'bg-brand hover:bg-brand-hover'
               }`}
               onClick={onExportItemsPack}
               disabled={itemsPackLoading}
