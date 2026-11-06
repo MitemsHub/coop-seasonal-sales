@@ -355,10 +355,7 @@ function AdminFoodBanksContent() {
             <thead className="bg-subtle">
               <tr>
                 <th className="text-left px-3 py-2 border-b">Branch</th>
-                <th className="text-left px-3 py-2 border-b">Bank</th>
-                <th className="text-left px-3 py-2 border-b">Account Name</th>
-                <th className="text-left px-3 py-2 border-b">Account No.</th>
-                <th className="text-right px-3 py-2 border-b">Invoices</th>
+                <th className="text-left px-3 py-2 border-b">Bank accounts &amp; invoices</th>
                 <th className="text-left px-3 py-2 border-b">Paid</th>
                 <th className="text-right px-3 py-2 border-b">Actions</th>
               </tr>
@@ -368,10 +365,7 @@ function AdminFoodBanksContent() {
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={`sk_${i}`} className="animate-pulse">
                     <td className="px-3 py-3 border-b"><div className="h-4 w-40 bg-muted rounded" /></td>
-                    <td className="px-3 py-3 border-b"><div className="h-4 w-28 bg-muted rounded" /></td>
-                    <td className="px-3 py-3 border-b"><div className="h-4 w-36 bg-muted rounded" /></td>
-                    <td className="px-3 py-3 border-b"><div className="h-4 w-24 bg-muted rounded" /></td>
-                    <td className="px-3 py-3 border-b text-right"><div className="h-4 w-10 bg-muted rounded ml-auto" /></td>
+                    <td className="px-3 py-3 border-b"><div className="h-20 w-72 bg-muted rounded" /></td>
                     <td className="px-3 py-3 border-b"><div className="h-4 w-16 bg-muted rounded" /></td>
                     <td className="px-3 py-3 border-b text-right"><div className="h-8 w-28 bg-muted rounded ml-auto" /></td>
                   </tr>
@@ -380,7 +374,7 @@ function AdminFoodBanksContent() {
 
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-muted">
+                  <td colSpan={4} className="px-3 py-6 text-center text-muted">
                     No rows found
                   </td>
                 </tr>
@@ -395,60 +389,60 @@ function AdminFoodBanksContent() {
                   <td className="px-3 py-2 border-b align-top">
                     {r.banks?.length ? (
                       <div className="space-y-2">
-                        {r.banks.slice(0, 2).map((b) => (
-                          <div key={b.id}>
-                            <div className="flex flex-wrap items-center gap-1.5 text-sm">
-                              <span className="font-medium text-fg">{b.bank_name || '—'}</span>
-                              <span className="font-mono text-xs text-subtext">{maskAccountNumber(b.account_number || '')}</span>
-                              {b.is_paid && (
-                                <span className="rounded-full bg-success-bg px-1.5 py-0.5 text-[10px] font-semibold text-success-fg">
-                                  paid
-                                </span>
-                              )}
-                            </div>
-                            {b.purpose && <div className="text-xs text-subtext">{b.purpose}</div>}
-                            {b.invoices?.length ? (
-                              <div className="mt-0.5 space-y-0.5">
-                                {b.invoices.slice(0, 3).map((inv) => (
-                                  <div key={inv.id} className="flex items-center gap-1.5 text-xs">
-                                    {inv.url ? (
-                                      <a
-                                        href={inv.url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="max-w-[180px] truncate text-brand hover:underline"
-                                        title={inv.file_name || 'Invoice'}
-                                      >
-                                        {inv.file_name || 'Invoice'}
-                                      </a>
-                                    ) : (
-                                      <span className="max-w-[180px] truncate text-fg">{inv.file_name || 'Invoice'}</span>
-                                    )}
-                                    {inv.amount != null && (
-                                      <span className="shrink-0 text-subtext">₦{Number(inv.amount).toLocaleString()}</span>
-                                    )}
-                                  </div>
-                                ))}
-                                {b.invoices.length > 3 && (
-                                  <div className="text-xs text-subtext">
-                                    +{b.invoices.length - 3} more invoice{b.invoices.length - 3 === 1 ? '' : 's'}
-                                  </div>
+                        {r.banks.map((b) => (
+                          <div key={b.id} className="rounded-lg border border-line bg-surface px-3 py-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-semibold text-fg">{b.bank_name || 'Bank'}</span>
+                                {b.is_paid && (
+                                  <span className="rounded-full bg-success-bg px-1.5 py-0.5 text-[10px] font-semibold text-success-fg">paid</span>
                                 )}
                               </div>
-                            ) : (
-                              <div className="text-xs text-subtext">No invoices yet</div>
+                              <span className="text-[11px] text-subtext">
+                                {Number(b.invoices?.length || 0).toLocaleString()} invoice
+                                {Number(b.invoices?.length || 0) === 1 ? '' : 's'}
+                              </span>
+                            </div>
+                            <div className="mt-1 grid gap-x-4 gap-y-0.5 text-xs text-subtext sm:grid-cols-2">
+                              <div>Account name: <span className="text-fg">{b.account_name || '—'}</span></div>
+                              <div>Account no: <span className="font-mono text-fg">{b.account_number || '—'}</span></div>
+                            </div>
+                            {b.purpose && (
+                              <div className="text-xs text-subtext">Purpose: <span className="text-fg">{b.purpose}</span></div>
                             )}
+                            <div className="mt-1.5 border-t border-line pt-1.5">
+                              {b.invoices?.length ? (
+                                <div className="space-y-0.5">
+                                  {b.invoices.map((inv) => (
+                                    <div key={inv.id} className="flex items-center justify-between gap-3 text-xs">
+                                      {inv.url ? (
+                                        <a
+                                          href={inv.url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="min-w-0 truncate text-brand hover:underline"
+                                          title={inv.file_name || 'Invoice'}
+                                        >
+                                          {inv.file_name || 'Invoice'}
+                                        </a>
+                                      ) : (
+                                        <span className="min-w-0 truncate text-fg">{inv.file_name || 'Invoice'}</span>
+                                      )}
+                                      <span className="shrink-0 font-medium text-fg">
+                                        {inv.amount != null ? `₦${Number(inv.amount).toLocaleString()}` : '—'}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-xs text-subtext">No invoices filed against this account.</div>
+                              )}
+                            </div>
                           </div>
                         ))}
-                        {r.banks.length > 2 && (
-                          <div className="text-xs text-subtext">& {r.banks.length - 2} other</div>
-                        )}
                       </div>
                     ) : '—'}
                   </td>
-                  <td className="px-3 py-2 border-b">{r.bank?.account_name || '—'}</td>
-                  <td className="px-3 py-2 border-b">{maskAccountNumber(r.bank?.account_number || '')}</td>
-                  <td className="px-3 py-2 border-b text-right">{Number(r.invoice_count || 0).toLocaleString()}</td>
                   <td className="px-3 py-2 border-b">
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${

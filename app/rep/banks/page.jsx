@@ -538,7 +538,7 @@ function RepFoodBanksContent() {
                 </div>
               </div>
 
-              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <div className="mt-4">
                 <div className="border rounded-lg p-3">
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-sm font-medium text-fg">Bank Accounts</div>
@@ -614,34 +614,6 @@ function RepFoodBanksContent() {
                   </div>
                 </div>
 
-                <div className="border rounded-lg p-3">
-                  <div className="text-sm font-medium text-fg mb-1">Invoices</div>
-                  <div className="text-xs text-muted">Uploaded: {Number(invoiceCount || 0).toLocaleString()}</div>
-                  <div className="mt-1 text-xs text-muted">
-                    Each invoice is filed against the account it was paid into. Use an account&apos;s
-                    <span className="font-medium"> Invoices</span> button to see only that account.
-                  </div>
-                  <div className="mt-2 flex gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => loadInvoices(null)}
-                      disabled={invoiceLoading}
-                      className="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
-                      aria-busy={invoiceLoading}
-                    >
-                      {invoiceLoading && <Spinner className="h-4 w-4 text-on-accent" />}
-                      <span>{invoiceLoading ? 'Loading…' : 'View All Invoices'}</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openUpload(null)}
-                      disabled={paid?.is_paid || banks.length === 0}
-                      className="inline-flex items-center gap-2 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
-                    >
-                      Upload Invoice
-                    </button>
-                  </div>
-                </div>
               </div>
             </>
           )}

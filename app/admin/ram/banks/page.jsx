@@ -422,10 +422,7 @@ function RamBanksContent() {
               <tr className="border-b border-line text-left">
                 <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Delivery Location</th>
                 <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Vendor</th>
-                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Bank</th>
-                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Account Name</th>
-                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Account No</th>
-                <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Invoices</th>
+                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Bank accounts &amp; invoices</th>
                 <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Status</th>
                 <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Actions</th>
               </tr>
@@ -436,17 +433,14 @@ function RamBanksContent() {
                   <tr key={`sk-${i}`} className="border-b border-line">
                     <td className="p-3"><div className="sakani-skeleton h-4 w-32 rounded" /></td>
                     <td className="p-3"><div className="sakani-skeleton h-4 w-40 rounded" /></td>
-                    <td className="p-3"><div className="sakani-skeleton h-4 w-24 rounded" /></td>
-                    <td className="p-3"><div className="sakani-skeleton h-4 w-36 rounded" /></td>
-                    <td className="p-3"><div className="sakani-skeleton h-4 w-20 rounded" /></td>
-                    <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-4 w-10 rounded" /></td>
+                    <td className="p-3"><div className="sakani-skeleton h-20 w-72 rounded" /></td>
                     <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-4 w-16 rounded" /></td>
                     <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-8 w-24 rounded" /></td>
                   </tr>
                 ))
               ) : !filtered.length ? (
                 <tr>
-                  <td className="p-10 text-center" colSpan={8}>
+                  <td className="p-10 text-center" colSpan={5}>
                     <div className="mx-auto flex max-w-xs flex-col items-center gap-2">
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-subtle">
                         <Landmark className="h-6 w-6 text-subtext" />
@@ -470,60 +464,60 @@ function RamBanksContent() {
                   <td className="p-3 align-top">
                     {r.banks?.length ? (
                       <div className="space-y-2">
-                        {r.banks.slice(0, 2).map((b) => (
-                          <div key={b.id}>
-                            <div className="flex flex-wrap items-center gap-1.5 text-sm">
-                              <span className="font-medium text-fg">{b.bank_name || '—'}</span>
-                              <span className="font-mono text-xs text-subtext">{maskAccountNumber(b.account_number || '')}</span>
-                              {b.is_paid && (
-                                <span className="rounded-full bg-success-bg px-1.5 py-0.5 text-[10px] font-semibold text-success-fg">
-                                  paid
-                                </span>
-                              )}
-                            </div>
-                            {b.purpose && <div className="text-xs text-subtext">{b.purpose}</div>}
-                            {b.invoices?.length ? (
-                              <div className="mt-0.5 space-y-0.5">
-                                {b.invoices.slice(0, 3).map((inv) => (
-                                  <div key={inv.id} className="flex items-center gap-1.5 text-xs">
-                                    {inv.url ? (
-                                      <a
-                                        href={inv.url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="max-w-[180px] truncate text-brand hover:underline"
-                                        title={inv.file_name || 'Invoice'}
-                                      >
-                                        {inv.file_name || 'Invoice'}
-                                      </a>
-                                    ) : (
-                                      <span className="max-w-[180px] truncate text-fg">{inv.file_name || 'Invoice'}</span>
-                                    )}
-                                    {inv.amount != null && (
-                                      <span className="shrink-0 text-subtext">₦{Number(inv.amount).toLocaleString()}</span>
-                                    )}
-                                  </div>
-                                ))}
-                                {b.invoices.length > 3 && (
-                                  <div className="text-xs text-subtext">
-                                    +{b.invoices.length - 3} more invoice{b.invoices.length - 3 === 1 ? '' : 's'}
-                                  </div>
+                        {r.banks.map((b) => (
+                          <div key={b.id} className="rounded-lg border border-line bg-surface px-3 py-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-semibold text-fg">{b.bank_name || 'Bank'}</span>
+                                {b.is_paid && (
+                                  <span className="rounded-full bg-success-bg px-1.5 py-0.5 text-[10px] font-semibold text-success-fg">paid</span>
                                 )}
                               </div>
-                            ) : (
-                              <div className="text-xs text-subtext">No invoices yet</div>
+                              <span className="text-[11px] text-subtext">
+                                {Number(b.invoices?.length || 0).toLocaleString()} invoice
+                                {Number(b.invoices?.length || 0) === 1 ? '' : 's'}
+                              </span>
+                            </div>
+                            <div className="mt-1 grid gap-x-4 gap-y-0.5 text-xs text-subtext sm:grid-cols-2">
+                              <div>Account name: <span className="text-fg">{b.account_name || '—'}</span></div>
+                              <div>Account no: <span className="font-mono text-fg">{b.account_number || '—'}</span></div>
+                            </div>
+                            {b.purpose && (
+                              <div className="text-xs text-subtext">Purpose: <span className="text-fg">{b.purpose}</span></div>
                             )}
+                            <div className="mt-1.5 border-t border-line pt-1.5">
+                              {b.invoices?.length ? (
+                                <div className="space-y-0.5">
+                                  {b.invoices.map((inv) => (
+                                    <div key={inv.id} className="flex items-center justify-between gap-3 text-xs">
+                                      {inv.url ? (
+                                        <a
+                                          href={inv.url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="min-w-0 truncate text-brand hover:underline"
+                                          title={inv.file_name || 'Invoice'}
+                                        >
+                                          {inv.file_name || 'Invoice'}
+                                        </a>
+                                      ) : (
+                                        <span className="min-w-0 truncate text-fg">{inv.file_name || 'Invoice'}</span>
+                                      )}
+                                      <span className="shrink-0 font-medium text-fg">
+                                        {inv.amount != null ? `₦${Number(inv.amount).toLocaleString()}` : '—'}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-xs text-subtext">No invoices filed against this account.</div>
+                              )}
+                            </div>
                           </div>
                         ))}
-                        {r.banks.length > 2 && (
-                          <div className="text-xs text-subtext">& {r.banks.length - 2} other</div>
-                        )}
                       </div>
                     ) : '—'}
                   </td>
-                  <td className="p-3 align-top">{r.bank?.account_name || '—'}</td>
-                  <td className="p-3 align-top font-mono text-xs">{r.bank?.account_number ? maskAccountNumber(r.bank.account_number) : '—'}</td>
-                  <td className="p-3 align-top text-right">{Number(r.invoice_count || 0).toLocaleString()}</td>
                   <td className="p-3 align-top text-right">
                     {r?.paid?.is_paid ? (
                       <span className="inline-flex items-center rounded-full bg-success-bg px-2 py-0.5 text-xs font-semibold text-success-fg">Paid</span>
