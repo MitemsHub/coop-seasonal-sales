@@ -26,6 +26,8 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
   const [busy, setBusy] = useState(false)
   const [rowBusy, setRowBusy] = useState(0)
   const [confirmId, setConfirmId] = useState(0)
+  const [editId, setEditId] = useState(0)
+  const [editForm, setEditForm] = useState({ bank_name: '', account_name: '', account_number: '' })
 
   const load = useCallback(async () => {
     if (!open || !module || !ownerId) return
@@ -51,6 +53,7 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
     setForm(EMPTY_FORM)
     setError('')
     setConfirmId(0)
+    setEditId(0)
     load()
   }, [load])
 
@@ -100,6 +103,43 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
       const json = await res.json()
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to update bank account')
       setAccounts(json.accounts || [])
+      onChanged?.()
+    } catch (e) {
+      setError(e?.message || 'Failed to update bank account')
+    } finally {
+      setRowBusy(0)
+    }
+  }
+
+  const startEdit = (account) => {
+    setEditId(Number(account.id))
+    setEditForm({
+      bank_name: account.bank_name || '',
+      account_name: account.account_name || '',
+      account_number: account.account_number || '',
+    })
+    setConfirmId(0)
+    setError('')
+  }
+
+  const saveEdit = async (account) => {
+    if (rowBusy) return
+    if (!editForm.bank_name.trim() || !editForm.account_name.trim() || !editForm.account_number.trim()) {
+      setError('Bank name, account name and account number are all required.')
+      return
+    }
+    setRowBusy(Number(account.id))
+    setError('')
+    try {
+      const res = await fetch('/api/admin/vendor-banks/accounts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module, owner_id: Number(ownerId), account_id: Number(account.id), ...editForm }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to update bank account')
+      setAccounts(json.accounts || [])
+      setEditId(0)
       onChanged?.()
     } catch (e) {
       setError(e?.message || 'Failed to update bank account')
@@ -162,41 +202,83 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
           ) : (
             <div className="divide-y divide-line rounded-lg border border-line">
               {accounts.map((a) => (
-                <div key={a.id} className="flex flex-col gap-2 p-2.5 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-1.5 text-sm">
-                      <span className="font-medium text-fg">{a.bank_name || '—'}</span>
-                      {a.is_current && (
-                        <span className="rounded-full bg-success-bg px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success-fg">
-                          Primary
-                        </span>
-                      )}
-                    </div>
-                    <div className="truncate text-xs text-muted">
-                      {a.account_name || '—'} · <span className="font-mono">{maskAccountNumber(a.account_number)}</span>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                    {!a.is_current && (
-                      <Button variant="secondary" size="sm" onClick={() => makePrimary(a)} loading={rowBusy === Number(a.id)}>
-                        Make primary
-                      </Button>
-                    )}
-                    {confirmId === Number(a.id) ? (
-                      <>
-                        <Button variant="danger" size="sm" onClick={() => remove(a)} loading={rowBusy === Number(a.id)}>
-                          Confirm remove
+                <div key={a.id} className="flex flex-col gap-2 p-2.5">
+                  {editId === Number(a.id) ? (
+                    <>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        <input
+                          value={editForm.bank_name}
+                          onChange={(e) => setEditForm({ ...editForm, bank_name: e.target.value })}
+                          placeholder="Bank name"
+                          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
+                          disabled={!!rowBusy}
+                        />
+                        <input
+                          value={editForm.account_name}
+                          onChange={(e) => setEditForm({ ...editForm, account_name: e.target.value })}
+                          placeholder="Account name"
+                          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
+                          disabled={!!rowBusy}
+                        />
+                        <input
+                          value={editForm.account_number}
+                          onChange={(e) => setEditForm({ ...editForm, account_number: e.target.value })}
+                          placeholder="Account number"
+                          inputMode="numeric"
+                          className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
+                          disabled={!!rowBusy}
+                        />
+                      </div>
+                      <div className="flex justify-end gap-1.5">
+                        <Button variant="brand" size="sm" onClick={() => saveEdit(a)} loading={rowBusy === Number(a.id)}>
+                          Save changes
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setConfirmId(0)} disabled={!!rowBusy}>
+                        <Button variant="secondary" size="sm" onClick={() => setEditId(0)} disabled={!!rowBusy}>
                           Cancel
                         </Button>
-                      </>
-                    ) : (
-                      <Button variant="ghost" size="sm" onClick={() => setConfirmId(Number(a.id))} disabled={!!rowBusy}>
-                        Remove
-                      </Button>
-                    )}
-                  </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                          <span className="font-medium text-fg">{a.bank_name || '—'}</span>
+                          {a.is_current && (
+                            <span className="rounded-full bg-success-bg px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success-fg">
+                              Primary
+                            </span>
+                          )}
+                        </div>
+                        <div className="truncate text-xs text-muted">
+                          {a.account_name || '—'} · <span className="font-mono">{maskAccountNumber(a.account_number)}</span>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                        {!a.is_current && (
+                          <Button variant="secondary" size="sm" onClick={() => makePrimary(a)} loading={rowBusy === Number(a.id)}>
+                            Make primary
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="sm" onClick={() => startEdit(a)} disabled={!!rowBusy}>
+                          Edit
+                        </Button>
+                        {confirmId === Number(a.id) ? (
+                          <>
+                            <Button variant="danger" size="sm" onClick={() => remove(a)} loading={rowBusy === Number(a.id)}>
+                              Confirm remove
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => setConfirmId(0)} disabled={!!rowBusy}>
+                              Cancel
+                            </Button>
+                          </>
+                        ) : (
+                          <Button variant="ghost" size="sm" onClick={() => setConfirmId(Number(a.id))} disabled={!!rowBusy}>
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

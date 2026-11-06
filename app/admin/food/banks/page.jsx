@@ -57,6 +57,18 @@ function AdminFoodBanksContent() {
   const [invoiceFile, setInvoiceFile] = useState(null)
   const [invoiceUploading, setInvoiceUploading] = useState(false)
 
+  const [invoiceEditOpen, setInvoiceEditOpen] = useState(false)
+  const [invoiceEditRow, setInvoiceEditRow] = useState(null)
+  const [invoiceEditRef, setInvoiceEditRef] = useState('')
+  const [invoiceEditDate, setInvoiceEditDate] = useState('')
+  const [invoiceEditAmount, setInvoiceEditAmount] = useState('')
+  const [invoiceEditNotes, setInvoiceEditNotes] = useState('')
+  const [invoiceEditSaving, setInvoiceEditSaving] = useState(false)
+
+  const [invoiceDeleteOpen, setInvoiceDeleteOpen] = useState(false)
+  const [invoiceDeleteRow, setInvoiceDeleteRow] = useState(null)
+  const [invoiceDeleting, setInvoiceDeleting] = useState(false)
+
   const [paying, setPaying] = useState(false)
 
   const fetchCtl = useRef(null)
@@ -194,6 +206,80 @@ function AdminFoodBanksContent() {
       setMsg({ type: 'error', text: e?.message || 'Upload failed' })
     } finally {
       setInvoiceUploading(false)
+    }
+  }
+
+  const openEditInvoice = (inv) => {
+    setInvoiceEditRow(inv || null)
+    setInvoiceEditRef(String(inv?.invoice_ref || ''))
+    setInvoiceEditDate(String(inv?.invoice_date || ''))
+    setInvoiceEditAmount(inv?.amount != null && inv?.amount !== '' ? String(inv.amount) : '')
+    setInvoiceEditNotes(String(inv?.notes || ''))
+    setInvoiceEditOpen(true)
+  }
+
+  const saveInvoiceEdits = async () => {
+    const id = Number(invoiceEditRow?.id)
+    if (!Number.isFinite(id) || id <= 0 || invoiceEditSaving) return
+    setInvoiceEditSaving(true)
+    setMsg(null)
+    try {
+      const res = await fetch('/api/admin/food/vendor-banks/invoices/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          invoice_id: id,
+          invoice_ref: invoiceEditRef,
+          invoice_date: invoiceEditDate,
+          amount: invoiceEditAmount,
+          notes: invoiceEditNotes,
+        }),
+      })
+      const json = await safeJson(res, '/api/admin/food/vendor-banks/invoices/update')
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to update invoice')
+      setInvoices((prev) => (prev || []).map((r) => (Number(r.id) === id ? json.invoice : r)))
+      setInvoiceEditOpen(false)
+      setInvoiceEditRow(null)
+      setMsg({ type: 'success', text: 'Invoice updated' })
+    } catch (e) {
+      setMsg({ type: 'error', text: e?.message || 'Failed to update invoice' })
+    } finally {
+      setInvoiceEditSaving(false)
+    }
+  }
+
+  const confirmDeleteInvoice = (inv) => {
+    setInvoiceDeleteRow(inv || null)
+    setInvoiceDeleteOpen(true)
+  }
+
+  const deleteInvoice = async () => {
+    const id = Number(invoiceDeleteRow?.id)
+    if (!Number.isFinite(id) || id <= 0 || invoiceDeleting) return
+    setInvoiceDeleting(true)
+    setMsg(null)
+    try {
+      const res = await fetch(`/api/admin/food/vendor-banks/invoices/delete?invoice_id=${encodeURIComponent(String(id))}`, {
+        method: 'DELETE',
+      })
+      const json = await safeJson(res, '/api/admin/food/vendor-banks/invoices/delete')
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to delete invoice')
+      setInvoices((prev) => (prev || []).filter((r) => Number(r.id) !== id))
+      const locId = Number(invoiceLoc?.id)
+      if (Number.isFinite(locId) && locId > 0) {
+        setRows((prev) =>
+          (prev || []).map((r) =>
+            Number(r.id) === locId ? { ...r, invoice_count: Math.max(0, Number(r.invoice_count || 0) - 1) } : r
+          )
+        )
+      }
+      setInvoiceDeleteOpen(false)
+      setInvoiceDeleteRow(null)
+      setMsg({ type: 'success', text: 'Invoice deleted' })
+    } catch (e) {
+      setMsg({ type: 'error', text: e?.message || 'Failed to delete invoice' })
+    } finally {
+      setInvoiceDeleting(false)
     }
   }
 
@@ -385,7 +471,7 @@ function AdminFoodBanksContent() {
                       </div>
                       {inv.notes && <div className="text-xs text-subtext mt-1">{inv.notes}</div>}
                     </div>
-                    <div className="shrink-0">
+                    <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                       {inv.url ? (
                         <a
                           href={inv.url}
@@ -398,12 +484,114 @@ function AdminFoodBanksContent() {
                       ) : (
                         <span className="text-xs text-subtext">No link</span>
                       )}
+                      <Button variant="secondary" size="sm" onClick={() => openEditInvoice(inv)}>
+                        Edit
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={() => confirmDeleteInvoice(inv)}>
+                        Delete
+                      </Button>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
           )}
+        </div>
+      </DraggableModal>
+
+      <DraggableModal
+        open={invoiceEditOpen}
+        onClose={() => {
+          if (invoiceEditSaving) return
+          setInvoiceEditOpen(false)
+          setInvoiceEditRow(null)
+        }}
+        title={`Edit Invoice · ${invoiceEditRow?.file_name || ''}`}
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setInvoiceEditOpen(false)
+                setInvoiceEditRow(null)
+              }}
+              disabled={invoiceEditSaving}
+            >
+              Cancel
+            </Button>
+            <Button onClick={saveInvoiceEdits} loading={invoiceEditSaving}>
+              Save
+            </Button>
+          </div>
+        }
+      >
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <div className="text-xs font-medium text-muted mb-1">Invoice reference</div>
+            <input
+              value={invoiceEditRef}
+              onChange={(e) => setInvoiceEditRef(e.target.value)}
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-brand focus:outline-none"
+            />
+          </div>
+          <div>
+            <div className="text-xs font-medium text-muted mb-1">Amount</div>
+            <input
+              value={invoiceEditAmount}
+              onChange={(e) => setInvoiceEditAmount(e.target.value)}
+              inputMode="decimal"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-brand focus:outline-none"
+            />
+          </div>
+          <div>
+            <div className="text-xs font-medium text-muted mb-1">Invoice date (YYYY-MM-DD)</div>
+            <input
+              value={invoiceEditDate}
+              onChange={(e) => setInvoiceEditDate(e.target.value)}
+              placeholder="YYYY-MM-DD"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-brand focus:outline-none"
+            />
+          </div>
+          <div>
+            <div className="text-xs font-medium text-muted mb-1">Notes</div>
+            <input
+              value={invoiceEditNotes}
+              onChange={(e) => setInvoiceEditNotes(e.target.value)}
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-brand focus:outline-none"
+            />
+          </div>
+        </div>
+      </DraggableModal>
+
+      <DraggableModal
+        open={invoiceDeleteOpen}
+        onClose={() => {
+          if (invoiceDeleting) return
+          setInvoiceDeleteOpen(false)
+          setInvoiceDeleteRow(null)
+        }}
+        title="Delete invoice?"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setInvoiceDeleteOpen(false)
+                setInvoiceDeleteRow(null)
+              }}
+              disabled={invoiceDeleting}
+            >
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={deleteInvoice} loading={invoiceDeleting}>
+              Delete
+            </Button>
+          </div>
+        }
+      >
+        <div className="text-sm text-muted">
+          This deletes the invoice file and its record
+          {invoiceDeleteRow?.file_name ? `: ${invoiceDeleteRow.file_name}` : ''}. It cannot be undone.
         </div>
       </DraggableModal>
 

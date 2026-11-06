@@ -81,6 +81,47 @@ export async function POST(request, { params }) {
   }
 }
 
+export async function PATCH(request, { params }) {
+  const session = await validateSession(request, 'admin')
+  if (!session.valid) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+
+  try {
+    const id = Math.trunc(Number(params?.id || 0))
+    const body = await request.json().catch(() => ({}))
+    const addonId = Math.trunc(Number(body.addon_id || 0))
+    if (!Number.isFinite(id) || id <= 0 || !Number.isFinite(addonId) || addonId <= 0) {
+      return NextResponse.json({ ok: false, error: 'Product and addon_id are required' }, { status: 400 })
+    }
+
+    const patch = { updated_at: new Date().toISOString() }
+    if (body.name !== undefined) {
+      const name = sanitizeString(body.name || '', { maxLength: 120, encodeHtml: false })
+      if (!name) return NextResponse.json({ ok: false, error: 'Service name is required' }, { status: 400 })
+      patch.name = name
+    }
+    if (body.price !== undefined) {
+      const price = Math.trunc(Number(body.price))
+      if (!Number.isFinite(price) || price < 0) return NextResponse.json({ ok: false, error: 'Service price cannot be negative' }, { status: 400 })
+      patch.price = price
+    }
+    if (Object.keys(patch).length <= 1) return NextResponse.json({ ok: false, error: 'Nothing to update' }, { status: 400 })
+
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('exhibition_product_addons')
+      .update(patch)
+      .eq('id', addonId)
+      .eq('product_id', id)
+      .select('id, product_id, name, price, unit, active, sort_order')
+      .maybeSingle()
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    if (!data) return NextResponse.json({ ok: false, error: 'Service not found' }, { status: 404 })
+    return NextResponse.json({ ok: true, addon: data })
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: e.message || 'Failed to update service' }, { status: 500 })
+  }
+}
+
 export async function DELETE(request, { params }) {
   const session = await validateSession(request, 'admin')
   if (!session.valid) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
