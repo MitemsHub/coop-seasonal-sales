@@ -77,7 +77,12 @@ export async function GET(req) {
         return q
       })(),
       (() => {
-        let q = supabase.from('food_vendor_invoices').select('id,branch_id,cycle_id').in('branch_id', branchIds).eq('cycle_id', cycleId)
+        let q = supabase
+          .from('food_vendor_invoices')
+          .select('id,branch_id,cycle_id,bank_account_id,invoice_ref,invoice_date,amount,file_name,mime_type,storage_bucket,storage_path,created_at')
+          .in('branch_id', branchIds)
+          .eq('cycle_id', cycleId)
+          .order('created_at', { ascending: false })
         return q
       })(),
       (() => {
@@ -126,6 +131,27 @@ export async function GET(req) {
       invoiceCountByBranchId.set(id, (invoiceCountByBranchId.get(id) || 0) + 1)
     }
 
+    // Invoices grouped by the account they were paid into, with a short-lived
+    // link, so the list can show them beside each bank instead of hiding them
+    // behind an action.
+    const invoicesByBankId = new Map()
+    await Promise.all(
+      (invoicesRes.data || []).map(async (inv) => {
+        const bankId = Number(inv?.bank_account_id)
+        if (!Number.isFinite(bankId) || bankId <= 0) return
+        const bucket = String(inv.storage_bucket || '')
+        const path = String(inv.storage_path || '')
+        let url = null
+        if (bucket && path) {
+          const { data: signed } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60)
+          url = signed?.signedUrl || null
+        }
+        const list = invoicesByBankId.get(bankId) || []
+        list.push({ ...inv, url })
+        invoicesByBankId.set(bankId, list)
+      })
+    )
+
     const paidByBranchId = new Map()
     for (const p of paidRes.data || []) {
       const id = Number(p?.branch_id)
@@ -135,12 +161,15 @@ export async function GET(req) {
 
     const out = (branches || []).map((b) => {
       const id = Number(b.id)
-      const banks = banksByBranchId.get(id) || []
+      const banks = (banksByBranchId.get(id) || []).map((acct) => ({
+        ...acct,
+        invoices: invoicesByBankId.get(Number(acct.id)) || [],
+      }))
       return {
         id,
         code: b.code || '',
         name: b.name || '',
-        bank: banks.find((x) => x.is_current) || banks[0] || null,
+        bank: banks[0] || null,
         banks,
         invoice_count: invoiceCountByBranchId.get(id) || 0,
         paid: paidByBranchId.get(id) || { is_paid: false, paid_at: null, cycle_id: cycleId },
