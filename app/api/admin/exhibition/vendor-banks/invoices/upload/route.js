@@ -77,6 +77,31 @@ export async function POST(req) {
 
     const cycleIdRaw = Math.trunc(Number(fd.get('cycle_id') || 0))
     const cycleId = Number.isFinite(cycleIdRaw) && cycleIdRaw > 0 ? cycleIdRaw : await resolveCycleId(supabase, vendorId).catch(() => null)
+
+    // An invoice belongs to the account the money went into. Without an
+    // explicit choice, use the newest account the vendor has on file.
+    const requestedBankId = Math.trunc(Number(fd.get('bank_account_id') || 0))
+    let bankAccountId = null
+    if (requestedBankId > 0) {
+      const { data: acct } = await supabase
+        .from('exhibition_vendor_bank_accounts')
+        .select('id')
+        .eq('id', requestedBankId)
+        .eq('vendor_id', vendorId)
+        .maybeSingle()
+      if (!acct?.id) return NextResponse.json({ ok: false, error: 'That bank account does not belong to this vendor' }, { status: 400 })
+      bankAccountId = Number(acct.id)
+    } else {
+      const { data: latest } = await supabase
+        .from('exhibition_vendor_bank_accounts')
+        .select('id')
+        .eq('vendor_id', vendorId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      bankAccountId = latest?.id ? Number(latest.id) : null
+    }
+
     const now = new Date()
     const day = now.toISOString().slice(0, 10)
     const rand = Math.random().toString(16).slice(2, 10)
@@ -97,6 +122,7 @@ export async function POST(req) {
       .insert({
         vendor_id: vendorId,
         cycle_id: cycleId,
+        bank_account_id: bankAccountId,
         invoice_ref: invoiceRef || null,
         notes: notes || null,
         storage_bucket: stored.storage_bucket,

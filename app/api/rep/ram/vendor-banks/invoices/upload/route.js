@@ -102,6 +102,28 @@ export async function POST(req) {
     const cycleId = await resolveActiveRamCycleId(supabase).catch(() => null)
     const locked = await isPaidLocked(supabase, locationId, cycleId).catch(() => false)
     if (locked) return NextResponse.json({ ok: false, error: 'Vendor is marked as Paid. Editing is locked.' }, { status: 403 })
+
+    const requestedBankId = Math.trunc(Number(fd.get('bank_account_id') || 0))
+    let bankAccountId = null
+    if (requestedBankId > 0) {
+      const { data: acct } = await supabase
+        .from('ram_vendor_bank_accounts')
+        .select('id')
+        .eq('id', requestedBankId)
+        .eq('ram_delivery_location_id', locationId)
+        .maybeSingle()
+      if (!acct?.id) return NextResponse.json({ ok: false, error: 'That bank account does not belong to this vendor' }, { status: 400 })
+      bankAccountId = Number(acct.id)
+    } else {
+      const { data: latest } = await supabase
+        .from('ram_vendor_bank_accounts')
+        .select('id')
+        .eq('ram_delivery_location_id', locationId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      bankAccountId = latest?.id ? Number(latest.id) : null
+    }
     const now = new Date()
     const day = now.toISOString().slice(0, 10)
     const rand = Math.random().toString(16).slice(2, 10)
@@ -118,6 +140,7 @@ export async function POST(req) {
       .insert({
         ram_delivery_location_id: locationId,
         ram_cycle_id: cycleId,
+        bank_account_id: bankAccountId,
         invoice_ref: invoiceRef || null,
         notes: notes || null,
         storage_bucket: bucket,

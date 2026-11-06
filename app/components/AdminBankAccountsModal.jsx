@@ -32,6 +32,9 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
   const [confirmId, setConfirmId] = useState(0)
   const [editId, setEditId] = useState(0)
   const [editForm, setEditForm] = useState(EMPTY_FORM)
+  const [unassigned, setUnassigned] = useState([])
+  const [assignSel, setAssignSel] = useState({})
+  const [assignBusy, setAssignBusy] = useState(0)
 
   const load = useCallback(async () => {
     if (!open || !module || !ownerId) return
@@ -45,6 +48,8 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
       const json = await res.json()
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to load bank accounts')
       setAccounts(json.accounts || [])
+      setUnassigned(json.unassigned_invoices || [])
+      setAssignSel({})
     } catch (e) {
       setError(e?.message || 'Failed to load bank accounts')
       setAccounts([])
@@ -70,6 +75,7 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
     const json = await res.json().catch(() => ({}))
     if (!res.ok || !json?.ok) throw new Error(json?.error || 'Request failed')
     setAccounts(json.accounts || [])
+    setUnassigned(json.unassigned_invoices || [])
     onChanged?.()
     return json
   }
@@ -153,6 +159,39 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
       setError(e?.message || 'Failed to remove bank account')
     } finally {
       setRowBusy(0)
+    }
+  }
+
+  // Old invoices (uploaded before accounts existed) get filed here, so their
+  // amount lands on the account the money actually went into.
+  const fileInvoice = async (inv) => {
+    const target = Number(assignSel[inv.id] || 0)
+    if (!target) {
+      setError('Choose the account this invoice belongs to.')
+      return
+    }
+    setAssignBusy(Number(inv.id))
+    setError('')
+    try {
+      const res = await fetch('/api/admin/vendor-banks/accounts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module, owner_id: Number(ownerId), invoice_id: Number(inv.id), bank_account_id: target }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to file invoice')
+      setAccounts(json.accounts || [])
+      setUnassigned(json.unassigned_invoices || [])
+      setAssignSel((prev) => {
+        const next = { ...prev }
+        delete next[inv.id]
+        return next
+      })
+      onChanged?.()
+    } catch (e) {
+      setError(e?.message || 'Failed to file invoice')
+    } finally {
+      setAssignBusy(0)
     }
   }
 
@@ -301,6 +340,52 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
             </div>
           )}
         </div>
+
+        {unassigned.length > 0 && (
+          <div className="rounded-lg border border-warning-border bg-warning-bg/40 p-3">
+            <div className="mb-1 text-sm font-semibold text-fg">Unassigned invoices ({unassigned.length})</div>
+            <p className="mb-2 text-xs text-muted">
+              Uploaded before an account was chosen. File each one onto the account the money went into.
+            </p>
+            <div className="space-y-1.5">
+              {unassigned.map((inv) => (
+                <div key={inv.id} className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 text-xs">
+                    <div className="truncate font-medium text-fg">{inv.file_name || 'Invoice'}</div>
+                    <div className="truncate text-muted">
+                      {inv.invoice_ref || 'No ref'}
+                      {inv.amount != null ? ` · ${fmtNaira(inv.amount)}` : ''}
+                      {inv.created_by_role ? ` · ${inv.created_by_role}${inv.created_by_code ? ` ${inv.created_by_code}` : ''}` : ''}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {inv.url ? (
+                      <a href={inv.url} target="_blank" rel="noreferrer" className="rounded-md border border-line bg-surface px-2 py-1 text-xs font-medium text-fg">
+                        Open
+                      </a>
+                    ) : null}
+                    <select
+                      value={assignSel[inv.id] || ''}
+                      onChange={(e) => setAssignSel({ ...assignSel, [inv.id]: e.target.value })}
+                      className="max-w-[220px] rounded-lg border border-line bg-surface px-2 py-1 text-xs text-fg"
+                    >
+                      <option value="">Choose account…</option>
+                      {accounts.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.bank_name || 'Bank'} · {maskAccountNumber(a.account_number)}
+                          {a.purpose ? ` — ${a.purpose}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <Button size="sm" variant="brand" onClick={() => fileInvoice(inv)} loading={assignBusy === Number(inv.id)}>
+                      File
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="rounded-lg border border-line bg-subtle/40 p-3">
           <div className="mb-2 text-sm font-semibold text-fg">Add another account</div>

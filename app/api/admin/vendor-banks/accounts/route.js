@@ -22,18 +22,24 @@ const MODULES = {
     invoiceTable: 'food_vendor_invoices',
     ownerCol: 'branch_id',
     cycleCol: 'cycle_id',
+    invoiceOwnerCol: 'branch_id',
+    invoiceCycleCol: 'cycle_id',
   },
   ram: {
     table: 'ram_vendor_bank_accounts',
     invoiceTable: 'ram_vendor_invoices',
     ownerCol: 'ram_delivery_location_id',
     cycleCol: 'ram_cycle_id',
+    invoiceOwnerCol: 'ram_delivery_location_id',
+    invoiceCycleCol: 'ram_cycle_id',
   },
   exhibition: {
     table: 'exhibition_vendor_bank_accounts',
     invoiceTable: 'exhibition_vendor_invoices',
     ownerCol: 'vendor_id',
     cycleCol: 'cycle_id',
+    invoiceOwnerCol: 'vendor_id',
+    invoiceCycleCol: 'cycle_id',
   },
 }
 
@@ -176,6 +182,20 @@ async function listAccounts(supabase, ctx, ownerId) {
   return data || []
 }
 
+const INVOICE_SELECT =
+  'id,bank_account_id,invoice_ref,invoice_date,amount,notes,storage_bucket,storage_path,file_name,mime_type,file_size,created_by_role,created_by_code,created_at'
+
+async function withUrl(supabase, inv) {
+  const bucket = String(inv.storage_bucket || '')
+  const path = String(inv.storage_path || '')
+  let url = null
+  if (bucket && path) {
+    const { data: signed } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60)
+    url = signed?.signedUrl || null
+  }
+  return { ...inv, url }
+}
+
 // The invoices filed against each account, with short-lived links so the admin
 // can open the actual file. Older databases may not have the link column yet.
 async function withInvoices(supabase, ctx, accounts) {
@@ -186,7 +206,7 @@ async function withInvoices(supabase, ctx, accounts) {
 
   const { data, error } = await supabase
     .from(table)
-    .select('id,bank_account_id,invoice_ref,invoice_date,amount,notes,storage_bucket,storage_path,file_name,mime_type,file_size,created_by_role,created_by_code,created_at')
+    .select(INVOICE_SELECT)
     .in('bank_account_id', accounts.map((a) => a.id))
     .order('created_at', { ascending: false })
   if (error) return accounts.map((a) => ({ ...a, invoices: [], invoice_total: 0 }))
@@ -202,27 +222,42 @@ async function withInvoices(supabase, ctx, accounts) {
   return Promise.all(
     accounts.map(async (account) => {
       const rows = byAccount.get(Number(account.id)) || []
-      const invoices = await Promise.all(
-        rows.map(async (inv) => {
-          const bucket = String(inv.storage_bucket || '')
-          const path = String(inv.storage_path || '')
-          let url = null
-          if (bucket && path) {
-            const { data: signed } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60)
-            url = signed?.signedUrl || null
-          }
-          return { ...inv, url }
-        })
-      )
+      const invoices = await Promise.all(rows.map((inv) => withUrl(supabase, inv)))
       const total = rows.reduce((sum, inv) => sum + Number(inv.amount || 0), 0)
       return { ...account, invoices, invoice_total: total }
     })
   )
 }
 
+// Invoices that predate account linking, or were uploaded before the owner had
+// an account: the admin can file each of them onto the right account.
+async function listUnassignedInvoices(supabase, ctx, ownerId) {
+  const meta = ctx.meta
+  const linked = await hasColumn(supabase, meta.invoiceTable, 'bank_account_id').catch(() => false)
+  if (!linked) return []
+  let q = supabase
+    .from(meta.invoiceTable)
+    .select(INVOICE_SELECT)
+    .eq(meta.invoiceOwnerCol, ownerId)
+    .is('bank_account_id', null)
+  const hasCycle = await hasColumn(supabase, meta.invoiceTable, meta.invoiceCycleCol).catch(() => false)
+  if (hasCycle && ctx.cycleId) q = q.eq(meta.invoiceCycleCol, ctx.cycleId)
+  const { data, error } = await q.order('created_at', { ascending: false })
+  if (error) return []
+  return Promise.all((data || []).map((inv) => withUrl(supabase, inv)))
+}
+
 async function respondWithAccounts(supabase, ctx, ownerId, extra = {}) {
   const accounts = await withInvoices(supabase, ctx, await listAccounts(supabase, ctx, ownerId))
-  return NextResponse.json({ ok: true, accounts, cycle_id: ctx.cycleId, paid_lock: ctx.paidLock, ...extra })
+  const unassigned = await listUnassignedInvoices(supabase, ctx, ownerId).catch(() => [])
+  return NextResponse.json({
+    ok: true,
+    accounts,
+    unassigned_invoices: unassigned,
+    cycle_id: ctx.cycleId,
+    paid_lock: ctx.paidLock,
+    ...extra,
+  })
 }
 
 export async function GET(req) {
@@ -316,6 +351,37 @@ export async function PATCH(req) {
     if (ctx.error) return NextResponse.json({ ok: false, error: ctx.error }, { status: ctx.status || 400 })
 
     const accounts = await listAccounts(supabase, ctx, ownerId)
+
+    // Filing an invoice onto an account (or taking it off), so old invoices can
+    // be attributed to the account the money actually went into.
+    if (body.invoice_id !== undefined) {
+      const invoiceId = parseId(body.invoice_id)
+      if (!invoiceId) return NextResponse.json({ ok: false, error: 'invoice_id is required' }, { status: 400 })
+      const targetRaw = body.bank_account_id
+      const targetId = targetRaw === null || targetRaw === '' || targetRaw === 0 ? 0 : parseId(targetRaw)
+      const linked = await hasColumn(supabase, ctx.meta.invoiceTable, 'bank_account_id').catch(() => false)
+      if (!linked) return NextResponse.json({ ok: false, error: 'Invoices cannot be linked in this module yet' }, { status: 400 })
+      if (targetId) {
+        const target = accounts.find((a) => Number(a.id) === targetId)
+        if (!target) return NextResponse.json({ ok: false, error: 'Bank account not found' }, { status: 404 })
+        if (target.is_paid) return NextResponse.json({ ok: false, error: 'That account is marked as paid. Mark it unpaid first.' }, { status: 403 })
+      }
+      const { data: invoice, error: invErr } = await supabase
+        .from(ctx.meta.invoiceTable)
+        .select(`id,${ctx.meta.invoiceOwnerCol}`)
+        .eq('id', invoiceId)
+        .eq(ctx.meta.invoiceOwnerCol, ownerId)
+        .maybeSingle()
+      if (invErr) return NextResponse.json({ ok: false, error: invErr.message }, { status: 500 })
+      if (!invoice) return NextResponse.json({ ok: false, error: 'Invoice not found for this vendor' }, { status: 404 })
+      const { error: updErr } = await supabase
+        .from(ctx.meta.invoiceTable)
+        .update({ bank_account_id: targetId || null })
+        .eq('id', invoiceId)
+      if (updErr) return NextResponse.json({ ok: false, error: updErr.message }, { status: 500 })
+      return respondWithAccounts(supabase, ctx, ownerId, { assigned_invoice_id: invoiceId })
+    }
+
     const row = accounts.find((a) => Number(a.id) === accountId)
     if (!row) return NextResponse.json({ ok: false, error: 'Bank account not found' }, { status: 404 })
 
