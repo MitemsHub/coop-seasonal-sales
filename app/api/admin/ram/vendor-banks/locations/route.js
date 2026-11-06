@@ -102,7 +102,11 @@ export async function GET(req) {
         return bq
       })(),
       (() => {
-        let iq = supabase.from('ram_vendor_invoices').select('id,ram_delivery_location_id,ram_cycle_id').in('ram_delivery_location_id', ids)
+        let iq = supabase
+          .from('ram_vendor_invoices')
+          .select('id,ram_delivery_location_id,ram_cycle_id,bank_account_id,invoice_ref,invoice_date,amount,file_name,mime_type,storage_bucket,storage_path,created_at')
+          .in('ram_delivery_location_id', ids)
+          .order('created_at', { ascending: false })
         if (invoicesHasCycle && cycleId) iq = iq.eq('ram_cycle_id', cycleId)
         return iq
       })(),
@@ -143,6 +147,26 @@ export async function GET(req) {
       invoiceCountByLocId.set(id, (invoiceCountByLocId.get(id) || 0) + 1)
     }
 
+    // Invoices grouped by account, with short-lived links, so the list shows
+    // them beside each bank instead of behind an action.
+    const invoicesByBankId = new Map()
+    await Promise.all(
+      (invoicesRes.data || []).map(async (inv) => {
+        const bankId = Number(inv?.bank_account_id)
+        if (!Number.isFinite(bankId) || bankId <= 0) return
+        const bucket = String(inv.storage_bucket || '')
+        const path = String(inv.storage_path || '')
+        let url = null
+        if (bucket && path) {
+          const { data: signed } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60)
+          url = signed?.signedUrl || null
+        }
+        const list = invoicesByBankId.get(bankId) || []
+        list.push({ ...inv, url })
+        invoicesByBankId.set(bankId, list)
+      })
+    )
+
     const paidByLocId = new Map()
     for (const p of paidRes?.data || []) {
       const id = Number(p?.ram_delivery_location_id)
@@ -152,8 +176,11 @@ export async function GET(req) {
 
     const out = (locations || []).map((l) => {
       const id = Number(l.id)
-      const banks = banksByLocId.get(id) || []
-      const bank = banks.find((x) => x.is_current) || banks[0] || null
+      const banks = (banksByLocId.get(id) || []).map((acct) => ({
+        ...acct,
+        invoices: invoicesByBankId.get(Number(acct.id)) || [],
+      }))
+      const bank = banks[0] || null
       const paid = paidByLocId.get(id) || { is_paid: false, paid_at: null, ram_cycle_id: cycleId ?? null }
       return {
         id,

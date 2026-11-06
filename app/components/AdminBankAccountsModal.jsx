@@ -272,8 +272,11 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
                               : ''}
                             {a.created_at ? ` · ${new Date(a.created_at).toLocaleDateString()}` : ''}
                           </div>
-                          {a.is_paid && a.paid_at && (
-                            <div className="text-xs text-success-fg">Paid {new Date(a.paid_at).toLocaleString()}{a.paid_by ? ` by ${a.paid_by}` : ''}</div>
+                          {a.is_paid && (
+                            <div className="text-xs text-success-fg">
+                              Marked paid {a.paid_at ? new Date(a.paid_at).toLocaleString() : ''}
+                              {a.paid_by ? ` by ${a.paid_by}` : ' by an admin'}
+                            </div>
                           )}
                         </div>
                         <div className="flex shrink-0 flex-wrap items-center gap-1.5">

@@ -74,13 +74,29 @@ export async function GET(request) {
     // Invoice counts per vendor (best-effort — the invoices table may not
     // exist yet on fresh databases, so a missing table just yields zeroes).
     const invoiceCounts = new Map()
+    const invoicesByBankId = new Map()
     const { data: invRows, error: invErr } = await supabase
       .from('exhibition_vendor_invoices')
-      .select('vendor_id')
+      .select('id,vendor_id,cycle_id,bank_account_id,invoice_ref,invoice_date,amount,file_name,mime_type,storage_bucket,storage_path,created_at')
+      .order('created_at', { ascending: false })
     if (!invErr) {
-      for (const r of invRows || []) {
-        invoiceCounts.set(String(r.vendor_id), (invoiceCounts.get(String(r.vendor_id)) || 0) + 1)
-      }
+      await Promise.all(
+        (invRows || []).map(async (r) => {
+          invoiceCounts.set(String(r.vendor_id), (invoiceCounts.get(String(r.vendor_id)) || 0) + 1)
+          const bankId = Number(r.bank_account_id)
+          if (!Number.isFinite(bankId) || bankId <= 0) return
+          const bucket = String(r.storage_bucket || '')
+          const path = String(r.storage_path || '')
+          let url = null
+          if (bucket && path) {
+            const { data: signed } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60)
+            url = signed?.signedUrl || null
+          }
+          const list = invoicesByBankId.get(bankId) || []
+          list.push({ ...r, url })
+          invoicesByBankId.set(bankId, list)
+        })
+      )
     }
 
     const pick = (v) => {
@@ -93,7 +109,10 @@ export async function GET(request) {
       cycle_id: cycleId > 0 ? cycleId : null,
       vendors: (vendors || []).map((v) => {
         const bank = pick(v)
-        const banks = banksForVendor(v.id)
+        const banks = banksForVendor(v.id).map((acct) => ({
+          ...acct,
+          invoices: invoicesByBankId.get(Number(acct.id)) || [],
+        }))
         return {
           ...v,
           invoice_count: invoiceCounts.get(String(v.id)) || 0,

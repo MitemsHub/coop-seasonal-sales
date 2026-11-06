@@ -202,13 +202,11 @@ function AdminFoodBanksContent() {
       const res = await fetch('/api/admin/food/vendor-banks/invoices/upload', { method: 'POST', body: fd })
       const json = await safeJson(res, '/api/admin/food/vendor-banks/invoices/upload')
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Upload failed')
-      setRows((prev) =>
-        (prev || []).map((r) => (Number(r.id) === id ? { ...r, invoice_count: Number(r.invoice_count || 0) + 1 } : r))
-      )
       setMsg({ type: 'success', text: 'Invoice uploaded' })
       setInvoiceUploadOpen(false)
       setInvoiceUploadLoc(null)
       setInvoiceFile(null)
+      await fetchRows()
     } catch (e) {
       setMsg({ type: 'error', text: e?.message || 'Upload failed' })
     } finally {

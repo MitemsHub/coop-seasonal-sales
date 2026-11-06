@@ -259,6 +259,7 @@ function RamBanksContent() {
       setInvoiceUploadOpen(false)
       setInvoiceFile(null)
       await loadInvoices(invoiceLoc)
+      await fetchRows()
       setMsg({ type: 'success', text: 'Invoice uploaded' })
     } catch (e) {
       setMsg({ type: 'error', text: e?.message || 'Upload failed' })
@@ -468,19 +469,54 @@ function RamBanksContent() {
                   </td>
                   <td className="p-3 align-top">
                     {r.banks?.length ? (
-                      <div className="space-y-0.5">
+                      <div className="space-y-2">
                         {r.banks.slice(0, 2).map((b) => (
-                          <div key={b.id} className="flex items-center gap-1.5">
-                            <span>{b.bank_name || '—'}</span>
-                            {b.is_paid && (
-                              <span className="rounded-full bg-success-bg px-1.5 py-0.5 text-[10px] font-semibold text-success-fg">
-                                paid
-                              </span>
+                          <div key={b.id}>
+                            <div className="flex flex-wrap items-center gap-1.5 text-sm">
+                              <span className="font-medium text-fg">{b.bank_name || '—'}</span>
+                              <span className="font-mono text-xs text-subtext">{maskAccountNumber(b.account_number || '')}</span>
+                              {b.is_paid && (
+                                <span className="rounded-full bg-success-bg px-1.5 py-0.5 text-[10px] font-semibold text-success-fg">
+                                  paid
+                                </span>
+                              )}
+                            </div>
+                            {b.purpose && <div className="text-xs text-subtext">{b.purpose}</div>}
+                            {b.invoices?.length ? (
+                              <div className="mt-0.5 space-y-0.5">
+                                {b.invoices.slice(0, 3).map((inv) => (
+                                  <div key={inv.id} className="flex items-center gap-1.5 text-xs">
+                                    {inv.url ? (
+                                      <a
+                                        href={inv.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="max-w-[180px] truncate text-brand hover:underline"
+                                        title={inv.file_name || 'Invoice'}
+                                      >
+                                        {inv.file_name || 'Invoice'}
+                                      </a>
+                                    ) : (
+                                      <span className="max-w-[180px] truncate text-fg">{inv.file_name || 'Invoice'}</span>
+                                    )}
+                                    {inv.amount != null && (
+                                      <span className="shrink-0 text-subtext">₦{Number(inv.amount).toLocaleString()}</span>
+                                    )}
+                                  </div>
+                                ))}
+                                {b.invoices.length > 3 && (
+                                  <div className="text-xs text-subtext">
+                                    +{b.invoices.length - 3} more invoice{b.invoices.length - 3 === 1 ? '' : 's'}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-xs text-subtext">No invoices yet</div>
                             )}
                           </div>
                         ))}
                         {r.banks.length > 2 && (
-                          <div className="text-xs text-subtext">+{r.banks.length - 2} more</div>
+                          <div className="text-xs text-subtext">& {r.banks.length - 2} other</div>
                         )}
                       </div>
                     ) : '—'}
