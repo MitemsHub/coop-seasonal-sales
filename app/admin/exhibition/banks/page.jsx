@@ -426,6 +426,7 @@ function AdminExhibitionBanksContent() {
                 <th className="text-left px-3 py-2 border-b">Vendor</th>
                 <th className="text-left px-3 py-2 border-b">Branch</th>
                 <th className="text-left px-3 py-2 border-b">Bank accounts &amp; invoices</th>
+                <th className="text-left px-3 py-2 border-b">Paid</th>
                 <th className="text-right px-3 py-2 border-b">Actions</th>
               </tr>
             </thead>
@@ -436,6 +437,7 @@ function AdminExhibitionBanksContent() {
                     <td className="px-3 py-3 border-b"><Skeleton className="h-4 w-40" /></td>
                     <td className="px-3 py-3 border-b"><Skeleton className="h-4 w-24" /></td>
                     <td className="px-3 py-3 border-b"><Skeleton className="h-20 w-72" /></td>
+                    <td className="px-3 py-3 border-b"><Skeleton className="h-4 w-16" /></td>
                     <td className="px-3 py-3 border-b text-right"><Skeleton className="ml-auto h-8 w-24" /></td>
                   </tr>
                 ))
@@ -443,26 +445,59 @@ function AdminExhibitionBanksContent() {
 
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-3 py-10 text-center">
+                  <td colSpan={5} className="px-3 py-10 text-center">
                     <Store className="mx-auto mb-2 h-8 w-8 text-muted" strokeWidth={1.5} />
                     <p className="text-sm text-muted">No vendors found{cycleId ? ' for this cycle' : ''}.</p>
                   </td>
                 </tr>
               )}
 
-              {paged.map((v) => (
-                <tr key={v.id} className="hover:bg-subtle">
-                  <td className="px-3 py-2 border-b">
-                    <div className="font-medium text-fg">{v.name || '—'}</div>
-                    <div className="font-mono text-xs text-subtext">{v.code}</div>
-                    <div className="text-xs text-subtext">{v.phone || ''}</div>
-                  </td>
-                  <td className="px-3 py-2 border-b text-muted">{v.branch_name || '—'}</td>
-                  <td className="px-3 py-2 border-b">
-                    {v.banks?.length ? (
-                      <div className="space-y-2">
-                        {v.banks.map((b) => (
-                          <div key={b.id} className="rounded-lg border border-line bg-surface px-3 py-2">
+              {paged.map((v) => {
+                const accounts = v.banks || []
+                if (!accounts.length) {
+                  return (
+                    <tr key={v.id} className="hover:bg-subtle">
+                      <td className="px-3 py-2 border-b align-top">
+                        <div className="font-medium text-fg">{v.name || '—'}</div>
+                        <div className="font-mono text-xs text-subtext">{v.code}</div>
+                        <div className="text-xs text-subtext">{v.phone || ''}</div>
+                      </td>
+                      <td className="px-3 py-2 border-b text-muted align-top">{v.branch_name || '—'}</td>
+                      <td className="px-3 py-2 border-b align-top">—</td>
+                      <td className="px-3 py-2 border-b align-top text-muted">—</td>
+                      <td className="px-3 py-2 border-b text-right align-top">
+                        <select
+                          defaultValue=""
+                          className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg focus:border-brand focus:outline-none disabled:opacity-50"
+                          disabled={loading}
+                          onChange={(e) => {
+                            const act = e.target.value
+                            e.target.value = ''
+                            if (!act) return
+                            if (act === 'banks') setBanksFor(v)
+                          }}
+                        >
+                          <option value="" disabled>Actions</option>
+                          <option value="banks">Manage banks</option>
+                        </select>
+                      </td>
+                    </tr>
+                  )
+                }
+                return accounts.map((b, idx) => (
+                  <tr key={`${v.id}-${b.id}`} className="hover:bg-subtle">
+                    {idx === 0 && (
+                      <td rowSpan={accounts.length} className="px-3 py-2 border-b align-top">
+                        <div className="font-medium text-fg">{v.name || '—'}</div>
+                        <div className="font-mono text-xs text-subtext">{v.code}</div>
+                        <div className="text-xs text-subtext">{v.phone || ''}</div>
+                      </td>
+                    )}
+                    {idx === 0 && (
+                      <td rowSpan={accounts.length} className="px-3 py-2 border-b text-muted align-top">{v.branch_name || '—'}</td>
+                    )}
+                    <td className="px-3 py-2 border-b align-top">
+                      <div className="rounded-lg border border-line bg-surface px-3 py-2">
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-sm font-semibold text-fg">{b.bank_name || 'Bank'}</span>
@@ -510,60 +545,41 @@ function AdminExhibitionBanksContent() {
                                 <div className="text-xs text-subtext">No invoices filed against this account.</div>
                               )}
                             </div>
-                            <div className="mt-1.5 flex flex-wrap items-center gap-3 border-t border-line pt-1.5 text-xs">
-                              <button
-                                type="button"
-                                onClick={() => openUpload(v, b.id)}
-                                disabled={!!b.is_paid}
-                                className="font-semibold text-brand hover:underline disabled:opacity-40"
-                              >
-                                Upload invoice
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setAccountPaid(v, b, !b.is_paid)}
-                                disabled={accountBusy === Number(b.id)}
-                                className="font-semibold text-fg hover:underline disabled:opacity-40"
-                              >
-                                {accountBusy === Number(b.id) ? 'Saving…' : b.is_paid ? 'Mark unpaid' : 'Mark paid'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setBanksFor(v)}
-                                className="text-muted hover:underline"
-                              >
-                                Edit / remove
-                              </button>
-                            </div>
-                          </div>
-                        ))}
                       </div>
-                    ) : '—'}
-                  </td>
-                  <td className="px-3 py-2 border-b text-right">
-                    <select
-                      defaultValue=""
-                      className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg focus:border-brand focus:outline-none disabled:opacity-50"
-                      disabled={loading}
-                      onChange={(e) => {
-                        const act = e.target.value
-                        e.target.value = ''
-                        if (!act) return
-                        if (act === 'bank') openBank(v)
-                        if (act === 'banks') setBanksFor(v)
-                        if (act === 'upload') openUpload(v)
-                        if (act === 'invoices') loadInvoices(v)
-                      }}
-                    >
-                      <option value="" disabled>Actions</option>
-                      <option value="bank">{v.bank ? 'Edit bank' : 'Set bank'}</option>
-                      <option value="banks">Manage banks ({v.banks?.length || 0})</option>
-                      <option value="upload">Upload Invoice</option>
-                      <option value="invoices">View Invoices</option>
-                    </select>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-3 py-2 border-b align-top">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          b.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'
+                        }`}
+                      >
+                        {b.is_paid ? 'Paid' : 'Unpaid'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 border-b text-right align-top">
+                      <select
+                        defaultValue=""
+                        className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg focus:border-brand focus:outline-none disabled:opacity-50"
+                        disabled={loading}
+                        onChange={(e) => {
+                          const act = e.target.value
+                          e.target.value = ''
+                          if (!act) return
+                          if (act === 'upload') openUpload(v, b.id)
+                          if (act === 'banks') setBanksFor(v)
+                          if (act === 'paid') setAccountPaid(v, b, true)
+                          if (act === 'unpaid') setAccountPaid(v, b, false)
+                        }}
+                      >
+                        <option value="" disabled>Actions</option>
+                        <option value="upload" disabled={!!b.is_paid}>Upload Invoice</option>
+                        {b.is_paid ? <option value="unpaid">Mark Unpaid</option> : <option value="paid">Mark Paid</option>}
+                        <option value="banks">Edit / Remove</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))
+              })}
             </tbody>
           </table>
         </div>

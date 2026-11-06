@@ -432,17 +432,58 @@ function AdminFoodBanksContent() {
                 </tr>
               )}
 
-              {filtered.map((r) => (
-                <tr key={r.id} className="hover:bg-subtle">
-                  <td className="px-3 py-2 border-b">
-                    <div className="font-medium text-fg">{r.name || '—'}</div>
-                    <div className="text-xs text-subtext">{r.code || ''}</div>
-                  </td>
-                  <td className="px-3 py-2 border-b align-top">
-                    {r.banks?.length ? (
-                      <div className="space-y-2">
-                        {r.banks.map((b) => (
-                          <div key={b.id} className="rounded-lg border border-line bg-surface px-3 py-2">
+              {filtered.map((r) => {
+                const accounts = r.banks || []
+                if (!accounts.length) {
+                  return (
+                    <tr key={r.id} className="hover:bg-subtle">
+                      <td className="px-3 py-2 border-b align-top">
+                        <div className="font-medium text-fg">{r.name || '—'}</div>
+                        <div className="text-xs text-subtext">{r.code || ''}</div>
+                      </td>
+                      <td className="px-3 py-2 border-b align-top">—</td>
+                      <td className="px-3 py-2 border-b align-top">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            r.paid?.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'
+                          }`}
+                        >
+                          {r.paid?.is_paid ? 'Paid' : 'Unpaid'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 border-b align-top text-right">
+                        <div className="flex justify-end">
+                          <select
+                            defaultValue=""
+                            className="border border-line rounded-lg px-2 py-1.5 text-xs sm:text-sm bg-surface disabled:opacity-50"
+                            onChange={(e) => {
+                              const v = e.target.value
+                              e.target.value = ''
+                              if (!v) return
+                              if (v === 'banks') setBanksFor(r)
+                              if (v === 'paid') togglePaid(r, true)
+                              if (v === 'unpaid') togglePaid(r, false)
+                            }}
+                          >
+                            <option value="" disabled>Actions</option>
+                            <option value="banks">Manage banks</option>
+                            {r?.paid?.is_paid ? <option value="unpaid">Mark Unpaid</option> : <option value="paid">Mark Paid</option>}
+                          </select>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                }
+                return accounts.map((b, idx) => (
+                  <tr key={`${r.id}-${b.id}`} className="hover:bg-subtle">
+                    {idx === 0 && (
+                      <td rowSpan={accounts.length} className="px-3 py-2 border-b align-top">
+                        <div className="font-medium text-fg">{r.name || '—'}</div>
+                        <div className="text-xs text-subtext">{r.code || ''}</div>
+                      </td>
+                    )}
+                    <td className="px-3 py-2 border-b align-top">
+                      <div className="rounded-lg border border-line bg-surface px-3 py-2">
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-sm font-semibold text-fg">{b.bank_name || 'Bank'}</span>
@@ -490,75 +531,44 @@ function AdminFoodBanksContent() {
                                 <div className="text-xs text-subtext">No invoices filed against this account.</div>
                               )}
                             </div>
-                            <div className="mt-1.5 flex flex-wrap items-center gap-3 border-t border-line pt-1.5 text-xs">
-                              <button
-                                type="button"
-                                onClick={() => openInvoiceUpload(r, b.id)}
-                                disabled={!!b.is_paid}
-                                className="font-semibold text-brand hover:underline disabled:opacity-40"
-                              >
-                                Upload invoice
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setAccountPaid(r, b, !b.is_paid)}
-                                disabled={accountBusy === Number(b.id)}
-                                className="font-semibold text-fg hover:underline disabled:opacity-40"
-                              >
-                                {accountBusy === Number(b.id) ? 'Saving…' : b.is_paid ? 'Mark unpaid' : 'Mark paid'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setBanksFor(r)}
-                                className="text-muted hover:underline"
-                              >
-                                Edit / remove
-                              </button>
-                            </div>
-                          </div>
-                        ))}
                       </div>
-                    ) : '—'}
-                  </td>
-                  <td className="px-3 py-2 border-b">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                        r.paid?.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'
-                      }`}
-                    >
-                      {r.paid?.is_paid ? 'Paid' : 'Unpaid'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 border-b text-right">
-                    <div className="flex justify-end">
-                      <select
-                        defaultValue=""
-                        className="border border-line rounded-lg px-2 py-1.5 text-xs sm:text-sm bg-surface disabled:opacity-50"
-                        onChange={(e) => {
-                          const v = e.target.value
-                          e.target.value = ''
-                          if (!v) return
-                          if (v === 'bank') openBankModal(r)
-                          if (v === 'banks') setBanksFor(r)
-                          if (v === 'upload') openInvoiceUpload(r)
-                          if (v === 'invoices') loadInvoices(r)
-                          if (v === 'paid') togglePaid(r, true)
-                          if (v === 'unpaid') togglePaid(r, false)
-                        }}
+                    </td>
+                    <td className="px-3 py-2 border-b align-top">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          b.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'
+                        }`}
                       >
-                        <option value="" disabled>
-                          Actions
-                        </option>
-                        <option value="bank">Set Bank</option>
-                        <option value="banks">Manage banks ({r.banks?.length || 0})</option>
-                        <option value="upload">Upload Invoice</option>
-                        <option value="invoices">View Invoices</option>
-                        {r?.paid?.is_paid ? <option value="unpaid">Mark Unpaid</option> : <option value="paid">Mark Paid</option>}
-                      </select>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {b.is_paid ? 'Paid' : 'Unpaid'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 border-b align-top text-right">
+                      <div className="flex justify-end">
+                        <select
+                          defaultValue=""
+                          className="border border-line rounded-lg px-2 py-1.5 text-xs sm:text-sm bg-surface disabled:opacity-50"
+                          onChange={(e) => {
+                            const v = e.target.value
+                            e.target.value = ''
+                            if (!v) return
+                            if (v === 'upload') openInvoiceUpload(r, b.id)
+                            if (v === 'manage') setBanksFor(r)
+                            if (v === 'paid') setAccountPaid(r, b, true)
+                            if (v === 'unpaid') setAccountPaid(r, b, false)
+                          }}
+                        >
+                          <option value="" disabled>
+                            Actions
+                          </option>
+                          <option value="upload" disabled={!!b.is_paid}>Upload Invoice</option>
+                          {b.is_paid ? <option value="unpaid">Mark Unpaid</option> : <option value="paid">Mark Paid</option>}
+                          <option value="manage">Edit / Remove</option>
+                        </select>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              })}
             </tbody>
           </table>
         </div>

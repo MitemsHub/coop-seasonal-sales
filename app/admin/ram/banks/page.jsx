@@ -475,7 +475,7 @@ function RamBanksContent() {
                 <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Delivery Location</th>
                 <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Vendor</th>
                 <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Bank accounts &amp; invoices</th>
-                <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Status</th>
+                <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Paid</th>
                 <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Actions</th>
               </tr>
             </thead>
@@ -502,22 +502,68 @@ function RamBanksContent() {
                     </div>
                   </td>
                 </tr>
-              ) : filtered.map((r) => (
-                <tr key={r.id} className="border-b border-line last:border-b-0 transition-colors duration-150 ease-sakani hover:bg-subtle">
-                  <td className="p-3 align-top">
-                    <div className="font-medium text-fg">{r.delivery_location || '—'}</div>
-                    <div className="text-xs text-subtext">{r.is_active ? '' : 'Inactive'}</div>
-                  </td>
-                  <td className="p-3 align-top">
-                    <div className="font-medium text-fg">{r.name || '—'}</div>
-                    <div className="text-xs text-subtext">{r.phone || ''}</div>
-                    <div className="text-xs text-subtext">{r.rep_code ? `Code: ${r.rep_code}` : ''}</div>
-                  </td>
-                  <td className="p-3 align-top">
-                    {r.banks?.length ? (
-                      <div className="space-y-2">
-                        {r.banks.map((b) => (
-                          <div key={b.id} className="rounded-lg border border-line bg-surface px-3 py-2">
+              ) : filtered.map((r) => {
+                const accounts = r.banks || []
+                if (!accounts.length) {
+                  return (
+                    <tr key={r.id} className="border-b border-line last:border-b-0 transition-colors duration-150 ease-sakani hover:bg-subtle">
+                      <td className="p-3 align-top">
+                        <div className="font-medium text-fg">{r.delivery_location || '—'}</div>
+                        <div className="text-xs text-subtext">{r.is_active ? '' : 'Inactive'}</div>
+                      </td>
+                      <td className="p-3 align-top">
+                        <div className="font-medium text-fg">{r.name || '—'}</div>
+                        <div className="text-xs text-subtext">{r.phone || ''}</div>
+                        <div className="text-xs text-subtext">{r.rep_code ? `Code: ${r.rep_code}` : ''}</div>
+                      </td>
+                      <td className="p-3 align-top">—</td>
+                      <td className="p-3 align-top text-right">
+                        {r?.paid?.is_paid ? (
+                          <span className="inline-flex items-center rounded-full bg-success-bg px-2 py-0.5 text-xs font-semibold text-success-fg">Paid</span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full bg-subtle px-2 py-0.5 text-xs font-semibold text-muted">Unpaid</span>
+                        )}
+                      </td>
+                      <td className="p-3 align-top text-right">
+                        <div className="flex justify-end">
+                          <select
+                            defaultValue=""
+                            className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg focus:border-brand focus:outline-none disabled:opacity-50"
+                            onChange={(e) => {
+                              const v = e.target.value
+                              e.target.value = ''
+                              if (!v) return
+                              if (v === 'banks') setBanksFor(r)
+                              if (v === 'paid') togglePaid(r, true)
+                              if (v === 'unpaid') togglePaid(r, false)
+                            }}
+                          >
+                            <option value="" disabled>Actions</option>
+                            <option value="banks">Manage banks</option>
+                            {r?.paid?.is_paid ? <option value="unpaid">Mark Unpaid</option> : <option value="paid">Mark Paid</option>}
+                          </select>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                }
+                return accounts.map((b, idx) => (
+                  <tr key={`${r.id}-${b.id}`} className="border-b border-line last:border-b-0 transition-colors duration-150 ease-sakani hover:bg-subtle">
+                    {idx === 0 && (
+                      <td rowSpan={accounts.length} className="p-3 align-top">
+                        <div className="font-medium text-fg">{r.delivery_location || '—'}</div>
+                        <div className="text-xs text-subtext">{r.is_active ? '' : 'Inactive'}</div>
+                      </td>
+                    )}
+                    {idx === 0 && (
+                      <td rowSpan={accounts.length} className="p-3 align-top">
+                        <div className="font-medium text-fg">{r.name || '—'}</div>
+                        <div className="text-xs text-subtext">{r.phone || ''}</div>
+                        <div className="text-xs text-subtext">{r.rep_code ? `Code: ${r.rep_code}` : ''}</div>
+                      </td>
+                    )}
+                    <td className="p-3 align-top">
+                      <div className="rounded-lg border border-line bg-surface px-3 py-2">
                             <div className="flex flex-wrap items-center justify-between gap-2">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-sm font-semibold text-fg">{b.bank_name || 'Bank'}</span>
@@ -565,73 +611,42 @@ function RamBanksContent() {
                                 <div className="text-xs text-subtext">No invoices filed against this account.</div>
                               )}
                             </div>
-                            <div className="mt-1.5 flex flex-wrap items-center gap-3 border-t border-line pt-1.5 text-xs">
-                              <button
-                                type="button"
-                                onClick={() => openUpload(r, b.id)}
-                                disabled={!!b.is_paid}
-                                className="font-semibold text-brand hover:underline disabled:opacity-40"
-                              >
-                                Upload invoice
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setAccountPaid(r, b, !b.is_paid)}
-                                disabled={accountBusy === Number(b.id)}
-                                className="font-semibold text-fg hover:underline disabled:opacity-40"
-                              >
-                                {accountBusy === Number(b.id) ? 'Saving…' : b.is_paid ? 'Mark unpaid' : 'Mark paid'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setBanksFor(r)}
-                                className="text-muted hover:underline"
-                              >
-                                Edit / remove
-                              </button>
-                            </div>
-                          </div>
-                        ))}
                       </div>
-                    ) : '—'}
-                  </td>
-                  <td className="p-3 align-top text-right">
-                    {r?.paid?.is_paid ? (
-                      <span className="inline-flex items-center rounded-full bg-success-bg px-2 py-0.5 text-xs font-semibold text-success-fg">Paid</span>
-                    ) : (
-                      <span className="inline-flex items-center rounded-full bg-subtle px-2 py-0.5 text-xs font-semibold text-muted">Unpaid</span>
-                    )}
-                  </td>
-                  <td className="p-3 align-top text-right">
-                    <div className="flex justify-end">
-                      <select
-                        defaultValue=""
-                        className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none disabled:opacity-50"
-                        onChange={(e) => {
-                          const v = e.target.value
-                          e.target.value = ''
-                          if (!v) return
-                          if (v === 'bank') openBank(r)
-                          if (v === 'banks') setBanksFor(r)
-                          if (v === 'invoices') loadInvoices(r)
-                          if (v === 'upload') openUpload(r)
-                          if (v === 'paid') togglePaid(r, true)
-                          if (v === 'unpaid') togglePaid(r, false)
-                        }}
-                      >
-                        <option value="" disabled>
-                          Actions
-                        </option>
-                        <option value="bank">{r.bank ? 'Update Bank' : 'Add Bank'}</option>
-                        <option value="banks">Manage banks ({r.banks?.length || 0})</option>
-                        <option value="upload">Upload Invoice</option>
-                        <option value="invoices">View Invoices</option>
-                        {r?.paid?.is_paid ? <option value="unpaid">Mark Unpaid</option> : <option value="paid">Mark Paid</option>}
-                      </select>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="p-3 align-top text-right">
+                      {b.is_paid ? (
+                        <span className="inline-flex items-center rounded-full bg-success-bg px-2 py-0.5 text-xs font-semibold text-success-fg">Paid</span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-subtle px-2 py-0.5 text-xs font-semibold text-muted">Unpaid</span>
+                      )}
+                    </td>
+                    <td className="p-3 align-top text-right">
+                      <div className="flex justify-end">
+                        <select
+                          defaultValue=""
+                          className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg focus:border-brand focus:outline-none disabled:opacity-50"
+                          onChange={(e) => {
+                            const v = e.target.value
+                            e.target.value = ''
+                            if (!v) return
+                            if (v === 'upload') openUpload(r, b.id)
+                            if (v === 'banks') setBanksFor(r)
+                            if (v === 'paid') setAccountPaid(r, b, true)
+                            if (v === 'unpaid') setAccountPaid(r, b, false)
+                          }}
+                        >
+                          <option value="" disabled>
+                            Actions
+                          </option>
+                          <option value="upload" disabled={!!b.is_paid}>Upload Invoice</option>
+                          {b.is_paid ? <option value="unpaid">Mark Unpaid</option> : <option value="paid">Mark Paid</option>}
+                          <option value="banks">Edit / Remove</option>
+                        </select>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              })}
             </tbody>
           </table>
         </div>
