@@ -60,6 +60,16 @@ function AdminFoodBanksContent() {
   const [accountBusy, setAccountBusy] = useState(0)
   const [accountDeleting, setAccountDeleting] = useState(0)
 
+  const [topBranchId, setTopBranchId] = useState('')
+  const [addBankOpen, setAddBankOpen] = useState(false)
+  const [addBankBranchId, setAddBankBranchId] = useState('')
+  const [addBankName, setAddBankName] = useState('')
+  const [addBankAccountName, setAddBankAccountName] = useState('')
+  const [addBankAccountNumber, setAddBankAccountNumber] = useState('')
+  const [addBankPurpose, setAddBankPurpose] = useState('')
+  const [addBankSaving, setAddBankSaving] = useState(false)
+  const [addBankErr, setAddBankErr] = useState('')
+
   const [invoiceEditOpen, setInvoiceEditOpen] = useState(false)
   const [invoiceEditRow, setInvoiceEditRow] = useState(null)
   const [invoiceEditRef, setInvoiceEditRef] = useState('')
@@ -256,6 +266,77 @@ function AdminFoodBanksContent() {
     }
   }
 
+  const copyAccountNumber = async (value) => {
+    try {
+      await navigator.clipboard.writeText(String(value || ''))
+      setMsg({ type: 'success', text: 'Account number copied' })
+    } catch {
+      setMsg({ type: 'error', text: 'Could not copy the account number' })
+    }
+  }
+
+  const openAddBank = (branchId) => {
+    setAddBankBranchId(String(branchId || topBranchId || ''))
+    setAddBankName('')
+    setAddBankAccountName('')
+    setAddBankAccountNumber('')
+    setAddBankPurpose('')
+    setAddBankErr('')
+    setAddBankOpen(true)
+  }
+
+  const saveNewBank = async () => {
+    const ownerId = Number(addBankBranchId)
+    if (!Number.isFinite(ownerId) || ownerId <= 0) {
+      setAddBankErr('Choose the branch this account belongs to.')
+      return
+    }
+    if (!addBankName.trim() || !addBankAccountName.trim() || !addBankAccountNumber.trim()) {
+      setAddBankErr('Bank name, account name and account number are all required.')
+      return
+    }
+    if (addBankSaving) return
+    setAddBankSaving(true)
+    setAddBankErr('')
+    try {
+      const res = await fetch('/api/admin/vendor-banks/accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          module: 'food',
+          owner_id: ownerId,
+          bank_name: addBankName,
+          account_name: addBankAccountName,
+          account_number: addBankAccountNumber,
+          purpose: addBankPurpose,
+        }),
+      })
+      const json = await safeJson(res, '/api/admin/vendor-banks/accounts')
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to add bank account')
+      setAddBankOpen(false)
+      setTopBranchId(String(ownerId))
+      setMsg({ type: 'success', text: 'Bank account added' })
+      await fetchRows()
+    } catch (e) {
+      setAddBankErr(e?.message || 'Failed to add bank account')
+    } finally {
+      setAddBankSaving(false)
+    }
+  }
+
+  const openTopInvoiceUpload = () => {
+    const loc = (rows || []).find((r) => Number(r.id) === Number(topBranchId))
+    if (!loc) {
+      setMsg({ type: 'error', text: 'Choose the branch to upload this invoice for.' })
+      return
+    }
+    if (!loc.banks?.length) {
+      setMsg({ type: 'error', text: 'That branch has no bank account yet. Add one first.' })
+      return
+    }
+    openInvoiceUpload(loc, loc.banks[0]?.id)
+  }
+
   const openInvoiceUpload = (loc, bankId) => {
     setInvoiceUploadLoc(loc || null)
     setInvoiceUploadBankId(String(bankId || loc?.banks?.[0]?.id || ''))
@@ -399,24 +480,46 @@ function AdminFoodBanksContent() {
 
   return (
     <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-        <div>
-          <h1 className="text-h2 font-semibold">Admin · Food Distribution · Banks</h1>
-          <div className="text-xs sm:text-sm text-muted">Cycle-sensitive (uses active cycle)</div>
+      <div className="mb-4 ui-card p-3 sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-h2 font-semibold">Food Distribution · Banks</h1>
+            <div className="text-xs sm:text-sm text-muted">Every account keeps its own invoices and paid state · active cycle</div>
+          </div>
+          <div className="flex w-full gap-2 sm:w-auto">
+            <input
+              value={term}
+              onChange={(e) => setTerm(e.target.value)}
+              placeholder="Search branch / bank / account"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none sm:w-80"
+            />
+            <Button variant="secondary" onClick={() => fetchRows()} loading={loading}>
+              {loading ? 'Refreshing…' : 'Refresh'}
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
-          <input
-            value={term}
-            onChange={(e) => setTerm(e.target.value)}
-            placeholder="Search branch / bank / account"
-            className="w-full sm:w-80 px-3 py-2 border rounded-lg text-sm"
-          />
-          <Button
-            onClick={() => fetchRows()}
-            loading={loading}
+        <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3 sm:flex-row sm:items-center">
+          <span className="text-xs font-semibold uppercase tracking-wide text-subtext">Add to a branch</span>
+          <select
+            value={topBranchId}
+            onChange={(e) => setTopBranchId(e.target.value)}
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-brand focus:outline-none sm:w-64"
           >
-            {loading ? 'Refreshing…' : 'Refresh'}
-          </Button>
+            <option value="">Choose a branch…</option>
+            {(rows || []).map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name || 'Branch'} ({r.code || r.id})
+              </option>
+            ))}
+          </select>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => openAddBank()}>
+              Add bank
+            </Button>
+            <Button size="sm" variant="accent" onClick={openTopInvoiceUpload}>
+              Upload invoice
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -470,8 +573,15 @@ function AdminFoodBanksContent() {
                   return (
                     <tr key={r.id} className="hover:bg-subtle">
                       <td className="px-3 py-2 border-b align-top">
-                        <div className="font-medium text-fg">{r.name || '—'}</div>
-                        <div className="text-xs text-subtext">{r.code || ''}</div>
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-subtle text-[10px] font-bold uppercase text-brand">
+                            {String(r.code || r.name || '?').slice(0, 2)}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="truncate font-medium text-fg">{r.name || '—'}</div>
+                            <div className="text-xs text-subtext">{r.code || ''}</div>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-3 py-2 border-b align-top">—</td>
                       <td className="px-3 py-2 border-b align-top">
@@ -509,60 +619,80 @@ function AdminFoodBanksContent() {
                 return accounts.map((b, idx) => (
                   <tr key={`${r.id}-${b.id}`} className="hover:bg-subtle">
                     {idx === 0 && (
-                      <td rowSpan={accounts.length} className="px-3 py-2 border-b align-top">
-                        <div className="font-medium text-fg">{r.name || '—'}</div>
-                        <div className="text-xs text-subtext">{r.code || ''}</div>
+                      <td rowSpan={accounts.length} className="border-b px-3 py-2 align-top">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-subtle text-[10px] font-bold uppercase text-brand">
+                            {String(r.code || r.name || '?').slice(0, 2)}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="truncate font-medium text-fg">{r.name || '—'}</div>
+                            <div className="text-xs text-subtext">{r.code || ''}</div>
+                          </div>
+                        </div>
                       </td>
                     )}
                     <td className="px-3 py-2 border-b align-top">
-                      <div className="rounded-lg border border-line bg-surface px-3 py-2">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-sm font-semibold text-fg">{b.bank_name || 'Bank'}</span>
-                                {b.is_paid && (
-                                  <span className="rounded-full bg-success-bg px-1.5 py-0.5 text-[10px] font-semibold text-success-fg">paid</span>
-                                )}
-                              </div>
-                              <span className="text-[11px] text-subtext">
-                                {Number(b.invoices?.length || 0).toLocaleString()} invoice
-                                {Number(b.invoices?.length || 0) === 1 ? '' : 's'}
-                              </span>
-                            </div>
-                            <div className="mt-1 grid gap-x-4 gap-y-0.5 text-xs text-subtext sm:grid-cols-2">
-                              <div>Account name: <span className="text-fg">{b.account_name || '—'}</span></div>
-                              <div>Account no: <span className="font-mono text-fg">{b.account_number || '—'}</span></div>
-                            </div>
-                            {b.purpose && (
-                              <div className="text-xs text-subtext">Purpose: <span className="text-fg">{b.purpose}</span></div>
-                            )}
-                            <div className="mt-1.5 border-t border-line pt-1.5">
-                              {b.invoices?.length ? (
-                                <div className="space-y-0.5">
-                                  {b.invoices.map((inv) => (
-                                    <div key={inv.id} className="flex items-center justify-between gap-3 text-xs">
-                                      {inv.url ? (
-                                        <a
-                                          href={inv.url}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="min-w-0 truncate text-brand hover:underline"
-                                          title={inv.file_name || 'Invoice'}
-                                        >
-                                          {inv.file_name || 'Invoice'}
-                                        </a>
-                                      ) : (
-                                        <span className="min-w-0 truncate text-fg">{inv.file_name || 'Invoice'}</span>
-                                      )}
-                                      <span className="shrink-0 font-medium text-fg">
-                                        {inv.amount != null ? `₦${Number(inv.amount).toLocaleString()}` : '—'}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="text-xs text-subtext">No invoices filed against this account.</div>
+                      <div className="rounded-xl border border-line bg-surface px-3.5 py-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-sm font-semibold text-fg">{b.bank_name || 'Bank'}</span>
+                          <span className="rounded-full bg-subtle px-2 py-0.5 text-[10px] font-medium text-muted">
+                            {Number(b.invoices?.length || 0).toLocaleString()} invoice
+                            {Number(b.invoices?.length || 0) === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                        <dl className="mt-1.5 grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
+                          <div className="min-w-0">
+                            <dt className="text-[10px] uppercase tracking-wide text-subtext">Account name</dt>
+                            <dd className="truncate text-fg">{b.account_name || '—'}</dd>
+                          </div>
+                          <div className="min-w-0">
+                            <dt className="text-[10px] uppercase tracking-wide text-subtext">Account number</dt>
+                            <dd className="flex items-center gap-1.5">
+                              <span className="truncate font-mono text-fg">{b.account_number || '—'}</span>
+                              {!!b.account_number && (
+                                <button
+                                  type="button"
+                                  onClick={() => copyAccountNumber(b.account_number)}
+                                  className="shrink-0 rounded border border-line px-1.5 py-0.5 text-[10px] font-medium text-muted hover:bg-subtle hover:text-fg"
+                                  title="Copy account number"
+                                >
+                                  Copy
+                                </button>
                               )}
-                            </div>
+                            </dd>
+                          </div>
+                        </dl>
+                        {b.purpose && (
+                          <div className="mt-1 text-xs text-subtext">Purpose: <span className="text-fg">{b.purpose}</span></div>
+                        )}
+                        <div className="mt-2 border-t border-line">
+                          {b.invoices?.length ? (
+                            <ul className="divide-y divide-line/70">
+                              {b.invoices.map((inv) => (
+                                <li key={inv.id} className="flex items-center justify-between gap-3 py-1 text-xs">
+                                  {inv.url ? (
+                                    <a
+                                      href={inv.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="min-w-0 truncate font-medium text-brand hover:underline"
+                                      title={inv.file_name || 'Invoice'}
+                                    >
+                                      {inv.file_name || 'Invoice'}
+                                    </a>
+                                  ) : (
+                                    <span className="min-w-0 truncate text-fg">{inv.file_name || 'Invoice'}</span>
+                                  )}
+                                  <span className="shrink-0 tabular-nums text-fg">
+                                    {inv.amount != null ? `₦${Number(inv.amount).toLocaleString()}` : '—'}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <div className="py-1 text-xs text-subtext">No invoices filed against this account.</div>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-3 py-2 border-b align-top">
@@ -607,6 +737,87 @@ function AdminFoodBanksContent() {
           </table>
         </div>
       </div>
+
+      <DraggableModal
+        open={addBankOpen}
+        onClose={() => {
+          if (!addBankSaving) setAddBankOpen(false)
+        }}
+        title="Add bank account"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setAddBankOpen(false)} disabled={addBankSaving}>
+              Cancel
+            </Button>
+            <Button onClick={saveNewBank} loading={addBankSaving}>
+              Save account
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          {addBankErr && (
+            <div className="rounded-lg border border-danger-border bg-danger-bg px-3 py-2 text-sm text-danger-fg">{addBankErr}</div>
+          )}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted">Branch</label>
+            <select
+              value={addBankBranchId}
+              onChange={(e) => setAddBankBranchId(e.target.value)}
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-brand focus:outline-none"
+              disabled={addBankSaving}
+            >
+              <option value="">Choose the branch…</option>
+              {(rows || []).map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name || 'Branch'} ({r.code || r.id})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted">Bank name</label>
+            <input
+              value={addBankName}
+              onChange={(e) => setAddBankName(e.target.value)}
+              placeholder="e.g. First Bank"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-brand focus:outline-none"
+              disabled={addBankSaving}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted">Account name</label>
+            <input
+              value={addBankAccountName}
+              onChange={(e) => setAddBankAccountName(e.target.value)}
+              placeholder="Name on the account"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-brand focus:outline-none"
+              disabled={addBankSaving}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted">Account number</label>
+            <input
+              value={addBankAccountNumber}
+              onChange={(e) => setAddBankAccountNumber(e.target.value)}
+              placeholder="0123456789"
+              inputMode="numeric"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 font-mono text-sm text-fg focus:border-brand focus:outline-none"
+              disabled={addBankSaving}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted">Purpose (optional)</label>
+            <input
+              value={addBankPurpose}
+              onChange={(e) => setAddBankPurpose(e.target.value)}
+              placeholder="e.g. transport, balance"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-brand focus:outline-none"
+              disabled={addBankSaving}
+            />
+          </div>
+        </div>
+      </DraggableModal>
 
       <DraggableModal open={invoiceListOpen} onClose={() => setInvoiceListOpen(false)} title={`Invoices · ${invoiceLoc?.name || ''}`}>
         <div className="space-y-3">
