@@ -249,20 +249,24 @@ export default function AdminBankAccountsModal({ open, onClose, module, ownerId,
                   ) : (
                     <>
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1.5 text-sm">
-                            <span className="font-medium text-fg">{a.bank_name || '—'}</span>
+                            <span className="font-semibold text-fg">{a.bank_name || '—'}</span>
                             {a.is_paid && (
                               <span className="rounded-full bg-success-bg px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success-fg">
                                 Paid
                               </span>
                             )}
                           </div>
-                          <div className="truncate text-xs text-muted">
-                            {a.account_name || '—'} · <span className="font-mono">{maskAccountNumber(a.account_number)}</span>
+                          <div className="mt-0.5 text-xs text-muted">
+                            Account name: <span className="text-fg">{a.account_name || '—'}</span>
                           </div>
                           <div className="text-xs text-muted">
-                            {a.purpose ? a.purpose : 'No purpose noted'}
+                            Account number:{' '}
+                            <span className="font-mono text-fg">{a.account_number || '—'}</span>
+                          </div>
+                          <div className="text-xs text-muted">
+                            {a.purpose ? `Purpose: ${a.purpose}` : 'No purpose noted'}
                             {a.created_by_role || a.created_by_code
                               ? ` · attached by ${a.created_by_role || 'user'}${a.created_by_code ? ` ${a.created_by_code}` : ''}`
                               : ''}
