@@ -60,6 +60,7 @@ function AdminExhibitionBanksContent() {
   const [invoiceUploadBankId, setInvoiceUploadBankId] = useState('')
   const [uploading, setUploading] = useState(false)
   const [accountBusy, setAccountBusy] = useState(0)
+  const [accountDeleting, setAccountDeleting] = useState(0)
 
   const [invoiceEditOpen, setInvoiceEditOpen] = useState(false)
   const [invoiceEditRow, setInvoiceEditRow] = useState(null)
@@ -239,6 +240,37 @@ function AdminExhibitionBanksContent() {
       setMsg({ type: 'error', text: e?.message || 'Failed to update paid status' })
     } finally {
       setAccountBusy(0)
+    }
+  }
+
+  const deleteAccount = async (row, bank) => {
+    const accountId = Number(bank?.id)
+    const ownerId = Number(row?.id)
+    if (!Number.isFinite(accountId) || accountId <= 0 || !Number.isFinite(ownerId) || ownerId <= 0) return
+    if (bank?.is_paid) {
+      setMsg({ type: 'error', text: 'Mark this account unpaid before removing it.' })
+      return
+    }
+    if (typeof window !== 'undefined') {
+      const label = `${bank?.bank_name || 'this account'}${bank?.account_number ? ` · ${bank.account_number}` : ''}`
+      if (!window.confirm(`Remove ${label}? Its invoices stay on the vendor and can be filed to another account.`)) return
+    }
+    setAccountDeleting(accountId)
+    setMsg(null)
+    try {
+      const qs = new URLSearchParams({ module: 'exhibition', owner_id: String(ownerId), account_id: String(accountId) })
+      const res = await fetch(`/api/admin/vendor-banks/accounts?${qs.toString()}`, { method: 'DELETE' })
+      const json = await safeJson(res, '/api/admin/vendor-banks/accounts')
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to remove account')
+      const accounts = json.accounts || []
+      setVendors((prev) =>
+        (prev || []).map((r) => (Number(r.id) === ownerId ? { ...r, banks: accounts, bank: accounts[0] || null } : r))
+      )
+      setMsg({ type: 'success', text: 'Account removed' })
+    } catch (e) {
+      setMsg({ type: 'error', text: e?.message || 'Failed to remove account' })
+    } finally {
+      setAccountDeleting(0)
     }
   }
 
@@ -569,12 +601,14 @@ function AdminExhibitionBanksContent() {
                           if (act === 'banks') setBanksFor(v)
                           if (act === 'paid') setAccountPaid(v, b, true)
                           if (act === 'unpaid') setAccountPaid(v, b, false)
+                          if (act === 'delete') deleteAccount(v, b)
                         }}
                       >
                         <option value="" disabled>Actions</option>
                         <option value="upload" disabled={!!b.is_paid}>Upload Invoice</option>
                         {b.is_paid ? <option value="unpaid">Mark Unpaid</option> : <option value="paid">Mark Paid</option>}
-                        <option value="banks">Edit / Remove</option>
+                        <option value="banks">Edit account</option>
+                        <option value="delete" disabled={!!b.is_paid}>Delete Account</option>
                       </select>
                     </td>
                   </tr>
