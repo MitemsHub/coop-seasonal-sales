@@ -59,6 +59,7 @@ function AdminExhibitionBanksContent() {
   const [invoiceFile, setInvoiceFile] = useState(null)
   const [invoiceUploadBankId, setInvoiceUploadBankId] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [accountBusy, setAccountBusy] = useState(0)
 
   const [invoiceEditOpen, setInvoiceEditOpen] = useState(false)
   const [invoiceEditRow, setInvoiceEditRow] = useState(null)
@@ -97,9 +98,12 @@ function AdminExhibitionBanksContent() {
     }
   }, [cycleId, safeJson])
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setMsg(null)
+  const load = useCallback(async (silent = false) => {
+    const isSilent = silent === true
+    if (!isSilent) {
+      setLoading(true)
+      setMsg(null)
+    }
     try {
       if (fetchCtl.current) fetchCtl.current.abort()
       const ctl = new AbortController()
@@ -112,10 +116,12 @@ function AdminExhibitionBanksContent() {
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to load')
       setVendors(json.vendors || [])
     } catch (e) {
-      if (e?.name !== 'AbortError') setMsg({ type: 'error', text: e?.message || 'Failed to load' })
-      setVendors([])
+      if (e?.name !== 'AbortError' && !isSilent) {
+        setMsg({ type: 'error', text: e?.message || 'Failed to load' })
+        setVendors([])
+      }
     } finally {
-      setLoading(false)
+      if (!isSilent) setLoading(false)
     }
   }, [cycleId, term, safeJson])
 
@@ -131,6 +137,23 @@ function AdminExhibitionBanksContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cycleId])
+
+  // Vendors upload invoices while this list is open, so poll quietly and refresh
+  // when the tab regains focus, without the loading skeleton.
+  useEffect(() => {
+    const refresh = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      load(true)
+    }
+    const id = setInterval(refresh, 30000)
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('focus', refresh)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', refresh)
+      window.removeEventListener('focus', refresh)
+    }
+  }, [load])
 
   const filtered = useMemo(() => {
     const t = String(term || '').trim().toLowerCase()
@@ -191,6 +214,34 @@ function AdminExhibitionBanksContent() {
     }
   }
 
+  // Mark one account paid or unpaid straight from the list.
+  const setAccountPaid = async (row, bank, next) => {
+    const accountId = Number(bank?.id)
+    const ownerId = Number(row?.id)
+    if (!Number.isFinite(accountId) || accountId <= 0 || !Number.isFinite(ownerId) || ownerId <= 0) return
+    if (accountBusy) return
+    setAccountBusy(accountId)
+    setMsg(null)
+    try {
+      const res = await fetch('/api/admin/vendor-banks/accounts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module: 'exhibition', owner_id: ownerId, account_id: accountId, paid: !!next }),
+      })
+      const json = await safeJson(res, '/api/admin/vendor-banks/accounts')
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to update paid status')
+      const accounts = json.accounts || []
+      setVendors((prev) =>
+        (prev || []).map((r) => (Number(r.id) === ownerId ? { ...r, banks: accounts, bank: accounts[0] || null } : r))
+      )
+      setMsg({ type: 'success', text: next ? 'Account marked paid' : 'Account marked unpaid' })
+    } catch (e) {
+      setMsg({ type: 'error', text: e?.message || 'Failed to update paid status' })
+    } finally {
+      setAccountBusy(0)
+    }
+  }
+
   const loadInvoices = async (v) => {
     const id = Number(v?.id)
     if (!Number.isFinite(id) || id <= 0) return
@@ -213,12 +264,12 @@ function AdminExhibitionBanksContent() {
     }
   }
 
-  const openUpload = (v) => {
+  const openUpload = (v, bankId) => {
     setInvoiceLoc(v || null)
     setInvoiceRef('')
     setInvoiceNotes('')
     setInvoiceFile(null)
-    setInvoiceUploadBankId(String(v?.banks?.[0]?.id || ''))
+    setInvoiceUploadBankId(String(bankId || v?.banks?.[0]?.id || ''))
     setInvoiceUploadOpen(true)
   }
 
@@ -348,7 +399,7 @@ function AdminExhibitionBanksContent() {
             placeholder="Search vendor / bank / account"
             className="w-full sm:w-72 px-3 py-2 border border-line rounded-lg text-sm bg-surface"
           />
-          <Button variant="ghost" size="sm" leftIcon={RefreshCw} onClick={load} disabled={loading}>
+          <Button variant="ghost" size="sm" leftIcon={RefreshCw} onClick={() => load()} disabled={loading}>
             Refresh
           </Button>
         </div>
@@ -458,6 +509,31 @@ function AdminExhibitionBanksContent() {
                               ) : (
                                 <div className="text-xs text-subtext">No invoices filed against this account.</div>
                               )}
+                            </div>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-3 border-t border-line pt-1.5 text-xs">
+                              <button
+                                type="button"
+                                onClick={() => openUpload(v, b.id)}
+                                disabled={!!b.is_paid}
+                                className="font-semibold text-brand hover:underline disabled:opacity-40"
+                              >
+                                Upload invoice
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setAccountPaid(v, b, !b.is_paid)}
+                                disabled={accountBusy === Number(b.id)}
+                                className="font-semibold text-fg hover:underline disabled:opacity-40"
+                              >
+                                {accountBusy === Number(b.id) ? 'Saving…' : b.is_paid ? 'Mark unpaid' : 'Mark paid'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setBanksFor(v)}
+                                className="text-muted hover:underline"
+                              >
+                                Edit / remove
+                              </button>
                             </div>
                           </div>
                         ))}

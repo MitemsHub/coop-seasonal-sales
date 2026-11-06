@@ -60,6 +60,7 @@ function RamBanksContent() {
   const [invoiceFile, setInvoiceFile] = useState(null)
   const [invoiceUploadBankId, setInvoiceUploadBankId] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [accountBusy, setAccountBusy] = useState(0)
 
   const [paying, setPaying] = useState(false)
 
@@ -81,10 +82,13 @@ function RamBanksContent() {
   const didInitRef = useRef(false)
   const safeJson = useMemo(() => safeJsonFactory(), [])
 
-  const fetchRows = async () => {
+  const fetchRows = async (silent = false) => {
+    const isSilent = silent === true
     const seq = ++fetchSeq.current
-    setLoading(true)
-    setMsg(null)
+    if (!isSilent) {
+      setLoading(true)
+      setMsg(null)
+    }
     try {
       if (fetchCtl.current) fetchCtl.current.abort()
       const ctl = new AbortController()
@@ -99,11 +103,13 @@ function RamBanksContent() {
       setRows(json.locations || [])
     } catch (e) {
       if (seq !== fetchSeq.current) return
-      if (e?.name !== 'AbortError') setMsg({ type: 'error', text: e?.message || 'Failed to load' })
-      setRows([])
+      if (e?.name !== 'AbortError' && !isSilent) {
+        setMsg({ type: 'error', text: e?.message || 'Failed to load' })
+        setRows([])
+      }
     } finally {
       if (seq === fetchSeq.current) {
-        setLoading(false)
+        if (!isSilent) setLoading(false)
         setDidLoadOnce(true)
       }
     }
@@ -117,6 +123,24 @@ function RamBanksContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Keep the list current while it is open: reps attach invoices at any time, so
+  // refresh in the background and on return to the tab without the skeleton.
+  useEffect(() => {
+    const refresh = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      fetchRows(true)
+    }
+    const id = setInterval(refresh, 30000)
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('focus', refresh)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', refresh)
+      window.removeEventListener('focus', refresh)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOnly])
 
   useEffect(() => {
     const wantsActive = String(searchParams?.get('active') || '') === '1'
@@ -204,6 +228,34 @@ function RamBanksContent() {
     }
   }
 
+  // Mark one account paid or unpaid straight from the list.
+  const setAccountPaid = async (row, bank, next) => {
+    const accountId = Number(bank?.id)
+    const ownerId = Number(row?.id)
+    if (!Number.isFinite(accountId) || accountId <= 0 || !Number.isFinite(ownerId) || ownerId <= 0) return
+    if (accountBusy) return
+    setAccountBusy(accountId)
+    setMsg(null)
+    try {
+      const res = await fetch('/api/admin/vendor-banks/accounts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module: 'ram', owner_id: ownerId, account_id: accountId, paid: !!next }),
+      })
+      const json = await safeJson(res, '/api/admin/vendor-banks/accounts')
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to update paid status')
+      const accounts = json.accounts || []
+      setRows((prev) =>
+        (prev || []).map((r) => (Number(r.id) === ownerId ? { ...r, banks: accounts, bank: accounts[0] || null } : r))
+      )
+      setMsg({ type: 'success', text: next ? 'Account marked paid' : 'Account marked unpaid' })
+    } catch (e) {
+      setMsg({ type: 'error', text: e?.message || 'Failed to update paid status' })
+    } finally {
+      setAccountBusy(0)
+    }
+  }
+
   const loadInvoices = async (loc) => {
     const id = Number(loc?.id)
     if (!Number.isFinite(id) || id <= 0) return
@@ -225,12 +277,12 @@ function RamBanksContent() {
     }
   }
 
-  const openUpload = (loc) => {
+  const openUpload = (loc, bankId) => {
     setInvoiceLoc(loc || null)
     setInvoiceRef('')
     setInvoiceNotes('')
     setInvoiceFile(null)
-    setInvoiceUploadBankId(String(loc?.banks?.[0]?.id || ''))
+    setInvoiceUploadBankId(String(bankId || loc?.banks?.[0]?.id || ''))
     setInvoiceUploadOpen(true)
   }
 
@@ -397,7 +449,7 @@ function RamBanksContent() {
                 onChange={(e) => setTerm(e.target.value)}
               />
               <Button
-                onClick={fetchRows}
+                onClick={() => fetchRows()}
                 loading={loading}
                 variant="accent"
               >
@@ -512,6 +564,31 @@ function RamBanksContent() {
                               ) : (
                                 <div className="text-xs text-subtext">No invoices filed against this account.</div>
                               )}
+                            </div>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-3 border-t border-line pt-1.5 text-xs">
+                              <button
+                                type="button"
+                                onClick={() => openUpload(r, b.id)}
+                                disabled={!!b.is_paid}
+                                className="font-semibold text-brand hover:underline disabled:opacity-40"
+                              >
+                                Upload invoice
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setAccountPaid(r, b, !b.is_paid)}
+                                disabled={accountBusy === Number(b.id)}
+                                className="font-semibold text-fg hover:underline disabled:opacity-40"
+                              >
+                                {accountBusy === Number(b.id) ? 'Saving…' : b.is_paid ? 'Mark unpaid' : 'Mark paid'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setBanksFor(r)}
+                                className="text-muted hover:underline"
+                              >
+                                Edit / remove
+                              </button>
                             </div>
                           </div>
                         ))}

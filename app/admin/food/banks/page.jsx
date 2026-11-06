@@ -57,6 +57,7 @@ function AdminFoodBanksContent() {
   const [invoiceNotes, setInvoiceNotes] = useState('')
   const [invoiceFile, setInvoiceFile] = useState(null)
   const [invoiceUploading, setInvoiceUploading] = useState(false)
+  const [accountBusy, setAccountBusy] = useState(0)
 
   const [invoiceEditOpen, setInvoiceEditOpen] = useState(false)
   const [invoiceEditRow, setInvoiceEditRow] = useState(null)
@@ -75,9 +76,12 @@ function AdminFoodBanksContent() {
   const fetchCtl = useRef(null)
   const safeJson = useMemo(() => safeJsonFactory(), [])
 
-  const fetchRows = async () => {
-    setLoading(true)
-    setMsg(null)
+  const fetchRows = async (silent = false) => {
+    const isSilent = silent === true
+    if (!isSilent) {
+      setLoading(true)
+      setMsg(null)
+    }
     try {
       if (fetchCtl.current) fetchCtl.current.abort()
       const ctl = new AbortController()
@@ -89,10 +93,12 @@ function AdminFoodBanksContent() {
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to load')
       setRows(json.locations || [])
     } catch (e) {
-      if (e?.name !== 'AbortError') setMsg({ type: 'error', text: e?.message || 'Failed to load' })
-      setRows([])
+      if (e?.name !== 'AbortError' && !isSilent) {
+        setMsg({ type: 'error', text: e?.message || 'Failed to load' })
+        setRows([])
+      }
     } finally {
-      setLoading(false)
+      if (!isSilent) setLoading(false)
     }
   }
 
@@ -104,6 +110,24 @@ function AdminFoodBanksContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Reps file invoices while an admin has this screen open, so poll quietly in
+  // the background and refresh on return to the tab instead of flashing the table.
+  useEffect(() => {
+    const refresh = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      fetchRows(true)
+    }
+    const id = setInterval(refresh, 30000)
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('focus', refresh)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', refresh)
+      window.removeEventListener('focus', refresh)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [term])
+
   const filtered = useMemo(() => {
     const t = String(term || '').trim().toLowerCase()
     if (!t) return rows || []
@@ -112,6 +136,34 @@ function AdminFoodBanksContent() {
       return a.includes(t)
     })
   }, [rows, term])
+
+  // Mark a single account paid or unpaid straight from the list.
+  const setAccountPaid = async (row, bank, next) => {
+    const accountId = Number(bank?.id)
+    const ownerId = Number(row?.id)
+    if (!Number.isFinite(accountId) || accountId <= 0 || !Number.isFinite(ownerId) || ownerId <= 0) return
+    if (accountBusy) return
+    setAccountBusy(accountId)
+    setMsg(null)
+    try {
+      const res = await fetch('/api/admin/vendor-banks/accounts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module: 'food', owner_id: ownerId, account_id: accountId, paid: !!next }),
+      })
+      const json = await safeJson(res, '/api/admin/vendor-banks/accounts')
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to update paid status')
+      const accounts = json.accounts || []
+      setRows((prev) =>
+        (prev || []).map((r) => (Number(r.id) === ownerId ? { ...r, banks: accounts, bank: accounts[0] || null } : r))
+      )
+      setMsg({ type: 'success', text: next ? 'Account marked paid' : 'Account marked unpaid' })
+    } catch (e) {
+      setMsg({ type: 'error', text: e?.message || 'Failed to update paid status' })
+    } finally {
+      setAccountBusy(0)
+    }
+  }
 
   const loadInvoices = async (loc) => {
     const id = Number(loc?.id)
@@ -172,9 +224,9 @@ function AdminFoodBanksContent() {
     }
   }
 
-  const openInvoiceUpload = (loc) => {
+  const openInvoiceUpload = (loc, bankId) => {
     setInvoiceUploadLoc(loc || null)
-    setInvoiceUploadBankId(String(loc?.banks?.[0]?.id || ''))
+    setInvoiceUploadBankId(String(bankId || loc?.banks?.[0]?.id || ''))
     setInvoiceRef('')
     setInvoiceNotes('')
     setInvoiceFile(null)
@@ -328,7 +380,7 @@ function AdminFoodBanksContent() {
             className="w-full sm:w-80 px-3 py-2 border rounded-lg text-sm"
           />
           <Button
-            onClick={fetchRows}
+            onClick={() => fetchRows()}
             loading={loading}
           >
             {loading ? 'Refreshing…' : 'Refresh'}
@@ -437,6 +489,31 @@ function AdminFoodBanksContent() {
                               ) : (
                                 <div className="text-xs text-subtext">No invoices filed against this account.</div>
                               )}
+                            </div>
+                            <div className="mt-1.5 flex flex-wrap items-center gap-3 border-t border-line pt-1.5 text-xs">
+                              <button
+                                type="button"
+                                onClick={() => openInvoiceUpload(r, b.id)}
+                                disabled={!!b.is_paid}
+                                className="font-semibold text-brand hover:underline disabled:opacity-40"
+                              >
+                                Upload invoice
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setAccountPaid(r, b, !b.is_paid)}
+                                disabled={accountBusy === Number(b.id)}
+                                className="font-semibold text-fg hover:underline disabled:opacity-40"
+                              >
+                                {accountBusy === Number(b.id) ? 'Saving…' : b.is_paid ? 'Mark unpaid' : 'Mark paid'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setBanksFor(r)}
+                                className="text-muted hover:underline"
+                              >
+                                Edit / remove
+                              </button>
                             </div>
                           </div>
                         ))}
