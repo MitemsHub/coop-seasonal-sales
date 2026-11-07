@@ -104,7 +104,7 @@ export async function PATCH(req, { params }) {
 
     const { data: lines, error: lErr } = await supabase
       .from('exhibition_order_lines')
-      .select('id, vendor_id, product_id, product_name, sku, unit, vendor_price, final_price, qty, amount, note')
+      .select('id, vendor_id, product_name, sku, unit, vendor_price, final_price, qty, amount, note')
       .eq('order_id', id)
       .order('id')
     if (lErr) return NextResponse.json({ ok: false, error: lErr.message }, { status: 500 })
@@ -209,7 +209,6 @@ export async function PATCH(req, { params }) {
       items.map((i) => ({
         order_id: id,
         vendor_id: vendorId,
-        product_id: null,
         product_name: i.name,
         sku: '',
         unit: 'each',
@@ -238,7 +237,6 @@ export async function PATCH(req, { params }) {
         lines.map((l) => ({
           order_id: id,
           vendor_id: l.vendor_id,
-          product_id: l.product_id,
           product_name: l.product_name,
           sku: l.sku || '',
           unit: l.unit || 'each',

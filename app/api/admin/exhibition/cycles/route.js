@@ -44,27 +44,20 @@ export async function GET(request) {
     const cycleIds = (cycles || []).map((c) => Number(c.id))
     let counts = new Map()
     if (cycleIds.length) {
-      const [v, p, o] = await Promise.all([
+      const [v, o] = await Promise.all([
         supabase.from('exhibition_vendors').select('cycle_id').in('cycle_id', cycleIds),
-        supabase.from('exhibition_products').select('cycle_id').in('cycle_id', cycleIds),
         supabase.from('exhibition_orders').select('cycle_id').in('cycle_id', cycleIds),
       ])
       if (!v.error) {
         for (const row of v.data || []) {
           const k = Number(row.cycle_id)
-          counts.set(k, { vendors: (counts.get(k)?.vendors || 0) + 1, products: counts.get(k)?.products || 0, orders: counts.get(k)?.orders || 0 })
-        }
-      }
-      if (!p.error) {
-        for (const row of p.data || []) {
-          const k = Number(row.cycle_id)
-          counts.set(k, { vendors: counts.get(k)?.vendors || 0, products: (counts.get(k)?.products || 0) + 1, orders: counts.get(k)?.orders || 0 })
+          counts.set(k, { vendors: (counts.get(k)?.vendors || 0) + 1, orders: counts.get(k)?.orders || 0 })
         }
       }
       if (!o.error) {
         for (const row of o.data || []) {
           const k = Number(row.cycle_id)
-          counts.set(k, { vendors: counts.get(k)?.vendors || 0, products: counts.get(k)?.products || 0, orders: (counts.get(k)?.orders || 0) + 1 })
+          counts.set(k, { vendors: counts.get(k)?.vendors || 0, orders: (counts.get(k)?.orders || 0) + 1 })
         }
       }
     }
@@ -76,7 +69,6 @@ export async function GET(request) {
         branch_name: c.branches?.name || '',
         branch_code: c.branches?.code || '',
         vendors: counts.get(Number(c.id))?.vendors || 0,
-        products: counts.get(Number(c.id))?.products || 0,
         orders: counts.get(Number(c.id))?.orders || 0,
       })),
     })

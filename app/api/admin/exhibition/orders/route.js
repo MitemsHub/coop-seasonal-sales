@@ -68,7 +68,7 @@ export async function GET(request) {
     if (orderIds.length) {
       const { data: lines, error: lErr } = await supabase
         .from('exhibition_order_lines')
-        .select('id, order_id, vendor_id, product_id, product_name, sku, unit, vendor_price, final_price, qty, amount, delivered, delivered_at, vendors:vendor_id(name)')
+        .select('id, order_id, vendor_id, product_name, sku, unit, vendor_price, final_price, qty, amount, delivered, delivered_at, vendors:vendor_id(name)')
         .in('order_id', orderIds)
         .order('id')
       if (lErr) return NextResponse.json({ ok: false, error: lErr.message }, { status: 500 })

@@ -11,20 +11,6 @@ export async function GET(req) {
     if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const supabase = createClient()
 
-    const { count: productCount } = await supabase
-      .from('exhibition_products')
-      .select('id', { count: 'exact', head: true })
-      .eq('vendor_id', ctx.vendor_id)
-      .eq('status', 'active')
-
-    const { count: liveProductCount } = await supabase
-      .from('exhibition_products')
-      .select('id', { count: 'exact', head: true })
-      .eq('vendor_id', ctx.vendor_id)
-      .eq('status', 'active')
-      .not('image_url', 'is', null)
-      .neq('image_url', '')
-
     // My lines grouped by their order status
     const { data: lines } = await supabase
       .from('exhibition_order_lines')
@@ -50,8 +36,6 @@ export async function GET(req) {
     return NextResponse.json({
       ok: true,
       stats: {
-        product_count: productCount || 0,
-        live_products: liveProductCount || 0,
         orders: byStatus,
         revenue,
         pending_amount: pendingAmount,

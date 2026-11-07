@@ -22,10 +22,9 @@ export async function GET(request) {
   try {
     const supabase = createClient()
 
-    const [cyclesRes, vendorsRes, productsRes, ordersRes, payRes] = await Promise.all([
+    const [cyclesRes, vendorsRes, ordersRes, payRes] = await Promise.all([
       supabase.from('exhibition_cycles').select('id, name, code, status, vendor_deduction_rate_pct, created_at, starts_at, ends_at, branch_id'),
       supabase.from('exhibition_vendors').select('id'),
-      supabase.from('exhibition_products').select('id, status'),
       supabase.from('exhibition_orders').select('id, order_id, status, total_amount, member_id, member_name_snapshot, payment_option, created_at, cycle_id, branch_id'),
       supabase.from('exhibition_vendor_payment_status').select('id, vendor_id, paid, amount'),
     ])
@@ -35,7 +34,6 @@ export async function GET(request) {
     }
     const cycles = cyclesRes.error ? [] : cyclesRes.data || []
     const vendors = vendorsRes.error ? [] : vendorsRes.data || []
-    const products = productsRes.error ? [] : productsRes.data || []
     const orders = ordersRes.error ? [] : ordersRes.data || []
     const payments = payRes.error ? [] : payRes.data || []
 
@@ -258,8 +256,6 @@ export async function GET(request) {
           : null,
         branches: new Set(orders.map((o) => Number(o.branch_id)).filter(Boolean)).size,
         vendors: vendors.length,
-        products: products.length,
-        active_products: products.filter((p) => p.status === 'active').length,
         orders: activeOrders.length,
         byStatus,
         byPayment: Object.entries(byPayment).filter(([, v]) => v.orders > 0).map(([key, v]) => ({ key, ...v })),

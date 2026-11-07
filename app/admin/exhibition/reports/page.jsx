@@ -210,7 +210,6 @@ export default function ExhibitionReportsPage() {
         head: [['Metric', 'Value']],
         body: [
           ['Vendors', String(s.vendors ?? 0)],
-          ['Products', String(s.products ?? 0)],
           ['Orders', String(s.orders ?? 0)],
           ['Loan Principal', money(s.loanPrincipal || 0)],
           ['Loan Interest', money(s.loanInterest || 0)],
@@ -751,7 +750,6 @@ export default function ExhibitionReportsPage() {
               <div className="ui-card p-4">
                 <div className="text-xs text-muted">Vendors</div>
                 <div className="text-[13px] font-semibold sm:text-lg mt-1">{s.vendors}</div>
-                <div className="text-[10px] text-muted mt-0.5">Products: {s.products || 0}</div>
               </div>
               <div className="ui-card p-4">
                 <div className="text-xs text-muted">Pending</div>

@@ -73,10 +73,10 @@ export async function DELETE(request, { params }) {
     const { data: vendor } = await supabase.from('exhibition_vendors').select('id, name').eq('id', id).maybeSingle()
     if (!vendor) return NextResponse.json({ ok: false, error: 'Vendor not found' }, { status: 404 })
 
-    const { data: products } = await supabase.from('exhibition_products').select('id').eq('vendor_id', id).limit(1)
-    if (products?.length) {
+    const { data: lines } = await supabase.from('exhibition_order_lines').select('id').eq('vendor_id', id).limit(1)
+    if (lines?.length) {
       return NextResponse.json(
-        { ok: false, error: `"${vendor.name}" has products on the catalog. Suspend the account instead of deleting.` },
+        { ok: false, error: `"${vendor.name}" has invoices. Suspend the account instead of deleting.` },
         { status: 409 }
       )
     }

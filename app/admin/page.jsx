@@ -497,7 +497,7 @@ function ExhibitionDashboard({ loading, data }) {
       {/* KPI cards — row 1: cycles, vendors, orders (unchanged) */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard loading={loading} icon={Store} title="Active cycles" value={loading ? '' : (summary.active_cycles ?? 0).toLocaleString()} delta={`${summary.branches ?? 0} branch${summary.branches === 1 ? '' : 'es'}`} trend="flat" href="/admin/exhibition/cycles" />
-        <StatCard loading={loading} icon={Package} title="Vendors" value={loading ? '' : (summary.vendors ?? 0).toLocaleString()} delta={`${summary.products ?? 0} products`} trend="flat" href="/admin/exhibition/vendors" />
+        <StatCard loading={loading} icon={Package} title="Vendors" value={loading ? '' : (summary.vendors ?? 0).toLocaleString()} delta={`${summary.orders ?? 0} invoices`} trend="flat" href="/admin/exhibition/vendors" />
         <StatCard loading={loading} icon={ClipboardList} title="Orders" value={loading ? '' : (summary.orders ?? 0).toLocaleString()} delta={`${summary.active_orders ?? 0} this cycle`} trend="flat" href="/admin/exhibition/reports" />
         <StatCard loading={loading} featured icon={Banknote} title="Total value" value={loading ? '' : naira(amounts.total)} delta="non-cancelled, this cycle" trend="flat" href="/admin/exhibition/reports" />
         <StatCard loading={loading} icon={Wallet} title="Loan" value={loading ? '' : naira(amounts.loans)} delta="loan orders" trend="flat" href="/admin/exhibition/reports" />
@@ -550,8 +550,8 @@ function ExhibitionDashboard({ loading, data }) {
                   <span className="text-sm font-semibold text-fg">{summary.active_cycles ?? 0}</span>
                 </div>
                 <div className="flex items-center justify-between rounded-lg bg-subtle px-3 py-2.5">
-                  <span className="text-sm text-muted">Active products</span>
-                  <span className="text-sm font-semibold text-fg">{summary.active_products ?? 0}</span>
+                  <span className="text-sm text-muted">Confirmed orders</span>
+                  <span className="text-sm font-semibold text-fg">{byStatus.Confirmed ?? 0}</span>
                 </div>
                 <div className="flex items-center justify-between rounded-lg bg-subtle px-3 py-2.5">
                   <span className="text-sm text-muted">Pending orders</span>

@@ -184,7 +184,6 @@ export async function POST(req) {
       items.map((i) => ({
         order_id: orderDbId,
         vendor_id: vendor.id,
-        product_id: null,
         product_name: i.name,
         sku: '',
         unit: 'each',

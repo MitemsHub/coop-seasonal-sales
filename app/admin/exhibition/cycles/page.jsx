@@ -218,7 +218,6 @@ export function ExhibitionCyclesContent() {
                   <TH>Cycle</TH>
                   <TH>Status</TH>
                   <TH className="text-right">Vendors</TH>
-                  <TH className="text-right">Products</TH>
                   <TH className="text-right">Orders</TH>
                   <TH>Dates</TH>
                   <TH className="text-right">Rates</TH>
@@ -238,7 +237,6 @@ export function ExhibitionCyclesContent() {
                       </Badge>
                     </TD>
                     <TD className="text-right tabular-nums">{c.vendors}</TD>
-                    <TD className="text-right tabular-nums">{c.products}</TD>
                     <TD className="text-right tabular-nums">{c.orders}</TD>
                     <TD className="text-muted">
                       <div>{fmtDate(c.starts_at)}</div>

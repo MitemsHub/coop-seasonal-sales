@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import CycleTag from '../components/CycleTag'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { ArrowRight, BarChart3, ChevronDown, Landmark, LayoutDashboard, LineChart, LogOut, Menu, PanelLeftClose, PanelLeftOpen, ShoppingBag, Store, X } from 'lucide-react'
+import { ArrowRight, BarChart3, ChevronDown, Landmark, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, ShoppingBag, Store, X } from 'lucide-react'
 import Breadcrumbs from '../components/ui/Breadcrumbs'
 import { getTrail } from '@/lib/breadcrumbs'
 
@@ -14,7 +14,6 @@ const NAV = [
   { href: '/vendor/banks', label: 'Banks', icon: Landmark },
   { href: '/vendor/reports', label: 'Report', icon: BarChart3 },
   { href: '/vendor/stand', label: 'Stand profile', icon: Store },
-  { href: '/vendor/insights', label: 'Insights', icon: LineChart },
 ]
 
 export default function VendorLayout({ children }) {

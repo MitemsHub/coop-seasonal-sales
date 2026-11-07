@@ -90,7 +90,7 @@ export async function GET(req) {
     const pagedIds = (data || []).map((o) => Number(o.id))
     const { data: pagedLines, error: lErr } = await supabase
       .from('exhibition_order_lines')
-      .select('id, order_id, product_id, product_name, sku, unit, vendor_price, final_price, qty, amount, delivered, delivered_at')
+      .select('id, order_id, product_name, sku, unit, vendor_price, final_price, qty, amount, delivered, delivered_at')
       .eq('vendor_id', ctx.vendor_id)
       .in('order_id', pagedIds)
       .order('id')

@@ -136,7 +136,7 @@ export default function VendorReportsPage() {
           {/* Summary Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 mb-6">
             {[
-              { label: 'Active Products', value: s.product_count || 0 },
+              { label: 'Confirmed', value: orders.Confirmed || 0 },
               { label: 'Total Lines', value: totalLines },
               { label: 'Pending', value: orders.Pending || 0 },
               { label: 'Approved', value: orders.Approved || 0 },
@@ -150,14 +150,14 @@ export default function VendorReportsPage() {
             ))}
           </div>
 
-          {/* By Product */}
+          {/* By Item */}
           <div className="rounded-xl border border-line bg-surface overflow-hidden mb-6">
-            <div className="border-b border-line bg-subtle/60 px-4 py-3 text-sm font-semibold text-fg">By Product</div>
+            <div className="border-b border-line bg-subtle/60 px-4 py-3 text-sm font-semibold text-fg">By Item</div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-line bg-subtle/30 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                    <th className="px-4 py-2">Product</th>
+                    <th className="px-4 py-2">Item</th>
                     <th className="px-4 py-2 text-right">Lines</th>
                     <th className="px-4 py-2 text-right">Qty</th>
                     <th className="px-4 py-2 text-right">Amount</th>
@@ -217,7 +217,7 @@ export default function VendorReportsPage() {
                 <thead>
                   <tr className="border-b border-line bg-subtle/30 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                     <th className="px-4 py-2">Order</th>
-                    <th className="px-4 py-2">Product</th>
+                    <th className="px-4 py-2">Item</th>
                     <th className="px-4 py-2">Status</th>
                     <th className="px-4 py-2 text-right">Qty</th>
                     <th className="px-4 py-2 text-right">Amount</th>
