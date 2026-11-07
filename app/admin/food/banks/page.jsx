@@ -698,7 +698,7 @@ function AdminFoodBanksContent() {
                           </div>
                           <div className="mt-0.5 text-[11px] font-semibold text-fg">{b.account_name || '—'}</div>
                           <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted">
-                            <span className="tabular-nums">{b.account_number || '—'}</span>
+                            <span className="font-semibold tabular-nums text-fg">{b.account_number || '—'}</span>
                             {!!b.account_number && (
                               <button
                                 type="button"
@@ -888,7 +888,7 @@ function AdminFoodBanksContent() {
                 <span aria-hidden="true" className="text-subtext">
                   ·
                 </span>
-                <span className="tabular-nums text-muted">{invoiceBank.account_number || '—'}</span>
+                <span className="font-semibold tabular-nums text-fg">{invoiceBank.account_number || '—'}</span>
               </div>
               {invoiceBank.purpose && <div className="mt-0.5 text-xs text-subtext">Purpose: {invoiceBank.purpose}</div>}
             </div>
