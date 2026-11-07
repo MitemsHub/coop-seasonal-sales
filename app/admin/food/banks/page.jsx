@@ -697,7 +697,7 @@ function AdminFoodBanksContent() {
                             )}
                           </div>
                           <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted">
-                            <span className="max-w-[220px] truncate">{b.account_name || '—'}</span>
+                            <span className="max-w-[220px] truncate font-semibold text-fg">{b.account_name || '—'}</span>
                             <span aria-hidden="true" className="text-subtext">
                               ·
                             </span>
@@ -886,10 +886,12 @@ function AdminFoodBanksContent() {
                   {invoiceBank.is_paid ? 'Paid' : 'Unpaid'}
                 </span>
               </div>
-              <div className="mt-0.5 text-xs text-muted">
-                {invoiceBank.account_name || '—'}
-                <span aria-hidden="true"> · </span>
-                <span className="font-medium tabular-nums text-fg">{invoiceBank.account_number || '—'}</span>
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
+                <span className="font-semibold text-fg">{invoiceBank.account_name || '—'}</span>
+                <span aria-hidden="true" className="text-subtext">
+                  ·
+                </span>
+                <span className="tabular-nums text-muted">{invoiceBank.account_number || '—'}</span>
               </div>
               {invoiceBank.purpose && <div className="mt-0.5 text-xs text-subtext">Purpose: {invoiceBank.purpose}</div>}
             </div>
