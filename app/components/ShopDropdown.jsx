@@ -1,16 +1,15 @@
 // app/components/ShopDropdown.jsx
 'use client'
 
-// The navbar "Shop" control for members. A single tap opens the three modules
-// (Food, Ram, Exhibition) with their live open/closed dot, so members can jump
-// straight into any shop instead of only the food one. Closed modules navigate
-// to their page, which shows the shared closed panel.
+// The navbar "Shop" control for members. A single tap opens the two active
+// modules (Food and Ram) with their live open/closed dot. The exhibition
+// shopfront is retired; its invitation and invoice history live outside Shop.
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Beef, ChevronDown, ShoppingBasket, Store } from 'lucide-react'
+import { Beef, ChevronDown, ShoppingBasket } from 'lucide-react'
 
-export default function ShopDropdown({ shoppingOpen, ramOpen, exhibitionOpen }) {
+export default function ShopDropdown({ shoppingOpen, ramOpen }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
 
@@ -34,7 +33,6 @@ export default function ShopDropdown({ shoppingOpen, ramOpen, exhibitionOpen }) 
   const items = [
     { href: '/shop', label: 'Food Distribution', Icon: ShoppingBasket, open: shoppingOpen },
     { href: '/ram/shop', label: 'Ram Sales', Icon: Beef, open: ramOpen },
-    { href: '/exhibition', label: 'Coop Exhibition', Icon: Store, open: exhibitionOpen },
   ]
 
   return (

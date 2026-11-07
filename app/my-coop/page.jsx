@@ -151,7 +151,7 @@ function MyCoopContent() {
         setLoading((s) => ({ ...s, cycles: false, ram: false }))
       })
 
-      // Module availability for the three shop cards.
+      // Module availability for the shop cards and the exhibition module.
       Promise.all([shoppingReq, ramShoppingReq, catalogReq]).then(
         ([shoppingRes, ramShoppingRes, exhibitionRes]) => {
           if (cancelled) return
@@ -438,10 +438,9 @@ function MyCoopContent() {
                 onClick={() => {
                   if (loading.modules) return
                   setModule('exhibition')
-                  if (exhibitionOpen) router.push('/exhibition')
-                  else setClosedModule('exhibition')
+                  router.push(exhibitionOpen ? '/exhibition' : '/exhibition/orders')
                 }}
-                aria-label={exhibitionOpen ? 'Open Coop Exhibition shop' : 'Coop Exhibition is closed. Tap to see options'}
+                aria-label={exhibitionOpen ? 'Open Coop Exhibition' : 'View your exhibition invoices'}
                 className={[
                   'group relative overflow-hidden rounded-2xl border p-4 text-left transition-all duration-200 ease-sakani',
                   'hover:-translate-y-0.5 hover:shadow-md',
@@ -464,8 +463,8 @@ function MyCoopContent() {
                 <p className="mt-3 text-sm font-semibold text-fg">Coop Exhibition</p>
                 <p className="mt-0.5 text-chips text-muted">
                   {exhibitionOpen
-                    ? (exhibitionCycle?.name ? `${exhibitionCycle.name}. Shop vendor stands` : 'Seasonal market with vendor stands')
-                    : 'Market is closed. Check back when the exhibition opens'}
+                    ? (exhibitionCycle?.name ? `${exhibitionCycle.name}. Counter invoices and confirmations` : 'Counter invoices from vendor stands')
+                    : 'No active exhibition. View your invoices'}
                 </p>
                 {exhibitionOpen && exhibitionCycle?.ends_at && <CycleCountdown endsAt={exhibitionCycle.ends_at} />}
                 <span
@@ -476,7 +475,7 @@ function MyCoopContent() {
                       : 'bg-subtle text-muted',
                   ].join(' ')}
                 >
-                  {exhibitionOpen ? 'Shop Exhibition' : 'See options'}
+                  {exhibitionOpen ? 'Open Exhibition' : 'View invoices'}
                   <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.2} />
                 </span>
               </button>
@@ -733,7 +732,7 @@ function MyCoopContent() {
         open={!!closedModule}
         onClose={() => setClosedModule(null)}
         onViewOrders={() => {
-          const dest = closedModule === 'ram' ? '/orders?tab=ram' : closedModule === 'exhibition' ? '/exhibition/orders' : '/orders'
+          const dest = closedModule === 'ram' ? '/orders?tab=ram' : '/orders'
           setClosedModule(null)
           router.push(dest)
         }}

@@ -926,7 +926,7 @@ const itemCards = useMemo(() => (
           <div className="absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-accent/10 blur-3xl" />
         </div>
         <div className="relative p-fluid pb-24 sm:pb-28 md:pb-32 max-w-7xl mx-auto">
-          {/* Continue-shopping banner — surfaces ram/exhibition carts here;
+          {/* Continue-shopping banner — surfaces the Ram cart here;
               the food cart is already covered by the sticky cart bar. */}
           <ContinueShoppingBanner excludeModules={['food']} className="mb-fluid-lg" />
 

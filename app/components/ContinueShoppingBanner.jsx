@@ -1,10 +1,9 @@
 // app/components/ContinueShoppingBanner.jsx
-// Surfaces the most recently touched in-progress cart (Food, Ram, or
-// Exhibition) with one-tap jumps back into the shop or straight to checkout.
+// Surfaces the most recently touched in-progress cart (Food or Ram) with
+// one-tap jumps back into the shop or straight to checkout.
 //
 // Props:
-//   excludeModules — modules to skip (e.g. ['exhibition'] on pages whose own
-//                    sticky cart bar already covers the exhibition cart).
+//   excludeModules — modules to skip (e.g. ['ram'] on the Ram shop page).
 //   className      — extra classes for the wrapper.
 //   compact       — render the one-line variant (module icon · count/total ·
 //                   chevron) for tight surfaces like the mobile drawer.
@@ -17,7 +16,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, Beef, ShoppingBasket, ShoppingCart, Store, X } from 'lucide-react'
+import { ArrowRight, Beef, ShoppingBasket, ShoppingCart, X } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import useCartCount from '../hooks/useCartCount'
 import { getCartTouch } from '@/lib/cartTouch'
@@ -31,7 +30,6 @@ const naira = (v) => `₦${Number(v || 0).toLocaleString()}`
 const MODULE_ICONS = {
   food: ShoppingBasket,
   ram: Beef,
-  exhibition: Store,
 }
 
 export default function ContinueShoppingBanner({ excludeModules = [], className = '', compact = false, onNavigate = null }) {
@@ -43,33 +41,21 @@ export default function ContinueShoppingBanner({ excludeModules = [], className 
   // line data (and touch stamps) whenever any cart changes.
   const { count: foodCartCount, onChange: onFoodCartChange } = useCartCount('food', { memberId })
   const { count: ramCartCount, onChange: onRamCartChange } = useCartCount('ram', { memberId })
-  const { count: exhCartCount, onChange: onExhCartChange } = useCartCount('exhibition', { memberId })
 
   const [foodCartLines, setFoodCartLines] = useState([])
-  const [exhCartLines, setExhCartLines] = useState([])
   const [ramCartQty, setRamCartQty] = useState(0)
   const [ramUnitPrice, setRamUnitPrice] = useState(null)
   const [dismissed, setDismissed] = useState(false)
 
-  // Adopt food + exhibition line data on mount and on any cart change — the
-  // hook delivers the stored value, so the banner never touches localStorage
-  // directly (mount-time adoption happens at subscription, so no initial read
-  // is needed).
+  // Adopt food line data on mount and on any cart change — the hook delivers
+  // the stored value, so the banner never touches localStorage directly.
   useEffect(() => {
     if (!memberId) return
     const adoptFood = (value) => {
       setFoodCartLines(Array.isArray(value) ? value.filter((l) => Number(l?.qty) > 0) : [])
     }
-    const adoptExh = (value) => {
-      setExhCartLines(Array.isArray(value) ? value.filter((l) => Number(l?.qty) > 0) : [])
-    }
-    const unsubFood = onFoodCartChange(adoptFood)
-    const unsubExh = onExhCartChange(adoptExh)
-    return () => {
-      unsubFood()
-      unsubExh()
-    }
-  }, [memberId, onFoodCartChange, onExhCartChange])
+    return onFoodCartChange(adoptFood)
+  }, [memberId, onFoodCartChange])
 
   // Adopt the ram cart qty the same way — the hook delivers the stored
   // { qty } value, so no count-keyed storage re-read.
@@ -117,7 +103,6 @@ export default function ContinueShoppingBanner({ excludeModules = [], className 
   }, [memberId, ramCartQty, ramUnitPrice])
 
   const foodCartTotal = foodCartLines.reduce((s, l) => s + Number(l?.price || 0) * Number(l?.qty || 0), 0)
-  const exhCartTotal = exhCartLines.reduce((s, l) => s + Number(l?.price || 0) * Number(l?.qty || 0), 0)
   const ramCartTotal = ramCartQty > 0 && ramUnitPrice ? ramCartQty * ramUnitPrice : null
 
   // The most recently touched non-empty cart drives the banner. When nothing
@@ -127,22 +112,19 @@ export default function ContinueShoppingBanner({ excludeModules = [], className 
     const carts = [
       { module: 'food', count: Number(foodCartCount) || 0, touch: getCartTouch('food', memberId) },
       { module: 'ram', count: Number(ramCartCount) || 0, touch: getCartTouch('ram', memberId) },
-      { module: 'exhibition', count: Number(exhCartCount) || 0, touch: getCartTouch('exhibition', memberId) },
     ]
       .filter((c) => !exclude.has(c.module) && c.count > 0)
     if (carts.length === 0) return null
     const maxTouch = Math.max(...carts.map((c) => c.touch))
     if (maxTouch > 0) return carts.reduce((a, b) => (b.touch > a.touch ? b : a))
-    const fallbackOrder = ['exhibition', 'food', 'ram'].filter((m) => !exclude.has(m))
+    const fallbackOrder = ['food', 'ram'].filter((m) => !exclude.has(m))
     return carts.find((c) => c.module === fallbackOrder[0]) || carts.find((c) => c.module === fallbackOrder[1]) || carts[0]
-  }, [foodCartCount, ramCartCount, exhCartCount, memberId, excludeModules])
+  }, [foodCartCount, ramCartCount, memberId, excludeModules])
 
   if (!activeCart || dismissed) return null
 
   const isRam = activeCart.module === 'ram'
   const ModuleIcon = MODULE_ICONS[activeCart.module] || ShoppingCart
-  const shopHref = activeCart.module === 'food' ? '/shop' : '/exhibition'
-  const checkoutHref = activeCart.module === 'food' ? '/cart' : '/exhibition/cart'
 
   // Compact one-line variant for tight surfaces (e.g. the mobile drawer):
   // module icon · truncated count/total · chevron. Tapping jumps into the
@@ -151,12 +133,9 @@ export default function ContinueShoppingBanner({ excludeModules = [], className 
     const label =
       activeCart.module === 'food'
         ? `${activeCart.count.toLocaleString()} item${activeCart.count === 1 ? '' : 's'} in Food`
-        : activeCart.module === 'ram'
-          ? `${activeCart.count.toLocaleString()} ram${activeCart.count === 1 ? '' : 's'} in Ram`
-          : `${activeCart.count.toLocaleString()} item${activeCart.count === 1 ? '' : 's'} in Exhibition`
-    const total =
-      activeCart.module === 'ram' ? (ramCartTotal != null ? naira(ramCartTotal) : null) : activeCart.module === 'food' ? naira(foodCartTotal) : naira(exhCartTotal)
-    const target = isRam ? '/ram/shop' : checkoutHref
+        : `${activeCart.count.toLocaleString()} ram${activeCart.count === 1 ? '' : 's'} in Ram`
+    const total = activeCart.module === 'ram' ? (ramCartTotal != null ? naira(ramCartTotal) : null) : naira(foodCartTotal)
+    const target = isRam ? '/ram/shop' : '/cart'
     return (
       <button
         type="button"
@@ -203,14 +182,10 @@ export default function ContinueShoppingBanner({ excludeModules = [], className 
             {activeCart.module === 'ram' && (
               <>{activeCart.count.toLocaleString()} ram{activeCart.count === 1 ? '' : 's'} in your Ram sales cart</>
             )}
-            {activeCart.module === 'exhibition' && (
-              <>{activeCart.count.toLocaleString()} item{activeCart.count === 1 ? '' : 's'} in your Exhibition cart</>
-            )}
           </p>
           <p className="mt-0.5 truncate text-chips text-muted">
             {activeCart.module === 'food' && <>Total · {naira(foodCartTotal)}</>}
             {activeCart.module === 'ram' && (ramCartTotal != null ? <>Total · {naira(ramCartTotal)}</> : 'Purchase on the Ram shop')}
-            {activeCart.module === 'exhibition' && <>Total · {naira(exhCartTotal)}</>}
           </p>
         </div>
       </div>
@@ -225,7 +200,7 @@ export default function ContinueShoppingBanner({ excludeModules = [], className 
               variant="secondary"
               size="sm"
               leftIcon={ShoppingCart}
-              onClick={() => router.push(shopHref)}
+              onClick={() => router.push('/shop')}
               className="w-full sm:w-auto"
             >
               Continue shopping
@@ -234,7 +209,7 @@ export default function ContinueShoppingBanner({ excludeModules = [], className 
               variant="accent"
               size="sm"
               rightIcon={ArrowRight}
-              onClick={() => router.push(checkoutHref)}
+              onClick={() => router.push('/cart')}
               className="w-full sm:w-auto"
             >
               Go to checkout

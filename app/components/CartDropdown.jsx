@@ -1,17 +1,16 @@
 // app/components/CartDropdown.jsx
 'use client'
 
-// The navbar "Cart" control for members. One tap opens the three module carts
-// (Food, Ram, Exhibition) each with its live item count, so members always see
-// what is in every cart — not just the module they are currently browsing.
-// Ram has no cart page: its selection lives in the shop's sticky cart bar, so
-// the Ram row links back to the shop.
+// The navbar "Cart" control for members. One tap opens the two live module
+// carts (Food and Ram) each with its live item count. Ram has no cart page: its
+// selection lives in the shop's sticky cart bar, so the Ram row links back to
+// the shop.
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Beef, ChevronDown, ShoppingBasket, ShoppingCart, Store } from 'lucide-react'
+import { Beef, ChevronDown, ShoppingBasket, ShoppingCart } from 'lucide-react'
 
-export default function CartDropdown({ food = 0, ram = 0, exhibition = 0 }) {
+export default function CartDropdown({ food = 0, ram = 0 }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
 
@@ -35,10 +34,9 @@ export default function CartDropdown({ food = 0, ram = 0, exhibition = 0 }) {
   const items = [
     { href: '/cart', label: 'Food Distribution', Icon: ShoppingBasket, count: food },
     { href: '/ram/shop', label: 'Ram Sales', Icon: Beef, count: ram },
-    { href: '/exhibition/cart', label: 'Coop Exhibition', Icon: Store, count: exhibition },
   ]
 
-  const total = food + ram + exhibition
+  const total = food + ram
 
   return (
     <div ref={wrapRef} className="relative">

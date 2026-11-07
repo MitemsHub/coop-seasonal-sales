@@ -4,9 +4,6 @@
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
-import { csrfGuard } from '@/lib/csrf'
-import { validateMemberId, validateNumber, validatePaymentOption } from '@/lib/validation'
-import { getCrossModuleExposure } from '@/lib/crossModuleExposure'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -67,10 +64,3 @@ export async function GET(req) {
   }
 }
 
-
-export async function POST() {
-  return NextResponse.json(
-    { ok: false, error: 'Online catalogue ordering is closed. Invoices are captured at the vendor stand.' },
-    { status: 410 }
-  )
-}

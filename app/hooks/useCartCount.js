@@ -4,7 +4,6 @@
 // One place for the cart-count event wiring used by the Navbar badge and every
 // shop surface. Each module owns an event name and a localStorage key:
 //   food              → 'cart-updated'             / cart_<memberId>
-//   exhibition        → 'exhibition-cart-updated'  / exhibitionCart_<memberId>
 //   ram               → 'ram-cart-updated'         / ramCart_<memberId>
 //   orders            → 'orders-count-updated'     / ordersCount_<memberId>
 //   exhibitionPending → 'exhibition-pending-updated' / exhibitionPending_<memberId>
@@ -40,7 +39,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 const MODULES = {
   food: { event: 'cart-updated', storageKey: (mid) => `cart_${mid}` },
   ram: { event: 'ram-cart-updated', storageKey: (mid) => `ramCart_${mid}` },
-  exhibition: { event: 'exhibition-cart-updated', storageKey: (mid) => `exhibitionCart_${mid}` },
   orders: { event: 'orders-count-updated', storageKey: (mid) => `ordersCount_${mid}` },
   exhibitionPending: {
     event: 'exhibition-pending-updated',

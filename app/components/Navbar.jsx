@@ -29,7 +29,6 @@ export default function Navbar() {
   // Shopping availability state (controls the Shop dropdown dots + cart link)
   const [shoppingOpen, setShoppingOpen] = useState(false)
   const [ramOpen, setRamOpen] = useState(false)
-  const [exhibitionOpen, setExhibitionOpen] = useState(false)
   const [shoppingStatusLoading, setShoppingStatusLoading] = useState(false)
 
   const userType = user?.type
@@ -84,15 +83,12 @@ export default function Navbar() {
   const memberId = userType === 'member' ? String(user?.id || '') : ''
   const memberIdKey = memberId ? memberId.trim().toUpperCase() : ''
   const isRamRoute = userType === 'member' && isActive('/ram')
-  const isExhibitionRoute = userType === 'member' && isActive('/exhibition')
 
   // Cart badge — one shared hook per module owns the event/storage listeners,
   // so the Navbar and every shop surface stay in sync without repeating wiring.
-  // All three modules dispatch their own event on save, so no polling is needed.
   const foodCart = useCartCount('food', { memberId: memberIdKey })
   const ramCart = useCartCount('ram', { memberId: memberIdKey })
-  const exhibitionCart = useCartCount('exhibition', { memberId: memberIdKey })
-  const cartCount = isRamRoute ? ramCart.count : isExhibitionRoute ? exhibitionCart.count : foodCart.count
+  const cartCount = isRamRoute ? ramCart.count : foodCart.count
 
   // Orders badges — the order pages announce after writing their count keys,
   // so these live via the same event/storage wiring as the cart badges (no poll).
@@ -145,20 +141,17 @@ export default function Navbar() {
     return () => t && clearTimeout(t)
   }, [userType, isDemandTrackingMode, hideNavbar])
 
-  // Load current shopping status for all three modules — the Shop dropdown
-  // shows live open/closed dots and the cart link gates on the food module.
+  // Load current shopping status for the two live modules — the Shop dropdown
+  // shows their open/closed dots.
   useEffect(() => {
     if (hideNavbar) return
     let cancelled = false
     const loadShoppingStatus = async () => {
       try {
         setShoppingStatusLoading(true)
-        const [f, r, e] = await Promise.allSettled([
+        const [f, r] = await Promise.allSettled([
           fetch('/api/system/shopping', { cache: 'no-store' }),
           fetch('/api/system/ram-shopping', { cache: 'no-store' }),
-          memberIdKey
-            ? fetch('/api/exhibition/availability', { cache: 'no-store' })
-            : Promise.reject(new Error('no member')),
         ])
         if (f.status === 'fulfilled') {
           const j = await f.value.json().catch(() => null)
@@ -168,15 +161,10 @@ export default function Navbar() {
           const j = await r.value.json().catch(() => null)
           if (!cancelled) setRamOpen(!!j?.open)
         }
-        if (e.status === 'fulfilled') {
-          const j = await e.value.json().catch(() => null)
-          if (!cancelled) setExhibitionOpen(!!(j?.ok && j?.open))
-        }
       } catch {
         if (!cancelled) {
           setShoppingOpen(false)
           setRamOpen(false)
-          setExhibitionOpen(false)
         }
       } finally {
         if (!cancelled) setShoppingStatusLoading(false)
@@ -282,7 +270,6 @@ export default function Navbar() {
                     <ShopDropdown
                       shoppingOpen={shoppingOpen}
                       ramOpen={ramOpen}
-                      exhibitionOpen={exhibitionOpen}
                     />
                   )}
                   <div className="inline-flex items-center">
@@ -318,7 +305,6 @@ export default function Navbar() {
                   <CartDropdown
                     food={Number.isFinite(Number(foodCart.count)) ? Number(foodCart.count) : 0}
                     ram={Number.isFinite(Number(ramCart.count)) ? Number(ramCart.count) : 0}
-                    exhibition={Number.isFinite(Number(exhibitionCart.count)) ? Number(exhibitionCart.count) : 0}
                   />
                 </>
               )}
@@ -677,7 +663,6 @@ export default function Navbar() {
                         {[
                           { href: '/shop', label: 'Food Distribution', open: shoppingOpen },
                           { href: '/ram/shop', label: 'Ram Sales', open: ramOpen },
-                          { href: '/exhibition', label: 'Coop Exhibition', open: exhibitionOpen },
                         ].map((m) => (
                           <Link
                             key={m.href}
@@ -743,7 +728,6 @@ export default function Navbar() {
                         {[
                           { href: '/cart', label: 'Food Cart', count: Number.isFinite(Number(foodCart.count)) ? Number(foodCart.count) : 0 },
                           { href: '/ram/shop', label: 'Ram Cart', count: Number.isFinite(Number(ramCart.count)) ? Number(ramCart.count) : 0 },
-                          { href: '/exhibition/cart', label: 'Exhibition Cart', count: Number.isFinite(Number(exhibitionCart.count)) ? Number(exhibitionCart.count) : 0 },
                         ].map((c) => (
                           <Link
                             key={c.href}

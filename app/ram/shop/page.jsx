@@ -513,7 +513,7 @@ function RamShopPageContent() {
           </svg>
           Dashboard
         </Link>
-        {/* Continue-shopping banner — surfaces food/exhibition carts here;
+        {/* Continue-shopping banner — surfaces the Food cart here;
             the ram cart is already covered by the sticky bar. */}
         <ContinueShoppingBanner excludeModules={['ram']} className="mb-fluid-lg" />
         <div className="flex items-center justify-between mb-6">
