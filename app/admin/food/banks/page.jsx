@@ -709,34 +709,17 @@ function AdminFoodBanksContent() {
 
                         <td className="px-4 py-3 align-middle">
                           {invs.length ? (
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => loadInvoices(r)}
-                                  className="shrink-0 rounded-full bg-subtle px-2 py-0.5 text-[11px] font-semibold text-fg hover:bg-line/60"
-                                  title="View all invoices for this branch"
-                                >
-                                  {invs.length}
-                                </button>
-                                {invs[0].url ? (
-                                  <a
-                                    href={invs[0].url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="min-w-0 truncate text-[11px] text-brand hover:underline"
-                                    title={invs[0].file_name || 'Latest invoice'}
-                                  >
-                                    {invs[0].file_name || 'Latest invoice'}
-                                  </a>
-                                ) : (
-                                  <span className="min-w-0 truncate text-[11px] text-fg">{invs[0].file_name || 'Latest invoice'}</span>
-                                )}
-                              </div>
-                              {invs.length > 1 && (
-                                <div className="mt-0.5 text-[10px] text-subtext">+{invs.length - 1} more filed</div>
-                              )}
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => loadInvoices(r)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1 text-[11px] font-semibold text-fg transition-colors hover:bg-subtle"
+                              title="View this branch's invoices"
+                            >
+                              Invoice
+                              <span className="rounded-full bg-subtle px-1.5 py-0.5 text-[10px] tabular-nums text-muted">
+                                {invs.length}
+                              </span>
+                            </button>
                           ) : (
                             <span className="text-[11px] text-subtext">None filed</span>
                           )}
