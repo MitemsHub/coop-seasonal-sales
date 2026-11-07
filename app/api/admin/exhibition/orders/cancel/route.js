@@ -3,7 +3,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { logExhibitionAudit } from '@/lib/exhibitionAudit'
-import { releaseOrdersStock } from '@/lib/exhibitionStock'
 import { validateSession, validateNumber, sanitizeString } from '@/lib/validation'
 
 export const runtime = 'nodejs'
@@ -47,9 +46,6 @@ export async function POST(req) {
       .in('id', toCancel)
       .in('status', ['Pending', 'Approved'])
     if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 })
-
-    // Return reserved stock to the shelf — cancelled orders free their units.
-    await releaseOrdersStock(supabase, toCancel)
 
     await logExhibitionAudit(toCancel, {
       action: 'Cancelled',

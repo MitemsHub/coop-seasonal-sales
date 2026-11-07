@@ -4,7 +4,6 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { logExhibitionAudit } from '@/lib/exhibitionAudit'
 import { closedCycleIds } from '@/lib/exhibitionCycleGuard'
-import { reserveOrdersStock } from '@/lib/exhibitionStock'
 import { validateSession, validateNumber } from '@/lib/validation'
 
 export const runtime = 'nodejs'
@@ -41,11 +40,8 @@ export async function POST(req) {
       (id) => String(byId.get(id)?.status || '') === 'Cancelled' && !closed.has(Number(byId.get(id)?.cycle_id))
     )
 
-    // Re-reserve stock before restoring — the cancelled order freed its units
-    // and they may have sold on. Orders that can't be covered stay cancelled.
-    const { failed: stockFailed } = await reserveOrdersStock(supabase, cycleOk)
-    const stockFailedIds = new Set(stockFailed.map((f) => Number(f.id)))
-    const toRestore = cycleOk.filter((id) => !stockFailedIds.has(id))
+    // Counter invoices carry no catalogue stock, so only the cycle gate applies.
+    const toRestore = cycleOk
 
     const failed = ids
       .filter((id) => !toRestore.includes(id))
@@ -54,7 +50,6 @@ export async function POST(req) {
         const closedCycle = !!row && closed.has(Number(row.cycle_id))
         const entry = { id, status: String(row?.status || '') }
         if (closedCycle) entry.reason = 'Closed exhibition cycle'
-        if (stockFailedIds.has(Number(id))) entry.reason = 'Insufficient stock to restore'
         return entry
       })
     if (!toRestore.length) {
@@ -62,13 +57,6 @@ export async function POST(req) {
       if (allClosed) {
         return NextResponse.json(
           { ok: false, error: 'Cannot restore: this order belongs to a closed exhibition cycle.' },
-          { status: 409 }
-        )
-      }
-      const allStock = failed.length > 0 && failed.every((f) => f.reason === 'Insufficient stock to restore')
-      if (allStock) {
-        return NextResponse.json(
-          { ok: false, error: 'Cannot restore: not enough stock left for the items in this order.' },
           { status: 409 }
         )
       }

@@ -5,7 +5,6 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { logExhibitionAudit } from '@/lib/exhibitionAudit'
 import { closedCycleIds } from '@/lib/exhibitionCycleGuard'
-import { checkOrdersStock } from '@/lib/exhibitionStock'
 import { validateSession, validateNumber } from '@/lib/validation'
 
 export const runtime = 'nodejs'
@@ -61,13 +60,10 @@ export async function POST(req) {
       return NextResponse.json({ ok: true, approved: [], failed })
     }
 
-    // Approval-time stock gate — the second line of defense behind checkout's
-    // reserve. Orders whose reservation has been invalidated (stock driven
-    // below zero or the product archived) stay Pending and are reported.
-    const { failed: stockFailed } = await checkOrdersStock(supabase, toApprove)
-    const stockBlocked = new Set(stockFailed.map((f) => f.id))
-    const toApproveFinal = toApprove.filter((id) => !stockBlocked.has(id))
-    const failedFinal = [...failed, ...stockFailed]
+    // Counter invoices carry no catalogue stock, so approval is the cycle gate
+    // above and nothing else.
+    const toApproveFinal = toApprove
+    const failedFinal = failed
     if (!toApproveFinal.length) {
       return NextResponse.json({ ok: true, approved: [], failed: failedFinal })
     }
