@@ -481,44 +481,46 @@ function AdminFoodBanksContent() {
   return (
     <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
       <div className="mb-4 ui-card p-3 sm:p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
             <h1 className="text-h2 font-semibold">Food Distribution · Banks</h1>
-            <div className="text-xs sm:text-sm text-muted">Every account keeps its own invoices and paid state · active cycle</div>
+            <div className="text-xs text-muted sm:text-sm">
+              {filtered.length.toLocaleString()} branch{filtered.length === 1 ? '' : 'es'} ·{' '}
+              {filtered.reduce((n, r) => n + (r.banks?.length || 0), 0).toLocaleString()} bank accounts · every account keeps
+              its own invoices and paid state
+            </div>
           </div>
-          <div className="flex w-full gap-2 sm:w-auto">
+          <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto xl:justify-end">
             <input
               value={term}
               onChange={(e) => setTerm(e.target.value)}
               placeholder="Search branch / bank / account"
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none sm:w-80"
+              className="min-w-[200px] flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none xl:w-64 xl:flex-none"
             />
-            <Button variant="secondary" onClick={() => fetchRows()} loading={loading}>
-              {loading ? 'Refreshing…' : 'Refresh'}
-            </Button>
-          </div>
-        </div>
-        <div className="mt-3 flex flex-col gap-2 border-t border-line pt-3 sm:flex-row sm:items-center">
-          <span className="text-xs font-semibold uppercase tracking-wide text-subtext">Add to a branch</span>
-          <select
-            value={topBranchId}
-            onChange={(e) => setTopBranchId(e.target.value)}
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-brand focus:outline-none sm:w-64"
-          >
-            <option value="">Choose a branch…</option>
-            {(rows || []).map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name || 'Branch'} ({r.code || r.id})
-              </option>
-            ))}
-          </select>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => openAddBank()}>
-              Add bank
-            </Button>
-            <Button size="sm" variant="accent" onClick={openTopInvoiceUpload}>
-              Upload invoice
-            </Button>
+            <select
+              value={topBranchId}
+              onChange={(e) => setTopBranchId(e.target.value)}
+              aria-label="Branch to add a bank or invoice to"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-brand focus:outline-none sm:w-44"
+            >
+              <option value="">Add to a branch…</option>
+              {(rows || []).map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name || 'Branch'} ({r.code || r.id})
+                </option>
+              ))}
+            </select>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => openAddBank()}>
+                Add bank
+              </Button>
+              <Button size="sm" variant="accent" onClick={openTopInvoiceUpload}>
+                Upload invoice
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => fetchRows()} loading={loading}>
+                {loading ? 'Refreshing…' : 'Refresh'}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -536,223 +538,262 @@ function AdminFoodBanksContent() {
         )}
       </AnimatePresence>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {loading && !filtered.length &&
-          Array.from({ length: 4 }).map((_, i) => (
-            <div key={`sk_${i}`} className="ui-card animate-pulse p-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-subtle" />
-                <div className="space-y-2">
-                  <div className="h-4 w-40 rounded bg-subtle" />
-                  <div className="h-3 w-28 rounded bg-subtle" />
-                </div>
-              </div>
-              <div className="mt-4 h-24 rounded-xl bg-subtle" />
-            </div>
-          ))}
+      <div className="ui-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[920px] text-sm">
+            <colgroup>
+              <col className="w-[220px]" />
+              <col />
+              <col className="w-[220px]" />
+              <col className="w-[96px]" />
+              <col className="w-[156px]" />
+            </colgroup>
+            <thead>
+              <tr className="border-b border-line bg-subtle/70 text-[11px] uppercase tracking-wide text-subtext">
+                <th className="px-4 py-2.5 text-left font-semibold">Branch</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Bank account</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Invoices</th>
+                <th className="px-4 py-2.5 text-left font-semibold">Paid</th>
+                <th className="px-4 py-2.5 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading &&
+                !filtered.length &&
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={`sk_${i}`} className="animate-pulse border-b border-line/60">
+                    <td className="px-4 py-3">
+                      <div className="h-4 w-32 rounded bg-subtle" />
+                      <div className="mt-1.5 h-3 w-20 rounded bg-subtle" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="h-4 w-40 rounded bg-subtle" />
+                      <div className="mt-1.5 h-3 w-56 rounded bg-subtle" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="h-4 w-24 rounded bg-subtle" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="h-5 w-16 rounded-full bg-subtle" />
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="ml-auto h-8 w-28 rounded bg-subtle" />
+                    </td>
+                  </tr>
+                ))}
 
-        {!loading && filtered.length === 0 && (
-          <div className="ui-card p-8 text-center text-sm text-muted lg:col-span-2">No branches match your search.</div>
-        )}
+              {!loading && filtered.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-10 text-center text-sm text-muted">
+                    No branches match your search.
+                  </td>
+                </tr>
+              )}
 
-        {filtered.map((r) => {
-          const accounts = r.banks || []
-          const invoiceCount = accounts.reduce((n, b) => n + Number(b.invoices?.length || 0), 0)
-          const invoiceTotal = accounts.reduce(
-            (n, b) =>
-              n +
-              (b.invoices || []).reduce((m, inv) => m + (inv.amount != null && inv.amount !== '' ? Number(inv.amount) || 0 : 0), 0),
-            0
-          )
-          return (
-            <section key={r.id} className="ui-card flex flex-col overflow-hidden">
-              <header className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
-                <div className="flex min-w-0 items-center gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-subtle text-xs font-bold uppercase tracking-wide text-brand">
-                    {String(r.code || r.name || '?').slice(0, 2)}
-                  </span>
-                  <div className="min-w-0">
-                    <h2 className="truncate text-sm font-semibold text-fg">{r.name || 'Branch'}</h2>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-subtext">
-                      <span className="uppercase tracking-wide">{r.code || '—'}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>
-                        {accounts.length} account{accounts.length === 1 ? '' : 's'}
-                      </span>
-                      <span aria-hidden="true">·</span>
-                      <span>
-                        {invoiceCount} invoice{invoiceCount === 1 ? '' : 's'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                      r?.paid?.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'
-                    }`}
-                  >
-                    <span className={`h-1.5 w-1.5 rounded-full ${r?.paid?.is_paid ? 'bg-success-fg' : 'bg-muted'}`} />
-                    {r?.paid?.is_paid ? 'Paid' : 'Unpaid'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => togglePaid(r, !r?.paid?.is_paid)}
-                    disabled={paying}
-                    className="text-[11px] font-medium text-muted underline-offset-2 hover:text-fg hover:underline disabled:opacity-50"
-                  >
-                    {r?.paid?.is_paid ? 'Mark branch unpaid' : 'Mark branch paid'}
-                  </button>
-                </div>
-              </header>
-
-              <div className="flex-1 divide-y divide-line">
-                {!accounts.length && (
-                  <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
-                    <p className="text-sm text-subtext">No bank account on this branch yet.</p>
-                    <Button size="sm" variant="secondary" onClick={() => openAddBank(r.id)}>
-                      Add first account
-                    </Button>
-                  </div>
-                )}
-
-                {accounts.map((b) => {
-                  const invs = b.invoices || []
-                  const visible = invs.slice(0, 2)
-                  const hidden = invs.length - visible.length
-                  return (
-                    <div key={b.id} className="px-4 py-3">
-                      <div className="flex items-start justify-between gap-3">
+              {filtered.map((r, branchIdx) =>
+                (r.banks || []).length === 0 ? (
+                  <tr key={r.id} className={`border-b border-line ${branchIdx % 2 === 0 ? 'bg-surface' : 'bg-subtle/25'}`}>
+                    <td className="px-4 py-3 align-middle">
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-subtle text-[10px] font-bold uppercase text-brand">
+                          {String(r.code || r.name || '?').slice(0, 2)}
+                        </span>
                         <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="truncate text-sm font-semibold text-fg">{b.bank_name || 'Bank'}</h3>
+                          <div className="truncate text-[13px] font-semibold text-fg">{r.name || 'Branch'}</div>
+                          <div className="mt-0.5 flex items-center gap-1.5">
+                            <span className="text-[10px] uppercase tracking-wide text-subtext">{r.code || '—'}</span>
+                            <button
+                              type="button"
+                              onClick={() => togglePaid(r, !r?.paid?.is_paid)}
+                              disabled={paying}
+                              title="Toggle this branch's paid status"
+                              className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold disabled:opacity-50 ${
+                                r?.paid?.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted hover:text-fg'
+                              }`}
+                            >
+                              <span className={`h-1 w-1 rounded-full ${r?.paid?.is_paid ? 'bg-success-fg' : 'bg-muted'}`} />
+                              Branch {r?.paid?.is_paid ? 'paid' : 'unpaid'}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 align-middle text-xs text-subtext">No bank account yet</td>
+                    <td className="px-4 py-3 align-middle text-xs text-subtext">—</td>
+                    <td className="px-4 py-3 align-middle">
+                      <span className="inline-flex items-center rounded-full bg-subtle px-2 py-0.5 text-[11px] font-semibold text-muted">
+                        {r?.paid?.is_paid ? 'Paid' : 'Unpaid'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 align-middle text-right">
+                      <Button size="sm" variant="secondary" onClick={() => openAddBank(r.id)}>
+                        Add bank
+                      </Button>
+                    </td>
+                  </tr>
+                ) : (
+                  (r.banks || []).map((b, idx) => {
+                    const invs = b.invoices || []
+                    return (
+                      <tr
+                        key={`${r.id}-${b.id}`}
+                        className={`${idx === 0 ? 'border-t border-line' : ''} border-b border-line/60 ${
+                          branchIdx % 2 === 0 ? 'bg-surface hover:bg-subtle/40' : 'bg-subtle/25 hover:bg-subtle/50'
+                        }`}
+                      >
+                        {idx === 0 && (
+                          <td rowSpan={(r.banks || []).length} className="px-4 py-3 align-top">
+                            <div className="flex items-start gap-2.5">
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-subtle text-[10px] font-bold uppercase text-brand">
+                                {String(r.code || r.name || '?').slice(0, 2)}
+                              </span>
+                              <div className="min-w-0">
+                                <div className="truncate text-[13px] font-semibold text-fg">{r.name || 'Branch'}</div>
+                                <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                                  <span className="text-[10px] uppercase tracking-wide text-subtext">{r.code || '—'}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => togglePaid(r, !r?.paid?.is_paid)}
+                                    disabled={paying}
+                                    title="Toggle this branch's paid status"
+                                    className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold disabled:opacity-50 ${
+                                      r?.paid?.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted hover:text-fg'
+                                    }`}
+                                  >
+                                    <span className={`h-1 w-1 rounded-full ${r?.paid?.is_paid ? 'bg-success-fg' : 'bg-muted'}`} />
+                                    Branch {r?.paid?.is_paid ? 'paid' : 'unpaid'}
+                                  </button>
+                                </div>
+                                <div className="mt-1 flex items-center gap-1.5 text-[10px] text-subtext">
+                                  <span>
+                                    {(r.banks || []).length} account{(r.banks || []).length === 1 ? '' : 's'}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => openAddBank(r.id)}
+                                    className="font-semibold text-brand hover:underline"
+                                  >
+                                    + Add
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        )}
+
+                        <td className="px-4 py-3 align-middle">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="text-[13px] font-semibold text-fg">{b.bank_name || 'Bank'}</span>
                             {b.purpose && (
                               <span className="rounded-full bg-subtle px-1.5 py-0.5 text-[10px] font-medium text-muted">{b.purpose}</span>
                             )}
                           </div>
-                          <div className="mt-1 truncate text-xs text-muted">{b.account_name || '—'}</div>
-                          <div className="mt-0.5 flex items-center gap-1.5">
-                            <span className="truncate font-mono text-xs text-fg">{b.account_number || '—'}</span>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted">
+                            <span className="max-w-[220px] truncate">{b.account_name || '—'}</span>
+                            <span aria-hidden="true" className="text-subtext">
+                              ·
+                            </span>
+                            <span className="font-mono text-fg">{b.account_number || '—'}</span>
                             {!!b.account_number && (
                               <button
                                 type="button"
                                 onClick={() => copyAccountNumber(b.account_number)}
-                                className="shrink-0 rounded border border-line px-1.5 py-0.5 text-[10px] font-medium text-muted transition-colors hover:bg-subtle hover:text-fg"
+                                className="rounded border border-line px-1.5 py-0.5 text-[10px] font-medium text-muted transition-colors hover:bg-subtle hover:text-fg"
                                 title="Copy account number"
                               >
                                 Copy
                               </button>
                             )}
                           </div>
-                        </div>
-                        <div className="flex shrink-0 flex-col items-end gap-1.5">
+                        </td>
+
+                        <td className="px-4 py-3 align-middle">
+                          {invs.length ? (
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => loadInvoices(r)}
+                                  className="shrink-0 rounded-full bg-subtle px-2 py-0.5 text-[11px] font-semibold text-fg hover:bg-line/60"
+                                  title="View all invoices for this branch"
+                                >
+                                  {invs.length}
+                                </button>
+                                {invs[0].url ? (
+                                  <a
+                                    href={invs[0].url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="min-w-0 truncate text-[11px] text-brand hover:underline"
+                                    title={invs[0].file_name || 'Latest invoice'}
+                                  >
+                                    {invs[0].file_name || 'Latest invoice'}
+                                  </a>
+                                ) : (
+                                  <span className="min-w-0 truncate text-[11px] text-fg">{invs[0].file_name || 'Latest invoice'}</span>
+                                )}
+                              </div>
+                              {invs.length > 1 && (
+                                <div className="mt-0.5 text-[10px] text-subtext">+{invs.length - 1} more filed</div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-subtext">None filed</span>
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3 align-middle">
                           <span
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                               b.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'
                             }`}
                           >
                             {b.is_paid ? 'Paid' : 'Unpaid'}
                           </span>
-                          <select
-                            defaultValue=""
-                            className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-fg focus:border-brand focus:outline-none"
-                            onChange={(e) => {
-                              const v = e.target.value
-                              e.target.value = ''
-                              if (!v) return
-                              if (v === 'upload') openInvoiceUpload(r, b.id)
-                              if (v === 'invoices') loadInvoices(r)
-                              if (v === 'manage') setBanksFor(r)
-                              if (v === 'paid') setAccountPaid(r, b, true)
-                              if (v === 'unpaid') setAccountPaid(r, b, false)
-                              if (v === 'delete') deleteAccount(r, b)
-                            }}
-                          >
-                            <option value="" disabled>
-                              Actions
-                            </option>
-                            <option value="upload" disabled={!!b.is_paid}>
-                              Upload invoice
-                            </option>
-                            <option value="invoices" disabled={!invs.length}>
-                              View invoices
-                            </option>
-                            {b.is_paid ? <option value="unpaid">Mark unpaid</option> : <option value="paid">Mark paid</option>}
-                            <option value="manage">Edit account</option>
-                            <option value="delete" disabled={!!b.is_paid}>
-                              Delete account
-                            </option>
-                          </select>
-                        </div>
-                      </div>
+                        </td>
 
-                      <div className="mt-2 rounded-lg bg-subtle/50 px-2.5 py-1.5">
-                        {invs.length ? (
-                          <>
-                            <ul className="divide-y divide-line/70">
-                              {visible.map((inv) => (
-                                <li key={inv.id} className="flex items-center justify-between gap-3 py-1">
-                                  {inv.url ? (
-                                    <a
-                                      href={inv.url}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="min-w-0 truncate text-[11px] font-medium text-brand hover:underline"
-                                      title={inv.file_name || 'Invoice'}
-                                    >
-                                      {inv.file_name || 'Invoice'}
-                                    </a>
-                                  ) : (
-                                    <span className="min-w-0 truncate text-[11px] text-fg">{inv.file_name || 'Invoice'}</span>
-                                  )}
-                                  <span className="shrink-0 font-mono text-[11px] tabular-nums text-fg">
-                                    {inv.amount != null && inv.amount !== '' ? `₦${Number(inv.amount).toLocaleString()}` : '—'}
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                            {hidden > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => loadInvoices(r)}
-                                className="mt-1 text-[11px] font-semibold text-brand hover:underline"
-                              >
-                                View all {invs.length} invoices
-                              </button>
-                            )}
-                          </>
-                        ) : (
-                          <div className="py-0.5 text-[11px] text-subtext">No invoices filed against this account.</div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-
-              {accounts.length > 0 && (
-                <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-subtle/40 px-4 py-2.5">
-                  <div className="text-[11px] text-muted">
-                    {invoiceTotal > 0 ? `Filed: ₦${invoiceTotal.toLocaleString()}` : 'No invoice amounts filed'}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Button size="sm" variant="secondary" onClick={() => openAddBank(r.id)}>
-                      Add account
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="accent"
-                      onClick={() => openInvoiceUpload(r, accounts[0]?.id)}
-                      disabled={!!accounts[0]?.is_paid}
-                    >
-                      Upload invoice
-                    </Button>
-                  </div>
-                </footer>
+                        <td className="px-4 py-3 align-middle text-right">
+                          <div className="flex justify-end">
+                            <select
+                              defaultValue=""
+                              className="rounded-lg border border-line bg-surface px-2 py-1.5 text-xs text-fg focus:border-brand focus:outline-none"
+                              onChange={(e) => {
+                                const v = e.target.value
+                                e.target.value = ''
+                                if (!v) return
+                                if (v === 'upload') openInvoiceUpload(r, b.id)
+                                if (v === 'invoices') loadInvoices(r)
+                                if (v === 'manage') setBanksFor(r)
+                                if (v === 'paid') setAccountPaid(r, b, true)
+                                if (v === 'unpaid') setAccountPaid(r, b, false)
+                                if (v === 'delete') deleteAccount(r, b)
+                              }}
+                            >
+                              <option value="" disabled>
+                                Actions
+                              </option>
+                              <option value="upload" disabled={!!b.is_paid}>
+                                Upload invoice
+                              </option>
+                              <option value="invoices" disabled={!invs.length}>
+                                View invoices
+                              </option>
+                              {b.is_paid ? <option value="unpaid">Mark unpaid</option> : <option value="paid">Mark paid</option>}
+                              <option value="manage">Edit account</option>
+                              <option value="delete" disabled={!!b.is_paid}>
+                                Delete account
+                              </option>
+                            </select>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )
               )}
-            </section>
-          )
-        })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <DraggableModal
