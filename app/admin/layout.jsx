@@ -30,6 +30,7 @@ import {
   Menu,
   MessageCircle,
   Package,
+  PackageCheck,
   PanelLeftClose,
   PanelLeftOpen,
   Percent,
@@ -434,6 +435,7 @@ export default function AdminLayout({ children }) {
     if (pathname.startsWith('/admin/ram/data')) return 'ram_data'
     if (pathname.startsWith('/admin/exhibition/pending')) return 'exh_pending'
     if (pathname.startsWith('/admin/exhibition/approved')) return 'exh_approved'
+    if (pathname.startsWith('/admin/exhibition/confirmed')) return 'exh_confirmed'
     if (pathname.startsWith('/admin/exhibition/delivered')) return 'exh_delivered'
     if (pathname.startsWith('/admin/exhibition/cancelled')) return 'exh_cancelled'
     if (pathname.startsWith('/admin/exhibition/cycles')) return 'exh_cycles'
@@ -659,7 +661,7 @@ export default function AdminLayout({ children }) {
                   <div className="mt-0.5 space-y-0.5 pl-4">
                     <NavLink href="/admin/exhibition/pending" label="Pending" icon={Clock} active={activeKey === 'exh_pending'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/approved" label="Approved" icon={CheckCircle2} active={activeKey === 'exh_approved'} collapsed={false} onNavigate={navOnClick} />
-                    <NavLink href="/admin/exhibition/delivered" label="Delivered" icon={Truck} active={activeKey === 'exh_delivered'} collapsed={false} onNavigate={navOnClick} />
+                    <NavLink href="/admin/exhibition/confirmed" label="Confirmed" icon={PackageCheck} active={activeKey === 'exh_confirmed'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/cancelled" label="Cancelled" icon={XCircle} active={activeKey === 'exh_cancelled'} collapsed={false} onNavigate={navOnClick} />
                   </div>
                 )}

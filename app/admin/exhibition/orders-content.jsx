@@ -1,12 +1,12 @@
 'use client'
 
 // app/admin/exhibition/orders-content.jsx
-// Shared admin content for the four exhibition order views (Pending,
-// Approved, Delivered, Cancelled). Approve happens here (admin = superuser);
-// delivered is marked by vendors; cancelled orders can be restored.
+// Shared admin content for the exhibition order views (Pending, Approved,
+// Confirmed, Cancelled). The admin approves; the member confirms receipt.
+// Cancelled orders can be restored.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { CheckCircle2, ChevronLeft, ChevronRight, History, Inbox, Package, PackageCheck, Plus, RefreshCw, RotateCcw, Search, Store, Truck, XCircle } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, History, Inbox, Package, Plus, RefreshCw, RotateCcw, Search, Truck, XCircle } from 'lucide-react'
 import Badge from '../../components/ui/Badge'
 import CounterInvoiceModal from '../../components/CounterInvoiceModal'
 import ExportButton from '../../components/ui/ExportButton'
@@ -63,7 +63,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
   const [invoiceOpen, setInvoiceOpen] = useState(false)
   const [editOrder, setEditOrder] = useState(null)
   const [cancelReason, setCancelReason] = useState('')
-  const [vendorBreakdown, setVendorBreakdown] = useState(null)
   const [auditOrder, setAuditOrder] = useState(null) // { id, order_id, created_at, member_id }
   const [auditEvents, setAuditEvents] = useState([])
   const [auditLoading, setAuditLoading] = useState(false)
@@ -124,20 +123,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
     [status, page, pageSize, term, payment, cycleFilter, safeJson]
   )
 
-  // Per-vendor handover breakdown across all branches — which vendors still
-  // owe goods on approved orders. Only meaningful on the Approved view.
-  const fetchVendorBreakdown = useCallback(async () => {
-    if (status !== 'Approved') return
-    try {
-      const qs = cycleFilter ? `?cycle_id=${encodeURIComponent(cycleFilter)}` : ''
-      const res = await fetch(`/api/admin/exhibition/vendors/breakdown${qs}`, { cache: 'no-store' })
-      const json = await safeJson(res, 'vendor breakdown')
-      if (res.ok && json?.ok) setVendorBreakdown(json)
-    } catch {
-      // The panel is best-effort — never block the page on it.
-    }
-  }, [status, cycleFilter, safeJson])
-
   const fetchCycles = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/exhibition/cycles', { cache: 'no-store' })
@@ -155,19 +140,17 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
             cycleDefaultedRef.current = true
             setCycleFilter(String(active.id))
             fetchOrders({ page: 1, cycle: String(active.id) })
-            fetchVendorBreakdown()
           }
         }
       }
     } catch {
       setCycles([])
     }
-  }, [safeJson, fetchOrders, fetchVendorBreakdown])
+  }, [safeJson, fetchOrders])
 
   useEffect(() => {
     fetchCycles()
     fetchOrders({ page: 1 })
-    fetchVendorBreakdown()
     return () => {
       if (fetchCtl.current) fetchCtl.current.abort()
     }
@@ -258,9 +241,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
           ? '/api/admin/exhibition/orders/approve'
           : type === 'cancel'
             ? '/api/admin/exhibition/orders/cancel'
-            : type === 'deliver'
-              ? '/api/admin/exhibition/orders/deliver'
-              : '/api/admin/exhibition/orders/restore'
+            : '/api/admin/exhibition/orders/restore'
       const res = await fetch(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -426,7 +407,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
 
   const canCancel = status === 'Pending' || status === 'Approved'
   const canApprove = status === 'Pending'
-  const canDeliver = status === 'Approved'
   const canRestore = status === 'Cancelled'
   // Counter invoices (vendor- or admin-captured) can be corrected while they
   // are still pending. Storefront orders are excluded: their lines point at
@@ -438,7 +418,11 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
         <div>
           <h1 className="text-h2 font-bold tracking-tight text-fg">Exhibition · {status}</h1>
-          <p className="text-sm text-muted">Orders in the {status.toLowerCase()} stage of the exhibition flow.</p>
+          <p className="text-sm text-muted">
+            {status === 'Confirmed'
+              ? 'Approved invoices the member has confirmed receiving.'
+              : `Orders in the ${status.toLowerCase()} stage of the exhibition flow.`}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {status === 'Pending' && (
@@ -469,117 +453,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
           </motion.div>
         ) : null}
       </AnimatePresence>
-
-      {/* Vendor handover — who still owes goods on approved orders across all
-          branches. Only the Approved view carries handover responsibility, so
-          the panel lives there (Pending orders haven't been approved yet). */}
-      {status === 'Approved' && vendorBreakdown && (
-        <div className="mb-4 rounded-xl border border-line-subtle bg-surface p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand/10">
-                <Store className="h-4 w-4 text-brand" strokeWidth={2.2} />
-              </span>
-              <div>
-                <h2 className="text-sm font-semibold text-fg">Vendor handover · all branches</h2>
-                <p className="text-xs text-muted">
-                  Who still owes goods on approved orders, aggregated across every branch
-                  {cycleFilter && cycles.some((c) => String(c.id) === String(cycleFilter))
-                    ? ` · ${cycles.find((c) => String(c.id) === String(cycleFilter))?.name || ''}`
-                    : ''}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={fetchVendorBreakdown}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              Refresh
-            </button>
-          </div>
-
-          {vendorBreakdown.vendors?.length ? (
-            <>
-              <div className="mb-2 text-xs text-muted">
-                {vendorBreakdown.vendors.length} vendor{vendorBreakdown.vendors.length === 1 ? '' : 's'} awaiting handover — scroll for more
-              </div>
-              <div className="grid max-h-[30rem] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
-              {vendorBreakdown.vendors.map((v) => {
-                const total = Number(v.qty_delivered || 0) + Number(v.qty_outstanding || 0)
-                const pct = total ? Math.round((Number(v.qty_delivered || 0) / total) * 100) : 0
-                const done = Number(v.qty_outstanding || 0) === 0
-                return (
-                  <div
-                    key={v.vendor_id}
-                    className={[
-                      'flex flex-col gap-2 rounded-lg border bg-surface p-3 transition-colors duration-200 ease-sakani',
-                      done ? 'border-success-border/70 bg-success-bg/40' : 'border-brand/25 bg-brand/5',
-                    ].join(' ')}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-fg" title={v.vendor_name}>
-                          {v.vendor_name || 'Vendor'}
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-muted">
-                          {v.branch_name ? `${v.branch_name} · ` : ''}
-                          {Number(v.orders || 0)} order{Number(v.orders || 0) === 1 ? '' : 's'} ·{' '}
-                          {total.toLocaleString()} item{total === 1 ? '' : 's'}
-                        </p>
-                      </div>
-                      {done ? (
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success-bg px-2 py-0.5 text-[10px] font-semibold text-success-fg">
-                          <PackageCheck className="h-3 w-3" strokeWidth={2.4} />
-                          All delivered
-                        </span>
-                      ) : (
-                        <span className="shrink-0 rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-brand">
-                          {Number(v.qty_outstanding || 0).toLocaleString()} outstanding
-                        </span>
-                      )}
-                    </div>
-
-                    <div>
-                      <div className="mb-1 flex items-center justify-between text-[11px]">
-                        <span className="text-muted">
-                          {Number(v.qty_delivered || 0).toLocaleString()} of {total.toLocaleString()} delivered
-                        </span>
-                        <span className={done ? 'font-semibold text-success-fg' : 'font-semibold text-fg'}>
-                          {pct}%
-                        </span>
-                      </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
-                        <div
-                          className={['h-full rounded-full transition-all duration-300 ease-sakani', done ? 'bg-success' : 'bg-brand'].join(' ')}
-                          style={{ width: `${Math.max(4, pct)}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between border-t border-line/70 pt-2">
-                      <span className="text-[11px] text-muted">Still owing</span>
-                      <span className={['text-sm font-semibold tabular-nums', done ? 'text-muted line-through' : 'text-fg'].join(' ')}>
-                        {naira(v.amount_outstanding)}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })}
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-line bg-subtle/60 px-4 py-6 text-center">
-              <PackageCheck className="h-5 w-5 text-brand" strokeWidth={2} />
-              <p className="text-sm font-medium text-fg">Nothing awaiting handover</p>
-              <p className="max-w-sm text-xs text-muted">
-                Approved orders with vendor lines will appear here once members order and they are approved.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Filters */}
       <div className="ui-card p-4 mb-4">
@@ -620,7 +493,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                   setCycleFilter(next)
                   setPage(1)
                   fetchOrders({ page: 1, cycle: next })
-                  fetchVendorBreakdown()
                 }}
               >
                 <option value="">All cycles</option>
@@ -656,10 +528,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
             <div className="mr-1 text-sm font-semibold text-fg">{status} Orders</div>
             <button
               type="button"
-              onClick={() => {
-                fetchOrders()
-                fetchVendorBreakdown()
-              }}
+              onClick={() => fetchOrders()}
               disabled={loading}
               className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
             >
@@ -683,17 +552,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 Approve ({selectedCount})
-              </button>
-            )}
-            {canDeliver && (
-              <button
-                type="button"
-                onClick={() => selectedCount && runAction('deliver', Array.from(selected))}
-                disabled={!selectedCount || bulkBusy}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
-              >
-                <Truck className="h-3.5 w-3.5" />
-                Deliver ({selectedCount})
               </button>
             )}
             {canCancel && (
@@ -815,7 +673,11 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                         <Inbox className="h-6 w-6 text-subtext" />
                       </div>
                       <p className="text-sm font-medium text-fg">No {status} exhibition orders</p>
-                      <p className="text-xs text-muted">When members place exhibition orders, they will appear here.</p>
+                      <p className="text-xs text-muted">
+                        {status === 'Confirmed'
+                          ? 'Approved invoices appear here once the member confirms receipt.'
+                          : 'When members place exhibition orders, they will appear here.'}
+                      </p>
                     </div>
                   </td>
                 </tr>
@@ -870,7 +732,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                           <div className="mt-1 max-w-[160px] space-y-0.5">
                             {o.per_vendor.map((v) => (
                               <div key={v.vendor_id} className="truncate text-xs text-subtext" title={v.vendor_name}>
-                                {v.vendor_name}: {v.qty} {v.all_delivered && status === 'Approved' ? '· delivered' : ''}
+                                {v.vendor_name}: {v.qty}
                               </div>
                             ))}
                           </div>
@@ -887,7 +749,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                             if (!v) return
                             if (v === 'edit') { setEditOrder(o); setInvoiceOpen(true) }
                             if (v === 'approve') setModal({ type: 'approve', ids: [o.id] })
-                            if (v === 'deliver') runAction('deliver', [o.id])
                             if (v === 'cancel') setModal({ type: 'cancel', ids: [o.id] })
                             if (v === 'restore') setModal({ type: 'restore', ids: [o.id] })
                             if (v === 'activity') openAudit(o)
@@ -896,7 +757,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                           <option value="" disabled>Actions</option>
                           {canEditRow(o) && <option value="edit">Edit invoice</option>}
                           {canApprove && <option value="approve">Approve</option>}
-                          {canDeliver && <option value="deliver">Deliver</option>}
                           {canCancel && <option value="cancel">Cancel</option>}
                           {canRestore && <option value="restore">Restore</option>}
                           <option value="activity">Activity</option>

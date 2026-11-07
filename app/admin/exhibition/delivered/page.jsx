@@ -1,12 +1,7 @@
-'use client'
+// The Delivered view no longer exists in the counter flow: the member confirms
+// receipt after approval. Keep the old URL working for bookmarks and links.
+import { redirect } from 'next/navigation'
 
-import ProtectedRoute from '../../../components/ProtectedRoute'
-import ExhibitionOrdersContent from '../orders-content'
-
-export default function ExhibitionDeliveredPage() {
-  return (
-    <ProtectedRoute allowedRoles={['admin']}>
-      <ExhibitionOrdersContent status="Delivered" />
-    </ProtectedRoute>
-  )
+export default function ExhibitionDeliveredRedirect() {
+  redirect('/admin/exhibition/confirmed')
 }
