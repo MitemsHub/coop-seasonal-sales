@@ -45,12 +45,14 @@ export async function GET(req) {
     const cycleId = await resolveActiveCycleId(supabase, searchParams)
     if (!cycleId) return NextResponse.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
 
-    const { data: invoices, error } = await supabase
+    const bankAccountId = asInt(searchParams.get('bank_account_id'), 0)
+    let query = supabase
       .from('food_vendor_invoices')
-      .select('id,branch_id,cycle_id,invoice_ref,invoice_date,amount,notes,storage_bucket,storage_path,file_name,mime_type,file_size,created_by_role,created_by_code,created_at')
+      .select('id,branch_id,cycle_id,bank_account_id,invoice_ref,invoice_date,amount,notes,storage_bucket,storage_path,file_name,mime_type,file_size,created_by_role,created_by_code,created_at')
       .eq('branch_id', branchId)
       .eq('cycle_id', cycleId)
-      .order('created_at', { ascending: false })
+    if (bankAccountId) query = query.eq('bank_account_id', bankAccountId)
+    const { data: invoices, error } = await query.order('created_at', { ascending: false })
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
     const out = await Promise.all(

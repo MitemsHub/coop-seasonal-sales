@@ -47,6 +47,7 @@ function AdminFoodBanksContent() {
 
   const [invoiceListOpen, setInvoiceListOpen] = useState(false)
   const [invoiceLoc, setInvoiceLoc] = useState(null)
+  const [invoiceBank, setInvoiceBank] = useState(null)
   const [invoices, setInvoices] = useState([])
   const [invoiceLoading, setInvoiceLoading] = useState(false)
 
@@ -207,13 +208,15 @@ function AdminFoodBanksContent() {
     }
   }
 
-  const loadInvoices = async (loc) => {
+  const loadInvoices = async (loc, bank = null) => {
     const id = Number(loc?.id)
     if (!Number.isFinite(id) || id <= 0) return
     setInvoiceLoading(true)
     setMsg(null)
+    setInvoiceBank(bank || null)
     try {
       const qs = new URLSearchParams({ branch_id: String(id) })
+      if (bank?.id) qs.set('bank_account_id', String(bank.id))
       const res = await fetch(`/api/admin/food/vendor-banks/invoices/list?${qs.toString()}`, { cache: 'no-store' })
       const json = await safeJson(res, '/api/admin/food/vendor-banks/invoices/list')
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to load invoices')
@@ -592,7 +595,12 @@ function AdminFoodBanksContent() {
 
               {filtered.map((r, branchIdx) =>
                 (r.banks || []).length === 0 ? (
-                  <tr key={r.id} className={`border-b border-line ${branchIdx % 2 === 0 ? 'bg-surface' : 'bg-subtle/25'}`}>
+                  <tr
+                    key={r.id}
+                    className={`border-t-2 border-line-strong border-b border-line/60 ${
+                      branchIdx % 2 === 0 ? 'bg-surface' : 'bg-subtle/25'
+                    }`}
+                  >
                     <td className="px-4 py-3 align-middle">
                       <div className="flex items-center gap-2.5">
                         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-subtle text-[10px] font-bold uppercase text-brand">
@@ -637,7 +645,7 @@ function AdminFoodBanksContent() {
                     return (
                       <tr
                         key={`${r.id}-${b.id}`}
-                        className={`${idx === 0 ? 'border-t border-line' : ''} border-b border-line/60 ${
+                        className={`${idx === 0 ? 'border-t-2 border-line-strong' : ''} border-b border-line/60 ${
                           branchIdx % 2 === 0 ? 'bg-surface hover:bg-subtle/40' : 'bg-subtle/25 hover:bg-subtle/50'
                         }`}
                       >
@@ -711,9 +719,9 @@ function AdminFoodBanksContent() {
                           {invs.length ? (
                             <button
                               type="button"
-                              onClick={() => loadInvoices(r)}
+                              onClick={() => loadInvoices(r, b)}
                               className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1 text-[11px] font-semibold text-fg transition-colors hover:bg-subtle"
-                              title="View this branch's invoices"
+                              title="View this account's invoices"
                             >
                               Invoice
                               <span className="rounded-full bg-subtle px-1.5 py-0.5 text-[10px] tabular-nums text-muted">
@@ -745,7 +753,7 @@ function AdminFoodBanksContent() {
                                 e.target.value = ''
                                 if (!v) return
                                 if (v === 'upload') openInvoiceUpload(r, b.id)
-                                if (v === 'invoices') loadInvoices(r)
+                                if (v === 'invoices') loadInvoices(r, b)
                                 if (v === 'manage') setBanksFor(r)
                                 if (v === 'paid') setAccountPaid(r, b, true)
                                 if (v === 'unpaid') setAccountPaid(r, b, false)
@@ -860,8 +868,32 @@ function AdminFoodBanksContent() {
         </div>
       </DraggableModal>
 
-      <DraggableModal open={invoiceListOpen} onClose={() => setInvoiceListOpen(false)} title={`Invoices · ${invoiceLoc?.name || ''}`}>
+      <DraggableModal
+        open={invoiceListOpen}
+        onClose={() => setInvoiceListOpen(false)}
+        title={['Invoices', invoiceLoc?.name, invoiceBank?.bank_name].filter(Boolean).join(' · ')}
+      >
         <div className="space-y-3">
+          {invoiceBank && (
+            <div className="rounded-lg border border-line bg-subtle/40 px-3 py-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-fg">{invoiceBank.bank_name || 'Bank account'}</span>
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                    invoiceBank.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'
+                  }`}
+                >
+                  {invoiceBank.is_paid ? 'Paid' : 'Unpaid'}
+                </span>
+              </div>
+              <div className="mt-0.5 text-xs text-muted">
+                {invoiceBank.account_name || '—'}
+                <span aria-hidden="true"> · </span>
+                <span className="font-mono text-fg">{invoiceBank.account_number || '—'}</span>
+              </div>
+              {invoiceBank.purpose && <div className="mt-0.5 text-xs text-subtext">Purpose: {invoiceBank.purpose}</div>}
+            </div>
+          )}
           {invoiceLoading ? (
             <div className="text-sm text-muted">Loading…</div>
           ) : invoices.length === 0 ? (
