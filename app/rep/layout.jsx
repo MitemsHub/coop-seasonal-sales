@@ -20,6 +20,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  PackageCheck,
   PanelLeftClose,
   PanelLeftOpen,
   Send,
@@ -201,6 +202,7 @@ export default function RepLayout({ children }) {
     if (pathname.startsWith('/rep/ram/banks')) return 'ram_banks'
     if (pathname.startsWith('/rep/exhibition/pending')) return 'exh_pending'
     if (pathname.startsWith('/rep/exhibition/approved')) return 'exh_approved'
+    if (pathname.startsWith('/rep/exhibition/confirmed')) return 'exh_confirmed'
     if (pathname.startsWith('/rep/exhibition/delivered')) return 'exh_delivered'
     if (pathname.startsWith('/rep/exhibition/cancelled')) return 'exh_cancelled'
     if (pathname.startsWith('/rep/exhibition/banks')) return 'exh_banks'
@@ -466,8 +468,10 @@ export default function RepLayout({ children }) {
               <GroupToggle open={exhOpen} onToggle={() => toggleModule('exhibition')} label="Coop Exhibition" collapsed={isCollapsed} onNavigate={() => setSidebarVisible(true)} />
               {!isCollapsed && exhOpen && (
                 <div className="mt-1 space-y-0.5">
-                  {/* Reps fulfil only: approved orders to deliver, plus vendor banks. */}
+                  {/* Reps watch the counter flow: approved invoices waiting on
+                      the member, then the confirmed history, plus vendor banks. */}
                   <NavLink href="/rep/exhibition/approved" label="Approved" icon={CheckCircle2} active={activeKey === 'exh_approved'} collapsed={false} onNavigate={navOnClick} />
+                  <NavLink href="/rep/exhibition/confirmed" label="Confirmed" icon={PackageCheck} active={activeKey === 'exh_confirmed'} collapsed={false} onNavigate={navOnClick} />
                   <NavLink href="/rep/exhibition/banks" label="Banks" icon={Landmark} active={activeKey === 'exh_banks'} collapsed={false} onNavigate={navOnClick} />
                 </div>
               )}

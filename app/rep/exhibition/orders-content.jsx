@@ -1,9 +1,9 @@
 'use client'
 
 // app/rep/exhibition/orders-content.jsx
-// Shared content for the rep exhibition order views (Pending, Approved,
-// Delivered, Cancelled). Reps approve and cancel; delivery is the vendor's
-// job; cancelled orders can be restored back to Pending.
+// Shared content for the rep exhibition order views (Approved, Confirmed,
+// Cancelled). Reps watch the counter flow; approving, cancelling and restoring
+// are admin actions, and the member confirms receipt.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { CheckCircle2, ChevronLeft, ChevronRight, Clock, History, Inbox, Package, PackageCheck, RefreshCw, RotateCcw, Search, Store, Truck, XCircle, Zap } from 'lucide-react'
@@ -80,7 +80,6 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
   const [modal, setModal] = useState(null) // { type: 'approve'|'cancel'|'restore', ids }
   const [cancelReason, setCancelReason] = useState('')
   const [stats, setStats] = useState(null)
-  const [vendorBreakdown, setVendorBreakdown] = useState(null)
   const [auditOrder, setAuditOrder] = useState(null) // { id, order_id, created_at, member_id }
   const [auditEvents, setAuditEvents] = useState([])
   const [auditLoading, setAuditLoading] = useState(false)
@@ -144,24 +143,10 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
     }
   }, [safeJson])
 
-  // Per-vendor handover breakdown — which vendors still owe goods on approved
-  // orders. Only meaningful on the Approved view, so it skips other statuses.
-  const fetchVendorBreakdown = useCallback(async () => {
-    if (status !== 'Approved') return
-    try {
-      const res = await fetch('/api/rep/exhibition/vendors/breakdown', { cache: 'no-store' })
-      const json = await safeJson(res, 'vendor breakdown')
-      if (res.ok && json?.ok) setVendorBreakdown(json)
-    } catch {
-      // The panel is best-effort — never block the page on it.
-    }
-  }, [status, safeJson])
-
   const refreshAll = useCallback(() => {
     fetchOrders()
     fetchStats()
-    fetchVendorBreakdown()
-  }, [fetchOrders, fetchStats, fetchVendorBreakdown])
+  }, [fetchOrders, fetchStats])
 
   // Audit trail for one order — who approved/cancelled/restored/delivered it.
   const openAudit = useCallback(async (o) => {
@@ -184,7 +169,6 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
   useEffect(() => {
     fetchOrders({ page: 1 })
     fetchStats()
-    fetchVendorBreakdown()
     return () => {
       if (fetchCtl.current) fetchCtl.current.abort()
     }
@@ -316,13 +300,11 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
     setMsg(null)
     try {
       const path =
-        type === 'deliver'
-          ? '/api/rep/exhibition/orders/deliver'
-          : type === 'approve'
-            ? '/api/rep/exhibition/orders/approve'
-            : type === 'cancel'
-              ? '/api/rep/exhibition/orders/cancel'
-              : '/api/rep/exhibition/orders/restore'
+        type === 'approve'
+          ? '/api/rep/exhibition/orders/approve'
+          : type === 'cancel'
+            ? '/api/rep/exhibition/orders/cancel'
+            : '/api/rep/exhibition/orders/restore'
       const res = await fetch(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -330,7 +312,7 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
       })
       const json = await safeJson(res, path)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Action failed')
-      const done = (json.approved || json.cancelled || json.restored || json.delivered || [])
+      const done = (json.approved || json.cancelled || json.restored || [])
       const failed = json.failed || []
       setOrders((prev) => (prev || []).filter((o) => !done.includes(o.id)))
       setSelected(new Set())
@@ -338,14 +320,13 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
       setCancelReason('')
       setMsg({
         type: 'success',
-        text: `${done.length} order(s) ${type === 'deliver' ? 'delivered' : type === 'approve' ? 'approved' : type === 'cancel' ? 'cancelled' : 'restored'}`,
+        text: `${done.length} order(s) ${type === 'approve' ? 'approved' : type === 'cancel' ? 'cancelled' : 'restored'}`,
 
         skipped: failed.length,
         reasons: summarizeFailed(failed),
       })
       fetchOrders({ page: safePage, keepMsg: true })
       fetchStats()
-      fetchVendorBreakdown()
     } catch (e) {
       setMsg({ type: 'error', text: e?.message || 'Action failed' })
     } finally {
@@ -489,10 +470,9 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
     }
   }
 
-  // Reps only fulfil: they see APPROVED orders and mark them delivered.
-  // Approving, cancelling and restoring are admin actions, enforced in the API
-  // as well as hidden here.
-  const canDeliver = status === 'Approved'
+  // Reps see the approved queue and the confirmed history. Approving,
+  // cancelling and restoring are admin actions, enforced in the API as well as
+  // hidden here.
   const canCancel = false
   const canApprove = false
   const canRestore = false
@@ -517,9 +497,9 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
             {status === 'Pending'
               ? 'Approve or cancel orders placed by members at your branch.'
               : status === 'Approved'
-                ? 'Approved orders ready to hand to members — mark each one delivered once collected.'
-                : status === 'Delivered'
-                  ? 'Orders the vendors have delivered to members.'
+                ? 'Approved invoices waiting for the member to confirm receipt.'
+                : status === 'Confirmed'
+                  ? 'Invoices the member has confirmed receiving.'
                   : 'Cancelled orders. Restore any that were cancelled by mistake.'}
           </p>
         </div>
@@ -550,11 +530,11 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
                   <span className="font-semibold text-fg">{naira(stats.todayPending?.total || 0)}</span>
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <Truck className="h-3.5 w-3.5 text-brand" strokeWidth={2.2} />
-                  Delivered this cycle
-                  <span className="font-semibold text-fg">{(stats.deliveredCycle?.count || 0).toLocaleString()}</span>
+                  <PackageCheck className="h-3.5 w-3.5 text-brand" strokeWidth={2.2} />
+                  Confirmed this season
+                  <span className="font-semibold text-fg">{(stats.confirmedCycle?.count || 0).toLocaleString()}</span>
                   <span className="text-line-strong">·</span>
-                  <span className="font-semibold text-fg">{naira(stats.deliveredCycle?.total || 0)}</span>
+                  <span className="font-semibold text-fg">{naira(stats.confirmedCycle?.total || 0)}</span>
                 </span>
               </span>
             </div>
@@ -562,8 +542,8 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
           <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
           {[
             { key: 'Pending', icon: Clock, delta: `${stats.todayPending?.count || 0} new today` },
-            { key: 'Approved', icon: CheckCircle2, delta: 'awaiting vendor handover' },
-            { key: 'Delivered', icon: Truck, delta: 'handed to members' },
+            { key: 'Approved', icon: CheckCircle2, delta: 'awaiting member confirmation' },
+            { key: 'Confirmed', icon: PackageCheck, delta: 'confirmed by members' },
             { key: 'Cancelled', icon: XCircle, delta: 'can be restored' },
           ].map(({ key, icon: Icon, delta }) => {
             const st = stats.statuses?.[key] || { count: 0, total: 0 }
@@ -594,139 +574,6 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
           </div>
         </>
       ) : null}
-
-      {/* Vendor handover — who still owes goods on approved orders. Only the
-          Approved view carries handover responsibility, so the panel lives
-          there (Pending orders haven't been approved yet). */}
-      {status === 'Approved' && vendorBreakdown && (
-        <div className="mb-4 rounded-xl border border-line-subtle bg-surface p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand/10">
-                <Store className="h-4 w-4 text-brand" strokeWidth={2.2} />
-              </span>
-              <div>
-                <h2 className="text-sm font-semibold text-fg">Vendor handover</h2>
-                <p className="text-xs text-muted">
-                  Who still owes goods on approved orders
-                  {vendorBreakdown.cycle?.name ? ` · ${vendorBreakdown.cycle.name}` : ''}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={fetchVendorBreakdown}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle"
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              Refresh
-            </button>
-          </div>
-
-          {/* Cycle totals — items and naira still owed across all vendors */}
-          {vendorBreakdown.totals && (
-            <div className="mb-3 flex flex-col gap-2 rounded-lg border border-line bg-subtle/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs font-medium text-muted">
-                Across {vendorBreakdown.vendors?.length || 0} vendor{vendorBreakdown.vendors?.length === 1 ? '' : 's'} this cycle
-              </p>
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
-                <div>
-                  <span className="text-[11px] text-muted">Items still owed</span>
-                  <p className="text-sm font-bold tabular-nums text-fg">
-                    {Number(vendorBreakdown.totals.qty_outstanding || 0).toLocaleString()}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-[11px] text-muted">Naira still owed</span>
-                  <p className="text-sm font-bold tabular-nums text-fg">
-                    {naira(vendorBreakdown.totals.amount_outstanding)}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-[11px] text-muted">Delivered</span>
-                  <p className="text-sm font-bold tabular-nums text-fg">
-                    {Number(vendorBreakdown.totals.qty_delivered || 0).toLocaleString()} items ·{' '}
-                    {naira(vendorBreakdown.totals.amount_delivered)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {vendorBreakdown.vendors?.length ? (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {vendorBreakdown.vendors.map((v) => {
-                const total = Number(v.qty_delivered || 0) + Number(v.qty_outstanding || 0)
-                const pct = total ? Math.round((Number(v.qty_delivered || 0) / total) * 100) : 0
-                const done = Number(v.qty_outstanding || 0) === 0
-                return (
-                  <div
-                    key={v.vendor_id}
-                    className={[
-                      'flex flex-col gap-2 rounded-lg border bg-surface p-3 transition-colors duration-200 ease-sakani',
-                      done ? 'border-success-border/70 bg-success-bg/40' : 'border-brand/25 bg-brand/5',
-                    ].join(' ')}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-fg" title={v.vendor_name}>
-                          {v.vendor_name || 'Vendor'}
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-muted">
-                          {Number(v.orders || 0)} order{Number(v.orders || 0) === 1 ? '' : 's'} ·{' '}
-                          {total.toLocaleString()} item{total === 1 ? '' : 's'}
-                        </p>
-                      </div>
-                      {done ? (
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success-bg px-2 py-0.5 text-[10px] font-semibold text-success-fg">
-                          <PackageCheck className="h-3 w-3" strokeWidth={2.4} />
-                          All delivered
-                        </span>
-                      ) : (
-                        <span className="shrink-0 rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-semibold text-brand">
-                          {Number(v.qty_outstanding || 0).toLocaleString()} outstanding
-                        </span>
-                      )}
-                    </div>
-
-                    <div>
-                      <div className="mb-1 flex items-center justify-between text-[11px]">
-                        <span className="text-muted">
-                          {Number(v.qty_delivered || 0).toLocaleString()} of {total.toLocaleString()} delivered
-                        </span>
-                        <span className={done ? 'font-semibold text-success-fg' : 'font-semibold text-fg'}>
-                          {pct}%
-                        </span>
-                      </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
-                        <div
-                          className={['h-full rounded-full transition-all duration-300 ease-sakani', done ? 'bg-success' : 'bg-brand'].join(' ')}
-                          style={{ width: `${Math.max(4, pct)}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between border-t border-line/70 pt-2">
-                      <span className="text-[11px] text-muted">Still owing</span>
-                      <span className={['text-sm font-semibold tabular-nums', done ? 'text-muted line-through' : 'text-fg'].join(' ')}>
-                        {naira(v.amount_outstanding)}
-                      </span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-line bg-subtle/60 px-4 py-6 text-center">
-              <PackageCheck className="h-5 w-5 text-brand" strokeWidth={2} />
-              <p className="text-sm font-medium text-fg">Nothing awaiting handover</p>
-              <p className="max-w-sm text-xs text-muted">
-                Approved orders with vendor lines will appear here once members order and you approve them.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
 
       <AnimatePresence mode="wait">
         {msg ? (
@@ -829,21 +676,6 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
             >
               {allSelectedOnPage ? 'Deselect All' : 'Select All'}
             </button>
-            {canDeliver && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (!selectedCount) return
-                  if (!window.confirm(`Mark ${selectedCount} approved order(s) as delivered?`)) return
-                  runAction('deliver', Array.from(selected))
-                }}
-                disabled={!selectedCount || bulkBusy}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-success-fg px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
-              >
-                <Truck className="h-3.5 w-3.5" />
-                Deliver ({selectedCount})
-              </button>
-            )}
             {canApprove && (
               <button
                 type="button"
@@ -1041,12 +873,6 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
                             const v = e.target.value
                             e.target.value = ''
                             if (!v) return
-                            if (v === 'deliver') {
-                              if (window.confirm(`Mark order ${o.order_id || o.id} as delivered?`)) {
-                                runAction('deliver', [o.id])
-                              }
-                              return
-                            }
                             if (v === 'approve') setModal({ type: 'approve', ids: [o.id] })
                             if (v === 'cancel') setModal({ type: 'cancel', ids: [o.id] })
                             if (v === 'restore') setModal({ type: 'restore', ids: [o.id] })
@@ -1055,7 +881,6 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
                           }}
                         >
                           <option value="" disabled>Actions</option>
-                          {canDeliver && <option value="deliver">Mark delivered</option>}
                           {canApprove && <option value="approve">Approve</option>}
                           {canCancel && <option value="cancel">Cancel</option>}
                           {canRestore && <option value="restore">Restore</option>}
@@ -1126,7 +951,7 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
           <div className="text-sm text-muted">
             {modal?.type === 'restore' ? 'Restore ' : 'Approve '}
             <b className="text-fg">{modal?.ids?.length || 0}</b> order(s)
-            {modal?.type === 'restore' ? ' back to Pending' : ', and vendors will then hand over the goods'}?
+            {modal?.type === 'restore' ? ' back to Pending' : ', then the member confirms receipt'}?
           </div>
         )}
       </DraggableModal>

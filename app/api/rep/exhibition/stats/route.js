@@ -2,7 +2,7 @@
 // Rep-scoped exhibition stats for the rep's own branch — powers the summary
 // strip on the rep exhibition order views and the rep dashboard.
 //   GET /api/rep/exhibition/stats
-// Returns per-status order counts + totals (Pending/Approved/Delivered/
+// Returns per-status order counts + totals (Pending/Approved/Confirmed/
 // Cancelled) plus today's new orders, all filtered to the rep's branch_id,
 // and a per-cycle breakdown so reps can compare activity across seasons.
 import { NextResponse } from 'next/server'
@@ -74,6 +74,8 @@ export async function GET(req) {
     let todayPendingTotal = 0
     let deliveredCycleCount = 0
     let deliveredCycleTotal = 0
+    let confirmedCycleCount = 0
+    let confirmedCycleTotal = 0
 
     for (const row of data || []) {
       const key = STATUSES.includes(String(row.status)) ? row.status : null
@@ -83,6 +85,10 @@ export async function GET(req) {
         if (key === 'Delivered' && cycleId && Number(row.cycle_id) === cycleId) {
           deliveredCycleCount += 1
           deliveredCycleTotal += Number(row.total_amount || 0)
+        }
+        if (key === 'Confirmed' && cycleId && Number(row.cycle_id) === cycleId) {
+          confirmedCycleCount += 1
+          confirmedCycleTotal += Number(row.total_amount || 0)
         }
       }
       if (String(row.created_at || '') >= todayStart) {
@@ -126,6 +132,7 @@ export async function GET(req) {
       today: { count: todayCount, total: Math.round(todayTotal) },
       todayPending: { count: todayPendingCount, total: Math.round(todayPendingTotal) },
       deliveredCycle: { count: deliveredCycleCount, total: Math.round(deliveredCycleTotal) },
+      confirmedCycle: { count: confirmedCycleCount, total: Math.round(confirmedCycleTotal) },
       total: (data || []).length,
     })
   } catch (e) {

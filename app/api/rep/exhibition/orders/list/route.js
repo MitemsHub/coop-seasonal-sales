@@ -1,7 +1,8 @@
 // app/api/rep/exhibition/orders/list/route.js
-// Rep view of exhibition orders for their branch. Reps approve, cancel and
-// restore; delivery is the vendor's job. The rep_token carries branch_id
-// (exhibition is branch-scoped like Food).
+// Rep view of exhibition orders for their branch. Reps watch the approved
+// queue and the member-confirmed history; approval, cancellation and restore
+// are admin actions. The rep_token carries branch_id (exhibition is
+// branch-scoped like Food).
 //   GET /api/rep/exhibition/orders/list?status=&payment=&cycle_id=&q=&limit=&offset=
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
@@ -26,7 +27,8 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url)
     const statusRaw = (searchParams.get('status') || '').trim()
     const status = STATUSES.includes(statusRaw) ? statusRaw : 'Pending'
-    // "Delivered" means handed over, so it includes member-confirmed orders.
+    // Kept for old bookmarks: "Delivered" now resolves to member-confirmed
+    // orders (plus any legacy delivered rows).
     const statusesToMatch = status === 'Delivered' ? ['Delivered', 'Confirmed'] : [status]
     const payment = (searchParams.get('payment') || '').trim()
     const cycleId = Math.trunc(Number(searchParams.get('cycle_id') || 0))

@@ -17,6 +17,7 @@ import {
   Home,
   Landmark,
   Package,
+  PackageCheck,
   RefreshCw,
   Send,
   ShoppingBasket,
@@ -67,7 +68,8 @@ const QUICK_LINKS = {
     { href: '/rep/ram/banks', label: 'Banks', icon: Landmark, desc: 'Vendor bank accounts' },
   ],
   exhibition: [
-    { href: '/rep/exhibition/approved', label: 'Approved', icon: CheckCircle2, desc: 'Deliver approved orders' },
+    { href: '/rep/exhibition/approved', label: 'Approved', icon: CheckCircle2, desc: 'Awaiting member confirmation' },
+    { href: '/rep/exhibition/confirmed', label: 'Confirmed', icon: PackageCheck, desc: 'Confirmed by members' },
     { href: '/rep/exhibition/banks', label: 'Banks', icon: Landmark, desc: 'Vendor bank accounts' },
   ],
 }
@@ -154,9 +156,10 @@ function PipelineStats({ loading, data, moduleName }) {
   const statuses = data?.statuses || {}
   const today = data?.today || {}
   const deliveredCycle = data?.deliveredCycle || {}
+  const confirmedCycle = data?.confirmedCycle || {}
   const pending = statuses.Pending || {}
   const approved = statuses.Approved || {}
-  const delivered = statuses.Delivered || {}
+  const completedCycle = moduleName === 'Exhibition' ? confirmedCycle : deliveredCycle
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <StatCard
@@ -178,11 +181,11 @@ function PipelineStats({ loading, data, moduleName }) {
       />
       <StatCard
         loading={loading}
-        icon={Truck}
-        title={`Delivered this ${moduleName === 'Exhibition' ? 'season' : 'cycle'}`}
-        value={loading ? '' : (deliveredCycle.count ?? 0).toLocaleString()}
-        delta={loading ? '' : naira(deliveredCycle.total)}
-        trend={(deliveredCycle.count ?? 0) > 0 ? 'up' : 'flat'}
+        icon={moduleName === 'Exhibition' ? PackageCheck : Truck}
+        title={moduleName === 'Exhibition' ? 'Confirmed this season' : 'Delivered this cycle'}
+        value={loading ? '' : (completedCycle.count ?? 0).toLocaleString()}
+        delta={loading ? '' : naira(completedCycle.total)}
+        trend={(completedCycle.count ?? 0) > 0 ? 'up' : 'flat'}
       />
       <StatCard
         loading={loading}
