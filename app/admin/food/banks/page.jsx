@@ -536,206 +536,223 @@ function AdminFoodBanksContent() {
         )}
       </AnimatePresence>
 
-      <div className="ui-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-subtle">
-              <tr>
-                <th className="text-left px-3 py-2 border-b">Branch</th>
-                <th className="text-left px-3 py-2 border-b">Bank accounts &amp; invoices</th>
-                <th className="text-left px-3 py-2 border-b">Paid</th>
-                <th className="text-right px-3 py-2 border-b">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && !filtered.length && (
-                Array.from({ length: 8 }).map((_, i) => (
-                  <tr key={`sk_${i}`} className="animate-pulse">
-                    <td className="px-3 py-3 border-b"><div className="h-4 w-40 bg-muted rounded" /></td>
-                    <td className="px-3 py-3 border-b"><div className="h-20 w-72 bg-muted rounded" /></td>
-                    <td className="px-3 py-3 border-b"><div className="h-4 w-16 bg-muted rounded" /></td>
-                    <td className="px-3 py-3 border-b text-right"><div className="h-8 w-28 bg-muted rounded ml-auto" /></td>
-                  </tr>
-                ))
-              )}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {loading && !filtered.length &&
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={`sk_${i}`} className="ui-card animate-pulse p-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-subtle" />
+                <div className="space-y-2">
+                  <div className="h-4 w-40 rounded bg-subtle" />
+                  <div className="h-3 w-28 rounded bg-subtle" />
+                </div>
+              </div>
+              <div className="mt-4 h-24 rounded-xl bg-subtle" />
+            </div>
+          ))}
 
-              {!loading && filtered.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-3 py-6 text-center text-muted">
-                    No rows found
-                  </td>
-                </tr>
-              )}
+        {!loading && filtered.length === 0 && (
+          <div className="ui-card p-8 text-center text-sm text-muted lg:col-span-2">No branches match your search.</div>
+        )}
 
-              {filtered.map((r) => {
-                const accounts = r.banks || []
-                if (!accounts.length) {
+        {filtered.map((r) => {
+          const accounts = r.banks || []
+          const invoiceCount = accounts.reduce((n, b) => n + Number(b.invoices?.length || 0), 0)
+          const invoiceTotal = accounts.reduce(
+            (n, b) =>
+              n +
+              (b.invoices || []).reduce((m, inv) => m + (inv.amount != null && inv.amount !== '' ? Number(inv.amount) || 0 : 0), 0),
+            0
+          )
+          return (
+            <section key={r.id} className="ui-card flex flex-col overflow-hidden">
+              <header className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-subtle text-xs font-bold uppercase tracking-wide text-brand">
+                    {String(r.code || r.name || '?').slice(0, 2)}
+                  </span>
+                  <div className="min-w-0">
+                    <h2 className="truncate text-sm font-semibold text-fg">{r.name || 'Branch'}</h2>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-subtext">
+                      <span className="uppercase tracking-wide">{r.code || '—'}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>
+                        {accounts.length} account{accounts.length === 1 ? '' : 's'}
+                      </span>
+                      <span aria-hidden="true">·</span>
+                      <span>
+                        {invoiceCount} invoice{invoiceCount === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                      r?.paid?.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${r?.paid?.is_paid ? 'bg-success-fg' : 'bg-muted'}`} />
+                    {r?.paid?.is_paid ? 'Paid' : 'Unpaid'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => togglePaid(r, !r?.paid?.is_paid)}
+                    disabled={paying}
+                    className="text-[11px] font-medium text-muted underline-offset-2 hover:text-fg hover:underline disabled:opacity-50"
+                  >
+                    {r?.paid?.is_paid ? 'Mark branch unpaid' : 'Mark branch paid'}
+                  </button>
+                </div>
+              </header>
+
+              <div className="flex-1 divide-y divide-line">
+                {!accounts.length && (
+                  <div className="flex flex-col items-center gap-2 px-4 py-8 text-center">
+                    <p className="text-sm text-subtext">No bank account on this branch yet.</p>
+                    <Button size="sm" variant="secondary" onClick={() => openAddBank(r.id)}>
+                      Add first account
+                    </Button>
+                  </div>
+                )}
+
+                {accounts.map((b) => {
+                  const invs = b.invoices || []
+                  const visible = invs.slice(0, 2)
+                  const hidden = invs.length - visible.length
                   return (
-                    <tr key={r.id} className="hover:bg-subtle">
-                      <td className="px-3 py-2 border-b align-top">
-                        <div className="flex items-center gap-2">
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-subtle text-[10px] font-bold uppercase text-brand">
-                            {String(r.code || r.name || '?').slice(0, 2)}
-                          </span>
-                          <div className="min-w-0">
-                            <div className="truncate font-medium text-fg">{r.name || '—'}</div>
-                            <div className="text-xs text-subtext">{r.code || ''}</div>
+                    <div key={b.id} className="px-4 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="truncate text-sm font-semibold text-fg">{b.bank_name || 'Bank'}</h3>
+                            {b.purpose && (
+                              <span className="rounded-full bg-subtle px-1.5 py-0.5 text-[10px] font-medium text-muted">{b.purpose}</span>
+                            )}
+                          </div>
+                          <div className="mt-1 truncate text-xs text-muted">{b.account_name || '—'}</div>
+                          <div className="mt-0.5 flex items-center gap-1.5">
+                            <span className="truncate font-mono text-xs text-fg">{b.account_number || '—'}</span>
+                            {!!b.account_number && (
+                              <button
+                                type="button"
+                                onClick={() => copyAccountNumber(b.account_number)}
+                                className="shrink-0 rounded border border-line px-1.5 py-0.5 text-[10px] font-medium text-muted transition-colors hover:bg-subtle hover:text-fg"
+                                title="Copy account number"
+                              >
+                                Copy
+                              </button>
+                            )}
                           </div>
                         </div>
-                      </td>
-                      <td className="px-3 py-2 border-b align-top">—</td>
-                      <td className="px-3 py-2 border-b align-top">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                            r.paid?.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'
-                          }`}
-                        >
-                          {r.paid?.is_paid ? 'Paid' : 'Unpaid'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 border-b align-top text-right">
-                        <div className="flex justify-end">
+                        <div className="flex shrink-0 flex-col items-end gap-1.5">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                              b.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'
+                            }`}
+                          >
+                            {b.is_paid ? 'Paid' : 'Unpaid'}
+                          </span>
                           <select
                             defaultValue=""
-                            className="border border-line rounded-lg px-2 py-1.5 text-xs sm:text-sm bg-surface disabled:opacity-50"
+                            className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-fg focus:border-brand focus:outline-none"
                             onChange={(e) => {
                               const v = e.target.value
                               e.target.value = ''
                               if (!v) return
-                              if (v === 'banks') setBanksFor(r)
-                              if (v === 'paid') togglePaid(r, true)
-                              if (v === 'unpaid') togglePaid(r, false)
+                              if (v === 'upload') openInvoiceUpload(r, b.id)
+                              if (v === 'invoices') loadInvoices(r)
+                              if (v === 'manage') setBanksFor(r)
+                              if (v === 'paid') setAccountPaid(r, b, true)
+                              if (v === 'unpaid') setAccountPaid(r, b, false)
+                              if (v === 'delete') deleteAccount(r, b)
                             }}
                           >
-                            <option value="" disabled>Actions</option>
-                            <option value="banks">Manage banks</option>
-                            {r?.paid?.is_paid ? <option value="unpaid">Mark Unpaid</option> : <option value="paid">Mark Paid</option>}
+                            <option value="" disabled>
+                              Actions
+                            </option>
+                            <option value="upload" disabled={!!b.is_paid}>
+                              Upload invoice
+                            </option>
+                            <option value="invoices" disabled={!invs.length}>
+                              View invoices
+                            </option>
+                            {b.is_paid ? <option value="unpaid">Mark unpaid</option> : <option value="paid">Mark paid</option>}
+                            <option value="manage">Edit account</option>
+                            <option value="delete" disabled={!!b.is_paid}>
+                              Delete account
+                            </option>
                           </select>
                         </div>
-                      </td>
-                    </tr>
-                  )
-                }
-                return accounts.map((b, idx) => (
-                  <tr key={`${r.id}-${b.id}`} className="hover:bg-subtle">
-                    {idx === 0 && (
-                      <td rowSpan={accounts.length} className="border-b px-3 py-2 align-top">
-                        <div className="flex items-center gap-2">
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-subtle text-[10px] font-bold uppercase text-brand">
-                            {String(r.code || r.name || '?').slice(0, 2)}
-                          </span>
-                          <div className="min-w-0">
-                            <div className="truncate font-medium text-fg">{r.name || '—'}</div>
-                            <div className="text-xs text-subtext">{r.code || ''}</div>
-                          </div>
-                        </div>
-                      </td>
-                    )}
-                    <td className="px-3 py-2 border-b align-top">
-                      <div className="rounded-xl border border-line bg-surface px-3.5 py-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <span className="text-sm font-semibold text-fg">{b.bank_name || 'Bank'}</span>
-                          <span className="rounded-full bg-subtle px-2 py-0.5 text-[10px] font-medium text-muted">
-                            {Number(b.invoices?.length || 0).toLocaleString()} invoice
-                            {Number(b.invoices?.length || 0) === 1 ? '' : 's'}
-                          </span>
-                        </div>
-                        <dl className="mt-1.5 grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
-                          <div className="min-w-0">
-                            <dt className="text-[10px] uppercase tracking-wide text-subtext">Account name</dt>
-                            <dd className="truncate text-fg">{b.account_name || '—'}</dd>
-                          </div>
-                          <div className="min-w-0">
-                            <dt className="text-[10px] uppercase tracking-wide text-subtext">Account number</dt>
-                            <dd className="flex items-center gap-1.5">
-                              <span className="truncate font-mono text-fg">{b.account_number || '—'}</span>
-                              {!!b.account_number && (
-                                <button
-                                  type="button"
-                                  onClick={() => copyAccountNumber(b.account_number)}
-                                  className="shrink-0 rounded border border-line px-1.5 py-0.5 text-[10px] font-medium text-muted hover:bg-subtle hover:text-fg"
-                                  title="Copy account number"
-                                >
-                                  Copy
-                                </button>
-                              )}
-                            </dd>
-                          </div>
-                        </dl>
-                        {b.purpose && (
-                          <div className="mt-1 text-xs text-subtext">Purpose: <span className="text-fg">{b.purpose}</span></div>
-                        )}
-                        <div className="mt-2 border-t border-line">
-                          {b.invoices?.length ? (
+                      </div>
+
+                      <div className="mt-2 rounded-lg bg-subtle/50 px-2.5 py-1.5">
+                        {invs.length ? (
+                          <>
                             <ul className="divide-y divide-line/70">
-                              {b.invoices.map((inv) => (
-                                <li key={inv.id} className="flex items-center justify-between gap-3 py-1 text-xs">
+                              {visible.map((inv) => (
+                                <li key={inv.id} className="flex items-center justify-between gap-3 py-1">
                                   {inv.url ? (
                                     <a
                                       href={inv.url}
                                       target="_blank"
                                       rel="noreferrer"
-                                      className="min-w-0 truncate font-medium text-brand hover:underline"
+                                      className="min-w-0 truncate text-[11px] font-medium text-brand hover:underline"
                                       title={inv.file_name || 'Invoice'}
                                     >
                                       {inv.file_name || 'Invoice'}
                                     </a>
                                   ) : (
-                                    <span className="min-w-0 truncate text-fg">{inv.file_name || 'Invoice'}</span>
+                                    <span className="min-w-0 truncate text-[11px] text-fg">{inv.file_name || 'Invoice'}</span>
                                   )}
-                                  <span className="shrink-0 tabular-nums text-fg">
-                                    {inv.amount != null ? `₦${Number(inv.amount).toLocaleString()}` : '—'}
+                                  <span className="shrink-0 font-mono text-[11px] tabular-nums text-fg">
+                                    {inv.amount != null && inv.amount !== '' ? `₦${Number(inv.amount).toLocaleString()}` : '—'}
                                   </span>
                                 </li>
                               ))}
                             </ul>
-                          ) : (
-                            <div className="py-1 text-xs text-subtext">No invoices filed against this account.</div>
-                          )}
-                        </div>
+                            {hidden > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => loadInvoices(r)}
+                                className="mt-1 text-[11px] font-semibold text-brand hover:underline"
+                              >
+                                View all {invs.length} invoices
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <div className="py-0.5 text-[11px] text-subtext">No invoices filed against this account.</div>
+                        )}
                       </div>
-                    </td>
-                    <td className="px-3 py-2 border-b align-top">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
-                          b.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'
-                        }`}
-                      >
-                        {b.is_paid ? 'Paid' : 'Unpaid'}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 border-b align-top text-right">
-                      <div className="flex justify-end">
-                        <select
-                          defaultValue=""
-                          className="border border-line rounded-lg px-2 py-1.5 text-xs sm:text-sm bg-surface disabled:opacity-50"
-                          onChange={(e) => {
-                            const v = e.target.value
-                            e.target.value = ''
-                            if (!v) return
-                            if (v === 'upload') openInvoiceUpload(r, b.id)
-                            if (v === 'manage') setBanksFor(r)
-                            if (v === 'paid') setAccountPaid(r, b, true)
-                            if (v === 'unpaid') setAccountPaid(r, b, false)
-                            if (v === 'delete') deleteAccount(r, b)
-                          }}
-                        >
-                          <option value="" disabled>
-                            Actions
-                          </option>
-                          <option value="upload" disabled={!!b.is_paid}>Upload Invoice</option>
-                          {b.is_paid ? <option value="unpaid">Mark Unpaid</option> : <option value="paid">Mark Paid</option>}
-                          <option value="manage">Edit account</option>
-                          <option value="delete" disabled={!!b.is_paid}>Delete Account</option>
-                        </select>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              })}
-            </tbody>
-          </table>
-        </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {accounts.length > 0 && (
+                <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-subtle/40 px-4 py-2.5">
+                  <div className="text-[11px] text-muted">
+                    {invoiceTotal > 0 ? `Filed: ₦${invoiceTotal.toLocaleString()}` : 'No invoice amounts filed'}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" variant="secondary" onClick={() => openAddBank(r.id)}>
+                      Add account
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="accent"
+                      onClick={() => openInvoiceUpload(r, accounts[0]?.id)}
+                      disabled={!!accounts[0]?.is_paid}
+                    >
+                      Upload invoice
+                    </Button>
+                  </div>
+                </footer>
+              )}
+            </section>
+          )
+        })}
       </div>
 
       <DraggableModal
