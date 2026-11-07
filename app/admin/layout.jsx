@@ -287,8 +287,8 @@ export default function AdminLayout({ children }) {
       setRamSub(isOps ? 'ops' : 'orders')
     } else if (pathname.startsWith('/admin/exhibition')) {
       setOpenModule('exhibition')
-      const isOps = ['/admin/exhibition/vendors', '/admin/exhibition/products',
-        '/admin/exhibition/markups', '/admin/exhibition/banks', '/admin/exhibition/cycles',
+      const isOps = ['/admin/exhibition/vendors',
+        '/admin/exhibition/banks', '/admin/exhibition/cycles',
         '/admin/exhibition/payouts', '/admin/exhibition/data', '/admin/exhibition/audit',
         '/admin/exhibition/reports'].some((p) => pathname.startsWith(p))
       setExhSub(isOps ? 'ops' : 'orders')
@@ -440,8 +440,6 @@ export default function AdminLayout({ children }) {
     if (pathname.startsWith('/admin/exhibition/cancelled')) return 'exh_cancelled'
     if (pathname.startsWith('/admin/exhibition/cycles')) return 'exh_cycles'
     if (pathname.startsWith('/admin/exhibition/vendors')) return 'exh_vendors'
-    if (pathname.startsWith('/admin/exhibition/products')) return 'exh_products'
-    if (pathname.startsWith('/admin/exhibition/markups')) return 'exh_markups'
     if (pathname.startsWith('/admin/exhibition/payouts')) return 'exh_payouts'
     if (pathname.startsWith('/admin/exhibition/banks')) return 'exh_banks'
     if (pathname.startsWith('/admin/exhibition/data')) return 'exh_data'
@@ -669,9 +667,8 @@ export default function AdminLayout({ children }) {
                 {exhOpsOpen && (
                   <div className="mt-0.5 space-y-0.5 pl-4">
                     <NavLink href="/admin/exhibition/vendors" label="Vendors" icon={Store} active={activeKey === 'exh_vendors'} collapsed={false} onNavigate={navOnClick} />
-                    {/* The 2026 counter flow sells without a catalogue. Products and
-                        discounts keep their routes for the future shop module but
-                        are no longer surfaced in the admin sidebar. */}
+                    {/* The 2026 counter flow sells without a catalogue, so the
+                        catalogue and discount pages have been removed. */}
                     <NavLink href="/admin/exhibition/banks" label="Banks" icon={Landmark} active={activeKey === 'exh_banks'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/data" label="Data" icon={Database} active={activeKey === 'exh_data'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/reports" label="Report" icon={BarChart3} active={activeKey === 'exh_reports'} collapsed={false} onNavigate={navOnClick} />

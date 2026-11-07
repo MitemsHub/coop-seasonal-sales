@@ -32,12 +32,6 @@ function isMissingTable(error, table) {
 // Statuses that still consume this cycle's loan allowance. Delivered and
 // Confirmed orders have already been spent — excluding them would free the cap.
 
-function makeOrderId() {
-  const y = new Date().getFullYear()
-  const rand = Math.random().toString(36).slice(2, 8).toUpperCase()
-  return `EXH-${y}-${rand}`
-}
-
 // GET /api/exhibition/orders?member_id=XXX — the member's exhibition orders
 // with their lines (used by the confirmation + any member-facing view).
 // Pass &status_only=1 to fetch just order_id + status (used by the member's
@@ -410,40 +404,30 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: reserveErr.message }, { status: 500 })
     }
 
-    // Create the order + lines + vendor payment rows.
-    // order_id is a short random string behind a UNIQUE constraint, so a
-    // collision must retry instead of surfacing as a checkout failure.
-    let orderId = ''
-    let inserted = null
-    let insErr = null
-    for (let attempt = 0; attempt < 3; attempt++) {
-      orderId = makeOrderId()
-      const res = await supabase
-        .from('exhibition_orders')
-        .insert({
-          order_id: orderId,
-          cycle_id: cycleId,
-          branch_id: branchId,
-          member_id: memberId,
-          member_name_snapshot: member.full_name || '',
-          payment_option: paymentOption,
-          status: 'Pending',
-          total_qty: totalQty,
-          total_amount: totalAmount,
-          exh_loan_grace_used: false,
-        })
-        .select('id')
-        .single()
-      inserted = res.data
-      insErr = res.error
-      if (!insErr || String(insErr?.code || '') !== '23505') break
-    }
+    // Create the order + lines + vendor payment rows. order_id comes from the
+    // sequential display-number default, so invoices read 1, 2, 3.
+    const { data: inserted, error: insErr } = await supabase
+      .from('exhibition_orders')
+      .insert({
+        cycle_id: cycleId,
+        branch_id: branchId,
+        member_id: memberId,
+        member_name_snapshot: member.full_name || '',
+        payment_option: paymentOption,
+        status: 'Pending',
+        total_qty: totalQty,
+        total_amount: totalAmount,
+        exh_loan_grace_used: false,
+      })
+      .select('id, order_id')
+      .single()
     if (insErr) {
       // Roll the reservation back so we never lock stock without an order.
       await supabase.rpc('exhibition_release_stock', { p_items: reserveItems }).catch(() => {})
       return NextResponse.json({ ok: false, error: insErr.message || 'Failed to create order' }, { status: 500 })
     }
     const orderDbId = inserted.id
+    const orderId = inserted.order_id
 
     const { error: lineErr } = await supabase.from('exhibition_order_lines').insert(
       [...priced, ...serviceLines].map((l) => ({

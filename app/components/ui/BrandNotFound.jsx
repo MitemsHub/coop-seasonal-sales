@@ -22,7 +22,6 @@ const CONTEXT_LINKS = {
   ],
   vendor: [
     { href: '/vendor/dashboard', label: 'Vendor Dashboard' },
-    { href: '/vendor/products', label: 'Products' },
     { href: '/vendor/orders', label: 'Orders' },
   ],
   rep: [

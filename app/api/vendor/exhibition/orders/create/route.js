@@ -24,12 +24,6 @@ const MAX_ITEMS = 40
 const MAX_PRINCIPAL = 100_000_000
 const PAYMENTS = ['Cash', 'Savings', 'Loan']
 
-function makeOrderId() {
-  const y = new Date().getFullYear()
-  const rand = Math.random().toString(36).slice(2, 8).toUpperCase()
-  return `EXH-${y}-${rand}`
-}
-
 function cleanText(v, max = 120) {
   return String(v ?? '')
     .trim()
@@ -157,33 +151,25 @@ export async function POST(req) {
 
     const totalQty = items.reduce((sum, i) => sum + i.qty, 0)
 
-    let orderId = ''
-    let inserted = null
-    let insErr = null
-    for (let attempt = 0; attempt < 3; attempt++) {
-      orderId = makeOrderId()
-      const res = await supabase
-        .from('exhibition_orders')
-        .insert({
-          order_id: orderId,
-          cycle_id: cycleId,
-          branch_id: vendor.branch_id,
-          member_id: memberId,
-          member_name_snapshot: member.full_name || '',
-          payment_option: paymentOption,
-          status: 'Pending',
-          total_qty: totalQty,
-          total_amount: total,
-          source: 'counter',
-          captured_by_role: 'vendor',
-          captured_by_code: String(ctx.vendor_code || ''),
-        })
-        .select('id')
-        .single()
-      inserted = res.data
-      insErr = res.error
-      if (!insErr || String(insErr?.code || '') !== '23505') break
-    }
+    // order_id comes from the sequential display-number default, so invoices
+    // read 1, 2, 3 instead of a random EXH- code.
+    const { data: inserted, error: insErr } = await supabase
+      .from('exhibition_orders')
+      .insert({
+        cycle_id: cycleId,
+        branch_id: vendor.branch_id,
+        member_id: memberId,
+        member_name_snapshot: member.full_name || '',
+        payment_option: paymentOption,
+        status: 'Pending',
+        total_qty: totalQty,
+        total_amount: total,
+        source: 'counter',
+        captured_by_role: 'vendor',
+        captured_by_code: String(ctx.vendor_code || ''),
+      })
+      .select('id, order_id')
+      .single()
     if (insErr) {
       const code = String(insErr.code || '')
       const msg = String(insErr.message || '')
@@ -196,6 +182,7 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: msg || 'Failed to create the invoice' }, { status: 500 })
     }
     const orderDbId = inserted.id
+    const orderId = inserted.order_id
 
     const { error: lineErr } = await supabase.from('exhibition_order_lines').insert(
       items.map((i) => ({
