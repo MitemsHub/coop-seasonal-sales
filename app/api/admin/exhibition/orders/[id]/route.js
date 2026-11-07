@@ -148,7 +148,9 @@ export async function PATCH(req, { params }) {
 
     const oldPrincipal = lines.reduce((sum, l) => sum + Number(l.amount || 0), 0)
     const oldTotal = Number(order.total_amount || 0)
-    const capOf = (pay, p, t) => (pay === 'Loan' ? (includeInterest ? t : p) : 0)
+    // Cash reserves nothing; Savings reserves its total; Loan reserves the
+    // total (or the principal when the season excludes interest from the cap).
+    const capOf = (pay, p, t) => (pay === 'Loan' ? (includeInterest ? t : p) : pay === 'Savings' ? t : 0)
     const oldCap = capOf(oldPayment, oldPrincipal, oldTotal)
     const newCap = capOf(paymentOption, principal, total)
     const delta = newCap - oldCap
