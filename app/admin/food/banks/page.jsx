@@ -701,7 +701,7 @@ function AdminFoodBanksContent() {
                             <span aria-hidden="true" className="text-subtext">
                               ·
                             </span>
-                            <span className="font-mono text-fg">{b.account_number || '—'}</span>
+                            <span className="font-medium tabular-nums text-fg">{b.account_number || '—'}</span>
                             {!!b.account_number && (
                               <button
                                 type="button"
@@ -851,7 +851,7 @@ function AdminFoodBanksContent() {
               onChange={(e) => setAddBankAccountNumber(e.target.value)}
               placeholder="0123456789"
               inputMode="numeric"
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 font-mono text-sm text-fg focus:border-brand focus:outline-none"
+              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg focus:border-brand focus:outline-none"
               disabled={addBankSaving}
             />
           </div>
@@ -889,7 +889,7 @@ function AdminFoodBanksContent() {
               <div className="mt-0.5 text-xs text-muted">
                 {invoiceBank.account_name || '—'}
                 <span aria-hidden="true"> · </span>
-                <span className="font-mono text-fg">{invoiceBank.account_number || '—'}</span>
+                <span className="font-medium tabular-nums text-fg">{invoiceBank.account_number || '—'}</span>
               </div>
               {invoiceBank.purpose && <div className="mt-0.5 text-xs text-subtext">Purpose: {invoiceBank.purpose}</div>}
             </div>
