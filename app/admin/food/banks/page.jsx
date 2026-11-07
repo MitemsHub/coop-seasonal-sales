@@ -543,21 +543,21 @@ function AdminFoodBanksContent() {
 
       <div className="ui-card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px] text-sm">
+          <table className="w-full min-w-[900px] table-fixed text-sm">
             <colgroup>
-              <col className="w-[220px]" />
-              <col />
-              <col className="w-[220px]" />
-              <col className="w-[96px]" />
-              <col className="w-[156px]" />
+              <col className="w-[22%]" />
+              <col className="w-[37%]" />
+              <col className="w-[14%]" />
+              <col className="w-[11%]" />
+              <col className="w-[16%]" />
             </colgroup>
             <thead>
               <tr className="border-b border-line bg-subtle/70 text-[11px] uppercase tracking-wide text-subtext">
-                <th className="px-4 py-2.5 text-left font-semibold">Branch</th>
-                <th className="px-4 py-2.5 text-left font-semibold">Bank account</th>
-                <th className="px-4 py-2.5 text-left font-semibold">Invoices</th>
-                <th className="px-4 py-2.5 text-left font-semibold">Paid</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Actions</th>
+                <th className="px-3 py-2.5 text-left font-semibold">Branch</th>
+                <th className="px-3 py-2.5 text-left font-semibold">Bank account</th>
+                <th className="px-3 py-2.5 text-left font-semibold">Invoices</th>
+                <th className="px-3 py-2.5 text-left font-semibold">Paid</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -565,21 +565,21 @@ function AdminFoodBanksContent() {
                 !filtered.length &&
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={`sk_${i}`} className="animate-pulse border-b border-line/60">
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5">
                       <div className="h-4 w-32 rounded bg-subtle" />
                       <div className="mt-1.5 h-3 w-20 rounded bg-subtle" />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5">
                       <div className="h-4 w-40 rounded bg-subtle" />
                       <div className="mt-1.5 h-3 w-56 rounded bg-subtle" />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5">
                       <div className="h-4 w-24 rounded bg-subtle" />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5">
                       <div className="h-5 w-16 rounded-full bg-subtle" />
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2.5">
                       <div className="ml-auto h-8 w-28 rounded bg-subtle" />
                     </td>
                   </tr>
@@ -601,7 +601,7 @@ function AdminFoodBanksContent() {
                       branchIdx % 2 === 0 ? 'bg-surface' : 'bg-subtle/25'
                     }`}
                   >
-                    <td className="px-4 py-3 align-middle">
+                    <td className="px-3 py-2.5 align-middle">
                       <div className="flex items-center gap-2.5">
                         <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-subtle text-[10px] font-bold uppercase text-brand">
                           {String(r.code || r.name || '?').slice(0, 2)}
@@ -626,14 +626,14 @@ function AdminFoodBanksContent() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 align-middle text-xs text-subtext">No bank account yet</td>
-                    <td className="px-4 py-3 align-middle text-xs text-subtext">—</td>
-                    <td className="px-4 py-3 align-middle">
+                    <td className="px-3 py-2.5 align-middle text-xs text-subtext">No bank account yet</td>
+                    <td className="px-3 py-2.5 align-middle text-xs text-subtext">—</td>
+                    <td className="px-3 py-2.5 align-middle">
                       <span className="inline-flex items-center rounded-full bg-subtle px-2 py-0.5 text-[11px] font-semibold text-muted">
                         {r?.paid?.is_paid ? 'Paid' : 'Unpaid'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 align-middle text-right">
+                    <td className="px-3 py-2.5 align-middle text-right">
                       <Button size="sm" variant="secondary" onClick={() => openAddBank(r.id)}>
                         Add bank
                       </Button>
@@ -650,7 +650,7 @@ function AdminFoodBanksContent() {
                         }`}
                       >
                         {idx === 0 && (
-                          <td rowSpan={(r.banks || []).length} className="px-4 py-3 align-top">
+                          <td rowSpan={(r.banks || []).length} className="px-3 py-2.5 align-top">
                             <div className="flex items-start gap-2.5">
                               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-subtle text-[10px] font-bold uppercase text-brand">
                                 {String(r.code || r.name || '?').slice(0, 2)}
@@ -689,19 +689,16 @@ function AdminFoodBanksContent() {
                           </td>
                         )}
 
-                        <td className="px-4 py-3 align-middle">
+                        <td className="px-3 py-2.5 align-middle">
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                             <span className="text-[13px] font-semibold text-fg">{b.bank_name || 'Bank'}</span>
                             {b.purpose && (
                               <span className="rounded-full bg-subtle px-1.5 py-0.5 text-[10px] font-medium text-muted">{b.purpose}</span>
                             )}
                           </div>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-muted">
-                            <span className="max-w-[220px] truncate font-semibold text-fg">{b.account_name || '—'}</span>
-                            <span aria-hidden="true" className="text-subtext">
-                              ·
-                            </span>
-                            <span className="font-medium tabular-nums text-fg">{b.account_number || '—'}</span>
+                          <div className="mt-0.5 text-[11px] font-semibold text-fg">{b.account_name || '—'}</div>
+                          <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted">
+                            <span className="tabular-nums">{b.account_number || '—'}</span>
                             {!!b.account_number && (
                               <button
                                 type="button"
@@ -715,7 +712,7 @@ function AdminFoodBanksContent() {
                           </div>
                         </td>
 
-                        <td className="px-4 py-3 align-middle">
+                        <td className="px-3 py-2.5 align-middle">
                           {invs.length ? (
                             <button
                               type="button"
@@ -733,7 +730,7 @@ function AdminFoodBanksContent() {
                           )}
                         </td>
 
-                        <td className="px-4 py-3 align-middle">
+                        <td className="px-3 py-2.5 align-middle">
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                               b.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'
@@ -743,11 +740,11 @@ function AdminFoodBanksContent() {
                           </span>
                         </td>
 
-                        <td className="px-4 py-3 align-middle text-right">
+                        <td className="px-3 py-2.5 align-middle text-right">
                           <div className="flex justify-end">
                             <select
                               defaultValue=""
-                              className="rounded-lg border border-line bg-surface px-2 py-1.5 text-xs text-fg focus:border-brand focus:outline-none"
+                              className="w-[132px] rounded-lg border border-line bg-surface px-2 py-1.5 text-xs text-fg focus:border-brand focus:outline-none"
                               onChange={(e) => {
                                 const v = e.target.value
                                 e.target.value = ''
