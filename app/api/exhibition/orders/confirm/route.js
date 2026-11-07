@@ -62,12 +62,15 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: 'This order was cancelled, so there is nothing to confirm.' }, { status: 409 })
     }
 
-    // You can only confirm something that was actually handed over.
-    if (order.status !== 'Delivered') {
+    // The 2026 counter flow closes with the member: once the admin approves the
+    // invoice, the member confirms as the goods are handed over. Delivered stays
+    // valid for orders captured before this change.
+    const confirmable = ['Approved', 'Delivered']
+    if (!confirmable.includes(order.status)) {
       return NextResponse.json(
         {
           ok: false,
-          error: 'You can confirm receipt once the goods have been marked delivered.',
+          error: 'You can confirm receipt once the admin has approved your invoice.',
           status: order.status,
         },
         { status: 409 }
@@ -75,17 +78,20 @@ export async function POST(request) {
     }
 
     const now = new Date().toISOString()
+    const patch = {
+      status: 'Confirmed',
+      member_confirmed_at: now,
+      member_confirmed_by: memberId,
+      updated_at: now,
+    }
+    // Approved orders were never stamped as handed over.
+    if (!order.delivered_at) patch.delivered_at = now
     const { error: upErr } = await supabase
       .from('exhibition_orders')
-      .update({
-        status: 'Confirmed',
-        member_confirmed_at: now,
-        member_confirmed_by: memberId,
-        updated_at: now,
-      })
+      .update(patch)
       .eq('id', order.id)
       .eq('member_id', order.member_id)
-      .eq('status', 'Delivered')
+      .in('status', confirmable)
     if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 })
 
     await logExhibitionAudit([order.id], {

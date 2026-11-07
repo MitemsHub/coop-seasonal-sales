@@ -4,15 +4,12 @@ import { Suspense, useEffect, useRef, useState } from 'react'
 import CycleTag from '../components/CycleTag'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { ArrowRight, BadgePercent, BarChart3, ChevronDown, ClipboardCheck, Landmark, LayoutDashboard, LineChart, LogOut, Menu, Package, PanelLeftClose, PanelLeftOpen, ShoppingBag, Store, X } from 'lucide-react'
+import { ArrowRight, BarChart3, ChevronDown, Landmark, LayoutDashboard, LineChart, LogOut, Menu, PanelLeftClose, PanelLeftOpen, ShoppingBag, Store, X } from 'lucide-react'
 import Breadcrumbs from '../components/ui/Breadcrumbs'
 import { getTrail } from '@/lib/breadcrumbs'
 
 const NAV = [
   { href: '/vendor/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/vendor/deliveries', label: 'Deliveries', icon: ClipboardCheck },
-  { href: '/vendor/products', label: 'Products', icon: Package },
-  { href: '/vendor/markups', label: 'Prices & Discounts', icon: BadgePercent },
   { href: '/vendor/orders', label: 'Orders', icon: ShoppingBag },
   { href: '/vendor/banks', label: 'Banks', icon: Landmark },
   { href: '/vendor/reports', label: 'Report', icon: BarChart3 },
@@ -371,7 +368,7 @@ export default function VendorLayout({ children }) {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold text-fg">The Exhibition is closed</p>
-                  <p className="mt-0.5 text-chips text-muted">Your stand and catalog will go live when the next cycle opens.</p>
+                  <p className="mt-0.5 text-chips text-muted">Your stand will go live when the next cycle opens.</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <button

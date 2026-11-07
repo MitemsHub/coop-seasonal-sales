@@ -226,11 +226,15 @@ function ExhibitionOrdersContent() {
                     </div>
 
                     {/* Member confirmation — the final step of the transaction */}
-                    {o.status === 'Delivered' && (
+                    {(o.status === 'Delivered' || o.status === 'Approved') && (
                       <div className="flex flex-col gap-2 border-b border-line bg-success-bg/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-fg">Did you receive your goods?</p>
-                          <p className="text-chips text-muted">Confirm to close this order.</p>
+                          <p className="text-chips text-muted">
+                            {o.status === 'Approved'
+                              ? 'Confirm once the goods are in your hands.'
+                              : 'Confirm to close this order.'}
+                          </p>
                         </div>
                         <Button
                           leftIcon={CheckCircle2}

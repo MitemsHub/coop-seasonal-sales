@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { BadgePercent, Calendar, ClipboardCheck, Package, ShoppingBag, Store, TrendingUp } from 'lucide-react'
+import { Calendar, ShoppingBag, Store, TrendingUp } from 'lucide-react'
 import Skeleton from '../../components/ui/Skeleton'
 import { getTrail } from '@/lib/breadcrumbs'
 
@@ -91,15 +91,8 @@ export default function VendorDashboardPage() {
 
   const cards = [
     {
-      label: 'Active products',
-      value: stats ? String(stats.product_count || 0) : null,
-      icon: Package,
-      href: '/vendor/products',
-      hint: stats ? `${stats.live_products || 0} with photos` : '',
-    },
-    {
       label: 'Orders (mine)',
-      value: stats ? String((stats.orders?.Pending || 0) + (stats.orders?.Approved || 0) + (stats.orders?.Delivered || 0)) : null,
+      value: stats ? String((stats.orders?.Pending || 0) + (stats.orders?.Approved || 0) + (stats.orders?.Confirmed || 0)) : null,
       icon: ShoppingBag,
       href: '/vendor/orders',
       hint: `${stats?.orders?.Pending || 0} pending · ${stats?.orders?.Approved || 0} approved`,
@@ -109,21 +102,7 @@ export default function VendorDashboardPage() {
       value: stats ? fmtNaira(stats.revenue) : null,
       icon: TrendingUp,
       href: '/vendor/orders',
-      hint: stats ? `${stats.delivered_lines || 0} items delivered` : '',
-    },
-    {
-      label: 'Deliveries checklist',
-      value: stats ? String(stats.handover_pending ?? 0) : null,
-      icon: ClipboardCheck,
-      href: '/vendor/deliveries',
-      hint: 'Approved items still to deliver',
-    },
-    {
-      label: 'Prices',
-      value: 'Manage',
-      icon: BadgePercent,
-      href: '/vendor/markups',
-      hint: 'Per-member negotiated prices',
+      hint: stats ? `${stats.orders?.Confirmed || 0} confirmed` : '',
     },
   ]
 

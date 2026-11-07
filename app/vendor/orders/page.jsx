@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, History, Package, PackageCheck, RotateCcw, ShoppingBag, Truck, XCircle } from 'lucide-react'
+import { CheckCircle2, History, Package, Plus, RotateCcw, ShoppingBag, Truck, XCircle } from 'lucide-react'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
 import DraggableModal from '../../components/DraggableModal'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
+import CounterInvoiceModal from '../../components/CounterInvoiceModal'
 
 const fmtNaira = (n) => `NGN ${Number(n || 0).toLocaleString()}`
 
@@ -31,6 +32,7 @@ const STATUS_TONE = {
   Pending: 'warning',
   Approved: 'info',
   Delivered: 'success',
+  Confirmed: 'success',
   Cancelled: 'muted',
 }
 
@@ -38,7 +40,7 @@ const FILTERS = [
   { key: '', label: 'All' },
   { key: 'Pending', label: 'Pending' },
   { key: 'Approved', label: 'Approved' },
-  { key: 'Delivered', label: 'Delivered' },
+  { key: 'Confirmed', label: 'Confirmed' },
   { key: 'Cancelled', label: 'Cancelled' },
 ]
 
@@ -46,7 +48,7 @@ export default function VendorOrdersPage() {
   const [orders, setOrders] = useState(null)
   const [filter, setFilter] = useState('')
   const [msg, setMsg] = useState('')
-  const [busy, setBusy] = useState('')
+  const [invoiceOpen, setInvoiceOpen] = useState(false)
   const [activityOrder, setActivityOrder] = useState(null) // the order card row
   const [activityEvents, setActivityEvents] = useState([])
   const [activityLoading, setActivityLoading] = useState(false)
@@ -109,32 +111,20 @@ export default function VendorOrdersPage() {
     return items
   }, [activityOrder, activityEvents])
 
-  const markDelivered = async (orderId) => {
-    setBusy(orderId)
-    setMsg('')
-    try {
-      const res = await fetch('/api/vendor/exhibition/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId }),
-      })
-      const json = await res.json()
-      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to update')
-      load()
-    } catch (e) {
-      setMsg(e.message || 'Failed to mark delivered')
-    } finally {
-      setBusy('')
-    }
-  }
-
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-6">
-        <h1 className="text-h1 font-bold tracking-tight text-fg">Orders</h1>
-        <p className="mt-1 text-sm text-muted">
-          Orders from your stand. Once the branch rep approves and you hand the goods over, mark the order delivered.
-        </p>
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-h1 font-bold tracking-tight text-fg">Orders</h1>
+          <p className="mt-1 text-sm text-muted">
+            Raise an invoice at your stand, the admin approves it, and the member confirms receipt.
+          </p>
+        </div>
+        <div className="sm:shrink-0">
+          <Button leftIcon={Plus} onClick={() => setInvoiceOpen(true)}>
+            New invoice
+          </Button>
+        </div>
       </div>
 
       {!!msg && <div className="mb-4 rounded-xl border border-danger-border bg-danger-bg px-4 py-3 text-sm text-danger-fg">{msg}</div>}
@@ -178,8 +168,8 @@ export default function VendorOrdersPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-bold text-fg">{o.order_id}</p>
                     <Badge tone={STATUS_TONE[o.status] || 'muted'}>{o.status}</Badge>
-                    {o.status === 'Approved' && !o.all_delivered && (
-                      <span className="text-chips text-muted">awaiting your delivery</span>
+                    {o.status === 'Approved' && (
+                      <span className="text-chips text-muted">waiting for the member to confirm</span>
                     )}
                   </div>
                   <p className="mt-1 text-chips text-muted">
@@ -200,22 +190,7 @@ export default function VendorOrdersPage() {
                     <History className="h-3.5 w-3.5" />
                     Activity
                   </button>
-                  {o.status === 'Approved' && !o.all_delivered && (
-                    <Button
-                      variant="success"
-                      leftIcon={PackageCheck}
-                      onClick={() => markDelivered(o.order_id)}
-                      loading={busy === o.order_id}
-                    >
-                      Mark delivered
-                    </Button>
-                  )}
-                  {o.all_delivered && o.status === 'Delivered' && (
-                    <span className="inline-flex items-center gap-1.5 text-chips font-medium text-success-fg">
-                      <CheckCircle2 className="h-4 w-4" />
-                      Delivered
-                    </span>
-                  )}
+
                 </div>
               </div>
               <div className="divide-y divide-line">
@@ -295,6 +270,12 @@ export default function VendorOrdersPage() {
           )}
         </div>
       </DraggableModal>
+
+      <CounterInvoiceModal
+        open={invoiceOpen}
+        onClose={() => setInvoiceOpen(false)}
+        onCreated={load}
+      />
     </div>
   )
 }

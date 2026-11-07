@@ -6,8 +6,9 @@
 // delivered is marked by vendors; cancelled orders can be restored.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { CheckCircle2, ChevronLeft, ChevronRight, History, Inbox, Package, PackageCheck, RefreshCw, RotateCcw, Search, Store, Truck, XCircle } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, History, Inbox, Package, PackageCheck, Plus, RefreshCw, RotateCcw, Search, Store, Truck, XCircle } from 'lucide-react'
 import Badge from '../../components/ui/Badge'
+import CounterInvoiceModal from '../../components/CounterInvoiceModal'
 import ExportButton from '../../components/ui/ExportButton'
 import DraggableModal from '../../components/DraggableModal'
 
@@ -59,6 +60,8 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
   const [bulkBusy, setBulkBusy] = useState(false)
   const [exportBusy, setExportBusy] = useState('')
   const [modal, setModal] = useState(null) // { type: 'approve'|'cancel'|'restore', ids }
+  const [invoiceOpen, setInvoiceOpen] = useState(false)
+  const [editOrder, setEditOrder] = useState(null)
   const [cancelReason, setCancelReason] = useState('')
   const [vendorBreakdown, setVendorBreakdown] = useState(null)
   const [auditOrder, setAuditOrder] = useState(null) // { id, order_id, created_at, member_id }
@@ -425,6 +428,10 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
   const canApprove = status === 'Pending'
   const canDeliver = status === 'Approved'
   const canRestore = status === 'Cancelled'
+  // Counter invoices (vendor- or admin-captured) can be corrected while they
+  // are still pending. Storefront orders are excluded: their lines point at
+  // catalogue products and stock reservations.
+  const canEditRow = (o) => status === 'Pending' && o.source !== 'storefront'
 
   return (
     <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
@@ -434,6 +441,16 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
           <p className="text-sm text-muted">Orders in the {status.toLowerCase()} stage of the exhibition flow.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {status === 'Pending' && (
+            <button
+              type="button"
+              onClick={() => { setEditOrder(null); setInvoiceOpen(true) }}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+            >
+              <Plus className="h-4 w-4" />
+              New invoice
+            </button>
+          )}
           <ExportButton format="excel" onClick={exportExcel} disabled={!orders.length} busy={exportBusy === 'excel'} />
           <ExportButton format="pdf" onClick={exportPDF} disabled={!orders.length} busy={exportBusy === 'pdf'} />
         </div>
@@ -868,6 +885,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                             const v = e.target.value
                             e.target.value = ''
                             if (!v) return
+                            if (v === 'edit') { setEditOrder(o); setInvoiceOpen(true) }
                             if (v === 'approve') setModal({ type: 'approve', ids: [o.id] })
                             if (v === 'deliver') runAction('deliver', [o.id])
                             if (v === 'cancel') setModal({ type: 'cancel', ids: [o.id] })
@@ -876,6 +894,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                           }}
                         >
                           <option value="" disabled>Actions</option>
+                          {canEditRow(o) && <option value="edit">Edit invoice</option>}
                           {canApprove && <option value="approve">Approve</option>}
                           {canDeliver && <option value="deliver">Deliver</option>}
                           {canCancel && <option value="cancel">Cancel</option>}
@@ -1017,6 +1036,19 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
         </div>
       </DraggableModal>
 
+      {/* Admin counter-invoice desk — raise a new invoice for a stand or fix a
+          pending one without leaving the approvals page. */}
+      <CounterInvoiceModal
+        mode="admin"
+        open={invoiceOpen}
+        order={editOrder}
+        onCreated={() => {
+          // The modal itself confirms the save; refreshing clears page toasts.
+          const wasEditing = Boolean(editOrder)
+          fetchOrders({ page: wasEditing ? safePage : 1 })
+        }}
+        onClose={() => { setInvoiceOpen(false); setEditOrder(null) }}
+      />
 
     </div>
   )

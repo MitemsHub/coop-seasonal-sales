@@ -20,6 +20,7 @@ import ExhibitionCycleHint from '../components/ExhibitionCycleHint'
 import ContinueShoppingBanner from '../components/ContinueShoppingBanner'
 import ExhibitionHubs from '../components/ExhibitionHubs'
 import ExhibitionProductCard from '../components/ExhibitionProductCard'
+import ExhibitionStandInvite from '../components/ExhibitionStandInvite'
 import CartStickyBar from '../components/CartStickyBar'
 import useExhibitionCatalog from '../hooks/useExhibitionCatalog'
 import useExhibitionCart from '../hooks/useExhibitionCart'
@@ -390,6 +391,18 @@ function ExhibitionShopContent() {
   )
 }
 
+// The 2026 exhibition sells from the stand, so the online shopfront is paused.
+// The shop below stays intact for the module it moves to next — flip this to
+// true to bring it back unchanged.
+const SHOPFRONT_ENABLED = false
+
 export default function ExhibitionPage() {
+  if (!SHOPFRONT_ENABLED) {
+    return (
+      <ProtectedRoute allowedRoles={['member']}>
+        <ExhibitionStandInvite />
+      </ProtectedRoute>
+    )
+  }
   return <ExhibitionShopContent />
 }

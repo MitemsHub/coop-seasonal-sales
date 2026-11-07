@@ -45,7 +45,7 @@ export async function GET(request) {
 
     let query = supabase
       .from('exhibition_orders')
-      .select('id, order_id, cycle_id, branch_id, member_id, member_name_snapshot, payment_option, status, total_qty, total_amount, approved_at, delivered_at, cancelled_at, restored_at, created_at, branches:branch_id(name, code), cycles:cycle_id(name, code)')
+      .select('*, branches:branch_id(name, code), cycles:cycle_id(name, code)')
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
 
