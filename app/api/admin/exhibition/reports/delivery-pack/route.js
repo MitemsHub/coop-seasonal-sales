@@ -81,13 +81,32 @@ export async function GET(req) {
       linesByOrder.set(l.order_id, arr)
     }
 
-    // Flatten into rows
+    // Flatten into rows. Loan interest is allocated across the order's lines
+    // (with the remainder on the last funded line) so every row reconciles:
+    // Amount + LoanInterest = Total. This also keeps the sheet total equal to
+    // the order total instead of repeating the full interest on every line.
     const rows = []
     for (const o of allOrders) {
       const lines = linesByOrder.get(o.id) || []
       const branchName = o.branches?.name || ''
       const branchCode = o.branches?.code || ''
-      for (const l of lines) {
+      const amounts = lines.map((l) => Number(l.amount || 0))
+      const principal = amounts.reduce((sum, amount) => sum + amount, 0)
+      const orderInterest = o.payment_option === 'Loan'
+        ? Math.max(0, Number(o.total_amount || 0) - principal)
+        : 0
+      const lastFundedLine = amounts.reduce((last, amount, index) => (amount > 0 ? index : last), -1)
+      let allocatedInterest = 0
+
+      lines.forEach((l, index) => {
+        const amount = amounts[index]
+        let loanInterest = 0
+        if (orderInterest > 0 && principal > 0) {
+          loanInterest = index === lastFundedLine
+            ? orderInterest - allocatedInterest
+            : Math.floor(orderInterest * (amount / principal))
+          allocatedInterest += loanInterest
+        }
         rows.push({
           OrderID: o.order_id || o.id,
           CreatedAt: o.created_at,
@@ -102,10 +121,11 @@ export async function GET(req) {
           SKU: l.sku || '',
           Unit: l.unit || '',
           Qty: Number(l.qty || 0),
-          Amount: Number(l.amount || 0),
-          Total: Number(o.total_amount || 0),
+          Amount: amount,
+          LoanInterest: loanInterest,
+          Total: amount + loanInterest,
         })
-      }
+      })
     }
 
     const wb = XLSX.utils.book_new()
