@@ -362,6 +362,12 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
   }
 
   const viewLines = viewOrder?.lines || []
+  const orderLineAmount = (line) => {
+    const qty = Number(line?.qty || 0)
+    return Number(line?.amount ?? qty * Number(line?.final_price ?? line?.vendor_price ?? 0))
+  }
+  const viewSubtotal = viewLines.reduce((sum, line) => sum + orderLineAmount(line), 0)
+  const viewInterest = Math.max(0, Number(viewOrder?.total_amount || 0) - viewSubtotal)
 
   const orderActionSelect = (o, className = '') => (
     <select
@@ -853,7 +859,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                   viewLines.map((l) => {
                     const qty = Number(l.qty || 0)
                     const unit = Number(l.final_price ?? l.vendor_price ?? 0)
-                    const amount = Number(l.amount ?? qty * unit)
+                    const amount = orderLineAmount(l)
                     return (
                       <div key={l.id} className="flex items-start gap-3 px-3 py-2.5">
                         <div className="min-w-0 flex-1">
@@ -870,9 +876,21 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
-              <span className="text-sm font-semibold text-fg">Total + Int</span>
-              <span className="text-lg font-bold tabular-nums text-fg">{naira(viewOrder.total_amount)}</span>
+            <div className="space-y-1.5 border-t border-line pt-3">
+              <div className="flex items-center justify-between gap-3 text-sm text-muted">
+                <span>Items subtotal</span>
+                <span className="tabular-nums">{naira(viewSubtotal)}</span>
+              </div>
+              {viewInterest > 0 && (
+                <div className="flex items-center justify-between gap-3 text-sm text-muted">
+                  <span>Loan interest</span>
+                  <span className="font-medium tabular-nums text-fg">{naira(viewInterest)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <span className="text-sm font-semibold text-fg">Total + Int</span>
+                <span className="text-lg font-bold tabular-nums text-fg">{naira(viewOrder.total_amount)}</span>
+              </div>
             </div>
           </div>
         )}
