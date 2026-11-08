@@ -357,6 +357,33 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
   // catalogue products and stock reservations.
   const canEditRow = (o) => status === 'Pending' && o.source !== 'storefront'
 
+  const actOnOrder = (value, o) => {
+    if (!value) return
+    if (value === 'edit') { setEditOrder(o); setInvoiceOpen(true) }
+    if (value === 'approve') setModal({ type: 'approve', ids: [o.id] })
+    if (value === 'cancel') setModal({ type: 'cancel', ids: [o.id] })
+    if (value === 'restore') setModal({ type: 'restore', ids: [o.id] })
+  }
+
+  const orderActionSelect = (o, className = '') => (
+    <select
+      defaultValue=""
+      disabled={bulkBusy}
+      className={`rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none disabled:opacity-50 ${className}`}
+      onChange={(e) => {
+        const value = e.target.value
+        e.target.value = ''
+        actOnOrder(value, o)
+      }}
+    >
+      <option value="" disabled>Actions</option>
+      {canEditRow(o) && <option value="edit">Edit invoice</option>}
+      {canApprove && <option value="approve">Approve</option>}
+      {canCancel && <option value="cancel">Cancel</option>}
+      {canRestore && <option value="restore">Restore</option>}
+    </select>
+  )
+
   return (
     <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
@@ -566,7 +593,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full min-w-[980px] text-sm">
             <thead className="sticky top-0 z-10 bg-surface">
               <tr className="border-b border-line text-left">
@@ -682,33 +709,112 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                           </div>
                         )}
                       </td>
-                      <td className="p-3 align-top text-right">
-                        <select
-                          defaultValue=""
-                          disabled={bulkBusy}
-                          className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none disabled:opacity-50"
-                          onChange={(e) => {
-                            const v = e.target.value
-                            e.target.value = ''
-                            if (!v) return
-                            if (v === 'edit') { setEditOrder(o); setInvoiceOpen(true) }
-                            if (v === 'approve') setModal({ type: 'approve', ids: [o.id] })
-                            if (v === 'cancel') setModal({ type: 'cancel', ids: [o.id] })
-                            if (v === 'restore') setModal({ type: 'restore', ids: [o.id] })
-                          }}
-                        >
-                          <option value="" disabled>Actions</option>
-                          {canEditRow(o) && <option value="edit">Edit invoice</option>}
-                          {canApprove && <option value="approve">Approve</option>}
-                          {canCancel && <option value="cancel">Cancel</option>}
-                          {canRestore && <option value="restore">Restore</option>}
-                        </select>
-                      </td>
+                      <td className="p-3 align-top text-right">{orderActionSelect(o)}</td>
                     </motion.tr>
                   ))}
               </AnimatePresence>
             </motion.tbody>
           </table>
+        </div>
+
+        {/* Phones get cards: the nine-column table becomes unreadable below md. */}
+        <div className="divide-y divide-line md:hidden">
+          {loading &&
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={`card-sk-${i}`} className="space-y-2 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="sakani-skeleton h-5 w-28 rounded" />
+                  <div className="sakani-skeleton h-5 w-20 rounded-full" />
+                </div>
+                <div className="sakani-skeleton h-4 w-44 rounded" />
+                <div className="sakani-skeleton h-4 w-36 rounded" />
+                <div className="sakani-skeleton h-9 w-full rounded-lg" />
+              </div>
+            ))}
+
+          {!loading && orders.length === 0 && (
+            <div className="flex flex-col items-center gap-2 p-8 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-subtle">
+                <Inbox className="h-6 w-6 text-subtext" />
+              </div>
+              <p className="text-sm font-medium text-fg">No {status} exhibition orders</p>
+              <p className="max-w-xs text-xs text-muted">
+                {status === 'Confirmed'
+                  ? 'Approved invoices appear here once the member confirms receipt.'
+                  : 'When members place exhibition orders, they will appear here.'}
+              </p>
+            </div>
+          )}
+
+          {!loading &&
+            pagedOrders.map((o) => (
+              <div key={`card-${o.id}`} className="p-4">
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(o.id)}
+                    onChange={() => toggleSelect(o.id)}
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-line text-brand focus:ring-brand"
+                    aria-label={`Select order ${o.order_id}`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-fg">{o.order_id || `#${o.id}`}</p>
+                        <p className="text-xs text-subtext">
+                          {fmtDate(o.created_at)}
+                          {o.cycle_name || o.cycle_code ? ` · ${o.cycle_name || o.cycle_code}` : ''}
+                        </p>
+                      </div>
+                      <Badge tone={STATUS_TONE[o.status] || 'neutral'} variant="subtle">{o.status}</Badge>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                      <div className="col-span-2 min-w-0 rounded-lg bg-subtle/50 px-2.5 py-2">
+                        <p className="text-chips text-muted">Member</p>
+                        <p className="mt-0.5 break-words font-medium text-fg">
+                          {o.member_id}{o.member_name_snapshot ? ` · ${o.member_name_snapshot}` : ''}
+                        </p>
+                      </div>
+                      <div className="col-span-2 min-w-0 rounded-lg bg-subtle/50 px-2.5 py-2">
+                        <p className="text-chips text-muted">Delivery Location</p>
+                        <p className="mt-0.5 break-words font-medium text-fg">{o.branch_name || `#${o.branch_id}`}</p>
+                      </div>
+                      <div>
+                        <p className="text-chips text-muted">Payment</p>
+                        <p className="mt-0.5 font-medium text-fg">{o.payment_option || '—'}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-chips text-muted">Qty</p>
+                        <p className="mt-0.5 tabular-nums font-medium text-fg">{Number(o.total_qty || 0).toLocaleString()}</p>
+                      </div>
+                      <div className="col-span-2 flex items-baseline justify-between gap-3 border-t border-line-subtle pt-2">
+                        <span className="text-chips text-muted">Total</span>
+                        <span className="text-base font-bold tabular-nums text-fg">{naira(o.total_amount)}</span>
+                      </div>
+                    </div>
+
+                    {o.per_vendor?.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {o.per_vendor.map((v) => (
+                          <span key={v.vendor_id} className="max-w-full truncate rounded-full bg-subtle px-2 py-0.5 text-chips text-muted" title={v.vendor_name}>
+                            {v.vendor_name}: {v.qty}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {status === 'Cancelled' && (
+                      <p className="mt-2 rounded-lg bg-subtle px-2.5 py-2 text-xs text-muted">
+                        Reason: {String(o.cancelled_reason || '—').trim()}
+                      </p>
+                    )}
+
+                    <div className="mt-3">{orderActionSelect(o, 'w-full')}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
         </div>
       </div>
 
