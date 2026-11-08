@@ -597,7 +597,7 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Items</h3>
               <span className="text-chips text-muted">{totals.qty} item{totals.qty === 1 ? '' : 's'}</span>
             </div>
-            <div className="overflow-x-auto rounded-xl border border-line">
+            <div className="hidden overflow-x-auto rounded-xl border border-line sm:block">
               <table className="w-full min-w-[520px] text-sm">
                 <thead className="bg-subtle/60 text-[11px] uppercase tracking-wide text-muted">
                   <tr>
@@ -663,6 +663,76 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
                 </tbody>
               </table>
             </div>
+
+            {/* Phones get stacked item editors so every field and total fits. */}
+            <div className="space-y-3 sm:hidden">
+              {items.map((it, idx) => {
+                const lineTotal = Math.max(0, Math.trunc(Number(it.qty) || 0)) * Math.max(0, Math.trunc(Number(it.price) || 0))
+                return (
+                  <div key={it.key} className="rounded-xl border border-line bg-surface p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-chips font-semibold uppercase tracking-wide text-muted">Item {idx + 1}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold tabular-nums text-fg">{naira(lineTotal)}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeItem(it.key)}
+                          disabled={items.length === 1}
+                          title="Remove item"
+                          aria-label={`Remove item ${idx + 1}`}
+                          className="rounded-lg p-1.5 text-muted hover:bg-danger-bg hover:text-danger-fg disabled:opacity-40"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-2">
+                      <label className="mb-1 block text-[11px] font-medium text-subtext" htmlFor={`item-name-${it.key}`}>
+                        Name
+                      </label>
+                      <input
+                        id={`item-name-${it.key}`}
+                        value={it.name}
+                        onChange={(e) => updateItem(it.key, { name: e.target.value })}
+                        placeholder="What did they buy?"
+                        aria-label={`Item ${idx + 1} name`}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="mb-1 block text-[11px] font-medium text-subtext" htmlFor={`item-qty-${it.key}`}>
+                          Qty
+                        </label>
+                        <input
+                          id={`item-qty-${it.key}`}
+                          value={it.qty}
+                          onChange={(e) => updateItem(it.key, { qty: e.target.value.replace(/[^0-9]/g, '') })}
+                          inputMode="numeric"
+                          aria-label={`Item ${idx + 1} quantity`}
+                          className={`${inputCls} text-center tabular-nums`}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[11px] font-medium text-subtext" htmlFor={`item-price-${it.key}`}>
+                          Price (NGN)
+                        </label>
+                        <input
+                          id={`item-price-${it.key}`}
+                          value={it.price}
+                          onChange={(e) => updateItem(it.key, { price: e.target.value.replace(/[^0-9]/g, '') })}
+                          inputMode="numeric"
+                          placeholder="0"
+                          aria-label={`Item ${idx + 1} price`}
+                          className={`${inputCls} tabular-nums`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
             <button
               type="button"
               onClick={addItem}
