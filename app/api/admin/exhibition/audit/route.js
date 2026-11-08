@@ -141,7 +141,7 @@ export async function GET(req) {
 
     const events = (data || []).map((e) => ({
       ...mapEvent(e),
-      order: orderContext(orderMap.get(e.order_id)),
+      order: orderContext(orderMap.get(String(e.order_id))),
     }))
 
     // Branch filter options for the page (all branches with exhibition orders).
