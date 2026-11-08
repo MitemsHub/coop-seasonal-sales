@@ -41,30 +41,6 @@ function memberBranch(m) {
   return String(m?.branch || m?.branch_name || '').trim()
 }
 
-function VendorFinancialNote({ loading, error, financials, showCredit = false }) {
-  if (loading) return <p className="mt-2 text-chips text-muted">Checking the member’s financial position…</p>
-  if (error) return <p className="mt-2 text-chips text-danger-fg">{error}</p>
-  if (!financials) return null
-  return (
-    <div className="mt-2 space-y-0.5 rounded-lg border border-line bg-surface px-2.5 py-2 text-chips text-muted">
-      {showCredit && (
-        <p>
-          <span className="font-semibold text-fg">Remaining credit facility:</span>{' '}
-          {naira(financials.financials?.loan_eligible)}
-        </p>
-      )}
-      <p>
-        <span className="font-semibold text-fg">Outstanding loans incl. shopping exposure:</span>{' '}
-        {naira(financials.financials?.outstanding_loans_total)}
-      </p>
-      <p>
-        <span className="font-semibold text-fg">50% Savings available:</span>{' '}
-        {naira(financials.financials?.savings_eligible)}
-      </p>
-    </div>
-  )
-}
-
 const inputCls =
   'w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none'
 
@@ -245,10 +221,11 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
     }
   }, [open])
 
-  // Both invoice desks need the member's available position. Vendors get the
-  // reduced summary returned by their own endpoint.
+  // Only the admin desk fetches the member's financial position. Vendors never
+  // see the member's credit, loan or savings figures; the server still checks
+  // eligibility when the invoice is submitted.
   useEffect(() => {
-    if (!open || !member?.member_id) {
+    if (!isAdmin || !open || !member?.member_id) {
       setFinancials(null)
       setFinancialsLoading(false)
       setFinancialsError('')
@@ -261,7 +238,7 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
     setFinancials(null)
     setFinancialsLoading(true)
     setFinancialsError('')
-    const endpoint = isAdmin ? '/api/admin/exhibition/members/financials' : '/api/vendor/exhibition/members/financials'
+    const endpoint = '/api/admin/exhibition/members/financials'
     fetch(`${endpoint}?${params.toString()}`, { cache: 'no-store' })
       .then(async (res) => {
         const json = await res.json().catch(() => null)
@@ -415,13 +392,14 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Vendor stand</h3>
                 {vendor && !editing && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    leftIcon={X}
                     onClick={() => { setVendor(null); setVendorQuery('') }}
-                    className="inline-flex items-center gap-1 text-chips font-medium text-muted hover:text-fg"
                   >
-                    <X className="h-3.5 w-3.5" /> Change
-                  </button>
+                    Change
+                  </Button>
                 )}
               </div>
 
@@ -499,13 +477,14 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Member</h3>
               {member && !editing && (
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={X}
                   onClick={() => { setMember(null); setQuery('') }}
-                  className="inline-flex items-center gap-1 text-chips font-medium text-muted hover:text-fg"
                 >
-                  <X className="h-3.5 w-3.5" /> Change
-                </button>
+                  Change
+                </Button>
               )}
             </div>
 
@@ -517,10 +496,10 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
                     <span className="font-medium text-fg">Delivery Branch:</span>{' '}
                     {memberBranch(member) || 'Not set'}
                   </p>
-                  {memberRole(member) && <p className="text-chips text-muted">{memberRole(member)}</p>}
+                  {isAdmin && memberRole(member) && <p className="text-chips text-muted">{memberRole(member)}</p>}
                 </div>
-                {/* Admins see the full position here. Vendors receive only the
-                    spendable/remaining summary beside the payment choice. */}
+                {/* Admins see the full position here. Vendors never receive the
+                    member's credit, loan or savings summary. */}
                 {isAdmin ? (
                   <div className="rounded-xl border border-line bg-subtle/40 p-2.5">
                     <div className="flex flex-wrap items-center justify-between gap-1">
@@ -607,7 +586,7 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
                               {m.member_id}
                               {memberMeta(m) ? ` · ${memberMeta(m)}` : ''}
                             </span>
-                            {memberRole(m) && <span className="block text-chips text-muted">{memberRole(m)}</span>}
+                            {isAdmin && memberRole(m) && <span className="block text-chips text-muted">{memberRole(m)}</span>}
                           </span>
                           <span className="text-chips font-semibold text-brand">Select</span>
                         </button>
@@ -628,9 +607,9 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Items</h3>
               <span className="text-chips text-muted">{totals.qty} item{totals.qty === 1 ? '' : 's'}</span>
             </div>
-            <div className="hidden overflow-x-auto rounded-xl border border-line sm:block">
+            <div className="hidden overflow-x-auto rounded-xl border border-line-strong sm:block">
               <table className="w-full min-w-[520px] text-sm">
-                <thead className="bg-subtle/60 text-[11px] uppercase tracking-wide text-muted">
+                <thead className="border-b border-line-strong bg-subtle/70 text-[11px] uppercase tracking-wide text-muted">
                   <tr>
                     <th className="w-10 px-2 py-2 text-left font-semibold">SN</th>
                     <th className="px-2 py-2 text-left font-semibold">Name</th>
@@ -640,7 +619,7 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
                     <th className="w-10 px-1 py-2" />
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-line">
+                <tbody className="divide-y divide-line-strong">
                   {items.map((it, idx) => {
                     const lineTotal = Math.max(0, Math.trunc(Number(it.qty) || 0)) * Math.max(0, Math.trunc(Number(it.price) || 0))
                     return (
@@ -700,7 +679,7 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
               {items.map((it, idx) => {
                 const lineTotal = Math.max(0, Math.trunc(Number(it.qty) || 0)) * Math.max(0, Math.trunc(Number(it.price) || 0))
                 return (
-                  <div key={it.key} className="rounded-xl border border-line bg-surface p-3">
+                  <div key={it.key} className="rounded-xl border border-line-strong bg-surface p-3">
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-chips font-semibold uppercase tracking-wide text-muted">Item {idx + 1}</span>
                       <div className="flex items-center gap-2">
@@ -827,14 +806,6 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
                         {loanRateError || 'Loading the current loan interest rate…'}
                       </p>
                     )}
-                    {!isAdmin && (
-                      <VendorFinancialNote
-                        loading={financialsLoading}
-                        error={financialsError}
-                        financials={financials}
-                        showCredit
-                      />
-                    )}
                   </div>
                 </div>
               </div>
@@ -849,13 +820,6 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
                     <p className="mt-0.5 text-xs text-muted">
                       The invoice value will be deducted from the member&apos;s savings when it is approved. The server checks the available savings balance before accepting the invoice.
                     </p>
-                    {!isAdmin && (
-                      <VendorFinancialNote
-                        loading={financialsLoading}
-                        error={financialsError}
-                        financials={financials}
-                      />
-                    )}
                   </div>
                 </div>
               </div>
