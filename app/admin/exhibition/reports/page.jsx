@@ -8,7 +8,8 @@ import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
 import ExportButton from '../../../components/ui/ExportButton'
 import Skeleton from '../../../components/ui/Skeleton'
-import { FileBarChart2, FileSpreadsheet, FileText, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
+import { downloadExcelWorkbook } from '../../../../lib/excelExport'
 
 function safeJson(res, label) {
   const ct = res.headers.get('content-type') || ''
@@ -23,17 +24,6 @@ function fileStamp() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function downloadCsv(filename, rows) {
-  if (!rows?.length) return
-  const headers = Object.keys(rows[0])
-  const csv = [headers.join(','), ...rows.map((r) => headers.map((h) => `"${String(r[h] ?? '').replace(/"/g, '""')}"`).join(','))].join('\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url; a.download = filename; a.click()
-  URL.revokeObjectURL(url)
-}
-
 function downloadBase64({ filename, type, data }) {
   const byteCharacters = atob(data)
   const byteNumbers = new Array(byteCharacters.length)
@@ -43,15 +33,6 @@ function downloadBase64({ filename, type, data }) {
   const a = document.createElement('a')
   a.href = url; a.download = filename || 'download'; a.click()
   URL.revokeObjectURL(url)
-}
-
-function Spinner({ className = '' }) {
-  return (
-    <svg className={`animate-spin ${className}`} viewBox="0 0 24 24" aria-hidden="true">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-    </svg>
-  )
 }
 
 const selectCls = 'bg-surface rounded-lg border border-line px-3 py-2 text-xs sm:text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none'
@@ -120,6 +101,7 @@ export default function ExhibitionReportsPage() {
   // Vendor table search + pagination
   const [vendorSearch, setVendorSearch] = useState('')
   const [vendorPage, setVendorPage] = useState(1)
+  const [vendorBusy, setVendorBusy] = useState(false)
   const vendorPageSize = 8
 
   // Applications by Branch filters
@@ -128,7 +110,9 @@ export default function ExhibitionReportsPage() {
   const [appPayment, setAppPayment] = useState('')
   const [appFrom, setAppFrom] = useState('')
   const [appTo, setAppTo] = useState('')
-  const [appBusy, setAppBusy] = useState(false)
+  const [appExcelBusy, setAppExcelBusy] = useState(false)
+  const [appPdfBusy, setAppPdfBusy] = useState(false)
+  const appBusy = appExcelBusy || appPdfBusy
   const [reportBusy, setReportBusy] = useState(false)
 
   // Applications Pack by Payment to Vendors filters
@@ -628,9 +612,21 @@ export default function ExhibitionReportsPage() {
     }
   }
 
-  const exportVendorCsv = () => downloadCsv(`exhibition-vendors-${fileStamp()}.csv`, vendorsByValue.map((v) => ({ vendor: v.vendor_name, value: v.value })))
-  const exportCategoryCsv = () => downloadCsv(`exhibition-categories-${fileStamp()}.csv`, byCategory.map((c) => ({ category: c.key, orders: c.orders, amount: c.amount })))
-  const exportLocationCsv = () => downloadCsv(`exhibition-locations-${fileStamp()}.csv`, byLocation.map((l) => ({ location: l.key, orders: l.orders, amount: l.amount })))
+  const exportVendorExcel = async () => {
+    setVendorBusy(true)
+    try {
+      const rows = filteredVendors.map((v) => ({
+        Vendor: v.vendor_name || '',
+        'Order Value': Number(v.value || 0),
+        Share: s?.amount ? `${((v.value / s.amount) * 100).toFixed(1)}%` : '0%',
+      }))
+      await downloadExcelWorkbook(`exhibition-vendors-${fileStamp()}.xlsx`, [{ name: 'Vendors', rows }])
+    } catch (e) {
+      alert(e.message || 'Excel export failed')
+    } finally {
+      setVendorBusy(false)
+    }
+  }
   const filteredVendors = useMemo(() => {
     const term = vendorSearch.trim().toLowerCase()
     let list = vendorsByValue
@@ -665,7 +661,9 @@ export default function ExhibitionReportsPage() {
 
   // ─── Applications by Branch export ───
   const exportApps = async (format) => {
-    setAppBusy(true)
+    const isPdf = format === 'pdf'
+    if (isPdf) setAppPdfBusy(true)
+    else setAppExcelBusy(true)
     try {
       const qs = new URLSearchParams()
       if (appBranchId) qs.set('branch_id', appBranchId)
@@ -681,17 +679,20 @@ export default function ExhibitionReportsPage() {
       const rows = []
       for (const o of orders) {
         for (const l of o.lines || []) {
-          rows.push({ order: o.order_id, status: o.status, payment: o.payment_option, member: o.member_name_snapshot || o.member_id, branch: o.branches?.name || '', vendor: l.vendor_name || '', product: l.product_name || '', qty: l.qty, amount: l.amount })
+          rows.push({ Order: o.order_id, Status: o.status, Payment: o.payment_option, Member: o.member_name_snapshot || o.member_id, Branch: o.branches?.name || '', Vendor: l.vendor_name || '', Product: l.product_name || '', Qty: l.qty, Amount: l.amount })
         }
       }
-      const headers = ['order', 'status', 'payment', 'member', 'branch', 'vendor', 'product', 'qty', 'amount']
-      if (format === 'pdf') {
+      const headers = ['Order', 'Status', 'Payment', 'Member', 'Branch', 'Vendor', 'Product', 'Qty', 'Amount']
+      if (isPdf) {
         await buildPdf('Exhibition · Applications by Branch', rows, headers)()
       } else {
-        downloadCsv(`exhibition-apps-branch-${fileStamp()}.csv`, rows)
+        await downloadExcelWorkbook(`exhibition-apps-branch-${fileStamp()}.xlsx`, [{ name: 'Applications', rows }])
       }
     } catch (e) { alert(e.message || 'Export failed') }
-    finally { setAppBusy(false) }
+    finally {
+      if (isPdf) setAppPdfBusy(false)
+      else setAppExcelBusy(false)
+    }
   }
 
 
@@ -724,18 +725,14 @@ export default function ExhibitionReportsPage() {
               {cycles.map((c) => <option key={c.id} value={c.id}>{c.name || `Cycle ${c.id}`} ({c.code})</option>)}
             </select>
             <Button onClick={load} disabled={loading} leftIcon={RefreshCw}>{loading ? 'Loading…' : 'Refresh'}</Button>
-            <Button variant="accent" onClick={exportAllPdf} disabled={!s || reportBusy}>
-              {reportBusy ? (
-                <span className="inline-flex items-center gap-2">
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                  Preparing…
-                </span>
-              ) : (
-                <>
-                  <FileBarChart2 className="h-4 w-4 mr-1" /> Download Report
-                </>
-              )}
-            </Button>
+            <ExportButton
+              format="pdf"
+              label="Download Report"
+              onClick={exportAllPdf}
+              disabled={!s || reportBusy}
+              busy={reportBusy}
+              busyText="Preparing…"
+            />
           </div>
         </div>
 
@@ -792,27 +789,34 @@ export default function ExhibitionReportsPage() {
 
             {/* ─── Vendor Performance ─── */}
             <div className="rounded-xl border border-line bg-surface overflow-hidden mb-6">
-              <div className="flex items-center justify-between border-b border-line bg-subtle/60 px-4 py-3">
+              <div className="flex flex-col gap-3 border-b border-line bg-subtle/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <h3 className="text-sm font-semibold text-fg">By Vendor</h3>
-                <div className="flex items-center gap-2">
+                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
                   <input type="text" placeholder="Search vendor…" value={vendorSearch} onChange={(e) => { setVendorSearch(e.target.value); setVendorPage(1) }}
-                    className="rounded-lg border border-line bg-surface px-3 py-1.5 text-xs text-fg w-40 focus:border-brand focus:outline-none" />
-                  <Button size="sm" variant="secondary" onClick={exportVendorCsv}>Export CSV</Button>
+                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-xs text-fg focus:border-brand focus:outline-none sm:w-40 sm:text-sm" />
+                  <ExportButton
+                    format="excel"
+                    onClick={exportVendorExcel}
+                    disabled={!filteredVendors.length || vendorBusy}
+                    busy={vendorBusy}
+                    busyText="Preparing…"
+                    className="justify-center"
+                  />
                 </div>
               </div>
               {filteredVendors.length === 0 ? <p className="px-4 py-6 text-center text-sm text-muted">No vendor data</p> : (
                 <>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
-                      <thead><tr className="border-b border-line bg-subtle/30 text-left font-semibold uppercase tracking-wide text-muted">
-                        <th className="px-3 py-1.5">#</th><th className="px-3 py-1.5">Vendor</th><th className="px-3 py-1.5 text-right">Order Value</th><th className="px-3 py-1.5 text-right">Share</th>
+                    <table className="w-full min-w-[480px] text-sm">
+                      <thead><tr className="border-b border-line bg-subtle/30 text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                        <th className="px-4 py-2">#</th><th className="px-4 py-2">Vendor</th><th className="px-4 py-2 text-right">Order Value</th><th className="px-4 py-2 text-right">Share</th>
                       </tr></thead>
                       <tbody>{pagedVendors.map((v, i) => (
                         <tr key={v.vendor_id} className="border-b border-line/50 last:border-0 hover:bg-subtle/30">
-                          <td className="px-3 py-1.5 text-muted">{(safeVendorPage - 1) * vendorPageSize + i + 1}</td>
-                          <td className="px-3 py-1.5 font-medium text-fg">{v.vendor_name}</td>
-                          <td className="px-3 py-1.5 text-right tabular-nums">{money(v.value)}</td>
-                          <td className="px-3 py-1.5 text-right text-muted">{s.amount ? ((v.value / s.amount) * 100).toFixed(1) + '%' : '0%'}</td>
+                          <td className="px-4 py-2.5 text-muted">{(safeVendorPage - 1) * vendorPageSize + i + 1}</td>
+                          <td className="px-4 py-2.5 font-medium text-fg">{v.vendor_name}</td>
+                          <td className="px-4 py-2.5 text-right tabular-nums">{money(v.value)}</td>
+                          <td className="px-4 py-2.5 text-right text-muted">{s.amount ? ((v.value / s.amount) * 100).toFixed(1) + '%' : '0%'}</td>
                         </tr>
                       ))}</tbody>
                     </table>
@@ -833,15 +837,23 @@ export default function ExhibitionReportsPage() {
 
             {/* ─── Applications by Branch (RAM-style export section) ─── */}
             <div className="rounded-xl border border-line bg-surface overflow-hidden mb-6">
-              <div className="flex flex-col gap-2 border-b border-line bg-subtle px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 border-b border-line bg-subtle px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm font-semibold text-fg">Applications by Branch</div>
-                <div className="flex items-center gap-2">
-                  <Button variant="accent" size="sm" onClick={() => exportApps('csv')} disabled={appBusy}>
-                    <FileSpreadsheet className="h-4 w-4 mr-1" /> {appBusy ? 'Preparing…' : 'Excel'}
-                  </Button>
-                  <Button variant="danger" size="sm" onClick={() => exportApps('pdf')} disabled={appBusy}>
-                    <FileText className="h-4 w-4 mr-1" /> {appBusy ? 'Preparing…' : 'PDF'}
-                  </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <ExportButton
+                    format="excel"
+                    onClick={() => exportApps('excel')}
+                    disabled={appBusy}
+                    busy={appExcelBusy}
+                    busyText="Preparing…"
+                  />
+                  <ExportButton
+                    format="pdf"
+                    onClick={() => exportApps('pdf')}
+                    disabled={appBusy}
+                    busy={appPdfBusy}
+                    busyText="Preparing…"
+                  />
                 </div>
               </div>
               <div className="p-4">
@@ -871,9 +883,9 @@ export default function ExhibitionReportsPage() {
 
             {/* ─── Applications Pack by Payment to Vendors ─── */}
             <div className="rounded-xl border border-line bg-surface overflow-hidden mb-6">
-              <div className="flex flex-col gap-2 border-b border-line bg-subtle px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 border-b border-line bg-subtle px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm font-semibold text-fg">Applications Pack by Payment to Vendors</div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <ExportButton format="excel" onClick={exportVendorPackExcel} disabled={packBusy} busy={packExcelBusy} busyText="Preparing…" />
                   <ExportButton format="pdf" onClick={exportVendorPackPdf} disabled={packBusy} busy={packPdfBusy} busyText="Preparing…" />
                 </div>
@@ -907,11 +919,16 @@ export default function ExhibitionReportsPage() {
 
             {/* ─── Delivery Pack (RAM-style download section) ─── */}
             <div className="rounded-xl border border-line bg-surface overflow-hidden mb-6">
-              <div className="flex flex-col gap-2 border-b border-line bg-subtle px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 border-b border-line bg-subtle px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm font-semibold text-fg">Delivery Pack (Master/Cash/Loan/Savings)</div>
-                <Button onClick={downloadDeliveryPack} disabled={dpBusy}>
-                  {dpBusy ? <><Spinner className="w-4 h-4 mr-1" /> Preparing…</> : 'Download Delivery Pack'}
-                </Button>
+                <ExportButton
+                  format="excel"
+                  label="Download Delivery Pack"
+                  onClick={downloadDeliveryPack}
+                  disabled={dpBusy}
+                  busy={dpBusy}
+                  busyText="Preparing…"
+                />
               </div>
               <div className="p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">

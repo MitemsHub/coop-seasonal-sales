@@ -6,7 +6,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import Skeleton from '../../components/ui/Skeleton'
 import Button from '../../components/ui/Button'
-import { FileBarChart2, FileText, RefreshCw } from 'lucide-react'
+import ExportButton from '../../components/ui/ExportButton'
+import { downloadExcelWorkbook } from '../../../lib/excelExport'
+import { RefreshCw } from 'lucide-react'
 
 function safeJson(res, label) {
   const ct = res.headers.get('content-type') || ''
@@ -23,23 +25,14 @@ function fileStamp() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-function downloadCsv(filename, rows) {
-  if (!rows?.length) return
-  const headers = Object.keys(rows[0])
-  const csv = [headers.join(','), ...rows.map((r) => headers.map((h) => `"${String(r[h] ?? '').replace(/"/g, '""')}"`).join(','))].join('\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url; a.download = filename; a.click()
-  URL.revokeObjectURL(url)
-}
-
 export default function VendorReportsPage() {
   const [stats, setStats] = useState(null)
   const [lines, setLines] = useState([])
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
+  const [excelBusy, setExcelBusy] = useState(false)
+  const [pdfBusy, setPdfBusy] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -119,10 +112,46 @@ export default function VendorReportsPage() {
   const branchName = profile?.vendor?.branch || ''
   const cycleName = profile?.cycle?.name || ''
 
-  const exportLinesCsv = () => downloadCsv(`vendor-orders-${fileStamp()}.csv`, lines.map((l) => ({
-    order: l.order_id, status: l.status, payment: l.payment, member: l.member,
-    product: l.product, qty: l.qty, unit_price: l.unit_price, amount: l.amount, date: l.created_at,
-  })))
+  const exportExcel = async () => {
+    setExcelBusy(true)
+    setErr(null)
+    try {
+      const summaryRows = [
+        { Metric: 'Vendor', Value: vendorName },
+        { Metric: 'Branch', Value: branchName || '—' },
+        { Metric: 'Cycle', Value: cycleName || '—' },
+        { Metric: 'Orders', Value: totalOrders },
+        { Metric: 'Confirmed orders', Value: orders.Confirmed || 0 },
+        { Metric: 'Pending orders', Value: orders.Pending || 0 },
+        { Metric: 'Approved orders', Value: orders.Approved || 0 },
+        { Metric: 'Total lines', Value: totalLines },
+        { Metric: 'Total revenue', Value: totalRevenue },
+      ]
+      await downloadExcelWorkbook(`vendor-report-${fileStamp()}.xlsx`, [
+        { name: 'Summary', rows: summaryRows },
+        { name: 'By Item', rows: byProduct.map((r) => ({ Item: r.key, Lines: r.orders, Qty: r.qty, Amount: r.amount })) },
+        { name: 'By Payment', rows: byPayment.map((r) => ({ Method: r.key, Lines: r.orders, Amount: r.amount })) },
+        {
+          name: 'Order Lines',
+          rows: lines.map((l) => ({
+            Order: `#${l.order_id}`,
+            Date: l.created_at ? new Date(l.created_at).toLocaleDateString('en-GB') : '',
+            Member: l.member,
+            Payment: l.payment,
+            Item: l.product,
+            Status: l.status,
+            Qty: l.qty,
+            'Unit Price': l.unit_price,
+            Amount: l.amount,
+          })),
+        },
+      ])
+    } catch (e) {
+      setErr(e.message || 'Excel export failed')
+    } finally {
+      setExcelBusy(false)
+    }
+  }
 
   const exportPdf = async () => {
     const { jsPDF } = await import('jspdf')
@@ -251,6 +280,18 @@ export default function VendorReportsPage() {
     doc.save(`vendor-report-${fileStamp()}.pdf`)
   }
 
+  const handleExportPdf = async () => {
+    setPdfBusy(true)
+    setErr(null)
+    try {
+      await exportPdf()
+    } catch (e) {
+      setErr(e.message || 'PDF export failed')
+    } finally {
+      setPdfBusy(false)
+    }
+  }
+
   return (
     <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
@@ -259,12 +300,20 @@ export default function VendorReportsPage() {
           <Button onClick={load} disabled={loading} leftIcon={RefreshCw}>
             {loading ? 'Loading…' : 'Refresh'}
           </Button>
-          <Button variant="secondary" onClick={exportLinesCsv} disabled={!lines.length}>
-            <FileBarChart2 className="h-4 w-4 mr-1" /> Export CSV
-          </Button>
-          <Button variant="accent" onClick={exportPdf} disabled={loading}>
-            <FileText className="h-4 w-4 mr-1" /> Export PDF
-          </Button>
+          <ExportButton
+            format="excel"
+            onClick={exportExcel}
+            disabled={loading}
+            busy={excelBusy}
+            busyText="Preparing…"
+          />
+          <ExportButton
+            format="pdf"
+            onClick={handleExportPdf}
+            disabled={loading}
+            busy={pdfBusy}
+            busyText="Preparing…"
+          />
         </div>
       </div>
 
@@ -348,10 +397,7 @@ export default function VendorReportsPage() {
 
           {/* Recent Lines */}
           <div className="rounded-xl border border-line bg-surface overflow-hidden">
-            <div className="flex items-center justify-between border-b border-line bg-subtle/60 px-4 py-3">
-              <h3 className="text-sm font-semibold text-fg">Order Lines (Recent)</h3>
-              <Button size="sm" variant="secondary" onClick={exportLinesCsv}>Export CSV</Button>
-            </div>
+            <div className="border-b border-line bg-subtle/60 px-4 py-3 text-sm font-semibold text-fg">Order Lines (Recent)</div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[560px] text-sm">
                 <thead>
