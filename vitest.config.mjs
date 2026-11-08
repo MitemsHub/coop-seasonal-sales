@@ -5,6 +5,8 @@ import { defineConfig } from 'vitest/config'
 import { fileURLToPath } from 'node:url'
 
 export default defineConfig({
+  // Next preserves JSX for its compiler; tests need it compiled for SSR checks.
+  oxc: { jsx: { runtime: 'automatic' } },
   resolve: {
     alias: {
       // Match the app's @/* -> project-root mapping (jsconfig.json) so hooks

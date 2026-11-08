@@ -27,6 +27,8 @@ import {
 } from 'lucide-react'
 import LandingHeader, { SIGNUP_URL } from './LandingHeader'
 import Reveal from './ui/Reveal'
+import useHeroSlideshow, { HERO_AUTOPLAY_MS } from '../hooks/useHeroSlideshow'
+import { HERO_IMAGES } from '../../lib/landingHeroImages'
 
 /* ---------------------------------------------------------------- */
 /*  Section heading pattern                                           */
@@ -52,22 +54,10 @@ function SectionHeading({ kicker, title, description }) {
 /*  The copy sits on the left over a canvas fade; the photo shows     */
 /*  through on the right and changes automatically.                   */
 /* ---------------------------------------------------------------- */
-const HERO_IMAGES = [
-  '/landing/photos/exhibition-cars.jpg',
-  '/landing/photos/hero-ram.jpg',
-  '/landing/photos/exhibition-food-rice.jpg',
-  '/landing/photos/exhibition-clothing.jpg',
-  '/landing/photos/exhibition-fabrics-shoes.jpg',
-  '/landing/photos/exhibition-home-decor.jpg',
-  '/landing/photos/exhibition-food-maggi.jpg',
-  '/landing/photos/exhibition-food-golden-morn.jpg',
-]
-
 const FILM_GRAIN =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E\")"
 
 const ROTATE_MS = 2800
-const HERO_AUTOPLAY_MS = 3000
 
 /* ---------------------------------------------------------------- */
 /*  Rotating category word — the noun in the first hero line animates  */
@@ -118,81 +108,46 @@ function RotatingHeroWord() {
   )
 }
 
-function PhotoHero() {
+export function PhotoHero() {
   const reduce = useReducedMotion()
-  const [slide, setSlide] = useState(0)
   const [paused, setPaused] = useState(false)
-  // Per-slide readiness — a photo never fades in until it's actually decoded,
-  // so the hero can't flash a blank or a "loading" state at any point.
-  const [ready, setReady] = useState({})
-  const markReady = (i) => setReady((r) => (r[i] ? r : { ...r, [i]: true }))
-  const imgRef = useRef(null)
+  const { slide, imgRef, markReady, go, goTo } = useHeroSlideshow({ reduce, paused })
   const COUNT = HERO_IMAGES.length
-
-  // Cached photos can fire `load` synchronously during React's commit, before its
-  // delegated onLoad listener is ready — which silently leaves a slide invisible.
-  // If the incoming photo is already decoded (preloaded), mark it ready here;
-  // onLoad/onError below cover the genuinely-uncached case.
-  useEffect(() => {
-    if (imgRef.current && imgRef.current.complete) markReady(slide)
-  }, [slide])
-
-  // Preload only the upcoming photos so crossfades are instant — a couple ahead,
-  // not all 14 at once. Preloading everything at mount splits the first image's
-  // eager load across 14 parallel downloads, which on a slow connection is what
-  // made the hero sit blank ("loader"-like) before the first photo appeared.
-  // Preloading isn't motion, so it runs for everyone — reduced-motion users who
-  // navigate with the arrows get the same instant, flash-free crossfades.
-  useEffect(() => {
-    const ahead = [slide + 1, slide + 2, slide - 1]
-    ahead.forEach((i) => {
-      const img = new Image()
-      img.src = HERO_IMAGES[(i + HERO_IMAGES.length) % HERO_IMAGES.length]
-    })
-  }, [slide])
-
-  // Auto-advance the backdrop, pausing on hover/focus and for reduced-motion users.
-  useEffect(() => {
-    if (reduce || paused) return
-    const id = setInterval(() => setSlide((s) => (s + 1) % COUNT), HERO_AUTOPLAY_MS)
-    return () => clearInterval(id)
-  }, [reduce, paused, COUNT])
-
-  const go = (dir) => setSlide((s) => (s + dir + COUNT) % COUNT)
-  const goTo = (i) => setSlide(i)
 
   return (
     <section
       className="relative overflow-hidden bg-canvas"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
-      onFocus={(e) => { if (e.target === e.currentTarget) setPaused(true) }}
-      onBlur={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false) }}
     >
-      {/* Full-bleed photo backdrop — crossfades automatically */}
+      {/* First image is visible in server HTML; only decoded slides replace it.
+          AnimatePresence disables the initial fade, preserving progressive paint. */}
       <div className="absolute inset-0" aria-hidden>
         <AnimatePresence initial={false}>
           <motion.div
             key={slide}
             className="absolute inset-0"
             initial={{ opacity: 0 }}
-            animate={{ opacity: ready[slide] ? 1 : 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.6, ease: 'easeInOut' }}
           >
             <motion.img
               ref={imgRef}
-              src={HERO_IMAGES[slide]}
+              src={HERO_IMAGES[slide].src}
+              srcSet={HERO_IMAGES[slide].srcSet}
+              sizes={HERO_IMAGES[slide].sizes}
               alt=""
               onLoad={() => markReady(slide)}
-              onError={() => markReady(slide)}
               className="hero-backdrop-photo h-full w-full object-cover"
               initial={false}
               animate={reduce ? undefined : { scale: [1, 1.07] }}
               // Zoom completes exactly as the next slide begins — the drift never looks cut short.
               transition={{ duration: HERO_AUTOPLAY_MS / 1000, ease: 'easeInOut' }}
               loading="eager"
-              fetchPriority={slide === 0 ? 'high' : undefined}
+              fetchPriority={slide === 0 ? 'high' : 'low'}
               draggable={false}
             />
             <div
