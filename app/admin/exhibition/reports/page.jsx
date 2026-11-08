@@ -907,8 +907,11 @@ export default function ExhibitionReportsPage() {
 
             {/* ─── Delivery Pack (RAM-style download section) ─── */}
             <div className="rounded-xl border border-line bg-surface overflow-hidden mb-6">
-              <div className="border-b border-line bg-subtle px-4 py-3">
+              <div className="flex flex-col gap-2 border-b border-line bg-subtle px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm font-semibold text-fg">Delivery Pack (Master/Cash/Loan/Savings)</div>
+                <Button onClick={downloadDeliveryPack} disabled={dpBusy}>
+                  {dpBusy ? <><Spinner className="w-4 h-4 mr-1" /> Preparing…</> : 'Download Delivery Pack'}
+                </Button>
               </div>
               <div className="p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -918,11 +921,6 @@ export default function ExhibitionReportsPage() {
                   </select>
                   <input type="date" className={selectCls} value={dpFrom} onChange={(e) => setDpFrom(e.target.value)} />
                   <input type="date" className={selectCls} value={dpTo} onChange={(e) => setDpTo(e.target.value)} />
-                </div>
-                <div className="mt-3">
-                  <Button onClick={downloadDeliveryPack} disabled={dpBusy}>
-                    {dpBusy ? <><Spinner className="w-4 h-4 mr-1" /> Preparing…</> : 'Download Delivery Pack'}
-                  </Button>
                 </div>
               </div>
             </div>
