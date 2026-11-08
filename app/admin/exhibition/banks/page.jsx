@@ -456,9 +456,9 @@ function AdminExhibitionBanksContent() {
             <thead className="bg-subtle">
               <tr>
                 <th className="text-left px-3 py-2 border-b">Vendor</th>
-                <th className="text-left px-3 py-2 border-b">Branch</th>
+                <th className="hidden text-left px-3 py-2 border-b md:table-cell">Branch</th>
                 <th className="text-left px-3 py-2 border-b">Bank accounts &amp; invoices</th>
-                <th className="text-left px-3 py-2 border-b">Paid</th>
+                <th className="hidden text-left px-3 py-2 border-b md:table-cell">Paid</th>
                 <th className="text-right px-3 py-2 border-b">Actions</th>
               </tr>
             </thead>
@@ -493,10 +493,11 @@ function AdminExhibitionBanksContent() {
                         <div className="font-medium text-fg">{v.name || '—'}</div>
                         <div className="font-mono text-xs text-subtext">{v.code}</div>
                         <div className="text-xs text-subtext">{v.phone || ''}</div>
+                        <div className="text-xs text-subtext md:hidden">{v.branch_name || '—'}</div>
                       </td>
-                      <td className="px-3 py-2 border-b text-muted align-top">{v.branch_name || '—'}</td>
+                      <td className="hidden px-3 py-2 border-b text-muted align-top md:table-cell">{v.branch_name || '—'}</td>
                       <td className="px-3 py-2 border-b align-top">—</td>
-                      <td className="px-3 py-2 border-b align-top text-muted">—</td>
+                      <td className="hidden px-3 py-2 border-b align-top text-muted md:table-cell">—</td>
                       <td className="px-3 py-2 border-b text-right align-top">
                         <select
                           defaultValue=""
@@ -523,10 +524,11 @@ function AdminExhibitionBanksContent() {
                         <div className="font-medium text-fg">{v.name || '—'}</div>
                         <div className="font-mono text-xs text-subtext">{v.code}</div>
                         <div className="text-xs text-subtext">{v.phone || ''}</div>
+                        <div className="text-xs text-subtext md:hidden">{v.branch_name || '—'}</div>
                       </td>
                     )}
                     {idx === 0 && (
-                      <td rowSpan={accounts.length} className="px-3 py-2 border-b text-muted align-top">{v.branch_name || '—'}</td>
+                      <td rowSpan={accounts.length} className="hidden px-3 py-2 border-b text-muted align-top md:table-cell">{v.branch_name || '—'}</td>
                     )}
                     <td className="px-3 py-2 border-b align-top">
                       <div className="rounded-lg border border-line bg-surface px-3 py-2">
@@ -579,7 +581,7 @@ function AdminExhibitionBanksContent() {
                             </div>
                       </div>
                     </td>
-                    <td className="px-3 py-2 border-b align-top">
+                    <td className="hidden px-3 py-2 border-b align-top md:table-cell">
                       <span
                         className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${
                           b.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'

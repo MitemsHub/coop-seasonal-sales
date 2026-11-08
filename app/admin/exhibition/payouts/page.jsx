@@ -166,8 +166,10 @@ export default function ExhibitionPayoutsPage() {
                   No vendors in this cycle, or no orders yet.
                 </div>
               ) : (
-                <Table>
-                  <THead>
+                <>
+                  <div className="hidden md:block">
+                    <Table>
+                      <THead>
                     <TR>
                       <TH>Vendor</TH>
                       <TH className="text-right">Gross</TH>
@@ -215,7 +217,65 @@ export default function ExhibitionPayoutsPage() {
                       </TR>
                     ))}
                   </TBody>
-                </Table>
+                    </Table>
+                  </div>
+
+                  {/* Phones get cards for the payout figures and action. */}
+                  <div className="divide-y divide-line md:hidden">
+                    {vendors.map((v) => (
+                      <div key={v.id} className="p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="font-medium text-fg">{v.name}</div>
+                            <div className="font-mono text-xs text-muted">{v.code}</div>
+                            {v.address || v.phone ? (
+                              <div className="text-xs text-muted">{v.address || v.phone}</div>
+                            ) : null}
+                          </div>
+                          {v.paid ? (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success-bg px-2.5 py-1 text-xs font-medium text-success-fg">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Paid
+                            </span>
+                          ) : (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-warning-bg px-2.5 py-1 text-xs font-medium text-warning-fg">
+                              <Banknote className="h-3.5 w-3.5" /> Owed
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                          <div>
+                            <div className="text-subtext">Gross</div>
+                            <div className="font-medium tabular-nums text-fg">{naira(v.gross)}</div>
+                          </div>
+                          <div>
+                            <div className="text-subtext">Deduction</div>
+                            <div className="font-medium tabular-nums text-fg">−{naira(v.deduction)}</div>
+                          </div>
+                          <div>
+                            <div className="text-subtext">Net</div>
+                            <div className="font-semibold tabular-nums text-fg">{naira(v.net)}</div>
+                          </div>
+                          <div>
+                            <div className="text-subtext">{v.paid ? 'Paid' : 'Balance'}</div>
+                            <div className="font-medium tabular-nums text-fg">{naira(v.paid ? v.paid_amount : v.balance)}</div>
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <Button
+                            className="w-full"
+                            size="sm"
+                            variant={v.paid ? 'secondary' : 'success'}
+                            leftIcon={v.paid ? Undo2 : BadgeCheck}
+                            onClick={() => togglePaid(v)}
+                            disabled={busy || v.net <= 0}
+                          >
+                            {v.paid ? 'Mark unpaid' : 'Mark paid'}
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </Card>
           </>

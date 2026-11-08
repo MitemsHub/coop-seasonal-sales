@@ -241,8 +241,10 @@ export default function ExhibitionVendorsPage() {
               No vendors match. Create vendor accounts for the exhibition.
             </div>
           ) : (
-            <Table>
-              <THead>
+            <>
+              <div className="hidden md:block">
+                <Table>
+                  <THead>
                 <TR>
                   <TH>Vendor</TH>
                   <TH>Code</TH>
@@ -287,7 +289,55 @@ export default function ExhibitionVendorsPage() {
                   </TR>
                 ))}
               </TBody>
-            </Table>
+                </Table>
+              </div>
+
+              {/* Phones get cards for the vendor details and actions. */}
+              <div className="divide-y divide-line md:hidden">
+                {vendors.map((v) => (
+                  <div key={v.id} className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-medium text-fg">{v.name}</div>
+                        <div className="font-mono text-xs text-muted">{v.code}</div>
+                      </div>
+                      <Badge tone={v.status === 'active' ? 'success' : 'neutral'} variant="subtle">
+                        {v.status}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                      <div>
+                        <div className="text-subtext">Branch</div>
+                        <div className="font-medium text-fg">{v.branch_name || `#${v.branch_id}`}</div>
+                      </div>
+                      <div>
+                        <div className="text-subtext">Cycle</div>
+                        <div className="font-medium text-fg">{v.cycle_name || `#${v.cycle_id}`}</div>
+                      </div>
+                      <div className="col-span-2">
+                        <div className="text-subtext">Contact</div>
+                        <div className="text-fg">{v.phone || '—'}</div>
+                        {v.address ? <div className="text-muted">{v.address}</div> : null}
+                      </div>
+                      <div className="col-span-2 text-subtext">Created {fmtDate(v.created_at)}</div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <Button size="sm" variant="ghost" leftIcon={Pencil} onClick={() => openEdit(v)} disabled={busy}>
+                        Edit
+                      </Button>
+                      <Button size="sm" variant={v.status === 'active' ? 'warning' : 'success'} onClick={() => toggleStatus(v)} disabled={busy}>
+                        {v.status === 'active' ? 'Suspend' : 'Activate'}
+                      </Button>
+                      <div className="col-span-2">
+                        <Button className="w-full" size="sm" variant="danger" leftIcon={Trash2} onClick={() => { setConfirmTarget(v); setConfirmOpen(true) }} disabled={busy}>
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </Card>
 

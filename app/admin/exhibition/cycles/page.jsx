@@ -212,8 +212,10 @@ export function ExhibitionCyclesContent() {
               No exhibition cycles yet. Create one to open the exhibition for every branch.
             </div>
           ) : (
-            <Table>
-              <THead>
+            <>
+              <div className="hidden md:block">
+                <Table>
+                  <THead>
                 <TR>
                   <TH>Cycle</TH>
                   <TH>Status</TH>
@@ -268,7 +270,63 @@ export function ExhibitionCyclesContent() {
                   </TR>
                 ))}
               </TBody>
-            </Table>
+                </Table>
+              </div>
+
+              {/* Phones get cycle cards with all figures and actions visible. */}
+              <div className="divide-y divide-line md:hidden">
+                {cycles.map((c) => (
+                  <div key={c.id} className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-medium text-fg">{c.name}</div>
+                        <div className="text-xs text-muted">{c.code}</div>
+                      </div>
+                      <Badge tone={STATUS_STYLES[c.status] || 'neutral'} variant="subtle">
+                        {c.status}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                      <div>
+                        <div className="text-subtext">Vendors</div>
+                        <div className="font-medium tabular-nums text-fg">{c.vendors}</div>
+                      </div>
+                      <div>
+                        <div className="text-subtext">Orders</div>
+                        <div className="font-medium tabular-nums text-fg">{c.orders}</div>
+                      </div>
+                      <div>
+                        <div className="text-subtext">Dates</div>
+                        <div className="text-fg">{fmtDate(c.starts_at)} → {fmtDate(c.ends_at)}</div>
+                      </div>
+                      <div>
+                        <div className="text-subtext">Rates</div>
+                        <div className="text-fg">Loan {c.loan_interest_rate_pct}% · Vendor {c.vendor_deduction_rate_pct}%</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {c.status !== 'active' ? (
+                        <Button size="sm" variant="success" leftIcon={Play} onClick={() => setStatus(c, 'active')} disabled={busy}>
+                          Open
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="secondary" onClick={() => setStatus(c, 'closed')} disabled={busy}>
+                          Close
+                        </Button>
+                      )}
+                      <Button size="sm" variant="ghost" leftIcon={Pencil} onClick={() => openEdit(c)} disabled={busy}>
+                        Edit
+                      </Button>
+                      <div className="col-span-2">
+                        <Button className="w-full" size="sm" variant="danger" leftIcon={Trash2} onClick={() => setDeleteTarget(c)} disabled={busy || c.status === 'active'} title={c.status === 'active' ? 'Close the cycle before deleting' : 'Delete cycle'}>
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </Card>
 
