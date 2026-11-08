@@ -7,7 +7,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { CheckCircle2, ChevronLeft, ChevronRight, Inbox, Plus, RefreshCw, RotateCcw, Search, XCircle } from 'lucide-react'
-import Badge from '../../components/ui/Badge'
 import CounterInvoiceModal from '../../components/CounterInvoiceModal'
 import ExportButton from '../../components/ui/ExportButton'
 import DraggableModal from '../../components/DraggableModal'
@@ -18,8 +17,6 @@ const naira = (v) =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(
     Number(v || 0)
   )
-
-const STATUS_TONE = { Pending: 'warning', Approved: 'info', Confirmed: 'success', Cancelled: 'danger' }
 
 const toastMotion = {
   initial: { opacity: 0, y: -8, scale: 0.99 },
@@ -54,6 +51,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
   const [modal, setModal] = useState(null) // { type: 'approve'|'cancel'|'restore', ids }
   const [invoiceOpen, setInvoiceOpen] = useState(false)
   const [editOrder, setEditOrder] = useState(null)
+  const [viewOrder, setViewOrder] = useState(null)
   const [cancelReason, setCancelReason] = useState('')
 
   const fetchCtl = useRef(null)
@@ -255,29 +253,27 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
     try {
       const rows = await fetchAllForExport()
       if (!rows.length) return
-      const flat = rows.map((o) => ({
-        order_id: o.order_id,
-        id: o.id,
-        created_at: o.created_at,
-        member_id: o.member_id,
-        member_name: o.member_name_snapshot || '',
-        delivery_location: o.branch_name || '',
-        cycle: o.cycle_name || o.cycle_code || '',
-        payment: o.payment_option || '',
-        total_qty: o.total_qty,
-        total_amount: o.total_amount,
-        status: o.status,
-        vendors: o.per_vendor.map((v) => `${v.vendor_name} (${v.qty})`).join(', '),
-      }))
+      const headers = ['Order ID', 'Date', 'Member ID', 'Member', 'Delivery Location', 'Cycle', 'Payment', 'Qty', 'Total + Int', 'Vendors']
+      const body = rows.map((o) => [
+        o.order_id,
+        o.created_at ? new Date(o.created_at).toLocaleString() : '',
+        o.member_id,
+        o.member_name_snapshot || '',
+        o.branch_name || '',
+        o.cycle_name || o.cycle_code || '',
+        o.payment_option || '',
+        Number(o.total_qty || 0),
+        Number(o.total_amount || 0),
+        (o.per_vendor || []).map((v) => `${v.vendor_name} (${v.qty})`).join(', '),
+      ])
       const ExcelJSMod = await import('exceljs')
       const ExcelJS = ExcelJSMod?.default ?? ExcelJSMod
       const wb = new ExcelJS.Workbook()
       const ws = wb.addWorksheet(status)
       ws.addRow([`Coop Exhibition · ${status} Orders (Admin)`])
       ws.addRow([`Cycle: ${cycleFilter ? cycles.find((c) => String(c.id) === String(cycleFilter))?.name || cycleFilter : 'All'} | Payment: ${payment || 'All'} | Search: ${term || 'All'}`])
-      const headers = Object.keys(flat[0] || { id: '' })
       ws.addRow(headers)
-      for (const r of flat) ws.addRow(headers.map((h) => r[h]))
+      for (const r of body) ws.addRow(r)
       const buffer = await wb.xlsx.writeBuffer()
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
       const url = URL.createObjectURL(blob)
@@ -304,7 +300,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
         title: `Coop Exhibition · ${status} Orders`,
         meta: `Cycle: ${sanitize(cycleLabel)} | Payment: ${sanitize(payment || 'All')} | Search: ${sanitize(term || 'All')}`,
       })
-      const head = [['Order', 'Date', 'Member', 'Delivery Location', 'Payment', 'Qty', 'Total', 'Status', 'Vendors']]
+      const head = [['Order', 'Date', 'Member', 'Delivery Location', 'Payment', 'Qty', 'Total + Int', 'Vendors']]
       const body = rows.map((o) => [
         sanitize(o.order_id || String(o.id)),
         o.created_at ? new Date(o.created_at).toLocaleString() : '',
@@ -313,7 +309,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
         sanitize(o.payment_option || ''),
         String(Number(o.total_qty || 0)),
         `NGN ${Number(o.total_amount || 0).toLocaleString()}`,
-        sanitize(o.status || ''),
         sanitize((o.per_vendor || []).map((v) => `${v.vendor_name} (${v.qty})`).join(', ')),
       ])
       const totals = rows.reduce(
@@ -325,7 +320,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
         { qty: 0, amount: 0 }
       )
       const totalsRowIndex = body.length
-      body.push(['TOTAL', '', '', '', '', String(totals.qty.toLocaleString()), `NGN ${totals.amount.toLocaleString()}`, '', ''])
+      body.push(['TOTAL', '', '', '', '', String(totals.qty.toLocaleString()), `NGN ${totals.amount.toLocaleString()}`, ''])
       await addManifestTable(doc, {
         head,
         body,
@@ -359,11 +354,14 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
 
   const actOnOrder = (value, o) => {
     if (!value) return
+    if (value === 'view') { setViewOrder(o); return }
     if (value === 'edit') { setEditOrder(o); setInvoiceOpen(true) }
     if (value === 'approve') setModal({ type: 'approve', ids: [o.id] })
     if (value === 'cancel') setModal({ type: 'cancel', ids: [o.id] })
     if (value === 'restore') setModal({ type: 'restore', ids: [o.id] })
   }
+
+  const viewLines = viewOrder?.lines || []
 
   const orderActionSelect = (o, className = '') => (
     <select
@@ -377,6 +375,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
       }}
     >
       <option value="" disabled>Actions</option>
+      <option value="view">View items</option>
       {canEditRow(o) && <option value="edit">Edit invoice</option>}
       {canApprove && <option value="approve">Approve</option>}
       {canCancel && <option value="cancel">Cancel</option>}
@@ -612,8 +611,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                 <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Delivery Location</th>
                 <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Payment</th>
                 <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Qty</th>
-                <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Total</th>
-                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Status</th>
+                <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Total + Int</th>
                 <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Actions</th>
               </tr>
             </thead>
@@ -629,7 +627,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                       <td className="p-3"><div className="sakani-skeleton h-4 w-16 rounded" /></td>
                       <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-4 w-10 rounded" /></td>
                       <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-4 w-20 rounded" /></td>
-                      <td className="p-3"><div className="sakani-skeleton h-4 w-20 rounded" /></td>
                       <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-8 w-24 rounded" /></td>
                     </tr>
                   ))}
@@ -638,7 +635,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
 
               {!loading && orders.length === 0 && (
                 <tr>
-                  <td className="p-10 text-center" colSpan={9}>
+                  <td className="p-10 text-center" colSpan={8}>
                     <div className="mx-auto flex max-w-xs flex-col items-center gap-2">
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-subtle">
                         <Inbox className="h-6 w-6 text-subtext" />
@@ -679,6 +676,15 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                         <div className="font-medium text-fg">{o.order_id || `#${o.id}`}</div>
                         <div className="text-xs text-subtext">{fmtDate(o.created_at)}</div>
                         <div className="text-xs text-subtext">{o.cycle_name || o.cycle_code || ''}</div>
+                        {o.per_vendor?.length > 0 && (
+                          <div className="mt-1 max-w-[190px] space-y-0.5">
+                            {o.per_vendor.map((v) => (
+                              <div key={v.vendor_id} className="truncate text-xs text-subtext" title={v.vendor_name}>
+                                {v.vendor_name}: {v.qty}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         {status === 'Cancelled' && (
                           <div className="mt-1 max-w-[220px] text-xs text-subtext">
                             Reason: {String(o.cancelled_reason || '—').trim()}
@@ -697,18 +703,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                       </td>
                       <td className="p-3 align-top text-right">{Number(o.total_qty || 0).toLocaleString()}</td>
                       <td className="p-3 align-top text-right font-medium text-fg">{naira(o.total_amount)}</td>
-                      <td className="p-3 align-top">
-                        <Badge tone={STATUS_TONE[o.status] || 'neutral'} variant="subtle">{o.status}</Badge>
-                        {o.per_vendor?.length > 0 && (
-                          <div className="mt-1 max-w-[160px] space-y-0.5">
-                            {o.per_vendor.map((v) => (
-                              <div key={v.vendor_id} className="truncate text-xs text-subtext" title={v.vendor_name}>
-                                {v.vendor_name}: {v.qty}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </td>
                       <td className="p-3 align-top text-right">{orderActionSelect(o)}</td>
                     </motion.tr>
                   ))}
@@ -717,15 +711,12 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
           </table>
         </div>
 
-        {/* Phones get cards: the nine-column table becomes unreadable below md. */}
+        {/* Phones get cards: the full table becomes unreadable below md. */}
         <div className="divide-y divide-line md:hidden">
           {loading &&
             Array.from({ length: 4 }).map((_, i) => (
               <div key={`card-sk-${i}`} className="space-y-2 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="sakani-skeleton h-5 w-28 rounded" />
-                  <div className="sakani-skeleton h-5 w-20 rounded-full" />
-                </div>
+                <div className="sakani-skeleton h-5 w-28 rounded" />
                 <div className="sakani-skeleton h-4 w-44 rounded" />
                 <div className="sakani-skeleton h-4 w-36 rounded" />
                 <div className="sakani-skeleton h-9 w-full rounded-lg" />
@@ -758,15 +749,12 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                     aria-label={`Select order ${o.order_id}`}
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-fg">{o.order_id || `#${o.id}`}</p>
-                        <p className="text-xs text-subtext">
-                          {fmtDate(o.created_at)}
-                          {o.cycle_name || o.cycle_code ? ` · ${o.cycle_name || o.cycle_code}` : ''}
-                        </p>
-                      </div>
-                      <Badge tone={STATUS_TONE[o.status] || 'neutral'} variant="subtle">{o.status}</Badge>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-fg">{o.order_id || `#${o.id}`}</p>
+                      <p className="text-xs text-subtext">
+                        {fmtDate(o.created_at)}
+                        {o.cycle_name || o.cycle_code ? ` · ${o.cycle_name || o.cycle_code}` : ''}
+                      </p>
                     </div>
 
                     <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
@@ -789,7 +777,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                         <p className="mt-0.5 tabular-nums font-medium text-fg">{Number(o.total_qty || 0).toLocaleString()}</p>
                       </div>
                       <div className="col-span-2 flex items-baseline justify-between gap-3 border-t border-line-subtle pt-2">
-                        <span className="text-chips text-muted">Total</span>
+                        <span className="text-chips text-muted">Total + Int</span>
                         <span className="text-base font-bold tabular-nums text-fg">{naira(o.total_amount)}</span>
                       </div>
                     </div>
@@ -817,6 +805,78 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
             ))}
         </div>
       </div>
+
+      <DraggableModal
+        open={!!viewOrder}
+        onClose={() => setViewOrder(null)}
+        widthClass="max-w-2xl w-full mx-4"
+        title={viewOrder ? `Items · ${viewOrder.order_id || `#${viewOrder.id}`}` : 'Items'}
+      >
+        {viewOrder && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 rounded-xl bg-subtle/60 p-3 text-sm sm:grid-cols-4">
+              <div className="col-span-2 min-w-0">
+                <p className="text-chips text-muted">Member</p>
+                <p className="mt-0.5 break-words font-medium text-fg">
+                  {viewOrder.member_id}{viewOrder.member_name_snapshot ? ` · ${viewOrder.member_name_snapshot}` : ''}
+                </p>
+              </div>
+              <div>
+                <p className="text-chips text-muted">Payment</p>
+                <p className="mt-0.5 font-medium text-fg">{viewOrder.payment_option || '—'}</p>
+              </div>
+              <div className="text-right sm:text-left">
+                <p className="text-chips text-muted">Qty</p>
+                <p className="mt-0.5 font-medium tabular-nums text-fg">{Number(viewOrder.total_qty || 0).toLocaleString()}</p>
+              </div>
+              <div className="col-span-2 min-w-0">
+                <p className="text-chips text-muted">Delivery Location</p>
+                <p className="mt-0.5 break-words font-medium text-fg">{viewOrder.branch_name || `#${viewOrder.branch_id}`}</p>
+              </div>
+              <div className="col-span-2 min-w-0">
+                <p className="text-chips text-muted">Cycle</p>
+                <p className="mt-0.5 break-words font-medium text-fg">{viewOrder.cycle_name || viewOrder.cycle_code || '—'}</p>
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Items</h3>
+                <span className="text-chips text-muted">
+                  {viewLines.length} line{viewLines.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              <div className="divide-y divide-line overflow-hidden rounded-xl border border-line">
+                {viewLines.length === 0 ? (
+                  <p className="px-3 py-6 text-center text-sm text-muted">No item lines recorded for this order.</p>
+                ) : (
+                  viewLines.map((l) => {
+                    const qty = Number(l.qty || 0)
+                    const unit = Number(l.final_price ?? l.vendor_price ?? 0)
+                    const amount = Number(l.amount ?? qty * unit)
+                    return (
+                      <div key={l.id} className="flex items-start gap-3 px-3 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="break-words text-sm font-medium text-fg">{l.product_name || 'Item'}</p>
+                          <p className="mt-0.5 text-chips text-muted">
+                            {[l.vendor_name, l.sku, `${qty} × ${naira(unit)}`].filter(Boolean).join(' · ')}
+                          </p>
+                        </div>
+                        <p className="shrink-0 text-sm font-semibold tabular-nums text-fg">{naira(amount)}</p>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
+              <span className="text-sm font-semibold text-fg">Total + Int</span>
+              <span className="text-lg font-bold tabular-nums text-fg">{naira(viewOrder.total_amount)}</span>
+            </div>
+          </div>
+        )}
+      </DraggableModal>
 
       <DraggableModal
         open={!!modal}

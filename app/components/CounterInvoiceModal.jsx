@@ -37,6 +37,34 @@ function memberRole(m) {
   return [categoryLabel(m), String(m?.grade || '').trim()].filter(Boolean).join(' · ')
 }
 
+function memberBranch(m) {
+  return String(m?.branch || m?.branch_name || '').trim()
+}
+
+function VendorFinancialNote({ loading, error, financials, showCredit = false }) {
+  if (loading) return <p className="mt-2 text-chips text-muted">Checking the member’s financial position…</p>
+  if (error) return <p className="mt-2 text-chips text-danger-fg">{error}</p>
+  if (!financials) return null
+  return (
+    <div className="mt-2 space-y-0.5 rounded-lg border border-line bg-surface px-2.5 py-2 text-chips text-muted">
+      {showCredit && (
+        <p>
+          <span className="font-semibold text-fg">Remaining credit facility:</span>{' '}
+          {naira(financials.financials?.loan_eligible)}
+        </p>
+      )}
+      <p>
+        <span className="font-semibold text-fg">Outstanding loans incl. shopping exposure:</span>{' '}
+        {naira(financials.financials?.outstanding_loans_total)}
+      </p>
+      <p>
+        <span className="font-semibold text-fg">50% Savings available:</span>{' '}
+        {naira(financials.financials?.savings_eligible)}
+      </p>
+    </div>
+  )
+}
+
 const inputCls =
   'w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none'
 
@@ -217,10 +245,10 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
     }
   }, [open])
 
-  // Admin only: show the member's financial standing for the invoice's
-  // cycle. Vendors deliberately never receive these balances.
+  // Both invoice desks need the member's available position. Vendors get the
+  // reduced summary returned by their own endpoint.
   useEffect(() => {
-    if (!open || !isAdmin || !member?.member_id) {
+    if (!open || !member?.member_id) {
       setFinancials(null)
       setFinancialsLoading(false)
       setFinancialsError('')
@@ -233,7 +261,8 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
     setFinancials(null)
     setFinancialsLoading(true)
     setFinancialsError('')
-    fetch(`/api/admin/exhibition/members/financials?${params.toString()}`, { cache: 'no-store' })
+    const endpoint = isAdmin ? '/api/admin/exhibition/members/financials' : '/api/vendor/exhibition/members/financials'
+    fetch(`${endpoint}?${params.toString()}`, { cache: 'no-store' })
       .then(async (res) => {
         const json = await res.json().catch(() => null)
         if (!res.ok || !json?.ok) throw new Error(json?.error || 'Could not load financial standing')
@@ -403,7 +432,7 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
                     <p className="truncate text-sm font-semibold text-fg">{vendor.name || 'Vendor'}</p>
                     <p className="truncate text-chips text-muted">{vendor.code || 'Vendor stand'}</p>
                     <p className="mt-0.5 truncate text-chips text-muted">
-                      <span className="font-medium text-fg">Branch:</span>{' '}
+                      <span className="font-medium text-fg">Delivery Location:</span>{' '}
                       {vendor.branch_name || vendor.branch || 'Not set'}
                     </p>
                     <p className="truncate text-chips text-muted">
@@ -443,7 +472,7 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
                                 {v.status !== 'active' ? ' · suspended' : ''}
                               </span>
                               <span className="block text-chips text-muted">
-                                Branch: {v.branch_name || 'Not set'}
+                                Delivery Location: {v.branch_name || 'Not set'}
                               </span>
                               <span className="block text-chips text-muted">
                                 Active cycle: {v.cycle_name || 'Not set'}
@@ -484,12 +513,14 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
               <div className="mt-2 space-y-2">
                 <div className="rounded-xl bg-subtle/60 px-3 py-2">
                   <p className="text-sm font-semibold text-fg">{member.full_name || 'Member'} · {member.member_id}</p>
-                  {memberMeta(member) && <p className="text-chips text-muted">{memberMeta(member)}</p>}
+                  <p className="text-chips text-muted">
+                    <span className="font-medium text-fg">Delivery Branch:</span>{' '}
+                    {memberBranch(member) || 'Not set'}
+                  </p>
                   {memberRole(member) && <p className="text-chips text-muted">{memberRole(member)}</p>}
                 </div>
-                {/* Financial position stays private: the vendor sees who the
-                    member is, not what they can afford. Limits are checked by
-                    the server when the invoice is submitted. */}
+                {/* Admins see the full position here. Vendors receive only the
+                    spendable/remaining summary beside the payment choice. */}
                 {isAdmin ? (
                   <div className="rounded-xl border border-line bg-subtle/40 p-2.5">
                     <div className="flex flex-wrap items-center justify-between gap-1">
@@ -526,7 +557,7 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
                         </div>
                         <p className="mt-1.5 text-chips text-muted">
                           Outstanding loans incl. shopping exposure: {naira(financials.financials?.outstanding_loans_total)}
-                          {' · '}Savings available: {naira(financials.financials?.savings_eligible)}
+                          {' · '}50% Savings available: {naira(financials.financials?.savings_eligible)}
                         </p>
                         {financials.financials?.warning && (
                           <p className="mt-1 text-chips text-warning-fg">{financials.financials.warning}</p>
@@ -796,6 +827,14 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
                         {loanRateError || 'Loading the current loan interest rate…'}
                       </p>
                     )}
+                    {!isAdmin && (
+                      <VendorFinancialNote
+                        loading={financialsLoading}
+                        error={financialsError}
+                        financials={financials}
+                        showCredit
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -810,6 +849,13 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
                     <p className="mt-0.5 text-xs text-muted">
                       The invoice value will be deducted from the member&apos;s savings when it is approved. The server checks the available savings balance before accepting the invoice.
                     </p>
+                    {!isAdmin && (
+                      <VendorFinancialNote
+                        loading={financialsLoading}
+                        error={financialsError}
+                        financials={financials}
+                      />
+                    )}
                   </div>
                 </div>
               </div>
