@@ -1,19 +1,17 @@
 // app/api/vendor/exhibition/members/financials/route.js
-// Vendor counter-invoice desk: the small financial summary a vendor needs at
-// the point of choosing Savings or Loan. Deliberately excludes the member's
-// total savings and loan balances; only the spendable/remaining figures are
-// returned.
+// Admin-only compatibility endpoint. The vendor invoice desk no longer calls
+// this route, and member financials must never be exposed to vendor sessions.
 //   GET /api/vendor/exhibition/members/financials?member_id=...
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
-import { getVendorContext } from '../../../_session'
+import { validateSession } from '@/lib/validation'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET(req) {
-  const ctx = await getVendorContext(req)
-  if (!ctx) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+  const session = await validateSession(req, 'admin')
+  if (!session.valid) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
 
   try {
     const memberId = String(req.nextUrl?.searchParams?.get('member_id') || '').trim().toUpperCase()
