@@ -23,6 +23,7 @@ import { ExhibitionOrderStepper, FoodOrderStepper, RamOrderStepper } from '../co
 import OrderReceiptModal from '../components/OrderReceiptModal'
 import { supabase } from '@/lib/supabaseClient'
 import { writePendingIds, markPendingSeen } from '../lib/exhibitionPendingBadge'
+import { normalizeExhibitionStatus } from '@/lib/exhibitionStatus'
 import Button from '../components/ui/Button'
 import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
@@ -34,6 +35,7 @@ const STATUS_TONES = {
   Pending: 'warning',
   Posted: 'info',
   Delivered: 'success',
+  Confirmed: 'success',
   Approved: 'success',
   Cancelled: 'danger',
 }
@@ -57,7 +59,7 @@ function OrdersPageContent() {
   const isAdmin = searchParams.get('admin') === 'true'
   const tabParam = (searchParams.get('tab') || '').trim().toLowerCase()
   const statusParam = (searchParams.get('status') || '').trim()
-  const VALID_STATUSES = ['Pending', 'Approved', 'Posted', 'Delivered', 'Cancelled']
+  const VALID_STATUSES = ['Pending', 'Approved', 'Posted', 'Delivered', 'Confirmed', 'Cancelled']
   const [activeTab, setActiveTab] = useState(
     tabParam === 'ram' ? 'ram' : tabParam === 'exhibition' ? 'exhibition' : 'food'
   )
@@ -212,7 +214,12 @@ function OrdersPageContent() {
       const res = await fetch(`/api/exhibition/orders?member_id=${encodeURIComponent(memberId)}`, { cache: 'no-store' })
       const data = await res.json().catch(() => ({}))
       if (data.ok) {
-        setExhibitionOrders(data.orders || [])
+        setExhibitionOrders(
+          (data.orders || []).map((order) => ({
+            ...order,
+            status: normalizeExhibitionStatus(order.status),
+          }))
+        )
       } else if (String(data.error || '').toLowerCase().includes('not set up')) {
         // Exhibition isn't configured yet — treat as an empty tab, not an error.
         setExhibitionOrders([])
@@ -263,7 +270,11 @@ function OrdersPageContent() {
 
   const listForTab = activeTab === 'ram' ? ramOrders : activeTab === 'exhibition' ? exhibitionOrders : orders
   const filteredOrders =
-    selectedStatus === 'All' ? listForTab : listForTab.filter((order) => order.status === selectedStatus)
+    selectedStatus === 'All'
+      ? listForTab
+      : listForTab.filter((order) =>
+          (activeTab === 'exhibition' ? normalizeExhibitionStatus(order.status) : order.status) === selectedStatus
+        )
 
   const ramLocationMap = new Map(ramLocations.map((l) => [String(l.id), l]))
 
@@ -374,7 +385,7 @@ function OrdersPageContent() {
                   ) : activeTab === 'exhibition' ? (
                     <>
                       <option key="approved" value="Approved">Approved</option>
-                      <option key="delivered" value="Delivered">Delivered</option>
+                      <option key="confirmed" value="Confirmed">Confirmed</option>
                     </>
                   ) : (
                     <>
@@ -483,7 +494,7 @@ function OrdersPageContent() {
                         <span className="text-sm font-bold tabular-nums text-fg">₦{Number(order.total_amount || 0).toLocaleString()}</span>
                       </div>
 
-                      {/* Pending → Approved → Delivered progress */}
+                      {/* Pending → Approved → Confirmed progress */}
                       <div className="mt-3 border-t border-line-subtle pt-3">
                         <ExhibitionOrderStepper status={order.status} />
                       </div>

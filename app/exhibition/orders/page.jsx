@@ -1,6 +1,6 @@
 // app/exhibition/orders/page.jsx
 // Member-facing 'My exhibition orders' — track each order through the
-// Pending → Approved → Delivered pipeline (Cancelled shows as a red state).
+// Pending → Approved → Confirmed pipeline (Cancelled shows as a red state).
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -21,6 +21,7 @@ import Badge from '../../components/ui/Badge'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
 import { EXHIBITION_STATUS_META } from '../../components/ui/OrderStepper'
+import { normalizeExhibitionStatus } from '@/lib/exhibitionStatus'
 import ExhibitionOrderTimeline from '../../components/ExhibitionOrderTimeline'
 
 const naira = (v) => `₦${Number(v || 0).toLocaleString()}`
@@ -146,7 +147,7 @@ function ExhibitionOrdersContent() {
               </div>
               <h1 className="mt-1.5 font-display text-h1 font-semibold tracking-tight text-fg">Track your orders</h1>
               <p className="mt-1 max-w-xl text-sm text-muted">
-                Follow each order from Pending approval to Delivered at your branch market.
+                Follow each order from Pending approval to Confirmed at your branch market.
               </p>
             </div>
           </div>
@@ -168,7 +169,7 @@ function ExhibitionOrdersContent() {
               </div>
               <div className="ui-card p-3 text-center">
                 <div className="text-xl font-bold tabular-nums text-success-fg">{stats.byStatus.Delivered + stats.byStatus.Confirmed}</div>
-                <div className="text-chips font-medium text-muted">Delivered</div>
+                <div className="text-chips font-medium text-muted">Confirmed</div>
               </div>
               <div className="ui-card p-3 text-center">
                 <div className="text-xl font-bold tabular-nums text-fg">{naira(stats.total)}</div>
@@ -197,7 +198,7 @@ function ExhibitionOrdersContent() {
           ) : (
             <div className="space-y-4">
               {orders.map((o) => {
-                const meta = STATUS_META[o.status] || { tone: 'neutral', label: o.status, icon: Package }
+                const meta = STATUS_META[normalizeExhibitionStatus(o.status)] || { tone: 'neutral', label: o.status, icon: Package }
                 const StatusIcon = meta.icon
                 return (
                   <div key={o.id} className="ui-card overflow-hidden">

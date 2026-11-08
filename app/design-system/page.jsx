@@ -735,7 +735,7 @@ export default function DesignSystemPage() {
             {[
               { label: 'Pending', node: <ExhibitionOrderStepper status="Pending" /> },
               { label: 'Approved', node: <ExhibitionOrderStepper status="Approved" /> },
-              { label: 'Delivered', node: <ExhibitionOrderStepper status="Delivered" /> },
+              { label: 'Confirmed', node: <ExhibitionOrderStepper status="Confirmed" /> },
               { label: 'Cancelled', node: <ExhibitionOrderStepper status="Cancelled" /> },
             ].map((row) => (
               <div key={row.label} className="rounded-xl border border-line bg-surface p-5">
@@ -750,7 +750,7 @@ export default function DesignSystemPage() {
             <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">Module presets</div>
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
               <div>
-                <div className="mb-2 text-chips font-medium text-muted">Exhibition · Pending → Approved → Delivered</div>
+                <div className="mb-2 text-chips font-medium text-muted">Exhibition · Pending → Approved → Confirmed</div>
                 <ExhibitionOrderStepper status="Approved" />
               </div>
               <div>

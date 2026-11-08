@@ -10,6 +10,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Beef, FileText, Printer, ShoppingBasket, Store, X } from 'lucide-react'
 import Image from 'next/image'
 import useFocusTrap from '../hooks/useFocusTrap'
+import { normalizeExhibitionStatus } from '@/lib/exhibitionStatus'
 import Button from './ui/Button'
 
 const naira = (v) => `₦${Number(v || 0).toLocaleString()}`
@@ -38,6 +39,7 @@ export default function OrderReceiptModal({
 
   const meta = MODULE_META[module] || MODULE_META.food
   const ModuleIcon = meta.icon
+  const displayStatus = module === 'exhibition' ? normalizeExhibitionStatus(order?.status) : order?.status
 
   const formatDate = (d) => new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
 
@@ -134,7 +136,7 @@ export default function OrderReceiptModal({
         doc.text('CBN Coop Seasonal Sales - Exhibition Invoice', 10, 12)
         doc.setFontSize(10)
         doc.text(`Order ID: ${order.order_id}`, 10, 20)
-        doc.text(`Status: ${order.status}`, 120, 20)
+        doc.text(`Status: ${displayStatus}`, 120, 20)
         doc.text(`Date: ${new Date(order.created_at).toLocaleString()}`, 10, 26)
         doc.text(`Member: ${order.member_name_snapshot || memberId} (${memberId})`, 10, 34)
         doc.text(`Branch: ${order.branch?.name || '-'}`, 10, 40)
@@ -324,7 +326,7 @@ export default function OrderReceiptModal({
                     </div>
                     <div>
                       <p className="text-chips font-medium uppercase tracking-wider text-muted">Status</p>
-                      <p className="font-medium text-fg">{order.status}</p>
+                      <p className="font-medium text-fg">{displayStatus}</p>
                     </div>
                     <div className="col-span-2 sm:col-span-1">
                       <p className="text-chips font-medium uppercase tracking-wider text-muted">Payment method</p>

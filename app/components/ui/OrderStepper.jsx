@@ -2,7 +2,7 @@
 // UI-kit order-progress stepper. One generic component renders any module's
 // journey from its status metadata + step list; the module presets below bind
 // it to the app's three order flows so pages never pass props:
-//   ExhibitionOrderStepper — Pending → Approved → Delivered
+//   ExhibitionOrderStepper — Pending → Approved → Confirmed
 //   RamOrderStepper        — Pending → Approved → Delivered (ram has its own
 //                            Approve flow before the vendor hands over)
 //   FoodOrderStepper       — Pending → Posted → Delivered
@@ -12,13 +12,14 @@
 'use client'
 
 import { BadgeCheck, CheckCircle2, Clock, Truck, XCircle } from 'lucide-react'
+import { normalizeExhibitionStatus } from '@/lib/exhibitionStatus'
 
 export const EXHIBITION_STATUS_META = {
   Pending: { tone: 'warning', label: 'Pending', icon: Clock, step: 0 },
   Approved: { tone: 'info', label: 'Approved', icon: CheckCircle2, step: 1 },
   Delivered: { tone: 'success', label: 'Delivered', icon: Truck, step: 2 },
   // The member's acknowledgement — the step that finalises the transaction.
-  Confirmed: { tone: 'success', label: 'Received', icon: BadgeCheck, step: 3 },
+  Confirmed: { tone: 'success', label: 'Confirmed', icon: BadgeCheck, step: 3 },
   Cancelled: { tone: 'danger', label: 'Cancelled', icon: XCircle },
 }
 
@@ -46,7 +47,7 @@ const EXHIBITION_STEPS = [
   { key: 'Pending', label: 'Pending', icon: Clock },
   { key: 'Approved', label: 'Approved', icon: CheckCircle2 },
   { key: 'Delivered', label: 'Delivered', icon: Truck },
-  { key: 'Confirmed', label: 'Received', icon: BadgeCheck },
+  { key: 'Confirmed', label: 'Confirmed', icon: BadgeCheck },
 ]
 
 const FOOD_STEPS = [
@@ -103,7 +104,7 @@ export default function OrderStepper({ status, meta, steps }) {
 // ── Module presets ────────────────────────────────────────────────────────
 
 export function ExhibitionOrderStepper({ status }) {
-  return <OrderStepper status={status} meta={EXHIBITION_STATUS_META} steps={EXHIBITION_STEPS} />
+  return <OrderStepper status={normalizeExhibitionStatus(status)} meta={EXHIBITION_STATUS_META} steps={EXHIBITION_STEPS} />
 }
 
 export function RamOrderStepper({ status }) {
