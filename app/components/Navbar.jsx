@@ -209,11 +209,11 @@ export default function Navbar() {
         </button>
 
         {/* Logo */}
-        <Link href="/" className="flex items-center space-x-2 group">
+        <Link href="/" className="flex min-w-0 items-center space-x-2 group">
           <div className="w-8 h-8 bg-surface border border-line-subtle rounded-lg flex items-center justify-center overflow-hidden">
             <img src="/logo.png" alt="CBN Coop" className="w-7 h-7 object-contain" />
           </div>
-          <div className="flex flex-col">
+          <div className="flex min-w-0 flex-col">
             {isOrdersNav ? (
               <>
                 <span className="font-bold text-[15px] sm:text-base lg:text-lg text-brand dark:text-fg leading-tight">
@@ -223,17 +223,17 @@ export default function Navbar() {
               </>
             ) : isRamMemberNav ? (
               <>
-                <span className="font-bold text-[15px] sm:text-base lg:text-lg text-brand dark:text-fg leading-tight">
+                <span className="max-w-[52vw] truncate font-bold text-[15px] sm:max-w-none sm:text-base lg:text-lg text-brand dark:text-fg leading-tight">
                   Coop Ram Distribution
                 </span>
-                <span className="text-xs sm:text-sm text-muted -mt-1">Members Distribution Portal</span>
+                <span className="max-w-[52vw] truncate text-xs sm:max-w-none sm:text-sm text-muted -mt-1">Members Distribution Portal</span>
               </>
             ) : isFoodMemberNav ? (
               <>
-                <span className="font-bold text-[15px] sm:text-base lg:text-lg text-brand dark:text-fg leading-tight">
+                <span className="max-w-[52vw] truncate font-bold text-[15px] sm:max-w-none sm:text-base lg:text-lg text-brand dark:text-fg leading-tight">
                   Coop Seasonal Sales
                 </span>
-                <span className="text-xs sm:text-sm text-muted -mt-1">Member Shopping Portal</span>
+                <span className="max-w-[52vw] truncate text-xs sm:max-w-none sm:text-sm text-muted -mt-1">Member Shopping Portal</span>
               </>
             ) : (
               <>

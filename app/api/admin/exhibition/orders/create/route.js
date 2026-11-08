@@ -119,12 +119,18 @@ export async function POST(req) {
 
     const { data: member, error: mErr } = await supabase
       .from('members')
-      .select('member_id, full_name, portal_enabled')
+      .select('member_id, full_name, portal_enabled, loans')
       .eq('member_id', memberId)
       .maybeSingle()
     if (mErr) return NextResponse.json({ ok: false, error: mErr.message }, { status: 500 })
     if (!member || member.portal_enabled === false) {
       return NextResponse.json({ ok: false, error: 'Member not found.' }, { status: 404 })
+    }
+    if (paymentOption === 'Savings' && Number(member.loans || 0) > 0) {
+      return NextResponse.json(
+        { ok: false, error: 'This member has an outstanding loan. Savings cannot be used — choose Loan or Cash.' },
+        { status: 400 },
+      )
     }
 
     const loanRatePct = Math.max(0, Number(cycle.loan_interest_rate_pct ?? 0))

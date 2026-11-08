@@ -6,7 +6,7 @@ import { getVendorContext } from '../../_session'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const STATUS_FILTERS = ['Pending', 'Approved', 'Delivered', 'Confirmed', 'Cancelled']
+const STATUS_FILTERS = ['Pending', 'Approved', 'Confirmed', 'Cancelled']
 
 //   GET /api/vendor/exhibition/orders?status=Approved&scope=pending|done|all&q=&limit=&offset=
 // Paginated list of the vendor's orders with their lines. `scope` narrows to
@@ -33,9 +33,10 @@ export async function GET(req) {
     // Status filter derived from the scope; legacy mode keeps the passed status.
     let statusFilter = null
     if (scope === 'pending') statusFilter = ['Approved']
-    else if (scope === 'done' || scope === 'all') statusFilter = ['Approved', 'Delivered', 'Confirmed']
+    else if (scope === 'done' || scope === 'all') statusFilter = ['Approved', 'Confirmed', 'Delivered']
+    else if (status === 'Confirmed') statusFilter = ['Confirmed', 'Delivered']
     else if (status && STATUS_FILTERS.includes(status)) statusFilter = [status]
-    else statusFilter = STATUS_FILTERS.filter((s) => s !== 'Cancelled')
+    else statusFilter = ['Pending', 'Approved', 'Confirmed', 'Delivered']
 
     // This vendor's participation per order: how many lines and how many
     // delivered — drives the pending/done scopes. (Per-vendor line counts stay
@@ -120,6 +121,9 @@ export async function GET(req) {
       const doneCount = lines.filter((l) => l.delivered).length
       return {
         ...o,
+        // The vendor portal uses Confirmed for the final state; Delivered is
+        // the legacy name still present on older rows.
+        status: o.status === 'Delivered' ? 'Confirmed' : o.status,
         db_id: Number(o.id), // numeric exhibition_orders.id — used by the audit endpoint
         member_name: o.member_name_snapshot || '',
         lines,
@@ -164,10 +168,10 @@ export async function POST(req) {
     if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     if (order.status === 'Cancelled') return NextResponse.json({ error: 'This order is cancelled' }, { status: 409 })
     if (order.status === 'Delivered' || order.status === 'Confirmed') {
-      return NextResponse.json({ error: 'This order is already delivered' }, { status: 409 })
+      return NextResponse.json({ error: 'This order is already confirmed' }, { status: 409 })
     }
     if (order.status !== 'Approved') {
-      return NextResponse.json({ error: 'Only approved orders can be marked delivered' }, { status: 409 })
+      return NextResponse.json({ error: 'Only approved orders can be handed over' }, { status: 409 })
     }
 
     // This vendor's lines on the order

@@ -79,12 +79,12 @@ export default function DraggableModal({
             transition={{ duration: 0.18, ease: 'easeOut' }}
             className={`bg-surface rounded-xl border border-line shadow-xl outline-none max-h-[90vh] overflow-y-auto overscroll-contain ${widthClass}`}
           >
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <div
                 className="flex items-center justify-between mb-4 cursor-move select-none touch-none"
                 onPointerDown={onPointerDown}
               >
-                <h3 className="text-[15px] font-semibold text-fg">{title}</h3>
+                <h3 className="min-w-0 pr-2 text-[15px] font-semibold text-fg">{title}</h3>
                 <button
                   type="button"
                   aria-label="Close"

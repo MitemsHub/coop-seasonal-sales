@@ -6,7 +6,7 @@
 // member, branch, cycle and total, so admins can review staff actions from
 // one place. Filter by action, branch, or search an order / member.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CheckCircle2, ChevronLeft, ChevronRight, History, Inbox, RefreshCw, RotateCcw, Search, Truck, XCircle } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, History, Inbox, RefreshCw, RotateCcw, Search, XCircle } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Badge from '../../../components/ui/Badge'
 import Button from '../../../components/ui/Button'
@@ -22,7 +22,7 @@ const naira = (v) =>
 
 const ACTION_META = {
   Approved: { tone: 'success', Icon: CheckCircle2 },
-  Delivered: { tone: 'info', Icon: Truck },
+  Confirmed: { tone: 'success', Icon: CheckCircle2 },
   Restored: { tone: 'warning', Icon: RotateCcw },
   Cancelled: { tone: 'danger', Icon: XCircle },
 }
@@ -119,7 +119,7 @@ export default function AdminExhibitionAuditPage() {
         <div className="mb-6">
           <h1 className="text-h2 font-bold tracking-tight text-fg">Audit Log</h1>
           <p className="mt-0.5 text-sm text-muted">
-            Who approved, cancelled, restored or delivered each exhibition order across every branch.
+            Who approved, cancelled, restored or confirmed each exhibition order across every branch.
           </p>
         </div>
 
@@ -171,7 +171,7 @@ export default function AdminExhibitionAuditPage() {
                   <option value="Approved">Approved</option>
                   <option value="Cancelled">Cancelled</option>
                   <option value="Restored">Restored</option>
-                  <option value="Delivered">Delivered</option>
+                  <option value="Confirmed">Confirmed</option>
                 </Select>
               </div>
               <div>
@@ -220,11 +220,11 @@ export default function AdminExhibitionAuditPage() {
               </div>
               <p className="text-sm font-medium text-fg">No audit events found</p>
               <p className="max-w-sm text-xs text-muted">
-                Approvals, cancellations, restores and deliveries by reps, admins and vendors will appear here.
+                Approvals, cancellations, restores and confirmations by reps, admins and vendors will appear here.
               </p>
             </div>
           ) : (
-            <Table>
+            <Table className="min-w-[760px]">
               <THead>
                 <TR>
                   <TH>When</TH>

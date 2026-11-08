@@ -6,7 +6,7 @@
 // Cancelled orders can be restored.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { CheckCircle2, ChevronLeft, ChevronRight, History, Inbox, Package, Plus, RefreshCw, RotateCcw, Search, Truck, XCircle } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, Inbox, Plus, RefreshCw, RotateCcw, Search, XCircle } from 'lucide-react'
 import Badge from '../../components/ui/Badge'
 import CounterInvoiceModal from '../../components/CounterInvoiceModal'
 import ExportButton from '../../components/ui/ExportButton'
@@ -19,15 +19,7 @@ const naira = (v) =>
     Number(v || 0)
   )
 
-const STATUS_TONE = { Pending: 'warning', Approved: 'info', Delivered: 'success', Confirmed: 'success', Cancelled: 'danger' }
-
-const AUDIT_ICON = {
-  'Order placed': { Icon: Package, iconCls: 'text-muted', tileCls: 'bg-subtle' },
-  Approved: { Icon: CheckCircle2, iconCls: 'text-success', tileCls: 'bg-success-bg' },
-  Cancelled: { Icon: XCircle, iconCls: 'text-danger', tileCls: 'bg-danger-bg' },
-  Restored: { Icon: RotateCcw, iconCls: 'text-brand', tileCls: 'bg-brand-subtle' },
-  Delivered: { Icon: Truck, iconCls: 'text-success', tileCls: 'bg-success-bg' },
-}
+const STATUS_TONE = { Pending: 'warning', Approved: 'info', Confirmed: 'success', Cancelled: 'danger' }
 
 const toastMotion = {
   initial: { opacity: 0, y: -8, scale: 0.99 },
@@ -63,10 +55,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
   const [invoiceOpen, setInvoiceOpen] = useState(false)
   const [editOrder, setEditOrder] = useState(null)
   const [cancelReason, setCancelReason] = useState('')
-  const [auditOrder, setAuditOrder] = useState(null) // { id, order_id, created_at, member_id }
-  const [auditEvents, setAuditEvents] = useState([])
-  const [auditLoading, setAuditLoading] = useState(false)
-  const [auditError, setAuditError] = useState('')
 
   const fetchCtl = useRef(null)
   // Whether the default active-cycle scope has been applied (once on mount)
@@ -187,50 +175,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
 
   // ── Actions ─────────────────────────────────────────────────────
 
-  // Audit trail for one order — who approved/cancelled/restored/delivered it.
-  // Reuses the admin exhibition audit endpoint (same lens the admin Audit Log
-  // page uses) so the Activity modal matches the rep portal's exactly.
-  const openAudit = useCallback(async (o) => {
-    setAuditOrder(o)
-    setAuditEvents([])
-    setAuditError('')
-    setAuditLoading(true)
-    try {
-      const res = await fetch(`/api/admin/exhibition/audit?order_id=${o.id}`, { cache: 'no-store' })
-      const json = await safeJson(res, '/api/admin/exhibition/audit')
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to load activity')
-      setAuditEvents(json.events || [])
-    } catch (e) {
-      setAuditError(e?.message || 'Failed to load activity')
-    } finally {
-      setAuditLoading(false)
-    }
-  }, [safeJson])
-
-  // Timeline: the order's placement (synthesised from the row) + logged events.
-  const auditItems = useMemo(() => {
-    const items = []
-    if (auditOrder?.created_at) {
-      items.push({
-        key: 'placed',
-        action: 'Order placed',
-        actorLabel: String(auditOrder.member_id || 'Member'),
-        note: '',
-        created_at: auditOrder.created_at,
-      })
-    }
-    for (const ev of auditEvents) {
-      items.push({
-        key: ev.id ?? `${ev.action}-${ev.created_at}`,
-        action: ev.action,
-        actorLabel: String(ev.actor_label || 'Unknown'),
-        note: String(ev.note || ''),
-        created_at: ev.created_at,
-      })
-    }
-    return items
-  }, [auditOrder, auditEvents])
-
   const runAction = async (type, ids, reason) => {
     if (!ids.length) return
     setBulkBusy(true)
@@ -317,7 +261,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
         created_at: o.created_at,
         member_id: o.member_id,
         member_name: o.member_name_snapshot || '',
-        branch: o.branch_name || '',
+        delivery_location: o.branch_name || '',
         cycle: o.cycle_name || o.cycle_code || '',
         payment: o.payment_option || '',
         total_qty: o.total_qty,
@@ -360,7 +304,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
         title: `Coop Exhibition · ${status} Orders`,
         meta: `Cycle: ${sanitize(cycleLabel)} | Payment: ${sanitize(payment || 'All')} | Search: ${sanitize(term || 'All')}`,
       })
-      const head = [['Order', 'Date', 'Member', 'Branch', 'Payment', 'Qty', 'Total', 'Status', 'Vendors']]
+      const head = [['Order', 'Date', 'Member', 'Delivery Location', 'Payment', 'Qty', 'Total', 'Status', 'Vendors']]
       const body = rows.map((o) => [
         sanitize(o.order_id || String(o.id)),
         o.created_at ? new Date(o.created_at).toLocaleString() : '',
@@ -458,7 +402,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
       <div className="ui-card p-4 mb-4">
         <div className="flex flex-col gap-2">
           <div className="flex flex-col lg:flex-row gap-2 lg:items-center lg:justify-between">
-            <div className="flex items-center gap-2 min-w-0">
+            <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
               <input
                 className="w-full max-w-[380px] min-w-0 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                 placeholder="Search order ID / member…"
@@ -477,7 +421,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                   setPage(1)
                   fetchOrders({ page: 1 })
                 }}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:opacity-50"
+                className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:opacity-50 sm:justify-start"
               >
                 <Search className="h-4 w-4" />
                 Search
@@ -577,7 +521,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
               </button>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <select
               className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
               value={pageSize}
@@ -623,7 +567,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[980px] text-sm">
             <thead className="sticky top-0 z-10 bg-surface">
               <tr className="border-b border-line text-left">
                 <th className="p-3 w-10">
@@ -638,7 +582,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                 </th>
                 <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Order</th>
                 <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Member</th>
-                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Branch</th>
+                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Delivery Location</th>
                 <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Payment</th>
                 <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Qty</th>
                 <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Total</th>
@@ -751,7 +695,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                             if (v === 'approve') setModal({ type: 'approve', ids: [o.id] })
                             if (v === 'cancel') setModal({ type: 'cancel', ids: [o.id] })
                             if (v === 'restore') setModal({ type: 'restore', ids: [o.id] })
-                            if (v === 'activity') openAudit(o)
                           }}
                         >
                           <option value="" disabled>Actions</option>
@@ -759,7 +702,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                           {canApprove && <option value="approve">Approve</option>}
                           {canCancel && <option value="cancel">Cancel</option>}
                           {canRestore && <option value="restore">Restore</option>}
-                          <option value="activity">Activity</option>
                         </select>
                       </td>
                     </motion.tr>
@@ -829,71 +771,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
             <b className="text-fg">{modal?.ids?.length || 0}</b> order(s){modal?.type === 'restore' ? ' back to Pending' : ', and vendors will then hand over the goods'}?
           </div>
         )}
-      </DraggableModal>
-
-      {/* Order activity — audit trail: who did what and when */}
-      <DraggableModal
-        open={!!auditOrder}
-        onClose={() => setAuditOrder(null)}
-        widthClass="max-w-lg w-full mx-4"
-        title={auditOrder ? `Activity · ${auditOrder.order_id}` : 'Activity'}
-      >
-        <div className="space-y-3">
-          {auditLoading ? (
-            <div className="space-y-3 py-2">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <div className="sakani-skeleton h-8 w-8 shrink-0 rounded-full" />
-                  <div className="flex-1 space-y-1.5">
-                    <div className="sakani-skeleton h-3.5 w-2/3 rounded" />
-                    <div className="sakani-skeleton h-3 w-1/3 rounded" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : auditError ? (
-            <div className="rounded-lg border border-danger-border bg-danger-bg/60 p-3 text-xs font-medium text-danger-fg">
-              {auditError}
-            </div>
-          ) : auditItems.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted">No activity recorded for this order yet.</p>
-          ) : (
-            <ol className="relative">
-              {auditItems.map((ev, i) => {
-                const { Icon, iconCls, tileCls } = AUDIT_ICON[ev.action] || { Icon: History, iconCls: 'text-muted', tileCls: 'bg-subtle' }
-                const isLast = i === auditItems.length - 1
-                return (
-                  <li key={ev.key} className="relative flex gap-3 pb-5 last:pb-0">
-                    {!isLast && (
-                      <span aria-hidden="true" className="absolute left-4 top-9 bottom-0 w-px bg-line" />
-                    )}
-                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${tileCls}`}>
-                      <Icon className={`h-4 w-4 ${iconCls}`} strokeWidth={2.2} />
-                    </span>
-                    <div className="min-w-0 flex-1 pt-0.5">
-                      <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-                        <p className="text-sm font-medium text-fg">
-                          {ev.action === 'Order placed' ? 'Order placed' : `${ev.action} by ${ev.actorLabel}`}
-                        </p>
-                        <time className="text-chips text-muted">{fmtDate(ev.created_at)}</time>
-                      </div>
-                      {ev.note ? (
-                        <p className="mt-0.5 text-xs text-muted">
-                          {ev.action === 'Cancelled' ? 'Reason: ' : ''}
-                          {ev.note}
-                        </p>
-                      ) : (
-                        ev.action === 'Order placed' && (
-                          <p className="mt-0.5 text-xs text-muted">By {ev.actorLabel}</p>
-                        )
-                      )}
-                    </div>
-                  </li>
-                )
-              })}
-            </ol>
-          )}
-        </div>
       </DraggableModal>
 
       {/* Admin counter-invoice desk — raise a new invoice for a stand or fix a

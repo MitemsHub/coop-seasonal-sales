@@ -70,7 +70,7 @@ export default function OrderReceiptModal({
           head: [['Order Details', '', '', '']],
           body: [
             ['Order ID', `#${order.id}`, 'Status', String(order.status || '—')],
-            ['Date', new Date(order.created_at).toLocaleString(), 'Payment', String(order.payment_option || '—')],
+            ['Date', new Date(order.created_at).toLocaleString(), 'Payment method', String(order.payment_option || '—')],
             ['Member', `${memberName || '—'} (${memberId || order.member_id || ''})`, 'Quantity', String(Number(order.qty || 0).toLocaleString())],
             ['Unit Price', currencyPDF(order.unit_price), 'Total', currencyPDF(order.total_amount)],
           ],
@@ -138,7 +138,7 @@ export default function OrderReceiptModal({
         doc.text(`Date: ${new Date(order.created_at).toLocaleString()}`, 10, 26)
         doc.text(`Member: ${order.member_name_snapshot || memberId} (${memberId})`, 10, 34)
         doc.text(`Branch: ${order.branch?.name || '-'}`, 10, 40)
-        doc.text(`Payment: ${order.payment_option}`, 10, 46)
+        doc.text(`Payment method: ${order.payment_option}`, 10, 46)
 
         let y = 52
         doc.setFontSize(11)
@@ -190,7 +190,7 @@ export default function OrderReceiptModal({
       doc.text(`Delivery: ${order.delivery?.name || '-'}`, 10, 46)
       doc.text(`Rep Phone: ${order.delivery?.rep_phone || '-'}`, 10, 52)
       doc.text(`Department: ${order.departments?.name || '-'}`, 10, 58)
-      doc.text(`Payment: ${order.payment_option}`, 10, 64)
+      doc.text(`Payment method: ${order.payment_option}`, 10, 64)
 
       let y = 70
       doc.setFontSize(11)
@@ -327,7 +327,7 @@ export default function OrderReceiptModal({
                       <p className="font-medium text-fg">{order.status}</p>
                     </div>
                     <div className="col-span-2 sm:col-span-1">
-                      <p className="text-chips font-medium uppercase tracking-wider text-muted">Payment</p>
+                      <p className="text-chips font-medium uppercase tracking-wider text-muted">Payment method</p>
                       <p className="font-medium text-fg">{order.payment_option}</p>
                     </div>
                     <div className="col-span-2 sm:col-span-3">

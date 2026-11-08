@@ -17,16 +17,19 @@ export async function GET(req) {
       .select('amount, delivered, orders:order_id(status)')
       .eq('vendor_id', ctx.vendor_id)
 
-    const byStatus = { Pending: 0, Approved: 0, Delivered: 0, Confirmed: 0, Cancelled: 0 }
+    const byStatus = { Pending: 0, Approved: 0, Confirmed: 0, Cancelled: 0 }
     let revenue = 0
     let pendingAmount = 0
     let deliveredQty = 0
     let handoverPending = 0
     for (const line of lines || []) {
-      const status = line.orders?.status || 'Pending'
+      // Delivered is the legacy handover state. Vendors now see that same
+      // final state as Confirmed, so fold old rows into the confirmed count.
+      const rawStatus = line.orders?.status || 'Pending'
+      const status = rawStatus === 'Delivered' ? 'Confirmed' : rawStatus
       if (byStatus[status] !== undefined) byStatus[status]++
       const amt = Number(line.amount || 0)
-      if (status === 'Approved' || status === 'Delivered' || status === 'Confirmed') revenue += amt
+      if (status === 'Approved' || status === 'Confirmed') revenue += amt
       if (status === 'Pending') pendingAmount += amt
       if (line.delivered) deliveredQty++
       // Approved lines this vendor still needs to hand over

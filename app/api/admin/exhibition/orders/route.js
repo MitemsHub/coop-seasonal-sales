@@ -8,7 +8,8 @@ import { validateSession } from '@/lib/validation'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const STATUSES = ['Pending', 'Approved', 'Delivered', 'Confirmed', 'Cancelled']
+const STATUSES = ['Pending', 'Approved', 'Confirmed', 'Cancelled']
+const normalizeStatus = (value) => (value === 'Delivered' ? 'Confirmed' : value)
 
 export async function GET(request) {
   const session = await validateSession(request, 'admin')
@@ -16,7 +17,7 @@ export async function GET(request) {
 
   try {
     const { searchParams } = new URL(request.url)
-    const status = String(searchParams.get('status') || '')
+    const status = normalizeStatus(String(searchParams.get('status') || ''))
     const cycleId = Math.trunc(Number(searchParams.get('cycle_id') || 0))
     const branchId = Math.trunc(Number(searchParams.get('branch_id') || 0))
     const payment = String(searchParams.get('payment') || '')
@@ -30,9 +31,9 @@ export async function GET(request) {
 
     // Count first (same filters)
     let countQ = supabase.from('exhibition_orders').select('id', { count: 'exact', head: true })
-    // "Delivered" means handed over: include orders the member has since
-    // confirmed, otherwise they vanish from the Delivered view.
-    if (status === 'Delivered') countQ = countQ.in('status', ['Delivered', 'Confirmed'])
+    // Confirmed is the hand-over stage. Legacy Delivered rows belong here too,
+    // otherwise old orders disappear from the Confirmed view.
+    if (status === 'Confirmed') countQ = countQ.in('status', ['Confirmed', 'Delivered'])
     else if (status && STATUSES.includes(status)) countQ = countQ.eq('status', status)
     else countQ = countQ.neq('status', 'Cancelled')
     if (cycleId > 0) countQ = countQ.eq('cycle_id', cycleId)
@@ -49,7 +50,7 @@ export async function GET(request) {
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
 
-    if (status === 'Delivered') query = query.in('status', ['Delivered', 'Confirmed'])
+    if (status === 'Confirmed') query = query.in('status', ['Confirmed', 'Delivered'])
     else if (status && STATUSES.includes(status)) query = query.eq('status', status)
     else query = query.neq('status', 'Cancelled')
     if (cycleId > 0) query = query.eq('cycle_id', cycleId)
@@ -81,6 +82,7 @@ export async function GET(request) {
 
     const orders = (data || []).map((o) => ({
       ...o,
+      status: normalizeStatus(o.status),
       branch_name: o.branches?.name || '',
       branch_code: o.branches?.code || '',
       cycle_name: o.cycles?.name || '',

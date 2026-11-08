@@ -30,7 +30,7 @@ export async function GET() {
     // still show a draft/closed season's name.
     const { data: activeRows, error: activeErr } = await supabase
       .from('exhibition_cycles')
-      .select('id, name, code, status, starts_at, ends_at')
+      .select('id, name, code, status, starts_at, ends_at, loan_interest_rate_pct')
       .eq('status', 'active')
       .order('created_at', { ascending: false })
       .limit(2)
@@ -45,7 +45,7 @@ export async function GET() {
     // two seasons overlap — exactly when the "is it open?" answer matters.
     const { data: latest, error: latestErr } = await supabase
       .from('exhibition_cycles')
-      .select('id, name, code, status, starts_at, ends_at')
+      .select('id, name, code, status, starts_at, ends_at, loan_interest_rate_pct')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
@@ -74,6 +74,7 @@ export async function GET() {
         status: cycle.status || 'draft',
         starts_at: cycle.starts_at || null,
         ends_at: cycle.ends_at || null,
+        loan_interest_rate_pct: Math.max(0, Number(cycle.loan_interest_rate_pct ?? 0)),
       },
     })
   } catch (e) {

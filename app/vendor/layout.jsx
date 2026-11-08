@@ -13,7 +13,6 @@ const NAV = [
   { href: '/vendor/orders', label: 'Orders', icon: ShoppingBag },
   { href: '/vendor/banks', label: 'Banks', icon: Landmark },
   { href: '/vendor/reports', label: 'Report', icon: BarChart3 },
-  { href: '/vendor/stand', label: 'Stand profile', icon: Store },
 ]
 
 export default function VendorLayout({ children }) {

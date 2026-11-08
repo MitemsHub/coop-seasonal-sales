@@ -9,7 +9,7 @@ import { getTrail } from '@/lib/breadcrumbs'
 const STATUS_STYLES = {
   Pending: 'border-warning-border bg-warning-bg text-warning-fg',
   Approved: 'border-info-border bg-info-bg text-info-fg',
-  Delivered: 'border-success-border bg-success-bg text-success-fg',
+  Confirmed: 'border-success-border bg-success-bg text-success-fg',
   Cancelled: 'border-line bg-subtle text-muted',
 }
 
@@ -180,7 +180,7 @@ export default function VendorDashboardPage() {
           </Link>
         </div>
         <div className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-4">
-          {['Pending', 'Approved', 'Delivered', 'Cancelled'].map((s) => (
+          {['Pending', 'Approved', 'Confirmed', 'Cancelled'].map((s) => (
             <div key={s} className="rounded-xl border border-line bg-canvas/60 p-4">
               <div className="flex items-center justify-between">
                 <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-chips font-medium ${STATUS_STYLES[s]}`}>
@@ -195,7 +195,7 @@ export default function VendorDashboardPage() {
           ))}
         </div>
         <div className="border-t border-line px-5 py-3 text-chips text-muted">
-          Orders are approved by the branch rep, then you hand the goods over and mark the order delivered.
+          Orders are approved by the branch rep, then the member confirms receipt at handover.
         </div>
       </div>
     </div>

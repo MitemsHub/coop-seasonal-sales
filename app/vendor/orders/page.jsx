@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, History, Package, Plus, RotateCcw, ShoppingBag, Truck, XCircle } from 'lucide-react'
+import { CheckCircle2, History, Package, Plus, RotateCcw, ShoppingBag, XCircle } from 'lucide-react'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
 import DraggableModal from '../../components/DraggableModal'
@@ -25,13 +25,12 @@ const AUDIT_ICON = {
   Approved: { Icon: CheckCircle2, iconCls: 'text-success', tileCls: 'bg-success-bg' },
   Cancelled: { Icon: XCircle, iconCls: 'text-danger', tileCls: 'bg-danger-bg' },
   Restored: { Icon: RotateCcw, iconCls: 'text-brand', tileCls: 'bg-brand-subtle' },
-  Delivered: { Icon: Truck, iconCls: 'text-success', tileCls: 'bg-success-bg' },
+  Confirmed: { Icon: CheckCircle2, iconCls: 'text-success', tileCls: 'bg-success-bg' },
 }
 
 const STATUS_TONE = {
   Pending: 'warning',
   Approved: 'info',
-  Delivered: 'success',
   Confirmed: 'success',
   Cancelled: 'muted',
 }
@@ -67,9 +66,9 @@ export default function VendorOrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter])
 
-  // Audit trail for one order — who approved/cancelled/restored/delivered it.
+  // Audit trail for one order — who approved/cancelled/restored/confirmed it.
   // Uses the vendor-scoped endpoint so vendors see the history behind an
-  // order they marked delivered.
+  // order they handed over.
   const openActivity = async (o) => {
     setActivityOrder(o)
     setActivityEvents([])

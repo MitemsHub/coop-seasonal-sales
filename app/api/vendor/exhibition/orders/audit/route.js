@@ -51,7 +51,9 @@ export async function GET(req) {
       const detail = r.detail || {}
       return {
         id: r.id,
-        action: r.action,
+        // Older handover events were logged as Delivered. The vendor portal
+        // presents that final state as Confirmed.
+        action: r.action === 'Delivered' ? 'Confirmed' : r.action,
         actor_type: String(detail.actor_type || ''),
         actor_label: String(r.actor || ''),
         note: String(detail.note || '').trim(),

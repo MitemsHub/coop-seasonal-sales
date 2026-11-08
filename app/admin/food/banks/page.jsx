@@ -83,7 +83,6 @@ function AdminFoodBanksContent() {
   const [invoiceDeleteRow, setInvoiceDeleteRow] = useState(null)
   const [invoiceDeleting, setInvoiceDeleting] = useState(false)
 
-  const [paying, setPaying] = useState(false)
 
   const fetchCtl = useRef(null)
   const safeJson = useMemo(() => safeJsonFactory(), [])
@@ -456,31 +455,6 @@ function AdminFoodBanksContent() {
     }
   }
 
-  const togglePaid = async (loc, nextIsPaid) => {
-    const id = Number(loc?.id)
-    if (!Number.isFinite(id) || id <= 0) return
-    if (paying) return
-    setPaying(true)
-    setMsg(null)
-    try {
-      const res = await fetch('/api/admin/food/vendor-banks/set-paid', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ branch_id: id, is_paid: !!nextIsPaid, notes: '' }),
-      })
-      const json = await safeJson(res, '/api/admin/food/vendor-banks/set-paid')
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to update paid status')
-      setRows((prev) =>
-        (prev || []).map((r) => (Number(r.id) === id ? { ...r, paid: { ...(r.paid || {}), ...json.paid, is_paid: !!json?.paid?.is_paid } } : r))
-      )
-      setMsg({ type: 'success', text: nextIsPaid ? 'Marked as Paid' : 'Marked as Unpaid' })
-    } catch (e) {
-      setMsg({ type: 'error', text: e?.message || 'Failed to update paid status' })
-    } finally {
-      setPaying(false)
-    }
-  }
-
   return (
     <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
       <div className="mb-4 ui-card p-3 sm:p-4">
@@ -608,20 +582,8 @@ function AdminFoodBanksContent() {
                         </span>
                         <div className="min-w-0">
                           <div className="truncate text-[13px] font-semibold text-fg">{r.name || 'Branch'}</div>
-                          <div className="mt-0.5 flex items-center gap-1.5">
+                          <div className="mt-0.5">
                             <span className="text-[10px] uppercase tracking-wide text-subtext">{r.code || '—'}</span>
-                            <button
-                              type="button"
-                              onClick={() => togglePaid(r, !r?.paid?.is_paid)}
-                              disabled={paying}
-                              title="Toggle this branch's paid status"
-                              className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold disabled:opacity-50 ${
-                                r?.paid?.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted hover:text-fg'
-                              }`}
-                            >
-                              <span className={`h-1 w-1 rounded-full ${r?.paid?.is_paid ? 'bg-success-fg' : 'bg-muted'}`} />
-                              Branch {r?.paid?.is_paid ? 'paid' : 'unpaid'}
-                            </button>
                           </div>
                         </div>
                       </div>
@@ -657,20 +619,8 @@ function AdminFoodBanksContent() {
                               </span>
                               <div className="min-w-0">
                                 <div className="truncate text-[13px] font-semibold text-fg">{r.name || 'Branch'}</div>
-                                <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                                <div className="mt-0.5">
                                   <span className="text-[10px] uppercase tracking-wide text-subtext">{r.code || '—'}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => togglePaid(r, !r?.paid?.is_paid)}
-                                    disabled={paying}
-                                    title="Toggle this branch's paid status"
-                                    className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold disabled:opacity-50 ${
-                                      r?.paid?.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted hover:text-fg'
-                                    }`}
-                                  >
-                                    <span className={`h-1 w-1 rounded-full ${r?.paid?.is_paid ? 'bg-success-fg' : 'bg-muted'}`} />
-                                    Branch {r?.paid?.is_paid ? 'paid' : 'unpaid'}
-                                  </button>
                                 </div>
                                 <div className="mt-1 flex items-center gap-1.5 text-[10px] text-subtext">
                                   <span>

@@ -313,14 +313,14 @@ function OrdersPageContent() {
 
             <div className="flex flex-wrap items-center gap-2">
               {/* Food / Ram tabs */}
-              <div role="tablist" aria-label="Order type" className="inline-flex rounded-xl bg-subtle p-1">
+              <div role="tablist" aria-label="Order type" className="inline-flex max-w-full overflow-x-auto rounded-xl bg-subtle p-1">
                 <button
                   type="button"
                   role="tab"
                   aria-selected={activeTab === 'food'}
                   onClick={() => router.push(ordersUrl('food'))}
                   className={[
-                    'inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all duration-200 ease-sakani sm:text-sm',
+                    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all duration-200 ease-sakani sm:text-sm',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
                     activeTab === 'food' ? 'bg-brand text-on-accent shadow-xs' : 'text-muted hover:text-fg',
                   ].join(' ')}
@@ -334,7 +334,7 @@ function OrdersPageContent() {
                   aria-selected={activeTab === 'ram'}
                   onClick={() => router.push(ordersUrl('ram'))}
                   className={[
-                    'inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all duration-200 ease-sakani sm:text-sm',
+                    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all duration-200 ease-sakani sm:text-sm',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
                     activeTab === 'ram' ? 'bg-brand text-on-accent shadow-xs' : 'text-muted hover:text-fg',
                   ].join(' ')}
@@ -348,7 +348,7 @@ function OrdersPageContent() {
                   aria-selected={activeTab === 'exhibition'}
                   onClick={() => router.push(ordersUrl('exhibition'))}
                   className={[
-                    'inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all duration-200 ease-sakani sm:text-sm',
+                    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all duration-200 ease-sakani sm:text-sm',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
                     activeTab === 'exhibition' ? 'bg-brand text-on-accent shadow-xs' : 'text-muted hover:text-fg',
                   ].join(' ')}

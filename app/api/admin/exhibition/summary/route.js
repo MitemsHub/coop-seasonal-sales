@@ -65,7 +65,11 @@ export async function GET(request) {
     const cycleRateMap = new Map(cycles.map((c) => [Number(c.id), Math.max(0, Number(c.loan_interest_rate_pct ?? 13)) / 100]))
     const activeCycleRate = activeCycle ? (cycleRateMap.get(Number(activeCycle.id)) || 0.13) : 0.13
 
-    const byStatus = { Pending: 0, Approved: 0, Delivered: 0, Cancelled: 0 }
+    // "Confirmed" is the current hand-over status. Legacy rows may still be
+    // stored as "Delivered", so fold those into the Confirmed bucket rather
+    // than exposing two names for the same stage.
+    const byStatus = { Pending: 0, Approved: 0, Confirmed: 0, Cancelled: 0 }
+    const normalizeStatus = (value) => (value === 'Delivered' ? 'Confirmed' : value)
     const byPayment = { Loan: { orders: 0, amount: 0 }, Savings: { orders: 0, amount: 0 }, Cash: { orders: 0, amount: 0 } }
     const byCategory = new Map()
     const byLocation = new Map()
@@ -75,7 +79,8 @@ export async function GET(request) {
     let savingsAmount = 0
     let cashAmount = 0
     for (const o of activeOrders) {
-      if (byStatus[o.status] !== undefined) byStatus[o.status]++
+      const normalizedStatus = normalizeStatus(o.status)
+      if (byStatus[normalizedStatus] !== undefined) byStatus[normalizedStatus]++
       if (o.status === 'Cancelled') continue
       const total = Number(o.total_amount || 0)
       amount += total
@@ -290,7 +295,7 @@ export async function GET(request) {
         recent_orders: [...activeOrders]
           .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
           .slice(0, 8)
-          .map((o) => ({ id: o.id, status: o.status, total_amount: o.total_amount, member_name_snapshot: o.member_name_snapshot || '', member_id: o.member_id, order_id: o.order_id, payment_option: o.payment_option, created_at: o.created_at })),
+          .map((o) => ({ id: o.id, status: normalizeStatus(o.status), total_amount: o.total_amount, member_name_snapshot: o.member_name_snapshot || '', member_id: o.member_id, order_id: o.order_id, payment_option: o.payment_option, created_at: o.created_at })),
       },
     })
   } catch (e) {

@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Skeleton from '../../components/ui/Skeleton'
 import Button from '../../components/ui/Button'
-import { FileBarChart2, RefreshCw } from 'lucide-react'
+import { FileBarChart2, FileText, RefreshCw } from 'lucide-react'
 
 function safeJson(res, label) {
   const ct = res.headers.get('content-type') || ''
@@ -15,6 +15,8 @@ function safeJson(res, label) {
 }
 
 const money = (n) => `₦${Number(n || 0).toLocaleString()}`
+// ASCII-only currency for PDF output so the naira glyph never scrambles.
+const pdfMoney = (n) => `NGN ${Number(n || 0).toLocaleString()}`
 
 function fileStamp() {
   const d = new Date()
@@ -35,6 +37,7 @@ function downloadCsv(filename, rows) {
 export default function VendorReportsPage() {
   const [stats, setStats] = useState(null)
   const [lines, setLines] = useState([])
+  const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
 
@@ -42,13 +45,17 @@ export default function VendorReportsPage() {
     setLoading(true)
     setErr(null)
     try {
-      const [statsRes, ordersRes] = await Promise.all([
+      const [statsRes, ordersRes, sessionJson] = await Promise.all([
         fetch('/api/vendor/exhibition/stats', { cache: 'no-store' }),
-        fetch('/api/vendor/exhibition/orders', { cache: 'no-store' }),
+        fetch('/api/vendor/exhibition/orders?limit=200', { cache: 'no-store' }),
+        fetch('/api/vendor/session', { cache: 'no-store' })
+          .then((r) => (r.ok ? r.json().catch(() => null) : null))
+          .catch(() => null),
       ])
       const statsJson = await safeJson(statsRes, 'stats')
       const ordersJson = await safeJson(ordersRes, 'orders')
       if (statsJson?.ok) setStats(statsJson.stats)
+      if (sessionJson?.ok) setProfile(sessionJson)
       if (ordersJson?.ok) {
         // Flatten order lines for the vendor
         const allLines = []
@@ -56,7 +63,7 @@ export default function VendorReportsPage() {
           for (const l of o.lines || []) {
             allLines.push({
               order_id: o.order_id,
-              status: o.status,
+              status: o.status === 'Delivered' ? 'Confirmed' : o.status,
               payment: o.payment_option,
               member: o.member_name_snapshot || o.member_id,
               product: l.product_name || '',
@@ -107,22 +114,156 @@ export default function VendorReportsPage() {
 
   const totalRevenue = s.revenue || 0
   const totalLines = lines.length
+  const totalOrders = new Set(lines.map((l) => l.order_id)).size
+  const vendorName = profile?.vendor?.name || 'Vendor'
+  const branchName = profile?.vendor?.branch || ''
+  const cycleName = profile?.cycle?.name || ''
 
   const exportLinesCsv = () => downloadCsv(`vendor-orders-${fileStamp()}.csv`, lines.map((l) => ({
     order: l.order_id, status: l.status, payment: l.payment, member: l.member,
     product: l.product, qty: l.qty, unit_price: l.unit_price, amount: l.amount, date: l.created_at,
   })))
 
+  const exportPdf = async () => {
+    const { jsPDF } = await import('jspdf')
+    const { default: autoTable } = await import('jspdf-autotable')
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const pageHeight = doc.internal.pageSize.getHeight()
+    const brand = [15, 76, 58]
+    const generated = new Date().toLocaleString('en-GB', {
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    })
+
+    doc.setFillColor(...brand)
+    doc.rect(0, 0, pageWidth, 28, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(16)
+    doc.text('Vendor Sales Report', 14, 13)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.text(`${cycleName || 'Coop Exhibition'}  ·  Generated ${generated}`, 14, 21)
+
+    doc.setTextColor(25, 25, 25)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(12)
+    doc.text(vendorName, 14, 38)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(90, 90, 90)
+    doc.text(
+      [branchName && `Branch: ${branchName}`, cycleName && `Cycle: ${cycleName}`].filter(Boolean).join('   ·   ') || 'Vendor report',
+      14,
+      44
+    )
+
+    autoTable(doc, {
+      startY: 50,
+      head: [['Report summary', '']],
+      body: [
+        ['Vendor', vendorName],
+        ['Branch', branchName || '—'],
+        ['Cycle', cycleName || '—'],
+        ['Report date', generated],
+        ['Orders', String(totalOrders)],
+        ['Confirmed orders', String(orders.Confirmed || 0)],
+        ['Pending orders', String(orders.Pending || 0)],
+        ['Approved orders', String(orders.Approved || 0)],
+        ['Total lines', String(totalLines)],
+        ['Total revenue', pdfMoney(totalRevenue)],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: brand, textColor: 255, fontSize: 10 },
+      styles: { fontSize: 9, cellPadding: 2 },
+      columnStyles: { 0: { cellWidth: 55, fontStyle: 'bold' }, 1: { cellWidth: 'auto' } },
+      margin: { left: 14, right: 14 },
+    })
+
+    autoTable(doc, {
+      startY: (doc.lastAutoTable?.finalY || 50) + 8,
+      head: [['By item', 'Lines', 'Qty', 'Amount']],
+      body: byProduct.length
+        ? byProduct.map((r) => [r.key, r.orders, r.qty, pdfMoney(r.amount)])
+        : [['No item data', '', '', '']],
+      theme: 'striped',
+      headStyles: { fillColor: brand, textColor: 255, fontSize: 9 },
+      styles: { fontSize: 8, cellPadding: 2 },
+      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
+      margin: { left: 14, right: 14 },
+    })
+
+    autoTable(doc, {
+      startY: (doc.lastAutoTable?.finalY || 50) + 8,
+      head: [['By payment method', 'Lines', 'Amount']],
+      body: byPayment.length
+        ? byPayment.map((r) => [r.key, r.orders, pdfMoney(r.amount)])
+        : [['No payment data', '', '']],
+      theme: 'striped',
+      headStyles: { fillColor: brand, textColor: 255, fontSize: 9 },
+      styles: { fontSize: 8, cellPadding: 2 },
+      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' } },
+      margin: { left: 14, right: 14 },
+    })
+
+    autoTable(doc, {
+      startY: (doc.lastAutoTable?.finalY || 50) + 8,
+      head: [['Order', 'Date', 'Member', 'Payment method', 'Item', 'Status', 'Qty', 'Amount']],
+      body: lines.length
+        ? lines.map((l) => [
+            `#${l.order_id}`,
+            l.created_at ? new Date(l.created_at).toLocaleDateString('en-GB') : '—',
+            l.member || '—',
+            l.payment || '—',
+            l.product || '—',
+            l.status || '—',
+            l.qty,
+            pdfMoney(l.amount),
+          ])
+        : [['No order lines', '', '', '', '', '', '', '']],
+      theme: 'striped',
+      headStyles: { fillColor: brand, textColor: 255, fontSize: 9 },
+      styles: { fontSize: 7.5, cellPadding: 1.8, overflow: 'linebreak' },
+      columnStyles: {
+        0: { cellWidth: 24 },
+        1: { cellWidth: 20 },
+        2: { cellWidth: 32 },
+        3: { cellWidth: 24 },
+        5: { cellWidth: 20 },
+        6: { halign: 'right', cellWidth: 14 },
+        7: { halign: 'right', cellWidth: 24 },
+      },
+      foot: [['', '', '', '', '', 'Total revenue', '', pdfMoney(totalRevenue)]],
+      footStyles: { fillColor: [238, 243, 240], textColor: 25, fontStyle: 'bold', fontSize: 8 },
+      margin: { left: 14, right: 14 },
+    })
+
+    const pageCount = doc.internal.getNumberOfPages()
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8)
+      doc.setTextColor(110, 110, 110)
+      doc.text(`Vendor report · ${vendorName}`, 14, pageHeight - 8)
+      doc.text(`Page ${i} of ${pageCount}`, pageWidth - 14, pageHeight - 8, { align: 'right' })
+    }
+
+    doc.save(`vendor-report-${fileStamp()}.pdf`)
+  }
+
   return (
     <div className="p-3 sm:p-4 md:p-6 max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <h1 className="text-h2 font-bold tracking-tight text-fg">My Report</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button onClick={load} disabled={loading} leftIcon={RefreshCw}>
             {loading ? 'Loading…' : 'Refresh'}
           </Button>
-          <Button variant="accent" onClick={exportLinesCsv} disabled={!lines.length}>
+          <Button variant="secondary" onClick={exportLinesCsv} disabled={!lines.length}>
             <FileBarChart2 className="h-4 w-4 mr-1" /> Export CSV
+          </Button>
+          <Button variant="accent" onClick={exportPdf} disabled={loading}>
+            <FileText className="h-4 w-4 mr-1" /> Export PDF
           </Button>
         </div>
       </div>
@@ -134,18 +275,17 @@ export default function VendorReportsPage() {
       ) : (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 mb-6">
+          <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 lg:grid-cols-3">
             {[
               { label: 'Confirmed', value: orders.Confirmed || 0 },
               { label: 'Total Lines', value: totalLines },
               { label: 'Pending', value: orders.Pending || 0 },
               { label: 'Approved', value: orders.Approved || 0 },
-              { label: 'Delivered', value: orders.Delivered || 0 },
               { label: 'Revenue', value: money(totalRevenue) },
             ].map((c) => (
-              <div key={c.label} className="rounded-xl border border-line bg-surface p-4">
+              <div key={c.label} className="min-w-0 rounded-xl border border-line bg-surface p-4">
                 <div className="text-xs text-muted">{c.label}</div>
-                <div className="text-[13px] font-semibold sm:text-lg mt-1">{c.value}</div>
+                <div className="mt-1 truncate text-xl font-semibold tabular-nums text-fg" title={String(c.value)}>{c.value}</div>
               </div>
             ))}
           </div>
@@ -154,7 +294,7 @@ export default function VendorReportsPage() {
           <div className="rounded-xl border border-line bg-surface overflow-hidden mb-6">
             <div className="border-b border-line bg-subtle/60 px-4 py-3 text-sm font-semibold text-fg">By Item</div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[560px] text-sm">
                 <thead>
                   <tr className="border-b border-line bg-subtle/30 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                     <th className="px-4 py-2">Item</th>
@@ -181,12 +321,12 @@ export default function VendorReportsPage() {
 
           {/* By Payment */}
           <div className="rounded-xl border border-line bg-surface overflow-hidden mb-6">
-            <div className="border-b border-line bg-subtle/60 px-4 py-3 text-sm font-semibold text-fg">By Payment Type</div>
+            <div className="border-b border-line bg-subtle/60 px-4 py-3 text-sm font-semibold text-fg">By Payment Method</div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[560px] text-sm">
                 <thead>
                   <tr className="border-b border-line bg-subtle/30 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                    <th className="px-4 py-2">Type</th>
+                    <th className="px-4 py-2">Method</th>
                     <th className="px-4 py-2 text-right">Lines</th>
                     <th className="px-4 py-2 text-right">Amount</th>
                   </tr>
@@ -213,7 +353,7 @@ export default function VendorReportsPage() {
               <Button size="sm" variant="secondary" onClick={exportLinesCsv}>Export CSV</Button>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[560px] text-sm">
                 <thead>
                   <tr className="border-b border-line bg-subtle/30 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                     <th className="px-4 py-2">Order</th>
@@ -231,7 +371,7 @@ export default function VendorReportsPage() {
                       <td className="px-4 py-2.5 text-muted">{l.product}</td>
                       <td className="px-4 py-2.5">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          l.status === 'Delivered' ? 'bg-success-bg text-success-fg'
+                          l.status === 'Confirmed' ? 'bg-success-bg text-success-fg'
                             : l.status === 'Cancelled' ? 'bg-danger-bg text-danger-fg'
                             : l.status === 'Approved' ? 'bg-info-bg text-info-fg'
                             : 'bg-warning-bg text-warning-fg'

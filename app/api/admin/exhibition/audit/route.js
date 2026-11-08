@@ -15,7 +15,9 @@ import { validateSession } from '@/lib/validation'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const ACTIONS = ['Approved', 'Cancelled', 'Restored', 'Delivered', 'Confirmed']
+const ACTIONS = ['Approved', 'Cancelled', 'Restored', 'Confirmed']
+const actionMatches = (action) =>
+  action === 'Confirmed' ? ['Confirmed', 'Delivered'] : [action]
 
 // exhibition_orders has FKs to branches AND cycles — both embeds resolve.
 const ORDER_SELECT =
@@ -27,7 +29,7 @@ function mapEvent(e) {
   const detail = e.detail || {}
   return {
     id: e.id,
-    action: e.action,
+    action: e.action === 'Delivered' ? 'Confirmed' : e.action,
     actor_type: String(detail.actor_type || ''),
     actor_label: String(e.actor || ''),
     note: String(detail.note || '').trim(),
@@ -42,7 +44,7 @@ function orderContext(o) {
     order_id: o.order_id,
     member_id: o.member_id,
     member_name_snapshot: o.member_name_snapshot,
-    status: o.status,
+    status: o.status === 'Delivered' ? 'Confirmed' : o.status,
     total_amount: o.total_amount,
     branch_name: o.branches?.name || '',
     branch_code: o.branches?.code || '',
@@ -113,7 +115,7 @@ export async function GET(req) {
       .select('id', { count: 'exact', head: true })
       .eq('module', 'exhibition')
       .in('order_id', orderIds)
-    if (action && ACTIONS.includes(action)) countQ = countQ.eq('action', action)
+    if (action && ACTIONS.includes(action)) countQ = countQ.in('action', actionMatches(action))
     const { count } = await countQ
 
     const { error: colErr } = await supabase.from('audit_log').select('created_at').limit(1)
@@ -126,7 +128,7 @@ export async function GET(req) {
       .in('order_id', orderIds)
     if (hasCreatedAt) query = query.order('created_at', { ascending: false })
     query = query.range(offset, offset + limit - 1)
-    if (action && ACTIONS.includes(action)) query = query.eq('action', action)
+    if (action && ACTIONS.includes(action)) query = query.in('action', actionMatches(action))
     const { data, error } = await query
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 

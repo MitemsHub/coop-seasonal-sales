@@ -718,8 +718,8 @@ export default function ExhibitionReportsPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <h1 className="text-h2 font-bold tracking-tight text-fg">Exhibition · Report</h1>
-          <div className="flex gap-2">
-            <select value={cycleId} onChange={(e) => setCycleId(e.target.value)} className={selectCls}>
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap">
+            <select value={cycleId} onChange={(e) => setCycleId(e.target.value)} className={`${selectCls} min-w-0 flex-1 sm:flex-none`}>
               <option value="">All active cycles</option>
               {cycles.map((c) => <option key={c.id} value={c.id}>{c.name || `Cycle ${c.id}`} ({c.code})</option>)}
             </select>
@@ -760,8 +760,8 @@ export default function ExhibitionReportsPage() {
                 <div className="text-[13px] font-semibold sm:text-lg mt-1">{byStatus.Approved || 0}</div>
               </div>
               <div className="ui-card p-4">
-                <div className="text-xs text-muted">Delivered</div>
-                <div className="text-[13px] font-semibold sm:text-lg mt-1">{byStatus.Delivered || 0}</div>
+                <div className="text-xs text-muted">Confirmed</div>
+                <div className="text-[13px] font-semibold sm:text-lg mt-1">{byStatus.Confirmed || 0}</div>
               </div>
               <div className="ui-card p-4">
                 <div className="text-xs text-muted">Loan Principal</div>
@@ -846,7 +846,7 @@ export default function ExhibitionReportsPage() {
                     <option value="">All statuses</option>
                     <option value="Pending">Pending</option>
                     <option value="Approved">Approved</option>
-                    <option value="Delivered">Delivered</option>
+                    <option value="Confirmed">Confirmed</option>
                     <option value="Cancelled">Cancelled</option>
                   </select>
                   <select className={selectCls} value={appPayment} onChange={(e) => setAppPayment(e.target.value)}>
@@ -886,7 +886,7 @@ export default function ExhibitionReportsPage() {
                     <option value="">All statuses</option>
                     <option value="Pending">Pending</option>
                     <option value="Approved">Approved</option>
-                    <option value="Delivered">Delivered</option>
+                    <option value="Confirmed">Confirmed</option>
                     <option value="Cancelled">Cancelled</option>
                   </select>
                   <select className={selectCls} value={packPayment} onChange={(e) => setPackPayment(e.target.value)}>

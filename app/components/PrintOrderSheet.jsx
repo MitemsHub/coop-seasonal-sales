@@ -123,7 +123,7 @@ export default function PrintOrderSheet({ open, onClose, module = 'exhibition', 
       // Order meta table
       const metaRows = [
         ['Order ID', String(orderRef), 'Status', String(status)],
-        ['Date', new Date(order.created_at || Date.now()).toLocaleString(), 'Payment', String(payment)],
+        ['Date', new Date(order.created_at || Date.now()).toLocaleString(), 'Payment method', String(payment)],
         ['Member', `${memberName || '—'} (${memberId || '—'})`, 'Branch', String(branchName)],
       ]
       if (module === 'exhibition' && cycleLabel) metaRows.push(['Cycle', String(cycleLabel), '', ''])
@@ -332,7 +332,7 @@ export default function PrintOrderSheet({ open, onClose, module = 'exhibition', 
                       <p className="font-medium text-fg">{status}</p>
                     </div>
                     <div className="col-span-2 sm:col-span-1">
-                      <p className="text-chips font-medium uppercase tracking-wider text-muted">Payment</p>
+                      <p className="text-chips font-medium uppercase tracking-wider text-muted">Payment method</p>
                       <p className="font-medium text-fg">{payment}</p>
                     </div>
                     <div className="col-span-2 sm:col-span-3">

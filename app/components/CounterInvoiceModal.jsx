@@ -6,13 +6,36 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Loader2, Plus, Search, Store, Trash2, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Info, Landmark, Loader2, MessageCircle, Plus, Search, Store, Trash2, X } from 'lucide-react'
 import DraggableModal from './DraggableModal'
 import Button from './ui/Button'
 
 const naira = (n) => `NGN ${Number(n || 0).toLocaleString()}`
 const newItem = () => ({ key: Math.random().toString(36).slice(2), name: '', qty: '1', price: '' })
 const PAYMENTS = ['Cash', 'Savings', 'Loan']
+const CATEGORY_LABELS = { A: 'Active', R: 'Retiree', P: 'Pensioner', E: 'Coop Staff' }
+const SAVINGS_LOAN_ERROR = 'This member has an outstanding loan. Savings cannot be used — choose Loan or Cash.'
+const CASH_BANK = {
+  bankName: 'Guaranty Trust Bank',
+  accountNumber: '0023723318',
+  accountName: 'CBN Staff Multipurpose Cooperative Society Limited',
+  phone: '09061388502',
+  whatsapp: 'https://wa.me/+2349061388502',
+}
+
+function categoryLabel(m) {
+  const code = String(m?.category || '').trim().toUpperCase()
+  return CATEGORY_LABELS[code] || String(m?.category || '').trim()
+}
+
+function memberMeta(m) {
+  const values = [m?.branch, m?.department].map((v) => String(v || '').trim()).filter(Boolean)
+  return [...new Set(values)].join(' · ')
+}
+
+function memberRole(m) {
+  return [categoryLabel(m), String(m?.grade || '').trim()].filter(Boolean).join(' · ')
+}
 
 const inputCls =
   'w-full rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none'
@@ -31,9 +54,14 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
   const [vendorSearching, setVendorSearching] = useState(false)
   const [items, setItems] = useState([newItem()])
   const [payment, setPayment] = useState('Cash')
+  const [loanRatePct, setLoanRatePct] = useState(null)
+  const [loanRateError, setLoanRateError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [created, setCreated] = useState(null)
+  const [financials, setFinancials] = useState(null)
+  const [financialsLoading, setFinancialsLoading] = useState(false)
+  const [financialsError, setFinancialsError] = useState('')
 
   const reset = () => {
     setQuery('')
@@ -46,9 +74,14 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
     setVendorSearching(false)
     setItems([newItem()])
     setPayment('Cash')
+    setLoanRatePct(null)
+    setLoanRateError('')
     setSubmitting(false)
     setError('')
     setCreated(null)
+    setFinancials(null)
+    setFinancialsLoading(false)
+    setFinancialsError('')
   }
 
   // Open fresh, or hydrate from the pending invoice being edited.
@@ -158,6 +191,65 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
     }
   }, [vendorQuery, vendor, open, isAdmin, editing])
 
+  // The live loan rate comes from the active cycle, so the modal shows the same
+  // interest the create route will apply.
+  useEffect(() => {
+    if (!open) return undefined
+    let alive = true
+    setLoanRatePct(null)
+    setLoanRateError('')
+    fetch('/api/exhibition/availability', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((json) => {
+        if (!alive) return
+        const rate = Number(json?.cycle?.loan_interest_rate_pct)
+        if (json?.ok && json?.cycle && Number.isFinite(rate)) {
+          setLoanRatePct(rate)
+        } else {
+          setLoanRateError('Could not load the current loan interest rate. Refresh and try again.')
+        }
+      })
+      .catch(() => {
+        if (alive) setLoanRateError('Could not load the current loan interest rate. Refresh and try again.')
+      })
+    return () => {
+      alive = false
+    }
+  }, [open])
+
+  // Admin only: show the member's financial standing for the invoice's
+  // cycle. Vendors deliberately never receive these balances.
+  useEffect(() => {
+    if (!open || !isAdmin || !member?.member_id) {
+      setFinancials(null)
+      setFinancialsLoading(false)
+      setFinancialsError('')
+      return undefined
+    }
+    let alive = true
+    const params = new URLSearchParams({ member_id: member.member_id })
+    const cycleId = order?.cycle_id || vendor?.cycle_id
+    if (cycleId) params.set('cycle_id', String(cycleId))
+    setFinancials(null)
+    setFinancialsLoading(true)
+    setFinancialsError('')
+    fetch(`/api/admin/exhibition/members/financials?${params.toString()}`, { cache: 'no-store' })
+      .then(async (res) => {
+        const json = await res.json().catch(() => null)
+        if (!res.ok || !json?.ok) throw new Error(json?.error || 'Could not load financial standing')
+        if (alive) setFinancials(json)
+      })
+      .catch((e) => {
+        if (alive) setFinancialsError(e?.message || 'Could not load financial standing')
+      })
+      .finally(() => {
+        if (alive) setFinancialsLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [open, isAdmin, member?.member_id, order?.cycle_id, vendor?.cycle_id])
+
   const totals = useMemo(() => {
     let qty = 0
     let principal = 0
@@ -167,8 +259,11 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
       qty += q
       principal += q * p
     }
-    return { qty, principal }
-  }, [items])
+    const rate = loanRatePct == null ? 0 : Math.max(0, Number(loanRatePct) || 0)
+    const interest = payment === 'Loan' ? Math.round((principal * rate) / 100) : 0
+    return { qty, principal, interest, total: principal + interest }
+  }, [items, payment, loanRatePct])
+  const loanRateReady = loanRatePct != null && Number.isFinite(Number(loanRatePct))
 
   const updateItem = (key, patch) =>
     setItems((prev) => prev.map((it) => (it.key === key ? { ...it, ...patch } : it)))
@@ -179,6 +274,14 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
     setError('')
     if (!member) {
       setError('Choose the member first.')
+      return
+    }
+    if (payment === 'Savings' && member.has_loan) {
+      setError(SAVINGS_LOAN_ERROR)
+      return
+    }
+    if (payment === 'Loan' && !loanRateReady) {
+      setError(loanRateError || 'The loan interest rate is still loading. Please try again.')
       return
     }
     if (isAdmin && !editing && !vendor) {
@@ -220,6 +323,7 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
       } else if (isAdmin) {
         url = '/api/admin/exhibition/orders/create'
         payload.vendor_id = vendor?.id
+        payload.member_id = member.member_id
       } else {
         payload.member_id = member.member_id
       }
@@ -245,7 +349,7 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
       open={open}
       onClose={onClose}
       widthClass="max-w-2xl w-full mx-4"
-      title={editing ? 'Edit counter invoice' : 'New counter invoice'}
+      title={editing ? 'Edit Invoice' : 'New Invoice'}
     >
       {created ? (
         <div className="space-y-4">
@@ -297,9 +401,15 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
                   <Store className="mt-0.5 h-4 w-4 shrink-0 text-brand" strokeWidth={2.2} />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-fg">{vendor.name || 'Vendor'}</p>
-                    <p className="text-chips text-muted">
-                      {vendor.branch || 'Branch'}
-                      {vendor.cycle ? ` · ${vendor.cycle}` : ''}
+                    <p className="truncate text-chips text-muted">{vendor.code || 'Vendor stand'}</p>
+                    <p className="mt-0.5 truncate text-chips text-muted">
+                      <span className="font-medium text-fg">Branch:</span>{' '}
+                      {vendor.branch_name || vendor.branch || 'Not set'}
+                    </p>
+                    <p className="truncate text-chips text-muted">
+                      <span className="font-medium text-fg">Active cycle:</span>{' '}
+                      {vendor.cycle_name || vendor.cycle || 'Not set'}
+                      {vendor.status && vendor.status !== 'active' ? ' · suspended' : ''}
                     </p>
                   </div>
                 </div>
@@ -329,9 +439,14 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
                             <span className="min-w-0">
                               <span className="block truncate text-sm font-medium text-fg">{v.name}</span>
                               <span className="block text-chips text-muted">
-                                {v.code} · {v.branch_name || 'Branch'}
-                                {v.cycle_name ? ` · ${v.cycle_name}` : ''}
+                                {v.code}
                                 {v.status !== 'active' ? ' · suspended' : ''}
+                              </span>
+                              <span className="block text-chips text-muted">
+                                Branch: {v.branch_name || 'Not set'}
+                              </span>
+                              <span className="block text-chips text-muted">
+                                Active cycle: {v.cycle_name || 'Not set'}
                               </span>
                             </span>
                             <span className="text-chips font-semibold text-brand">
@@ -369,11 +484,57 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
               <div className="mt-2 space-y-2">
                 <div className="rounded-xl bg-subtle/60 px-3 py-2">
                   <p className="text-sm font-semibold text-fg">{member.full_name || 'Member'} · {member.member_id}</p>
-                  <p className="text-chips text-muted">{member.branch || 'Branch'} </p>
+                  {memberMeta(member) && <p className="text-chips text-muted">{memberMeta(member)}</p>}
+                  {memberRole(member) && <p className="text-chips text-muted">{memberRole(member)}</p>}
                 </div>
                 {/* Financial position stays private: the vendor sees who the
                     member is, not what they can afford. Limits are checked by
                     the server when the invoice is submitted. */}
+                {isAdmin ? (
+                  <div className="rounded-xl border border-line bg-subtle/40 p-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-1">
+                      <p className="text-chips font-semibold uppercase tracking-wide text-muted">Financial standing</p>
+                      {financials?.cycle?.name && (
+                        <p className="text-chips text-muted">Cycle: {financials.cycle.name}</p>
+                      )}
+                    </div>
+                    {financialsLoading ? (
+                      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        {[0, 1, 2].map((i) => (
+                          <div key={i} className="sakani-skeleton h-14 rounded-lg" />
+                        ))}
+                      </div>
+                    ) : financialsError ? (
+                      <p className="mt-2 rounded-lg border border-danger-border bg-danger-bg px-2.5 py-2 text-xs text-danger-fg">
+                        {financialsError}
+                      </p>
+                    ) : financials ? (
+                      <>
+                        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                          <div className="min-w-0 rounded-lg border border-line bg-surface px-2.5 py-2">
+                            <p className="text-chips text-muted">Savings</p>
+                            <p className="truncate text-sm font-bold tabular-nums text-fg">{naira(financials.financials?.savings)}</p>
+                          </div>
+                          <div className="min-w-0 rounded-lg border border-line bg-surface px-2.5 py-2">
+                            <p className="text-chips text-muted">Loans</p>
+                            <p className="truncate text-sm font-bold tabular-nums text-fg">{naira(financials.financials?.loans)}</p>
+                          </div>
+                          <div className="min-w-0 rounded-lg border border-success-border bg-success-bg/40 px-2.5 py-2">
+                            <p className="text-chips text-muted">Remaining credit facility</p>
+                            <p className="truncate text-sm font-bold tabular-nums text-success-fg">{naira(financials.financials?.loan_eligible)}</p>
+                          </div>
+                        </div>
+                        <p className="mt-1.5 text-chips text-muted">
+                          Outstanding loans incl. shopping exposure: {naira(financials.financials?.outstanding_loans_total)}
+                          {' · '}Savings available: {naira(financials.financials?.savings_eligible)}
+                        </p>
+                        {financials.financials?.warning && (
+                          <p className="mt-1 text-chips text-warning-fg">{financials.financials.warning}</p>
+                        )}
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
                 <p className="text-chips text-muted">
                   {editing ? 'The member cannot be changed on an existing invoice.' : 'Eligibility is checked when you submit the invoice.'}
                 </p>
@@ -397,12 +558,25 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
                       <li key={m.member_id}>
                         <button
                           type="button"
-                          onClick={() => { setMember(m); setResults([]) }}
+                          onClick={() => {
+                            setMember(m)
+                            setResults([])
+                            if (m.has_loan && payment === 'Savings') {
+                              setPayment('Cash')
+                              setError(SAVINGS_LOAN_ERROR)
+                            } else {
+                              setError('')
+                            }
+                          }}
                           className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-subtle"
                         >
                           <span className="min-w-0">
                             <span className="block truncate text-sm font-medium text-fg">{m.full_name || m.member_id}</span>
-                            <span className="block text-chips text-muted">{m.member_id} · {m.branch || '—'}</span>
+                            <span className="block text-chips text-muted">
+                              {m.member_id}
+                              {memberMeta(m) ? ` · ${memberMeta(m)}` : ''}
+                            </span>
+                            {memberRole(m) && <span className="block text-chips text-muted">{memberRole(m)}</span>}
                           </span>
                           <span className="text-chips font-semibold text-brand">Select</span>
                         </button>
@@ -498,15 +672,23 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
             </button>
           </section>
 
-          {/* Payment */}
+          {/* Payment method */}
           <section>
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Payment</h3>
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Payment Method</h3>
             <div className="flex flex-wrap gap-2">
               {PAYMENTS.map((p) => (
                 <button
                   key={p}
                   type="button"
-                  onClick={() => setPayment(p)}
+                  onClick={() => {
+                    if (p === 'Savings' && member?.has_loan) {
+                      setError(SAVINGS_LOAN_ERROR)
+                      return
+                    }
+                    setPayment(p)
+                    setError('')
+                  }}
+                  title={p === 'Savings' && member?.has_loan ? 'Savings is unavailable while the member has a loan' : undefined}
                   className={[
                     'rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors duration-150',
                     payment === p
@@ -524,6 +706,78 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
               </p>
             )}
 
+            {payment === 'Loan' && (
+              <div className="mt-2 rounded-xl border border-warning-border bg-warning-bg/60 p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning-fg" strokeWidth={2} />
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-warning-fg">Loan Payment</div>
+                    {loanRateReady ? (
+                      <>
+                        <p className="mt-0.5 text-xs text-muted">
+                          Interest Rate: {Number(loanRatePct)}% interest will be charged on all items purchased using the loan payment option.
+                        </p>
+                        <p className="mt-1 text-xs font-medium text-fg">
+                          Interest {naira(totals.interest)} · Total payable {naira(totals.total)}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="mt-0.5 text-xs text-muted">
+                        {loanRateError || 'Loading the current loan interest rate…'}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {payment === 'Savings' && (
+              <div className="mt-2 rounded-xl border border-info-border bg-info-bg/60 p-3">
+                <div className="flex items-start gap-2">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-info-fg" strokeWidth={2} />
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-info-fg">Savings Payment</div>
+                    <p className="mt-0.5 text-xs text-muted">
+                      The invoice value will be deducted from the member&apos;s savings when it is approved. The server checks the available savings balance before accepting the invoice.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {payment === 'Cash' && (
+              <div className="mt-2 rounded-xl border border-info-border bg-info-bg/60 p-3">
+                <div className="flex items-start gap-2">
+                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-info-fg" strokeWidth={2} />
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-info-fg">Cash Payment</div>
+                    <p className="mt-0.5 text-xs text-muted">
+                      After raising the invoice, kindly send your payment receipt to the Cooperative ({CASH_BANK.phone}) for verification.
+                    </p>
+                    <div className="mt-2 rounded-lg border border-info-border bg-surface p-2.5">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-fg">
+                        <Landmark className="h-4 w-4 text-info-fg" strokeWidth={2} />
+                        Bank Transfer Details
+                      </div>
+                      <div className="mt-1 space-y-0.5 text-xs text-muted">
+                        <div>{CASH_BANK.bankName}</div>
+                        <div>Account Number: {CASH_BANK.accountNumber}</div>
+                        <div>Account Name: {CASH_BANK.accountName}</div>
+                      </div>
+                    </div>
+                    <a
+                      href={CASH_BANK.whatsapp}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-2 inline-flex items-center gap-2 rounded-lg bg-success-fg px-3 py-2 text-xs font-medium text-on-accent transition-[filter] duration-200 hover:brightness-110"
+                    >
+                      <MessageCircle className="h-4 w-4" strokeWidth={2} />
+                      Send Receipt via WhatsApp
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
           </section>
 
           {!!error && (
@@ -532,12 +786,17 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
 
           <div className="flex flex-col gap-3 border-t border-line pt-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-chips text-muted">Invoice total</p>
+              <p className="text-chips text-muted">{payment === 'Loan' ? 'Invoice total (principal)' : 'Invoice total'}</p>
               <p className="text-lg font-bold tabular-nums text-fg">{naira(totals.principal)}</p>
+              {payment === 'Loan' && loanRateReady && (
+                <p className="text-chips text-muted">
+                  Interest ({Number(loanRatePct)}%): {naira(totals.interest)} · Total: {naira(totals.total)}
+                </p>
+              )}
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={onClose} disabled={submitting}>Cancel</Button>
-              <Button onClick={submit} loading={submitting} disabled={!member || (isAdmin && !editing && !vendor) || totals.principal <= 0}>
+              <Button onClick={submit} loading={submitting} disabled={!member || (isAdmin && !editing && !vendor) || totals.principal <= 0 || (payment === 'Loan' && !loanRateReady)}>
                 {editing ? 'Save changes' : isAdmin ? 'Raise invoice' : 'Submit invoice'}
               </Button>
             </div>

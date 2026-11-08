@@ -1,5 +1,6 @@
 'use client'
 
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Upload } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -41,6 +42,7 @@ function maskAccountNumber(s) {
 }
 
 const isPdfFile = (file) => /pdf$/i.test(String(file?.name || '')) || file?.type === 'application/pdf'
+const DIRECT_UPLOAD_THRESHOLD = 4 * 1024 * 1024
 
 function prettySize(bytes) {
   const n = Number(bytes || 0)
@@ -55,7 +57,9 @@ function prettySize(bytes) {
 // Chrome), which the upload route accepts by extension.
 function compressPhoto(file, maxDim = 1800, quality = 0.82) {
   return new Promise((resolve) => {
-    if (!file || !String(file.type || '').startsWith('image/')) return resolve(file)
+    const looksLikeImage =
+      String(file.type || '').startsWith('image/') || /\.(jpe?g|png|webp|bmp|gif)$/i.test(String(file?.name || ''))
+    if (!file || !looksLikeImage) return resolve(file)
     const img = new Image()
     const objectUrl = URL.createObjectURL(file)
     img.onload = () => {
@@ -350,14 +354,71 @@ function RepFoodBanksContent() {
       if (prepared.size > 10 * 1024 * 1024) {
         throw new Error('That file is larger than 10MB — take a smaller photo or send the PDF again.')
       }
-      const fd = new FormData()
-      fd.set('bank_account_id', String(invoiceBankId))
-      fd.set('invoice_ref', invoiceRef)
-      fd.set('notes', invoiceNotes)
-      fd.set('file', prepared, prepared.name || 'invoice')
-      const res = await fetch('/api/rep/food/vendor-banks/invoices/upload', { method: 'POST', body: fd })
-      const json = await safeJson(res, '/api/rep/food/vendor-banks/invoices/upload')
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Upload failed')
+
+      // Vercel rejects request bodies over 4.5MB before the route runs. Larger
+      // invoices are therefore sent straight to Supabase Storage with a signed
+      // URL; only the small metadata request goes through the function.
+      if (prepared.size > DIRECT_UPLOAD_THRESHOLD) {
+        const directUrl = '/api/rep/food/vendor-banks/invoices/direct-upload'
+        const signRes = await fetch(directUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({
+            action: 'sign',
+            bank_account_id: Number(invoiceBankId),
+            file_name: prepared.name || 'invoice',
+            file_type: prepared.type || '',
+            file_size: prepared.size,
+          }),
+        })
+        const signed = await safeJson(signRes, directUrl)
+        if (!signRes.ok || !signed?.ok) throw new Error(signed?.error || 'Could not prepare the upload')
+        if (!signed?.path || !signed?.token) throw new Error('Could not prepare the upload')
+
+        if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+          throw new Error('File storage is not configured. Please contact the administrator.')
+        }
+        const storage = createSupabaseClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        )
+        const uploadFile = new File([prepared], prepared.name || signed.file_name || 'invoice', {
+          type: signed.mime_type || prepared.type || 'application/octet-stream',
+        })
+        const { error: storageErr } = await storage.storage
+          .from(signed.bucket || 'vendor-invoices')
+          .uploadToSignedUrl(signed.path, signed.token, uploadFile, {
+            contentType: signed.mime_type,
+            upsert: false,
+          })
+        if (storageErr) throw new Error(storageErr.message || 'Could not upload the invoice file')
+
+        const completeRes = await fetch(directUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({
+            action: 'complete',
+            path: signed.path,
+            bank_account_id: signed.bank_account_id,
+            file_name: signed.file_name || prepared.name || 'invoice',
+            mime_type: signed.mime_type,
+            file_size: prepared.size,
+            invoice_ref: invoiceRef,
+            notes: invoiceNotes,
+          }),
+        })
+        const completed = await safeJson(completeRes, directUrl)
+        if (!completeRes.ok || !completed?.ok) throw new Error(completed?.error || 'Upload failed')
+      } else {
+        const fd = new FormData()
+        fd.set('bank_account_id', String(invoiceBankId))
+        fd.set('invoice_ref', invoiceRef)
+        fd.set('notes', invoiceNotes)
+        fd.set('file', prepared, prepared.name || 'invoice')
+        const res = await fetch('/api/rep/food/vendor-banks/invoices/upload', { method: 'POST', body: fd })
+        const json = await safeJson(res, '/api/rep/food/vendor-banks/invoices/upload')
+        if (!res.ok || !json?.ok) throw new Error(json?.error || 'Upload failed')
+      }
       setInvoiceUploadOpen(false)
       setInvoiceFile(null)
       setInvoiceCount((n) => n + 1)
