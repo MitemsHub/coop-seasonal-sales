@@ -833,8 +833,16 @@ export default function ExhibitionReportsPage() {
 
             {/* ─── Applications by Branch (RAM-style export section) ─── */}
             <div className="rounded-xl border border-line bg-surface overflow-hidden mb-6">
-              <div className="border-b border-line bg-subtle px-4 py-3">
+              <div className="flex flex-col gap-2 border-b border-line bg-subtle px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm font-semibold text-fg">Applications by Branch</div>
+                <div className="flex items-center gap-2">
+                  <Button variant="accent" size="sm" onClick={() => exportApps('csv')} disabled={appBusy}>
+                    <FileSpreadsheet className="h-4 w-4 mr-1" /> {appBusy ? 'Preparing…' : 'Excel'}
+                  </Button>
+                  <Button variant="danger" size="sm" onClick={() => exportApps('pdf')} disabled={appBusy}>
+                    <FileText className="h-4 w-4 mr-1" /> {appBusy ? 'Preparing…' : 'PDF'}
+                  </Button>
+                </div>
               </div>
               <div className="p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
@@ -858,21 +866,17 @@ export default function ExhibitionReportsPage() {
                   <input type="date" className={selectCls} value={appFrom} onChange={(e) => setAppFrom(e.target.value)} />
                   <input type="date" className={selectCls} value={appTo} onChange={(e) => setAppTo(e.target.value)} />
                 </div>
-                <div className="mt-3 flex gap-2">
-                  <Button variant="accent" size="sm" onClick={() => exportApps('csv')} disabled={appBusy}>
-                    <FileSpreadsheet className="h-4 w-4 mr-1" /> {appBusy ? 'Preparing…' : 'Excel'}
-                  </Button>
-                  <Button variant="danger" size="sm" onClick={() => exportApps('pdf')} disabled={appBusy}>
-                    <FileText className="h-4 w-4 mr-1" /> {appBusy ? 'Preparing…' : 'PDF'}
-                  </Button>
-                </div>
               </div>
             </div>
 
             {/* ─── Applications Pack by Payment to Vendors ─── */}
             <div className="rounded-xl border border-line bg-surface overflow-hidden mb-6">
-              <div className="border-b border-line bg-subtle px-4 py-3">
+              <div className="flex flex-col gap-2 border-b border-line bg-subtle px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm font-semibold text-fg">Applications Pack by Payment to Vendors</div>
+                <div className="flex items-center gap-2">
+                  <ExportButton format="excel" onClick={exportVendorPackExcel} disabled={packBusy} busy={packExcelBusy} busyText="Preparing…" />
+                  <ExportButton format="pdf" onClick={exportVendorPackPdf} disabled={packBusy} busy={packPdfBusy} busyText="Preparing…" />
+                </div>
               </div>
               <div className="p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
@@ -897,10 +901,6 @@ export default function ExhibitionReportsPage() {
                   </select>
                   <input type="date" className={selectCls} value={packFrom} onChange={(e) => setPackFrom(e.target.value)} />
                   <input type="date" className={selectCls} value={packTo} onChange={(e) => setPackTo(e.target.value)} />
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <ExportButton format="excel" onClick={exportVendorPackExcel} disabled={packBusy} busy={packExcelBusy} busyText="Preparing…" />
-                  <ExportButton format="pdf" onClick={exportVendorPackPdf} disabled={packBusy} busy={packPdfBusy} busyText="Preparing…" />
                 </div>
               </div>
             </div>
