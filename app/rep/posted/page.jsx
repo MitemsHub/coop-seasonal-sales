@@ -62,7 +62,7 @@ function RepPostedPageContent() {
     const s = String(search || '').trim().toLowerCase()
     if (!s) return orders || []
     return (orders || []).filter((o) => {
-      const hay = `${o.order_id} ${o.member_id} ${o.member_name_snapshot || ''}`.toLowerCase()
+      const hay = `${o.order_id} ${o.member_id} ${o.member_name_snapshot || ''} ${o.member_phone || ''}`.toLowerCase()
       return hay.includes(s)
     })
   }, [orders, search])
@@ -246,7 +246,7 @@ function RepPostedPageContent() {
         dept,
       })
 
-      const headers = ['ID','Order','Member','Dept','Pay','Item','Qty','Unit Price','Amount','Remarks','Sign']
+      const headers = ['ID','Order','Member','Phone','Dept','Pay','Item','Qty','Unit Price','Amount','Remarks','Sign']
       const sanitize = sanitizePdfText
       const doc = await createManifestDoc({
         title: 'Posted Orders Manifest',
@@ -256,6 +256,7 @@ function RepPostedPageContent() {
       sanitize(r.id),
       sanitize(r.order),
       sanitize(r.member),
+      sanitize(r.phone),
       sanitize(r.dept),
       sanitize(r.pay),
       sanitize(r.item),
@@ -268,9 +269,9 @@ function RepPostedPageContent() {
 
     // Create a foot row: label under Item, totals under Qty and Amount
     const footRow = headers.map((_, i) => {
-      if (i === 5) return 'TOTAL'
-      if (i === 6) return String(totalQty)
-      if (i === 8) return `NGN ${Number(totalAmount).toLocaleString()}`
+      if (i === 6) return 'TOTAL'
+      if (i === 7) return String(totalQty)
+      if (i === 9) return `NGN ${Number(totalAmount).toLocaleString()}`
       return ''
     })
 
@@ -279,17 +280,18 @@ function RepPostedPageContent() {
       body: rows,
       startY: 30,
       columnStyles: {
-        0: { cellWidth: 16 },   // ID
-        1: { cellWidth: 14 },   // Order
-        2: { cellWidth: 40 },   // Member
-        3: { cellWidth: 28 },   // Dept
-        4: { cellWidth: 16 },   // Pay
-        5: { cellWidth: 45 },   // Item
-        6: { cellWidth: 12, halign: 'right' },   // Qty
-        7: { cellWidth: 22, halign: 'right' },   // Unit Price
-        8: { cellWidth: 24, halign: 'right' },   // Amount
-        9: { cellWidth: 36 },   // Remarks
-        10: { cellWidth: 14 },  // Signature
+        0: { cellWidth: 14 },   // ID
+        1: { cellWidth: 12 },   // Order
+        2: { cellWidth: 32 },   // Member
+        3: { cellWidth: 20 },   // Phone
+        4: { cellWidth: 22 },   // Dept
+        5: { cellWidth: 14 },   // Pay
+        6: { cellWidth: 38 },   // Item
+        7: { cellWidth: 10, halign: 'right' },   // Qty
+        8: { cellWidth: 20, halign: 'right' },   // Unit Price
+        9: { cellWidth: 22, halign: 'right' },   // Amount
+        10: { cellWidth: 26 },  // Remarks
+        11: { cellWidth: 12 },  // Signature
       },
       options: {
         foot: [footRow],
@@ -298,10 +300,10 @@ function RepPostedPageContent() {
         headStyles: { fillColor: [75, 85, 99], fontSize: 9, halign: 'center', valign: 'middle', textColor: [255,255,255] },
         didParseCell: (data) => {
           if (data.section === 'foot') {
-            if (data.column.index === 5) {
+            if (data.column.index === 6) {
               data.cell.styles.halign = 'center' // TOTAL label under Item
             }
-            if (data.column.index === 6 || data.column.index === 8) {
+            if (data.column.index === 7 || data.column.index === 9) {
               data.cell.styles.halign = 'right' // Qty and Amount totals
             }
           }
@@ -320,7 +322,7 @@ function RepPostedPageContent() {
     })
     // Footer rows appended after main table
     const makeRow = (mapper) => headers.map((_, i) => mapper(i))
-    const sigDateRow = makeRow(i => i === 4 ? 'DATE' : (i === 5 ? 'SIGNATURE' : ''))
+    const sigDateRow = makeRow(i => i === 5 ? 'DATE' : (i === 6 ? 'SIGNATURE' : ''))
     const issuedRow = makeRow(i => i === 2 ? 'ITEMS ISSUED BY' : '')
     const receivedRow = makeRow(i => i === 2 ? 'ITEMS RECEIVED BY' : '')
     await renderTable(doc, {
@@ -356,18 +358,18 @@ function RepPostedPageContent() {
 
       const heading = 'Posted Orders Manifest'
       ws.addRow([heading])
-      ws.mergeCells('A1','K1')
+      ws.mergeCells('A1','L1')
       ws.getRow(1).font = { bold: true, size: 14 }
       ws.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' }
 
       // Derive scope line from the shared builder
       const details = `${scope}  |  Orders: ${orderCount}`
       ws.addRow([details])
-      ws.mergeCells('A2','K2')
+      ws.mergeCells('A2','L2')
       ws.getRow(2).font = { italic: true }
       ws.getRow(2).alignment = { vertical: 'middle', horizontal: 'center' }
 
-      const headers = ['ID','Order','Member','Dept','Pay','Item','Qty','Unit Price','Amount','Remarks','Sign']
+      const headers = ['ID','Order','Member','Phone','Dept','Pay','Item','Qty','Unit Price','Amount','Remarks','Sign']
       const headerRow = ws.addRow(headers)
       headerRow.font = { bold: true }
       headerRow.eachCell(cell => {
@@ -377,13 +379,13 @@ function RepPostedPageContent() {
       })
 
       rows.forEach(r => {
-        const row = ws.addRow([r.id, r.order, r.member, r.dept, r.pay, r.item, r.qty, r.unitPrice, r.amount, r.remarks, r.signature])
+        const row = ws.addRow([r.id, r.order, r.member, r.phone, r.dept, r.pay, r.item, r.qty, r.unitPrice, r.amount, r.remarks, r.signature])
         row.eachCell(cell => {
           cell.border = { top: {style: 'thin'}, left: {style: 'thin'}, bottom: {style: 'thin'}, right: {style: 'thin'} }
         })
       })
 
-      const totalsRow = ws.addRow(['', '', 'TOTAL', '', '', '', totalQty, '', totalAmount, '', ''])
+      const totalsRow = ws.addRow(['', '', 'TOTAL', '', '', '', '', totalQty, '', totalAmount, '', ''])
       totalsRow.eachCell(cell => {
         cell.border = { top: {style: 'thin'}, left: {style: 'thin'}, bottom: {style: 'thin'}, right: {style: 'thin'} }
         cell.font = { bold: true }
@@ -395,6 +397,7 @@ function RepPostedPageContent() {
         { width: 10 }, // ID
         { width: 10 }, // Order
         { width: 26 }, // Member
+        { width: 18 }, // Phone
         { width: 18 }, // Dept
         { width: 10 }, // Pay
         { width: 26 }, // Item
@@ -406,15 +409,15 @@ function RepPostedPageContent() {
       ]
 
       for (let r = 3; r <= totalsRowNumber; r++) {
-        ws.getCell(`G${r}`).numFmt = '#,##0'
         ws.getCell(`H${r}`).numFmt = '#,##0'
         ws.getCell(`I${r}`).numFmt = '#,##0'
+        ws.getCell(`J${r}`).numFmt = '#,##0'
       }
 
-      // Footer rows: place labels under Column C and move DATE/SIGNATURE closer (E/F)
-      const footerSigDate = ['', '', '', '', 'DATE', 'SIGNATURE', '', '', '', '', '']
-      const footerIssued = ['', '', 'ITEMS ISSUED BY', '', '', '', '', '', '', '', '']
-      const footerReceived = ['', '', 'ITEMS RECEIVED BY', '', '', '', '', '', '', '', '']
+      // Footer rows: place labels under Column C and move DATE/SIGNATURE closer (F/G)
+      const footerSigDate = ['', '', '', '', '', 'DATE', 'SIGNATURE', '', '', '', '', '']
+      const footerIssued = ['', '', 'ITEMS ISSUED BY', '', '', '', '', '', '', '', '', '']
+      const footerReceived = ['', '', 'ITEMS RECEIVED BY', '', '', '', '', '', '', '', '', '']
       const fsr1 = ws.addRow(footerSigDate)
       const fsr2 = ws.addRow(footerIssued)
       const fsr3 = ws.addRow(footerReceived)
@@ -897,6 +900,7 @@ function RepPostedPageContent() {
                     <td className="px-3 py-3">
                       <div className="text-fg">{o.member_name_snapshot}</div>
                       <div className="text-xs text-muted">{o.member_id}</div>
+                      <div className="text-xs text-subtext">{o.member_phone || '-'}</div>
                     </td>
                     <td className="px-3 py-3">{o.departments?.name || '-'}</td>
                     <td className="px-3 py-3">{o.payment_option}</td>

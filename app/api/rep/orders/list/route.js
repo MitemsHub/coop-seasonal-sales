@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '../../../../../lib/supabaseServer'
 import { verify } from '@/lib/signing'
 import { resolveOrderCycle } from '@/lib/orderCycle'
+import { attachMemberPhones } from '@/lib/foodOrderMemberPhone'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -78,6 +79,8 @@ export async function GET(req) {
       nextCursor = page[limit - 1]?.order_id
       page = page.slice(0, limit)
     }
+
+    page = await attachMemberPhones(supabase, page)
 
     return NextResponse.json({ ok:true, orders: page, nextCursor, branch: claim.branch_code, department: scopedDeptId ? claim.department || '' : (dept || '') })
   } catch (e) {

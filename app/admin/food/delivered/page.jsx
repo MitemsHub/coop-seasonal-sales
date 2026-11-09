@@ -186,6 +186,7 @@ function DeliveredPageContent() {
       posted_at: o.posted_at,
       member_id: o.member_id,
       member_name: o.member_name_snapshot,
+      member_phone: o.member_phone || '',
       member_branch: o.member_branch?.name || '',
       delivery_branch: o.delivery?.name || '',
       department: o.departments?.name || '',
@@ -231,11 +232,12 @@ function DeliveredPageContent() {
       meta: `Search: ${term || 'All'}  |  Payment: ${payment || 'All'}`,
     })
 
-    const headers = ['Order', 'Member', 'Dept', 'Pay', 'SKU', 'Item', 'Qty', 'Unit Price', 'Amount']
+    const headers = ['Order', 'Member', 'Member Phone', 'Dept', 'Pay', 'SKU', 'Item', 'Qty', 'Unit Price', 'Amount']
     const rows = all.flatMap((o) =>
       (o.order_lines || []).map((l) => [
         sanitize(o.order_id),
         sanitize(o.member_name_snapshot || ''),
+        sanitize(o.member_phone || ''),
         sanitize(o.departments?.name || ''),
         sanitize(o.payment_option || ''),
         sanitize(l.items?.sku || ''),
@@ -252,14 +254,15 @@ function DeliveredPageContent() {
       startY: 30,
       columnStyles: {
         0: { cellWidth: 14 }, // Order
-        1: { cellWidth: 40 }, // Member
-        2: { cellWidth: 28 }, // Dept
-        3: { cellWidth: 16 }, // Pay
-        4: { cellWidth: 20 }, // SKU
-        5: { cellWidth: 58 }, // Item
-        6: { cellWidth: 12, halign: 'right' }, // Qty
-        7: { cellWidth: 24, halign: 'right' }, // Unit Price
-        8: { cellWidth: 26, halign: 'right' }, // Amount
+        1: { cellWidth: 36 }, // Member
+        2: { cellWidth: 22 }, // Member Phone
+        3: { cellWidth: 24 }, // Dept
+        4: { cellWidth: 14 }, // Pay
+        5: { cellWidth: 18 }, // SKU
+        6: { cellWidth: 50 }, // Item
+        7: { cellWidth: 10, halign: 'right' }, // Qty
+        8: { cellWidth: 22, halign: 'right' }, // Unit Price
+        9: { cellWidth: 24, halign: 'right' }, // Amount
       },
     })
 
@@ -494,6 +497,7 @@ function DeliveredPageContent() {
                     <td className="p-3">
                       <div className="font-medium text-fg">{o.member_id}</div>
                       <div className="text-muted">{o.member_name_snapshot}</div>
+                      <div className="text-xs text-subtext">{o.member_phone || '-'}</div>
                       <div className="text-xs text-subtext">{o.member_branch?.name || '-'}</div>
                     </td>
                     <td className="p-3">

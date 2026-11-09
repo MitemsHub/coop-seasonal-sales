@@ -153,6 +153,7 @@ function RepDeliveredContent() {
           Order: o.order_id,
           PostedAt: o.posted_at,
           Member: o.member_name_snapshot,
+          MemberPhone: o.member_phone || '',
           MemberBranch: o.member_branch?.name || '',
           Delivery: o.delivery?.name || '',
           Department: o.departments?.name || '',
@@ -205,7 +206,7 @@ function RepDeliveredContent() {
         : source.filter((o) => `${o.order_id} ${o.member_id} ${o.member_name_snapshot || ''}`.toLowerCase().includes(s))
 
       if (!filtered.length) throw new Error('No rows to export')
-      const headers = ['ID', 'Order', 'Member', 'Dept', 'Pay', 'Item', 'Qty', 'Unit Price', 'Amount']
+      const headers = ['ID', 'Order', 'Member', 'Member Phone', 'Dept', 'Pay', 'Item', 'Qty', 'Unit Price', 'Amount']
       const sanitize = sanitizePdfText
       const doc = await createManifestDoc({
         title: 'Delivered Orders Manifest',
@@ -216,6 +217,7 @@ function RepDeliveredContent() {
           sanitize(o.member_id),
           sanitize(o.order_id),
           sanitize(o.member_name_snapshot),
+          sanitize(o.member_phone || ''),
           sanitize(o.departments?.name),
           sanitize(o.payment_option),
           sanitize(l.items?.name),
@@ -230,15 +232,16 @@ function RepDeliveredContent() {
         body,
         startY: 30,
         columnStyles: {
-          0: { cellWidth: 18 }, // ID
+          0: { cellWidth: 16 }, // ID
           1: { cellWidth: 14 }, // Order
-          2: { cellWidth: 52 }, // Member
-          3: { cellWidth: 28 }, // Dept
-          4: { cellWidth: 16 }, // Pay
-          5: { cellWidth: 72 }, // Item
-          6: { cellWidth: 12, halign: 'right' }, // Qty
-          7: { cellWidth: 24, halign: 'right' }, // Unit Price
-          8: { cellWidth: 26, halign: 'right' }, // Amount
+          2: { cellWidth: 36 }, // Member
+          3: { cellWidth: 22 }, // Member Phone
+          4: { cellWidth: 22 }, // Dept
+          5: { cellWidth: 14 }, // Pay
+          6: { cellWidth: 50 }, // Item
+          7: { cellWidth: 10, halign: 'right' }, // Qty
+          8: { cellWidth: 22, halign: 'right' }, // Unit Price
+          9: { cellWidth: 24, halign: 'right' }, // Amount
         },
       })
 
@@ -427,6 +430,7 @@ function RepDeliveredContent() {
                     <td className="px-3 py-3">
                       <div className="text-fg">{o.member_name_snapshot}</div>
                       <div className="text-xs text-muted">{o.member_id}</div>
+                      <div className="text-xs text-subtext">{o.member_phone || '-'}</div>
                     </td>
                     <td className="px-3 py-3">{o.departments?.name || '-'}</td>
                     <td className="px-3 py-3">{o.payment_option}</td>

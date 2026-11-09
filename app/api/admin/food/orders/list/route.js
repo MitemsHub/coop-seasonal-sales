@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '../../../../../../lib/supabaseServer'
 import { resolveOrderCycle } from '../../../../../../lib/orderCycle'
+import { attachMemberPhones } from '../../../../../../lib/foodOrderMemberPhone'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -301,6 +302,8 @@ export async function GET(req) {
       nextCursor = orders[limit - 1]?.order_id
       orders = orders.slice(0, limit)
     }
+
+    orders = await attachMemberPhones(supabase, orders)
 
     const summary = await computeSummary({
       supabase,

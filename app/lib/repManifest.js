@@ -14,7 +14,7 @@ export function buildManifest({ orders = [], search = '', dept = '' }) {
   const filtered = !s
     ? orders
     : orders.filter((o) => {
-        const hay = `${o.order_id} ${o.member_id} ${o.member_name_snapshot || ''}`.toLowerCase()
+        const hay = `${o.order_id} ${o.member_id} ${o.member_name_snapshot || ''} ${o.member_phone || ''}`.toLowerCase()
         return hay.includes(s)
       })
 
@@ -27,6 +27,7 @@ export function buildManifest({ orders = [], search = '', dept = '' }) {
       id: o.member_id,
       order: o.order_id,
       member: o.member_name_snapshot,
+      phone: o.member_phone || '',
       dept: o.departments?.name || '',
       pay: o.payment_option,
       item: l.items?.name,
