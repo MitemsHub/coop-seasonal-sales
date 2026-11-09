@@ -7,7 +7,7 @@ import DraggableModal from '../../../components/DraggableModal'
 import Button from '../../../components/ui/Button'
 import ExportButton from '../../../components/ui/ExportButton'
 import { FileBarChart2, Package, Sparkles, Download } from 'lucide-react'
-import { buildQuickAnalysisModel } from '@/lib/quickAnalysis'
+import { buildDeliveryLocationModel } from '@/lib/quickAnalysis'
 import { renderQuickAnalysisPng } from '@/lib/quickAnalysisCanvas'
 
 function ReportsSkeleton() {
@@ -1467,7 +1467,7 @@ function ReportsPageContent() {
     }
   }
 
-  // Builds the branch grouping (lib/quickAnalysis) and renders the
+  // Builds the delivery-location grouping (lib/quickAnalysis) and renders the
   // infographic onto a canvas (lib/quickAnalysisCanvas) entirely in the
   // browser — same analysis as the standalone matplotlib prototype, but
   // produced on click with no server round-trip. The preview <img> uses the
@@ -1476,8 +1476,8 @@ function ReportsPageContent() {
     if (!data || analysisBusy) return
     setAnalysisBusy(true)
     try {
-      const model = buildQuickAnalysisModel({
-        byBranch: data.byBranch || [],
+      const model = buildDeliveryLocationModel({
+        byDeliveryMember: data.byDeliveryMember || [],
         allBranches: branches,
       })
       const { blob, dataUrl } = await renderQuickAnalysisPng(model)
@@ -2008,7 +2008,7 @@ function ReportsPageContent() {
       <DraggableModal
         open={analysisOpen}
         onClose={closeQuickAnalysis}
-        title="Quick Analysis · Branch Orders"
+        title="Quick Analysis · Delivery Locations"
         widthClass="max-w-3xl w-full mx-4"
         footer={
           <div className="flex flex-wrap justify-end gap-2">
@@ -2028,7 +2028,7 @@ function ReportsPageContent() {
         {analysisImage?.dataUrl ? (
           <img
             src={analysisImage.dataUrl}
-            alt="Quick analysis infographic of orders by branch"
+            alt="Quick analysis infographic of orders by delivery location"
             className="w-full h-auto rounded-lg border border-line-subtle"
           />
         ) : (

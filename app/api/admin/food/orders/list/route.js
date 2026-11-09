@@ -35,7 +35,7 @@ function applyOrderFilters({
   deliveryBranchId,
   payment,
   term,
-  termBranchId,
+  termBranchIds,
   memberCategory,
   from,
   to,
@@ -46,13 +46,16 @@ function applyOrderFilters({
   if (payment) out = out.eq('payment_option', payment)
   if (ordersHasCategorySnapshot && memberCategory) out = out.eq('member_category_snapshot', memberCategory)
   if (term) {
-    const termClean = term.replace(/%/g, '')
+    const termClean = term.replace(/[%,()]/g, ' ').trim()
+    if (!termClean) return out
     const isInt = /^\d+$/.test(termClean)
     const termOr = [`member_id.ilike.%${termClean}%`, `member_name_snapshot.ilike.%${termClean}%`]
     if (isInt) termOr.push(`order_id.eq.${Number(termClean)}`)
-    if (termBranchId) {
-      termOr.push(`delivery_branch_id.eq.${Number(termBranchId)}`)
-      termOr.push(`branch_id.eq.${Number(termBranchId)}`)
+    for (const branchId of termBranchIds || []) {
+      const id = Number(branchId)
+      if (!Number.isFinite(id)) continue
+      termOr.push(`delivery_branch_id.eq.${id}`)
+      termOr.push(`branch_id.eq.${id}`)
     }
     out = out.or(termOr.join(','))
   }
@@ -79,7 +82,7 @@ async function computeSummary({
   deliveryBranchId,
   payment,
   term,
-  termBranchId,
+  termBranchIds,
   memberCategory,
   from,
   to,
@@ -96,7 +99,7 @@ async function computeSummary({
       deliveryBranchId,
       payment,
       term,
-      termBranchId,
+      termBranchIds,
       memberCategory,
       from,
       to,
@@ -120,7 +123,7 @@ async function computeSummary({
       deliveryBranchId,
       payment,
       term,
-      termBranchId,
+      termBranchIds,
       memberCategory,
       from,
       to,
@@ -157,7 +160,7 @@ async function computeSummary({
         deliveryBranchId: null,
         payment: '',
         term: '',
-        termBranchId: null,
+        termBranchIds: [],
         memberCategory: '',
         from: f,
         to: t,
@@ -180,7 +183,7 @@ async function computeSummary({
         deliveryBranchId: null,
         payment: '',
         term: '',
-        termBranchId: null,
+        termBranchIds: [],
         memberCategory: '',
         from: f,
         to: t,
@@ -238,11 +241,17 @@ export async function GET(req) {
       deliveryBranchId = br?.id || null
     }
 
-    let termBranchId = null
+    let termBranchIds = []
     if (term) {
-      const termUpper = term.toUpperCase()
-      const { data: brByTerm } = await supabase.from('branches').select('id').eq('code', termUpper).maybeSingle()
-      termBranchId = brByTerm?.id || null
+      const branchTerm = term.replace(/[%,()]/g, ' ').trim()
+      if (branchTerm) {
+        const { data: brByTerm } = await supabase
+          .from('branches')
+          .select('id')
+          .or(`code.ilike.%${branchTerm}%,name.ilike.%${branchTerm}%`)
+          .limit(50)
+        termBranchIds = (brByTerm || []).map((b) => b.id).filter((id) => id != null)
+      }
     }
 
     const selectColsParts = [
@@ -274,7 +283,7 @@ export async function GET(req) {
       deliveryBranchId,
       payment,
       term,
-      termBranchId,
+      termBranchIds,
       memberCategory,
       from,
       to,
@@ -302,7 +311,7 @@ export async function GET(req) {
       deliveryBranchId,
       payment,
       term,
-      termBranchId,
+      termBranchIds,
       memberCategory,
       from,
       to,

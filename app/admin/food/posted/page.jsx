@@ -413,7 +413,7 @@ function PostedAdminPageContent() {
           <div className="flex gap-2 flex-1 min-w-[220px]">
             <input
               className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
-              placeholder="Search (Order / Member / Branch)"
+              placeholder="Search (Order / Member / Delivery Branch)"
               value={term}
               onChange={(e) => setTerm(e.target.value)}
               onKeyDown={handleKeyPress}
