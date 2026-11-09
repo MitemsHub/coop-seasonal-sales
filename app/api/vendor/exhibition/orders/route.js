@@ -79,7 +79,7 @@ export async function GET(req) {
     let query = applyFilters(
       supabase
         .from('exhibition_orders')
-        .select('id, order_id, status, member_id, member_name_snapshot, payment_option, total_qty, total_amount, created_at')
+        .select('id, order_id, status, member_id, member_name_snapshot, payment_option, total_qty, total_amount, created_at, branches:branch_id(name, code), cycles:cycle_id(name, code)')
         .in('id', ids)
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1)
@@ -126,6 +126,10 @@ export async function GET(req) {
         status: o.status === 'Delivered' ? 'Confirmed' : o.status,
         db_id: Number(o.id), // numeric exhibition_orders.id — used by the audit endpoint
         member_name: o.member_name_snapshot || '',
+        branch_name: o.branches?.name || '',
+        branch_code: o.branches?.code || '',
+        cycle_name: o.cycles?.name || '',
+        cycle_code: o.cycles?.code || '',
         lines,
         my_qty: myQty,
         my_amount: myAmount,

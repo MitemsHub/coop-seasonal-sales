@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, History, Package, Plus, RotateCcw, ShoppingBag, XCircle } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Eye, Plus, ShoppingBag } from 'lucide-react'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
 import DraggableModal from '../../components/DraggableModal'
@@ -10,23 +10,6 @@ import Skeleton from '../../components/ui/Skeleton'
 import CounterInvoiceModal from '../../components/CounterInvoiceModal'
 
 const fmtNaira = (n) => `NGN ${Number(n || 0).toLocaleString()}`
-
-const fmtDate = (iso) => {
-  if (!iso) return '—'
-  try {
-    return new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-  } catch {
-    return '—'
-  }
-}
-
-const AUDIT_ICON = {
-  'Order placed': { Icon: Package, iconCls: 'text-muted', tileCls: 'bg-subtle' },
-  Approved: { Icon: CheckCircle2, iconCls: 'text-success', tileCls: 'bg-success-bg' },
-  Cancelled: { Icon: XCircle, iconCls: 'text-danger', tileCls: 'bg-danger-bg' },
-  Restored: { Icon: RotateCcw, iconCls: 'text-brand', tileCls: 'bg-brand-subtle' },
-  Confirmed: { Icon: CheckCircle2, iconCls: 'text-success', tileCls: 'bg-success-bg' },
-}
 
 const STATUS_TONE = {
   Pending: 'warning',
@@ -48,10 +31,7 @@ export default function VendorOrdersPage() {
   const [filter, setFilter] = useState('')
   const [msg, setMsg] = useState('')
   const [invoiceOpen, setInvoiceOpen] = useState(false)
-  const [activityOrder, setActivityOrder] = useState(null) // the order card row
-  const [activityEvents, setActivityEvents] = useState([])
-  const [activityLoading, setActivityLoading] = useState(false)
-  const [activityError, setActivityError] = useState('')
+  const [viewOrder, setViewOrder] = useState(null)
 
   const load = async () => {
     const qs = filter ? `?status=${filter}` : ''
@@ -66,49 +46,7 @@ export default function VendorOrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter])
 
-  // Audit trail for one order — who approved/cancelled/restored/confirmed it.
-  // Uses the vendor-scoped endpoint so vendors see the history behind an
-  // order they handed over.
-  const openActivity = async (o) => {
-    setActivityOrder(o)
-    setActivityEvents([])
-    setActivityError('')
-    setActivityLoading(true)
-    try {
-      const res = await fetch(`/api/vendor/exhibition/orders/audit?order_id=${o.db_id}`, { cache: 'no-store' })
-      const json = await res.json()
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to load activity')
-      setActivityEvents(json.events || [])
-    } catch (e) {
-      setActivityError(e?.message || 'Failed to load activity')
-    } finally {
-      setActivityLoading(false)
-    }
-  }
-
-  // Timeline: the order's placement (synthesised from the card row) + events.
-  const activityItems = useMemo(() => {
-    const items = []
-    if (activityOrder?.created_at) {
-      items.push({
-        key: 'placed',
-        action: 'Order placed',
-        actorLabel: String(activityOrder.member_name || activityOrder.member_id || 'Member'),
-        note: '',
-        created_at: activityOrder.created_at,
-      })
-    }
-    for (const ev of activityEvents) {
-      items.push({
-        key: ev.id ?? `${ev.action}-${ev.created_at}`,
-        action: ev.action,
-        actorLabel: String(ev.actor_label || 'Unknown'),
-        note: String(ev.note || ''),
-        created_at: ev.created_at,
-      })
-    }
-    return items
-  }, [activityOrder, activityEvents])
+  const viewLines = viewOrder?.lines || []
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -149,7 +87,7 @@ export default function VendorOrdersPage() {
       {!orders ? (
         <div className="space-y-3">
           {[0, 1, 2].map((i) => (
-            <Skeleton key={i} className="h-28 w-full rounded-2xl" />
+            <Skeleton key={i} className="h-24 w-full rounded-2xl" />
           ))}
         </div>
       ) : orders.length === 0 ? (
@@ -162,7 +100,7 @@ export default function VendorOrdersPage() {
         <div className="space-y-4">
           {orders.map((o) => (
             <div key={o.order_id} className="rounded-2xl border border-line bg-surface">
-              <div className="flex flex-col gap-3 border-b border-line px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-bold text-fg">{o.order_id}</p>
@@ -180,94 +118,96 @@ export default function VendorOrdersPage() {
                     <p className="text-sm font-bold text-fg">{fmtNaira(o.my_amount)}</p>
                     <p className="text-chips text-muted">{o.my_qty} item{o.my_qty === 1 ? '' : 's'} from your stand</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => openActivity(o)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-chips font-medium text-muted transition-colors duration-150 hover:bg-subtle hover:text-fg"
-                    title="View the order's audit trail"
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    leftIcon={Eye}
+                    onClick={() => setViewOrder(o)}
+                    aria-haspopup="dialog"
+                    title="View the items on this order"
                   >
-                    <History className="h-3.5 w-3.5" />
-                    Activity
-                  </button>
-
+                    View items
+                  </Button>
                 </div>
-              </div>
-              <div className="divide-y divide-line">
-                {o.lines.map((l) => (
-                  <div key={l.id} className="flex items-center gap-3 px-5 py-2.5">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-fg">{l.product_name}</p>
-                      <p className="text-chips text-muted">{l.sku}</p>
-                    </div>
-                    <p className="text-sm text-muted">×{l.qty}</p>
-                    <p className="w-28 text-right text-sm font-medium text-fg">{fmtNaira(l.amount)}</p>
-                  </div>
-                ))}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Order activity — audit trail: who did what and when */}
+      {/* Order items — the same summary + line-item popup pattern as the admin desk. */}
       <DraggableModal
-        open={!!activityOrder}
-        onClose={() => setActivityOrder(null)}
-        widthClass="max-w-lg w-full mx-4"
-        title={activityOrder ? `Activity · ${activityOrder.order_id}` : 'Activity'}
+        open={!!viewOrder}
+        onClose={() => setViewOrder(null)}
+        widthClass="max-w-2xl w-full mx-4"
+        title={viewOrder ? `Items · ${viewOrder.order_id}` : 'Items'}
       >
-        <div className="space-y-3">
-          {activityLoading ? (
-            <div className="space-y-3 py-2">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <div className="sakani-skeleton h-8 w-8 shrink-0 rounded-full" />
-                  <div className="flex-1 space-y-1.5">
-                    <div className="sakani-skeleton h-3.5 w-2/3 rounded" />
-                    <div className="sakani-skeleton h-3 w-1/3 rounded" />
-                  </div>
-                </div>
-              ))}
+        {viewOrder && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 rounded-xl bg-subtle/60 p-3 text-sm sm:grid-cols-4">
+              <div className="col-span-2 min-w-0">
+                <p className="text-chips text-muted">Member</p>
+                <p className="mt-0.5 break-words font-medium text-fg">
+                  {viewOrder.member_name || viewOrder.member_id || 'Member'}
+                  {viewOrder.member_name && viewOrder.member_id ? ` · ${viewOrder.member_id}` : ''}
+                </p>
+              </div>
+              <div>
+                <p className="text-chips text-muted">Payment</p>
+                <p className="mt-0.5 font-medium text-fg">{viewOrder.payment_option || '—'}</p>
+              </div>
+              <div className="text-right sm:text-left">
+                <p className="text-chips text-muted">Qty</p>
+                <p className="mt-0.5 font-medium tabular-nums text-fg">
+                  {Number(viewOrder.my_qty ?? viewOrder.total_qty ?? 0).toLocaleString()}
+                </p>
+              </div>
+              <div className="col-span-2 min-w-0">
+                <p className="text-chips text-muted">Delivery Location</p>
+                <p className="mt-0.5 break-words font-medium text-fg">{viewOrder.branch_name || '—'}</p>
+              </div>
+              <div className="col-span-2 min-w-0">
+                <p className="text-chips text-muted">Cycle</p>
+                <p className="mt-0.5 break-words font-medium text-fg">{viewOrder.cycle_name || viewOrder.cycle_code || '—'}</p>
+              </div>
             </div>
-          ) : activityError ? (
-            <div className="rounded-lg border border-danger-border bg-danger-bg/60 p-3 text-xs font-medium text-danger-fg">
-              {activityError}
-            </div>
-          ) : activityItems.length === 0 ? (
-            <p className="py-4 text-center text-sm text-muted">No activity recorded for this order yet.</p>
-          ) : (
-            <ol className="relative">
-              {activityItems.map((ev, i) => {
-                const { Icon, iconCls, tileCls } = AUDIT_ICON[ev.action] || { Icon: History, iconCls: 'text-muted', tileCls: 'bg-subtle' }
-                const isLast = i === activityItems.length - 1
-                return (
-                  <li key={ev.key} className="relative flex gap-3 pb-5 last:pb-0">
-                    {!isLast && <span aria-hidden="true" className="absolute left-4 top-9 bottom-0 w-px bg-line" />}
-                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${tileCls}`}>
-                      <Icon className={`h-4 w-4 ${iconCls}`} strokeWidth={2.2} />
-                    </span>
-                    <div className="min-w-0 flex-1 pt-0.5">
-                      <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-                        <p className="text-sm font-medium text-fg">
-                          {ev.action === 'Order placed' ? 'Order placed' : `${ev.action} by ${ev.actorLabel}`}
-                        </p>
-                        <time className="text-chips text-muted">{fmtDate(ev.created_at)}</time>
+
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Items</h3>
+                <span className="text-chips text-muted">
+                  {viewLines.length} line{viewLines.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              <div className="divide-y divide-line-strong overflow-hidden rounded-xl border border-line-strong">
+                {viewLines.length === 0 ? (
+                  <p className="px-3 py-6 text-center text-sm text-muted">No item lines recorded for this order.</p>
+                ) : (
+                  viewLines.map((l) => {
+                    const qty = Number(l.qty || 0)
+                    const unit = Number(l.final_price ?? l.vendor_price ?? 0)
+                    return (
+                      <div key={l.id} className="flex items-start gap-3 px-3 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="break-words text-sm font-medium text-fg">{l.product_name || 'Item'}</p>
+                          <p className="mt-0.5 text-chips text-muted">
+                            {[l.sku, `${qty} × ${fmtNaira(unit)}`].filter(Boolean).join(' · ')}
+                          </p>
+                        </div>
+                        <p className="shrink-0 text-sm font-semibold tabular-nums text-fg">{fmtNaira(l.amount)}</p>
                       </div>
-                      {ev.note ? (
-                        <p className="mt-0.5 text-xs text-muted">
-                          {ev.action === 'Cancelled' ? 'Reason: ' : ''}
-                          {ev.note}
-                        </p>
-                      ) : (
-                        ev.action === 'Order placed' && <p className="mt-0.5 text-xs text-muted">By {ev.actorLabel}</p>
-                      )}
-                    </div>
-                  </li>
-                )
-              })}
-            </ol>
-          )}
-        </div>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-line pt-3">
+              <span className="text-sm font-semibold text-fg">Total from your stand</span>
+              <span className="text-lg font-bold tabular-nums text-fg">{fmtNaira(viewOrder.my_amount)}</span>
+            </div>
+          </div>
+        )}
       </DraggableModal>
 
       <CounterInvoiceModal
