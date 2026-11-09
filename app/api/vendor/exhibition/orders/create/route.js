@@ -129,7 +129,7 @@ export async function POST(req) {
     }
     if (paymentOption === 'Savings' && Number(member.loans || 0) > 0) {
       return NextResponse.json(
-        { ok: false, error: 'This member has an outstanding loan. Savings cannot be used — choose Loan or Cash.' },
+        { ok: false, error: 'Savings is not available for this member. Choose Cash or Loan.' },
         { status: 400 },
       )
     }

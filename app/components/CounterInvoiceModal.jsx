@@ -282,7 +282,7 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
       setError('Choose the member first.')
       return
     }
-    if (payment === 'Savings' && member.has_loan) {
+    if (isAdmin && payment === 'Savings' && member.has_loan) {
       setError(SAVINGS_LOAN_ERROR)
       return
     }
@@ -571,7 +571,7 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
                           onClick={() => {
                             setMember(m)
                             setResults([])
-                            if (m.has_loan && payment === 'Savings') {
+                            if (isAdmin && m.has_loan && payment === 'Savings') {
                               setPayment('Cash')
                               setError(SAVINGS_LOAN_ERROR)
                             } else {
@@ -761,14 +761,14 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
                   key={p}
                   type="button"
                   onClick={() => {
-                    if (p === 'Savings' && member?.has_loan) {
+                    if (isAdmin && p === 'Savings' && member?.has_loan) {
                       setError(SAVINGS_LOAN_ERROR)
                       return
                     }
                     setPayment(p)
                     setError('')
                   }}
-                  title={p === 'Savings' && member?.has_loan ? 'Savings is unavailable while the member has a loan' : undefined}
+                  title={isAdmin && p === 'Savings' && member?.has_loan ? 'Savings is unavailable while the member has a loan' : undefined}
                   className={[
                     'rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors duration-150',
                     payment === p

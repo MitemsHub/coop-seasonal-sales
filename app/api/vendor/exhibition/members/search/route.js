@@ -17,7 +17,7 @@ export async function GET(req) {
     const term = `%${q}%`
     const { data, error } = await supabase
       .from('members')
-      .select('member_id, full_name, branch_id, department_id, loans, branches:branch_id(name, code), departments:department_id(name)')
+      .select('member_id, full_name, branch_id, department_id, branches:branch_id(name, code), departments:department_id(name)')
       .or(`member_id.ilike.${term},full_name.ilike.${term}`)
       .order('member_id', { ascending: true })
       .limit(8)
@@ -37,7 +37,6 @@ export async function GET(req) {
         branch: m.branches?.name || '',
         branch_code: m.branches?.code || '',
         department: m.departments?.name || '',
-        has_loan: Number(m.loans || 0) > 0,
       })),
     })
   } catch (e) {
