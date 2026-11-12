@@ -21,8 +21,9 @@ export async function POST(req) {
 
     const { orderId, note } = await req.json()
     // ensure the order belongs to this delivery branch
-    const { data: o } = await supabase.from('orders').select('order_id, delivery_branch_id').eq('order_id', orderId).single()
+    const { data: o } = await supabase.from('orders').select('order_id, delivery_branch_id, status').eq('order_id', orderId).single()
     if (!o || o.delivery_branch_id !== claim.branch_id) return NextResponse.json({ ok:false, error:'forbidden' }, { status:403 })
+    if (o.status !== 'Pending') return NextResponse.json({ ok:false, error:'Only pending orders can be posted' }, { status:403 })
 
     const { data, error } = await supabase.rpc('post_order', { p_order_id: orderId, p_admin: `rep:${claim.branch_code}` })
     console.log('RPC post_order result:', { orderId, data, error })

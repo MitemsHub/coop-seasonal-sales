@@ -57,6 +57,34 @@ export async function GET(req) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     }
 
+    // An invoice follows the payment status of the account it was filed
+    // against. Fetch those account flags once, then attach them to every row so
+    // the rep sees a per-invoice Paid/Unpaid badge and the edit lock.
+    const bankIds = Array.from(
+      new Set(
+        (invoices || [])
+          .map((inv) => Number(inv?.bank_account_id))
+          .filter((id) => Number.isFinite(id) && id > 0)
+      )
+    )
+    const paidByBankId = new Map()
+    if (bankIds.length) {
+      const { data: bankRows, error: bankErr } = await supabase
+        .from('food_vendor_bank_accounts')
+        .select('id,is_paid,paid_at')
+        .in('id', bankIds)
+        .eq('branch_id', branchId)
+        .eq('cycle_id', cycleId)
+      if (!bankErr) {
+        for (const bank of bankRows || []) {
+          paidByBankId.set(Number(bank.id), {
+            is_paid: !!bank.is_paid,
+            paid_at: bank.paid_at || null,
+          })
+        }
+      }
+    }
+
     const out = await Promise.all(
       (invoices || []).map(async (inv) => {
         const bucket = String(inv.storage_bucket || '')
@@ -66,7 +94,8 @@ export async function GET(req) {
           const { data: urlData } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60)
           url = urlData?.signedUrl || null
         }
-        return { ...inv, url }
+        const paid = paidByBankId.get(Number(inv.bank_account_id)) || { is_paid: false, paid_at: null }
+        return { ...inv, ...paid, url }
       })
     )
 

@@ -144,9 +144,30 @@ function RepFoodBanksContent() {
   const fetchCtl = useRef(null)
   const safeJson = useMemo(() => safeJsonFactory(), [])
 
-  const fetchLocation = async () => {
-    setLoading(true)
-    setMsg(null)
+  const branchPaid = !!paid?.is_paid
+  const isAccountPaid = (bank) => branchPaid || !!bank?.is_paid
+  const isInvoicePaid = (inv) => {
+    if (branchPaid || !!inv?.is_paid) return true
+    const bank = (banks || []).find((b) => Number(b.id) === Number(inv?.bank_account_id))
+    return !!bank?.is_paid
+  }
+  const paidAccountCount = (banks || []).filter((b) => !!b.is_paid).length
+  const allAccountsPaid = banks.length > 0 && paidAccountCount === banks.length
+  const branchPaymentLabel = branchPaid
+    ? 'Paid (Locked)'
+    : allAccountsPaid
+      ? 'All accounts paid'
+      : paidAccountCount > 0
+        ? `${paidAccountCount}/${banks.length} accounts paid`
+        : 'Unpaid'
+  const branchPaymentTone =
+    branchPaid || paidAccountCount > 0 ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'
+
+  const fetchLocation = async ({ silent = false } = {}) => {
+    if (!silent) {
+      setLoading(true)
+      setMsg(null)
+    }
     try {
       if (fetchCtl.current) fetchCtl.current.abort()
       const ctl = new AbortController()
@@ -161,28 +182,60 @@ function RepFoodBanksContent() {
       setInvoiceCount(Number(json.invoice_count || 0))
       setPaid(json.paid || { is_paid: false, paid_at: null })
     } catch (e) {
-      if (e?.name !== 'AbortError') setMsg({ type: 'error', text: e?.message || 'Failed to load' })
-      setCycle(null)
-      setBranch(null)
-      setBanks([])
-      setInvoiceCount(0)
-      setPaid({ is_paid: false, paid_at: null })
+      if (e?.name !== 'AbortError' && !silent) {
+        setMsg({ type: 'error', text: e?.message || 'Failed to load' })
+        setCycle(null)
+        setBranch(null)
+        setBanks([])
+        setInvoiceCount(0)
+        setPaid({ is_paid: false, paid_at: null })
+      }
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
   useEffect(() => {
     fetchLocation()
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return
+      fetchLocation({ silent: true })
+    }
+    const id = setInterval(refresh, 30_000)
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('focus', refresh)
     return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', refresh)
+      window.removeEventListener('focus', refresh)
       if (fetchCtl.current) fetchCtl.current.abort()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Keep an open invoice list in step with account-level paid changes picked
+  // up by the poll, without another round trip.
+  useEffect(() => {
+    if (!invoiceListOpen) return
+    setInvoices((prev) =>
+      (prev || []).map((inv) => {
+        const bank = banks.find((b) => Number(b.id) === Number(inv.bank_account_id))
+        return { ...inv, is_paid: !!bank?.is_paid }
+      })
+    )
+  }, [banks, invoiceListOpen])
+
   const openBank = (row = null) => {
-    if (paid?.is_paid) {
-      setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
+    const locked = row ? isAccountPaid(row) : branchPaid || allAccountsPaid
+    if (locked) {
+      setMsg({
+        type: 'error',
+        text: branchPaid
+          ? 'Branch is marked as Paid. Editing is locked.'
+          : row
+            ? 'This bank account is marked as Paid. Editing is locked.'
+            : 'All bank accounts are marked as Paid. Editing is locked.',
+      })
       return
     }
     setBankEditId(row?.id ? Number(row.id) : null)
@@ -193,7 +246,7 @@ function RepFoodBanksContent() {
   }
 
   const saveBank = async () => {
-    if (paid?.is_paid) {
+    if (branchPaid) {
       setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
       return
     }
@@ -234,8 +287,13 @@ function RepFoodBanksContent() {
   }
 
   const openDeleteBank = (row) => {
-    if (paid?.is_paid) {
-      setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
+    if (isAccountPaid(row)) {
+      setMsg({
+        type: 'error',
+        text: branchPaid
+          ? 'Branch is marked as Paid. Editing is locked.'
+          : 'This bank account is marked as Paid. Mark it unpaid before removing it.',
+      })
       return
     }
     setBankDeleteRow(row || null)
@@ -253,8 +311,13 @@ function RepFoodBanksContent() {
   const deleteBank = async () => {
     const id = Number(bankDeleteRow?.id)
     if (!Number.isFinite(id) || id <= 0) return
-    if (paid?.is_paid) {
-      setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
+    if (isAccountPaid(bankDeleteRow)) {
+      setMsg({
+        type: 'error',
+        text: branchPaid
+          ? 'Branch is marked as Paid. Editing is locked.'
+          : 'This bank account is marked as Paid. Mark it unpaid before removing it.',
+      })
       return
     }
     if (deletingBank) return
@@ -301,19 +364,25 @@ function RepFoodBanksContent() {
   }
 
   const openUpload = (bank = null, replaceInv = null) => {
-    if (paid?.is_paid) {
-      setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
+    if (branchPaid || (bank && isAccountPaid(bank)) || (replaceInv && isInvoicePaid(replaceInv))) {
+      setMsg({
+        type: 'error',
+        text: branchPaid
+          ? 'Branch is marked as Paid. Editing is locked.'
+          : 'This bank account or invoice is marked as Paid. Editing is locked.',
+      })
       return
     }
     if (!banks.length) {
       setMsg({ type: 'error', text: 'Add a bank account first — every invoice is filed against an account.' })
       return
     }
+    const fallbackBank = banks.find((b) => !isAccountPaid(b)) || null
     const preset = bank?.id
       ? String(bank.id)
       : replaceInv?.bank_account_id
         ? String(replaceInv.bank_account_id)
-        : String(banks[0]?.id || '')
+        : String(fallbackBank?.id || '')
     setInvoiceBankId(preset)
     setReplaceInvoiceId(replaceInv?.id ? Number(replaceInv.id) : null)
     setInvoiceRef(replaceInv?.invoice_ref || '')
@@ -326,8 +395,13 @@ function RepFoodBanksContent() {
   // Re-file an invoice without hunting for the account: the upload modal opens
   // on that invoice's account, and the old file is retired once the new one is in.
   const replaceInvoiceFile = (inv) => {
-    if (paid?.is_paid) {
-      setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
+    if (isInvoicePaid(inv)) {
+      setMsg({
+        type: 'error',
+        text: branchPaid
+          ? 'Branch is marked as Paid. Editing is locked.'
+          : 'This invoice is marked as Paid. Editing is locked.',
+      })
       return
     }
     const acct = banks.find((b) => Number(b.id) === Number(inv?.bank_account_id)) || null
@@ -335,7 +409,7 @@ function RepFoodBanksContent() {
   }
 
   const uploadInvoice = async () => {
-    if (paid?.is_paid) {
+    if (branchPaid) {
       setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
       return
     }
@@ -343,6 +417,18 @@ function RepFoodBanksContent() {
     if (!invoiceBankId) {
       setMsg({ type: 'error', text: 'Choose the bank account this invoice belongs to.' })
       return
+    }
+    const selectedBank = banks.find((b) => Number(b.id) === Number(invoiceBankId))
+    if (selectedBank && isAccountPaid(selectedBank)) {
+      setMsg({ type: 'error', text: 'This bank account is marked as Paid. Editing is locked.' })
+      return
+    }
+    if (replaceInvoiceId) {
+      const oldInvoice = invoices.find((inv) => Number(inv.id) === Number(replaceInvoiceId))
+      if (oldInvoice && isInvoicePaid(oldInvoice)) {
+        setMsg({ type: 'error', text: 'This invoice is marked as Paid. Editing is locked.' })
+        return
+      }
     }
     if (uploading) return
     setUploading(true)
@@ -454,8 +540,13 @@ function RepFoodBanksContent() {
   }
 
   const openEditInvoice = (inv) => {
-    if (paid?.is_paid) {
-      setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
+    if (isInvoicePaid(inv)) {
+      setMsg({
+        type: 'error',
+        text: branchPaid
+          ? 'Branch is marked as Paid. Editing is locked.'
+          : 'This invoice is marked as Paid. Editing is locked.',
+      })
       return
     }
     setInvoiceEditRow(inv || null)
@@ -469,8 +560,13 @@ function RepFoodBanksContent() {
   const saveInvoiceEdits = async () => {
     const id = Number(invoiceEditRow?.id)
     if (!Number.isFinite(id) || id <= 0) return
-    if (paid?.is_paid) {
-      setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
+    if (isInvoicePaid(invoiceEditRow)) {
+      setMsg({
+        type: 'error',
+        text: branchPaid
+          ? 'Branch is marked as Paid. Editing is locked.'
+          : 'This invoice is marked as Paid. Editing is locked.',
+      })
       return
     }
     if (invoiceSaving) return
@@ -502,8 +598,13 @@ function RepFoodBanksContent() {
   }
 
   const openDeleteInvoice = (inv) => {
-    if (paid?.is_paid) {
-      setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
+    if (isInvoicePaid(inv)) {
+      setMsg({
+        type: 'error',
+        text: branchPaid
+          ? 'Branch is marked as Paid. Editing is locked.'
+          : 'This invoice is marked as Paid. Editing is locked.',
+      })
       return
     }
     setInvoiceDeleteRow(inv || null)
@@ -513,8 +614,13 @@ function RepFoodBanksContent() {
   const deleteInvoice = async () => {
     const id = Number(invoiceDeleteRow?.id)
     if (!Number.isFinite(id) || id <= 0) return
-    if (paid?.is_paid) {
-      setMsg({ type: 'error', text: 'Branch is marked as Paid. Editing is locked.' })
+    if (isInvoicePaid(invoiceDeleteRow)) {
+      setMsg({
+        type: 'error',
+        text: branchPaid
+          ? 'Branch is marked as Paid. Editing is locked.'
+          : 'This invoice is marked as Paid. Editing is locked.',
+      })
       return
     }
     if (invoiceDeleting) return
@@ -590,11 +696,9 @@ function RepFoodBanksContent() {
                 <div className="text-right">
                   <div className="text-sm text-muted">Status</div>
                   <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      paid?.is_paid ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'
-                    }`}
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${branchPaymentTone}`}
                   >
-                    {paid?.is_paid ? 'Paid (Locked)' : 'Unpaid'}
+                    {branchPaymentLabel}
                   </span>
                 </div>
               </div>
@@ -620,6 +724,15 @@ function RepFoodBanksContent() {
                                 <span className="shrink-0 rounded-full bg-subtle px-2 py-0.5 text-[10px] font-semibold text-muted">
                                   {Number(b.invoice_count || 0)} invoice{Number(b.invoice_count || 0) === 1 ? '' : 's'}
                                 </span>
+                                <span
+                                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                    isAccountPaid(b)
+                                      ? 'bg-success-bg text-success-fg'
+                                      : 'bg-subtle text-muted'
+                                  }`}
+                                >
+                                  {isAccountPaid(b) ? 'Paid' : 'Unpaid'}
+                                </span>
                               </div>
                               <div className="text-xs text-muted truncate">{b.account_name || '—'}</div>
                               <div className="text-xs text-muted">{maskAccountNumber(b.account_number || '')}</div>
@@ -636,7 +749,7 @@ function RepFoodBanksContent() {
                               <button
                                 type="button"
                                 onClick={() => openUpload(b)}
-                                disabled={paid?.is_paid}
+                                disabled={isAccountPaid(b)}
                                 className="inline-flex items-center rounded-lg bg-brand px-2.5 py-1.5 text-xs font-semibold text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
                               >
                                 Upload
@@ -644,7 +757,7 @@ function RepFoodBanksContent() {
                               <button
                                 type="button"
                                 onClick={() => openBank(b)}
-                                disabled={paid?.is_paid}
+                                disabled={isAccountPaid(b)}
                                 className="inline-flex items-center rounded-lg bg-accent px-2.5 py-1.5 text-xs font-semibold text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
                               >
                                 Edit
@@ -652,7 +765,7 @@ function RepFoodBanksContent() {
                               <button
                                 type="button"
                                 onClick={() => openDeleteBank(b)}
-                                disabled={paid?.is_paid}
+                                disabled={isAccountPaid(b)}
                                 className="inline-flex items-center rounded-lg bg-danger-fg px-2.5 py-1.5 text-xs font-semibold text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
                               >
                                 Delete
@@ -667,7 +780,7 @@ function RepFoodBanksContent() {
                     <button
                       type="button"
                       onClick={() => openBank(null)}
-                      disabled={paid?.is_paid || banks.length >= 10}
+                      disabled={branchPaid || allAccountsPaid || banks.length >= 10}
                       className="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
                     >
                       Add Account
@@ -785,7 +898,16 @@ function RepFoodBanksContent() {
                 <div key={inv.id} className="border rounded-lg p-3 bg-surface">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="text-sm font-medium text-fg truncate">{inv.file_name || 'Invoice'}</div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-medium text-fg truncate">{inv.file_name || 'Invoice'}</div>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            isInvoicePaid(inv) ? 'bg-success-bg text-success-fg' : 'bg-subtle text-muted'
+                          }`}
+                        >
+                          {isInvoicePaid(inv) ? 'Paid' : 'Unpaid'}
+                        </span>
+                      </div>
                       <div className="text-xs text-muted truncate">{invoiceBankLabel(inv)}</div>
                       <div className="text-xs text-muted">
                         Ref: {inv.invoice_ref || '—'} • Date: {inv.invoice_date || '—'} • Amount:{' '}
@@ -809,7 +931,7 @@ function RepFoodBanksContent() {
                       <button
                         type="button"
                         onClick={() => replaceInvoiceFile(inv)}
-                        disabled={paid?.is_paid}
+                        disabled={isInvoicePaid(inv)}
                         className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
                       >
                         Replace
@@ -817,7 +939,7 @@ function RepFoodBanksContent() {
                       <button
                         type="button"
                         onClick={() => openEditInvoice(inv)}
-                        disabled={paid?.is_paid}
+                        disabled={isInvoicePaid(inv)}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
                       >
                         Edit
@@ -825,7 +947,7 @@ function RepFoodBanksContent() {
                       <button
                         type="button"
                         onClick={() => openDeleteInvoice(inv)}
-                        disabled={paid?.is_paid}
+                        disabled={isInvoicePaid(inv)}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-danger-fg px-3 py-1.5 text-xs font-semibold text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
                       >
                         Delete
@@ -849,8 +971,9 @@ function RepFoodBanksContent() {
           >
             <option value="">Select the bank account…</option>
             {banks.map((b) => (
-              <option key={b.id} value={b.id}>
+              <option key={b.id} value={b.id} disabled={isAccountPaid(b)}>
                 {b.bank_name || 'Bank'} · {b.account_name || ''} · {maskAccountNumber(b.account_number || '')}
+                {isAccountPaid(b) ? ' — Paid, locked' : ''}
               </option>
             ))}
           </select>

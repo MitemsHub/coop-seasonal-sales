@@ -59,7 +59,7 @@ export async function GET(req) {
     const [bankRes, invRes, paid] = await Promise.all([
       supabase
         .from('food_vendor_bank_accounts')
-        .select('id,branch_id,cycle_id,bank_name,account_name,account_number,is_current,created_at,created_by_role,created_by_code')
+        .select('id,branch_id,cycle_id,bank_name,account_name,account_number,purpose,is_current,is_paid,paid_at,paid_by,created_at,created_by_role,created_by_code')
         .eq('branch_id', branchId)
         .eq('cycle_id', cycle.id)
         .order('is_current', { ascending: false })

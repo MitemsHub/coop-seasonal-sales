@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { validateSession } from '@/lib/validation'
 import { createClient } from '@/lib/supabaseServer'
 import { resolveFoodCycleId } from '@/lib/cycleResolve'
+import { isFoodBankAccountPaid } from '@/lib/repFoodBankGuard'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -92,17 +93,23 @@ export async function POST(req) {
 
     const { data: inv, error: selErr } = await supabase
       .from('food_vendor_invoices')
-      .select('id,branch_id,cycle_id,storage_bucket,storage_path')
+      .select('id,branch_id,cycle_id,bank_account_id,storage_bucket,storage_path')
       .eq('id', invoiceId)
       .maybeSingle()
     if (selErr) return NextResponse.json({ ok: false, error: selErr.message }, { status: 500 })
     if (!inv) return NextResponse.json({ ok: false, error: 'Invoice not found' }, { status: 404 })
     if (Number(inv.branch_id) !== Number(branchId)) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
+    if (await isFoodBankAccountPaid(supabase, { accountId: inv.bank_account_id, branchId, cycleId })) {
+      return NextResponse.json(
+        { ok: false, error: 'This invoice is marked as Paid. Editing is locked.' },
+        { status: 403 }
+      )
+    }
 
     if (payload.bank_account_id) {
       const { data: acct, error: acctErr } = await supabase
         .from('food_vendor_bank_accounts')
-        .select('id')
+        .select('id,is_paid')
         .eq('id', payload.bank_account_id)
         .eq('branch_id', branchId)
         .eq('cycle_id', cycleId)
@@ -112,6 +119,12 @@ export async function POST(req) {
       }
       if (!acct?.id) {
         return NextResponse.json({ ok: false, error: 'That bank account does not belong to this branch' }, { status: 400 })
+      }
+      if (acct.is_paid) {
+        return NextResponse.json(
+          { ok: false, error: 'That bank account is marked as Paid. Choose an unpaid account.' },
+          { status: 403 }
+        )
       }
     }
 

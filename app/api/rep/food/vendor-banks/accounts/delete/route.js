@@ -18,7 +18,7 @@ export async function POST(req) {
 
     const { data: row, error: rowErr } = await supabase
       .from('food_vendor_bank_accounts')
-      .select('id,is_current,account_number')
+      .select('id,is_current,account_number,is_paid')
       .eq('id', accountId)
       .eq('branch_id', branchId)
       .eq('cycle_id', cycleId)
@@ -28,6 +28,12 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: rowErr.message }, { status: 500 })
     }
     if (!row?.id) return NextResponse.json({ ok: false, error: 'Bank account not found' }, { status: 404 })
+    if (row.is_paid) {
+      return NextResponse.json(
+        { ok: false, error: 'This bank account is marked as Paid. Mark it unpaid before removing it.' },
+        { status: 403 }
+      )
+    }
 
     const { error: delErr } = await supabase
       .from('food_vendor_bank_accounts')

@@ -103,7 +103,7 @@ export async function POST(req) {
     if (Number.isFinite(requestedBankId) && requestedBankId > 0) {
       const { data: acct, error: acctErr } = await supabase
         .from('food_vendor_bank_accounts')
-        .select('id')
+        .select('id,is_paid')
         .eq('id', requestedBankId)
         .eq('branch_id', branchId)
         .eq('cycle_id', cycleId)
@@ -114,15 +114,27 @@ export async function POST(req) {
       if (!acct?.id) {
         return NextResponse.json({ ok: false, error: 'That bank account does not belong to this branch' }, { status: 400 })
       }
+      if (acct.is_paid) {
+        return NextResponse.json(
+          { ok: false, error: 'This bank account is marked as Paid. Editing is locked.' },
+          { status: 403 }
+        )
+      }
       bankAccountId = Number(acct.id)
     } else {
       const { data: current } = await supabase
         .from('food_vendor_bank_accounts')
-        .select('id')
+        .select('id,is_paid')
         .eq('branch_id', branchId)
         .eq('cycle_id', cycleId)
         .eq('is_current', true)
         .maybeSingle()
+      if (current?.is_paid) {
+        return NextResponse.json(
+          { ok: false, error: 'This bank account is marked as Paid. Editing is locked.' },
+          { status: 403 }
+        )
+      }
       bankAccountId = current?.id ? Number(current.id) : null
     }
 

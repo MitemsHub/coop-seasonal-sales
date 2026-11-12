@@ -20,8 +20,9 @@ export async function POST(req) {
     }
 
     const { orderId, deliveredBy } = await req.json()
-    const { data: o } = await supabase.from('orders').select('order_id, delivery_branch_id').eq('order_id', orderId).single()
+    const { data: o } = await supabase.from('orders').select('order_id, delivery_branch_id, status').eq('order_id', orderId).single()
     if (!o || o.delivery_branch_id !== claim.branch_id) return NextResponse.json({ ok:false, error:'forbidden' }, { status:403 })
+    if (o.status !== 'Posted') return NextResponse.json({ ok:false, error:'Only posted orders can be delivered' }, { status:403 })
 
     const { error } = await supabase.rpc('deliver_order', { p_order_id: orderId, p_admin: `rep:${claim.branch_code}` })
     if (error) return NextResponse.json({ ok:false, error: error.message }, { status:400 })

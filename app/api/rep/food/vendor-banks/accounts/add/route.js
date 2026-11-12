@@ -28,7 +28,7 @@ export async function POST(req) {
 
     const { data: existing, error: listErr } = await supabase
       .from('food_vendor_bank_accounts')
-      .select('id,account_number,is_current')
+      .select('id,account_number,is_current,is_paid')
       .eq('branch_id', branchId)
       .eq('cycle_id', cycleId)
 
@@ -44,6 +44,12 @@ export async function POST(req) {
           error: `Up to ${MAX_FOOD_BANK_ACCOUNTS} bank accounts can be attached per cycle. Remove one first.`,
         },
         { status: 400 }
+      )
+    }
+    if (rows.length && rows.every((r) => r.is_paid)) {
+      return NextResponse.json(
+        { ok: false, error: 'All bank accounts are marked as Paid. Editing is locked.' },
+        { status: 403 }
       )
     }
 

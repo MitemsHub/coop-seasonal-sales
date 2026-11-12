@@ -1,7 +1,7 @@
 // app/rep/posted/page.jsx
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Clock, Package, Truck, XCircle, Zap } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { announceRepFoodStats, onRepFoodStatsChanged } from '../../lib/repFoodStatsSync'
@@ -45,8 +45,10 @@ function RepPostedPageContent() {
   const [pdfLoading, setPdfLoading] = useState(false)
   const [viewOpen, setViewOpen] = useState(false)
   const [viewOrder, setViewOrder] = useState(null)
+  const [viewStatus, setViewStatus] = useState('Posted')
   const [sheetOrder, setSheetOrder] = useState(null) // order row for the print sheet
   const [stats, setStats] = useState(null)
+  const fetchCtl = useRef(null)
   const { user } = useAuth()
 
   const naira = (v) => `₦${Number(v || 0).toLocaleString()}`
@@ -107,6 +109,10 @@ function RepPostedPageContent() {
     loadStats()
   }, [user, loadStats])
 
+  useEffect(() => () => {
+    if (fetchCtl.current) fetchCtl.current.abort()
+  }, [])
+
   // Keep the strip (and the current page's order list) fresh without a
   // reload: refetch on the shared rep-food-stats event (announced by admin
   // pages after post/deliver/cancel/restore and by this page after its own
@@ -130,12 +136,12 @@ function RepPostedPageContent() {
       document.removeEventListener('visibilitychange', onVisible)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user])
+  }, [user, viewStatus])
 
   useEffect(() => { 
     if (user?.type !== 'rep' || !user?.authenticated) return
     fetchOrders(null) 
-  }, [dept, user])
+  }, [dept, user, viewStatus])
 
   const resetPagination = () => {
     setCursorStack([null])
@@ -143,14 +149,31 @@ function RepPostedPageContent() {
     setNextCursor(null)
   }
 
+  const showStatus = (next) => {
+    if (next !== 'Posted' && next !== 'Cancelled') return
+    if (next === viewStatus) return
+    setViewStatus(next)
+    setSearch('')
+    setSearchInput('')
+    setShowModal(null)
+    setSheetOrder(null)
+    setViewOpen(false)
+    setMsg(null)
+    setDidLoadOnce(false)
+    resetPagination()
+    setOrders([])
+  }
+
   const fetchOrders = async (cursorOverride, opts = null) => {
     const silent = opts?.silent === true
     if (!silent) { setLoading(true); setMsg(null) }
+    if (fetchCtl.current) fetchCtl.current.abort()
     const ctl = new AbortController()
+    fetchCtl.current = ctl
     const timer = setTimeout(() => ctl.abort(), 5000)
     try {
       const cursor = cursorOverride !== undefined ? cursorOverride : cursorStack[pageIndex] || null
-      const qs = new URLSearchParams({ status: 'Posted', limit: String(pageSize) })
+      const qs = new URLSearchParams({ status: viewStatus, limit: String(pageSize) })
       if (dept) qs.set('dept', dept)
       if (cursor) { qs.set('cursor', String(cursor)); qs.set('dir', 'next') }
       const res = await fetch(`/api/rep/orders/list?${qs.toString()}`, { cache: 'no-store', headers:{ 'Accept':'application/json' }, signal: ctl.signal })
@@ -162,8 +185,10 @@ function RepPostedPageContent() {
       if (e.name !== 'AbortError' && !silent) setMsg({ type:'error', text:e.message })
     } finally {
       clearTimeout(timer)
-      if (!silent) setLoading(false)
-      setDidLoadOnce(true)
+      const isCurrent = fetchCtl.current === ctl
+      if (isCurrent) fetchCtl.current = null
+      if (!silent && isCurrent) setLoading(false)
+      if (isCurrent) setDidLoadOnce(true)
     }
   }
 
@@ -187,6 +212,7 @@ function RepPostedPageContent() {
   }
 
   const deliverOne = async (id) => {
+    if (viewStatus !== 'Posted') return
     setShowModal({ 
       type: 'deliver', 
       orderId: id, 
@@ -691,8 +717,8 @@ function RepPostedPageContent() {
           </span>
         </div>
         {/* Branch-wide status cards — the same at-a-glance overview the
-            exhibition pending view shows. The posted card is highlighted
-            because that's the queue this page clears. */}
+            exhibition pending view shows. Posted and Cancelled switch the
+            list below; the active card is highlighted. */}
         <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
           {[
             { key: 'Pending', icon: Clock, delta: `${stats.todayPending?.count || 0} new today` },
@@ -701,28 +727,34 @@ function RepPostedPageContent() {
             { key: 'Cancelled', icon: XCircle, delta: 'admin can restore' },
           ].map(({ key, icon: Icon, delta }) => {
             const st = stats.statuses?.[key] || { count: 0, total: 0 }
-            const active = key === 'Posted'
+            const canOpen = key === 'Posted' || key === 'Cancelled'
+            const active = key === viewStatus
             return (
-              <div
+              <button
+                type="button"
                 key={key}
+                onClick={() => canOpen && showStatus(key)}
+                aria-pressed={active}
+                aria-disabled={!canOpen}
                 className={[
-                  'rounded-xl border bg-surface p-3 transition-colors duration-200 ease-sakani',
+                  'rounded-xl border bg-surface p-3 text-left transition-colors duration-200 ease-sakani',
                   active ? 'border-brand/50 ring-1 ring-brand/25' : 'border-line-subtle',
+                  canOpen ? 'cursor-pointer hover:border-brand/40' : 'cursor-default',
                 ].join(' ')}
               >
-                <div className="flex items-center justify-between gap-1">
+                <span className="flex items-center justify-between gap-1">
                   <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">
                     <Icon className="h-3.5 w-3.5" strokeWidth={2.2} />
                     {key}
                   </span>
                   {active && <span className="rounded-full bg-brand/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand">Viewing</span>}
-                </div>
-                <p className="mt-1.5 text-[clamp(1.125rem,1.125rem+0.22vw,1.375rem)] font-semibold leading-tight tracking-tight text-fg">
+                </span>
+                <span className="mt-1.5 block text-[clamp(1.125rem,1.125rem+0.22vw,1.375rem)] font-semibold leading-tight tracking-tight text-fg">
                   {st.count.toLocaleString()}
-                </p>
-                <p className="mt-0.5 truncate text-[11px] text-subtext">{naira(st.total)}</p>
-                <p className="mt-1 truncate text-[10px] text-muted">{delta}</p>
-              </div>
+                </span>
+                <span className="mt-0.5 block truncate text-[11px] text-subtext">{naira(st.total)}</span>
+                <span className="mt-1 block truncate text-[10px] text-muted">{delta}</span>
+              </button>
             )
           })}
         </div>
@@ -730,22 +762,25 @@ function RepPostedPageContent() {
       )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div>
-          <h1 className="text-h2 font-bold tracking-tight text-fg">Food Distribution · Posted</h1>
+          <h1 className="text-h2 font-bold tracking-tight text-fg">Food Distribution · {viewStatus}</h1>
           <div className="text-xs text-muted">
             Current Branch: {user?.branchName || user?.branchCode || '—'}
             {user?.department ? `, ${user.department}` : ''}
+            {viewStatus === 'Cancelled' ? ' · Read-only view' : ''}
           </div>
         </div>
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50 whitespace-nowrap"
-          disabled={itemsPackLoading}
-          onClick={exportItemsPack}
-          aria-busy={itemsPackLoading}
-        >
-          {itemsPackLoading && <Spinner className="h-4 w-4 text-on-accent" />}
-          <span>{itemsPackLoading ? 'Downloading…' : 'Items Pack'}</span>
-        </button>
+        {viewStatus === 'Posted' && (
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50 whitespace-nowrap"
+            disabled={itemsPackLoading}
+            onClick={exportItemsPack}
+            aria-busy={itemsPackLoading}
+          >
+            {itemsPackLoading && <Spinner className="h-4 w-4 text-on-accent" />}
+            <span>{itemsPackLoading ? 'Downloading…' : 'Items Pack'}</span>
+          </button>
+        )}
       </div>
 
       <div className="ui-card p-4 mb-4">
@@ -796,20 +831,24 @@ function RepPostedPageContent() {
             </button>
           </div>
 
-            <ExportButton
-              format="excel"
-              onClick={() => exportExcel().catch(() => null)}
-              disabled={excelLoading}
-              busy={excelLoading}
-              busyText="Preparing…"
-            />
-            <ExportButton
-              format="pdf"
-              onClick={() => exportPDF().catch(() => null)}
-              disabled={pdfLoading}
-              busy={pdfLoading}
-              busyText="Preparing…"
-            />
+            {viewStatus === 'Posted' && (
+              <>
+                <ExportButton
+                  format="excel"
+                  onClick={() => exportExcel().catch(() => null)}
+                  disabled={excelLoading}
+                  busy={excelLoading}
+                  busyText="Preparing…"
+                />
+                <ExportButton
+                  format="pdf"
+                  onClick={() => exportPDF().catch(() => null)}
+                  disabled={pdfLoading}
+                  busy={pdfLoading}
+                  busyText="Preparing…"
+                />
+              </>
+            )}
             <button
               type="button"
               className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover disabled:opacity-50"
@@ -827,7 +866,7 @@ function RepPostedPageContent() {
 
       <div className="ui-card overflow-hidden">
         <div className="p-4 border-b border-line bg-subtle flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div className="text-sm font-semibold">Posted Orders</div>
+          <div className="text-sm font-semibold">{viewStatus} Orders</div>
           <div className="flex items-center gap-2 text-xs font-normal text-subtext">
             <button
               type="button"
@@ -890,7 +929,7 @@ function RepPostedPageContent() {
               ) : filteredOrders.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-10 text-center text-muted">
-                    No Posted orders.
+                    No {viewStatus} orders.
                   </td>
                 </tr>
               ) : (
@@ -915,8 +954,8 @@ function RepPostedPageContent() {
                           e.target.value = ''
                           if (!v) return
                           if (v === 'view') openView(o)
-                          if (v === 'deliver') deliverOne(o.order_id)
-                          if (v === 'sheet') setSheetOrder(o)
+                          if (v === 'deliver' && viewStatus === 'Posted') deliverOne(o.order_id)
+                          if (v === 'sheet' && viewStatus === 'Posted') setSheetOrder(o)
                         }}
                         disabled={deliveringOrder === o.order_id}
                       >
@@ -924,8 +963,12 @@ function RepPostedPageContent() {
                           Actions
                         </option>
                         <option value="view">View</option>
-                        <option value="deliver">Deliver</option>
-                        <option value="sheet">Print sheet</option>
+                        {viewStatus === 'Posted' && (
+                          <>
+                            <option value="deliver">Deliver</option>
+                            <option value="sheet">Print sheet</option>
+                          </>
+                        )}
                       </select>
                     </td>
                   </tr>

@@ -70,24 +70,24 @@ async function resolveBankAccount(supabase, branchId, cycleId, requestedBankId) 
   if (Number.isFinite(requested) && requested > 0) {
     const { data: acct, error } = await supabase
       .from('food_vendor_bank_accounts')
-      .select('id')
+      .select('id,is_paid')
       .eq('id', requested)
       .eq('branch_id', branchId)
       .eq('cycle_id', cycleId)
       .maybeSingle()
     if (error && !isMissingTable(error, 'food_vendor_bank_accounts')) throw error
     if (!acct?.id) return { error: 'That bank account does not belong to this branch' }
-    return { bankAccountId: Number(acct.id) }
+    return { bankAccountId: Number(acct.id), isPaid: !!acct.is_paid }
   }
 
   const { data: current } = await supabase
     .from('food_vendor_bank_accounts')
-    .select('id')
+    .select('id,is_paid')
     .eq('branch_id', branchId)
     .eq('cycle_id', cycleId)
     .eq('is_current', true)
     .maybeSingle()
-  return { bankAccountId: current?.id ? Number(current.id) : null }
+  return { bankAccountId: current?.id ? Number(current.id) : null, isPaid: !!current?.is_paid }
 }
 
 export async function POST(req) {
@@ -115,6 +115,12 @@ export async function POST(req) {
     const action = String(body?.action || '').trim()
     const account = await resolveBankAccount(supabase, branchId, cycleId, body?.bank_account_id)
     if (account.error) return NextResponse.json({ ok: false, error: account.error }, { status: 400 })
+    if (account.isPaid) {
+      return NextResponse.json(
+        { ok: false, error: 'This bank account is marked as Paid. Editing is locked.' },
+        { status: 403 }
+      )
+    }
 
     if (action === 'sign') {
       const fileName = safeName(body?.file_name)
