@@ -40,12 +40,36 @@ export async function POST(req) {
     const updates = { status: 'Cancelled', cancelled_at: now, restored_at: null, updated_at: now }
     if (reason) updates.cancelled_reason = reason
 
+    // Shop-originated lines reserved stock at checkout. Put those units back
+    // before the cancellation is considered complete; manual invoice lines
+    // have no product_id and are ignored.
+    const { data: reservedLines } = await supabase
+      .from('exhibition_order_lines')
+      .select('product_id, qty')
+      .in('order_id', toCancel)
+      .not('product_id', 'is', null)
+    const releaseByProduct = new Map()
+    for (const line of reservedLines || []) {
+      const pid = Number(line.product_id)
+      const qty = Number(line.qty || 0)
+      if (!Number.isFinite(pid) || pid <= 0 || qty <= 0) continue
+      releaseByProduct.set(pid, (releaseByProduct.get(pid) || 0) + qty)
+    }
+
     const { error: upErr } = await supabase
       .from('exhibition_orders')
       .update(updates)
       .in('id', toCancel)
       .in('status', ['Pending', 'Approved'])
     if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 })
+
+    let stockReleaseWarning = ''
+    if (releaseByProduct.size) {
+      const { error: releaseErr } = await supabase.rpc('exhibition_release_stock', {
+        p_items: [...releaseByProduct.entries()].map(([product_id, qty]) => ({ product_id, qty })),
+      })
+      if (releaseErr) stockReleaseWarning = releaseErr.message || 'Failed to release stock'
+    }
 
     await logExhibitionAudit(toCancel, {
       action: 'Cancelled',
@@ -54,7 +78,12 @@ export async function POST(req) {
       note: reason,
     })
 
-    return NextResponse.json({ ok: true, cancelled: toCancel, failed })
+    return NextResponse.json({
+      ok: true,
+      cancelled: toCancel,
+      failed,
+      ...(stockReleaseWarning ? { warning: stockReleaseWarning } : {}),
+    })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Internal server error' }, { status: 500 })
   }

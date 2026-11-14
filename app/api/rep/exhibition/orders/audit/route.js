@@ -1,7 +1,7 @@
 // app/api/rep/exhibition/orders/audit/route.js
 // GET /api/rep/exhibition/orders/audit?order_id=NNN
 // Returns the audit trail for one exhibition order at the rep's branch —
-// who approved / cancelled / restored / delivered it and when. Scoped to the
+// who approved / confirmed / cancelled / restored it and when. Scoped to the
 // rep's branch so a rep can only inspect their own branch's orders. Reads the
 // shared audit_log table (rows tagged module='exhibition'), the same trail the
 // admin audit views and the food/ram modules use.

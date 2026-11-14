@@ -2,7 +2,7 @@
 
 // app/admin/exhibition/audit/page.jsx
 // Admin audit log for Coop Exhibition orders. Every approved / cancelled /
-// restored / delivered event — by reps, admins and vendors — with the order's
+// restored / confirmed event — by reps, admins and vendors — with the order's
 // member, branch, cycle and total, so admins can review staff actions from
 // one place. Filter by action, branch, or search an order / member.
 import { useCallback, useEffect, useRef, useState } from 'react'

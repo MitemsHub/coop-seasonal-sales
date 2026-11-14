@@ -14,16 +14,15 @@ import Select from './ui/Select'
 import { parseCsv, pick } from '../../lib/csvParse'
 
 const TEMPLATE = [
-  'name,price,unit,qty,image_url',
-  'Handwoven Ankara Tote,15000,each,25,',
-  'Fresh tomatoes (basket),8500,basket,40,',
+  'name,price,unit,qty',
+  'Handwoven Ankara Tote,15000,each,25',
+  'Fresh tomatoes (basket),8500,basket,40',
 ].join('\n')
 
 const NAME_KEYS = ['name', 'product', 'product name', 'item', 'description']
 const PRICE_KEYS = ['price', 'amount', 'vendor_price', 'vendor price', 'unit price']
 const UNIT_KEYS = ['unit', 'uom', 'measure']
 const QTY_KEYS = ['qty', 'quantity', 'stock', 'quantity in stock']
-const IMAGE_KEYS = ['image_url', 'image', 'photo', 'image url', 'picture']
 
 function saveFile(filename, text) {
   const blob = new Blob([text], { type: 'text/csv;charset=utf-8' })
@@ -96,7 +95,6 @@ export default function ProductImportModal({
         price: pick(record, PRICE_KEYS),
         unit: pick(record, UNIT_KEYS) || 'each',
         qty: pick(record, QTY_KEYS),
-        image_url: pick(record, IMAGE_KEYS),
       }))
     )
   }
@@ -251,7 +249,7 @@ export default function ProductImportModal({
           <div className="rounded-xl border border-dashed border-line bg-subtle px-4 py-6 text-center">
             <FileSpreadsheet className="mx-auto mb-2 h-7 w-7 text-muted" strokeWidth={1.6} />
             <p className="text-sm font-medium text-fg">{fileName || 'Choose a CSV file'}</p>
-            <p className="mt-0.5 text-xs text-muted">Columns: name, price, unit, qty, image_url (only name and price are required).</p>
+            <p className="mt-0.5 text-xs text-muted">Columns: name, price, unit, qty (only name and price are required). Add product photos after importing.</p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
               <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-on-accent">
                 <Upload className="h-3.5 w-3.5" />
@@ -298,7 +296,9 @@ export default function ProductImportModal({
           )}
 
           <p className="text-xs text-muted">
-            Imported products wait for approval before they appear on the member shop.
+            {requireTarget
+              ? 'Admin imports go live immediately. The price you enter is the member price.'
+              : 'Imported products wait for approval before they appear on the member shop.'}
           </p>
         </div>
       )}

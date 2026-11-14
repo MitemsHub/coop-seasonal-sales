@@ -1,9 +1,9 @@
 // app/api/rep/exhibition/vendors/breakdown/route.js
 // Per-vendor handover breakdown for the rep's branch. Across the branch's
-// APPROVED orders in the active cycle, which vendors still owe goods — i.e.
-// lines the vendor has not yet marked delivered. Powers the vendor handover
-// panel on the Approved view so reps see at a glance who still needs to hand
-// over.
+// APPROVED orders in the active cycle, which vendors still owe goods. Every
+// approved line is outstanding until the member confirms receipt. Powers the
+// vendor handover panel on the Approved view so reps see at a glance who still
+// needs to hand over.
 //   GET /api/rep/exhibition/vendors/breakdown
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
@@ -60,7 +60,7 @@ export async function GET(req) {
     if (orderIds.length) {
       const { data: lines, error: lErr } = await supabase
         .from('exhibition_order_lines')
-        .select('id, order_id, vendor_id, product_name, qty, amount, delivered, vendors:vendor_id(name)')
+        .select('id, order_id, vendor_id, product_name, qty, amount, vendors:vendor_id(name)')
         .in('order_id', orderIds)
         .order('id')
       if (lErr) return NextResponse.json({ ok: false, error: lErr.message }, { status: 500 })
@@ -72,19 +72,12 @@ export async function GET(req) {
           vendor_id: k,
           vendor_name: l.vendors?.name || '',
           orders: new Set(),
-          qty_delivered: 0,
           qty_outstanding: 0,
-          amount_delivered: 0,
           amount_outstanding: 0,
         }
         cur.orders.add(Number(l.order_id))
-        if (l.delivered) {
-          cur.qty_delivered += Number(l.qty || 0)
-          cur.amount_delivered += Number(l.amount || 0)
-        } else {
-          cur.qty_outstanding += Number(l.qty || 0)
-          cur.amount_outstanding += Number(l.amount || 0)
-        }
+        cur.qty_outstanding += Number(l.qty || 0)
+        cur.amount_outstanding += Number(l.amount || 0)
         by.set(k, cur)
       }
 
@@ -93,9 +86,7 @@ export async function GET(req) {
           vendor_id: v.vendor_id,
           vendor_name: v.vendor_name,
           orders: v.orders.size,
-          qty_delivered: v.qty_delivered,
           qty_outstanding: v.qty_outstanding,
-          amount_delivered: Math.round(v.amount_delivered),
           amount_outstanding: Math.round(v.amount_outstanding),
         })
       }
@@ -113,11 +104,9 @@ export async function GET(req) {
       (acc, v) => {
         acc.qty_outstanding += Number(v.qty_outstanding || 0)
         acc.amount_outstanding += Number(v.amount_outstanding || 0)
-        acc.qty_delivered += Number(v.qty_delivered || 0)
-        acc.amount_delivered += Number(v.amount_delivered || 0)
         return acc
       },
-      { qty_outstanding: 0, amount_outstanding: 0, qty_delivered: 0, amount_delivered: 0 }
+      { qty_outstanding: 0, amount_outstanding: 0 }
     )
 
     return NextResponse.json({
@@ -126,8 +115,6 @@ export async function GET(req) {
       totals: {
         qty_outstanding: totals.qty_outstanding,
         amount_outstanding: Math.round(totals.amount_outstanding),
-        qty_delivered: totals.qty_delivered,
-        amount_delivered: Math.round(totals.amount_delivered),
       },
       vendors,
     })

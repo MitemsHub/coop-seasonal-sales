@@ -9,7 +9,6 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const STATUSES = ['Pending', 'Approved', 'Confirmed', 'Cancelled']
-const normalizeStatus = (value) => (value === 'Delivered' ? 'Confirmed' : value)
 
 export async function GET(request) {
   const session = await validateSession(request, 'admin')
@@ -17,7 +16,7 @@ export async function GET(request) {
 
   try {
     const { searchParams } = new URL(request.url)
-    const status = normalizeStatus(String(searchParams.get('status') || ''))
+    const status = String(searchParams.get('status') || '')
     const cycleId = Math.trunc(Number(searchParams.get('cycle_id') || 0))
     const branchId = Math.trunc(Number(searchParams.get('branch_id') || 0))
     const payment = String(searchParams.get('payment') || '')
@@ -31,10 +30,7 @@ export async function GET(request) {
 
     // Count first (same filters)
     let countQ = supabase.from('exhibition_orders').select('id', { count: 'exact', head: true })
-    // Confirmed is the hand-over stage. Legacy Delivered rows belong here too,
-    // otherwise old orders disappear from the Confirmed view.
-    if (status === 'Confirmed') countQ = countQ.in('status', ['Confirmed', 'Delivered'])
-    else if (status && STATUSES.includes(status)) countQ = countQ.eq('status', status)
+    if (status && STATUSES.includes(status)) countQ = countQ.eq('status', status)
     else countQ = countQ.neq('status', 'Cancelled')
     if (cycleId > 0) countQ = countQ.eq('cycle_id', cycleId)
     if (branchId > 0) countQ = countQ.eq('branch_id', branchId)
@@ -50,8 +46,7 @@ export async function GET(request) {
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
 
-    if (status === 'Confirmed') query = query.in('status', ['Confirmed', 'Delivered'])
-    else if (status && STATUSES.includes(status)) query = query.eq('status', status)
+    if (status && STATUSES.includes(status)) query = query.eq('status', status)
     else query = query.neq('status', 'Cancelled')
     if (cycleId > 0) query = query.eq('cycle_id', cycleId)
     if (branchId > 0) query = query.eq('branch_id', branchId)
@@ -69,7 +64,7 @@ export async function GET(request) {
     if (orderIds.length) {
       const { data: lines, error: lErr } = await supabase
         .from('exhibition_order_lines')
-        .select('id, order_id, vendor_id, product_name, sku, unit, vendor_price, final_price, qty, amount, delivered, delivered_at, vendors:vendor_id(name)')
+        .select('id, order_id, vendor_id, product_name, sku, unit, vendor_price, final_price, qty, amount, vendors:vendor_id(name)')
         .in('order_id', orderIds)
         .order('id')
       if (lErr) return NextResponse.json({ ok: false, error: lErr.message }, { status: 500 })
@@ -82,7 +77,6 @@ export async function GET(request) {
 
     const orders = (data || []).map((o) => ({
       ...o,
-      status: normalizeStatus(o.status),
       branch_name: o.branches?.name || '',
       branch_code: o.branches?.code || '',
       cycle_name: o.cycles?.name || '',
@@ -92,10 +86,9 @@ export async function GET(request) {
         const by = new Map()
         for (const l of linesByOrder.get(o.id) || []) {
           const k = l.vendor_id
-          const cur = by.get(k) || { vendor_id: k, vendor_name: l.vendor_name || '', qty: 0, amount: 0, all_delivered: true }
+          const cur = by.get(k) || { vendor_id: k, vendor_name: l.vendor_name || '', qty: 0, amount: 0 }
           cur.qty += Number(l.qty || 0)
           cur.amount += Number(l.amount || 0)
-          cur.all_delivered = cur.all_delivered && Boolean(l.delivered)
           by.set(k, cur)
         }
         return [...by.values()]

@@ -11,7 +11,7 @@ import { verify } from '@/lib/signing'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const STATUSES = ['Pending', 'Approved', 'Delivered', 'Confirmed', 'Cancelled']
+const STATUSES = ['Pending', 'Approved', 'Confirmed', 'Cancelled']
 
 export async function GET(req) {
   try {
@@ -27,9 +27,7 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url)
     const statusRaw = (searchParams.get('status') || '').trim()
     const status = STATUSES.includes(statusRaw) ? statusRaw : 'Pending'
-    // Kept for old bookmarks: "Delivered" now resolves to member-confirmed
-    // orders (plus any legacy delivered rows).
-    const statusesToMatch = status === 'Delivered' ? ['Delivered', 'Confirmed'] : [status]
+    const statusesToMatch = [status]
     const payment = (searchParams.get('payment') || '').trim()
     const cycleId = Math.trunc(Number(searchParams.get('cycle_id') || 0))
     const q = (searchParams.get('q') || '').trim()
@@ -45,7 +43,7 @@ export async function GET(req) {
 
     let query = supabase
       .from('exhibition_orders')
-      .select('id, order_id, cycle_id, branch_id, member_id, member_name_snapshot, payment_option, status, total_qty, total_amount, approved_at, delivered_at, cancelled_at, cancelled_reason, restored_at, created_at, branches:branch_id(name, code), cycles:cycle_id(name, code)')
+      .select('id, order_id, cycle_id, branch_id, member_id, member_name_snapshot, payment_option, status, total_qty, total_amount, approved_at, member_confirmed_at, confirmed_by_role, confirmed_by_code, cancelled_at, cancelled_reason, restored_at, created_at, branches:branch_id(name, code), cycles:cycle_id(name, code)')
       .eq('branch_id', branchId)
       .in('status', statusesToMatch)
       .order('created_at', { ascending: false })
@@ -63,7 +61,7 @@ export async function GET(req) {
     if (orderIds.length) {
       const { data: lines, error: lErr } = await supabase
         .from('exhibition_order_lines')
-        .select('id, order_id, vendor_id, product_name, sku, unit, vendor_price, final_price, qty, amount, delivered, vendors:vendor_id(name)')
+        .select('id, order_id, vendor_id, product_name, sku, unit, vendor_price, final_price, qty, amount, vendors:vendor_id(name)')
         .in('order_id', orderIds)
         .order('id')
       if (lErr) return NextResponse.json({ ok: false, error: lErr.message }, { status: 500 })
@@ -85,10 +83,9 @@ export async function GET(req) {
         const by = new Map()
         for (const l of linesByOrder.get(o.id) || []) {
           const k = l.vendor_id
-          const cur = by.get(k) || { vendor_id: k, vendor_name: l.vendor_name || '', qty: 0, amount: 0, all_delivered: true }
+          const cur = by.get(k) || { vendor_id: k, vendor_name: l.vendor_name || '', qty: 0, amount: 0 }
           cur.qty += Number(l.qty || 0)
           cur.amount += Number(l.amount || 0)
-          cur.all_delivered = cur.all_delivered && Boolean(l.delivered)
           by.set(k, cur)
         }
         return [...by.values()]

@@ -6,7 +6,7 @@
 // are admin actions, and the member confirms receipt.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { CheckCircle2, ChevronLeft, ChevronRight, Clock, History, Inbox, Package, PackageCheck, RefreshCw, RotateCcw, Search, Store, Truck, XCircle, Zap } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, Clock, History, Inbox, Package, PackageCheck, RefreshCw, RotateCcw, Search, Store, XCircle, Zap } from 'lucide-react'
 import Badge from '../../components/ui/Badge'
 import ExportButton from '../../components/ui/ExportButton'
 import DraggableModal from '../../components/DraggableModal'
@@ -18,14 +18,14 @@ const naira = (v) =>
     Number(v || 0)
   )
 
-const STATUS_TONE = { Pending: 'warning', Approved: 'info', Delivered: 'success', Confirmed: 'success', Cancelled: 'danger' }
+const STATUS_TONE = { Pending: 'warning', Approved: 'info', Confirmed: 'success', Cancelled: 'danger' }
 
 const AUDIT_ICON = {
   'Order placed': { Icon: Package, iconCls: 'text-muted', tileCls: 'bg-subtle' },
   Approved: { Icon: CheckCircle2, iconCls: 'text-success', tileCls: 'bg-success-bg' },
   Cancelled: { Icon: XCircle, iconCls: 'text-danger', tileCls: 'bg-danger-bg' },
   Restored: { Icon: RotateCcw, iconCls: 'text-brand', tileCls: 'bg-brand-subtle' },
-  Delivered: { Icon: Truck, iconCls: 'text-success', tileCls: 'bg-success-bg' },
+  Confirmed: { Icon: PackageCheck, iconCls: 'text-success', tileCls: 'bg-success-bg' },
 }
 
 const toastMotion = {
@@ -148,7 +148,7 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
     fetchStats()
   }, [fetchOrders, fetchStats])
 
-  // Audit trail for one order — who approved/cancelled/restored/delivered it.
+  // Audit trail for one order — who approved, confirmed, cancelled or restored it.
   const openAudit = useCallback(async (o) => {
     setAuditOrder(o)
     setAuditEvents([])
@@ -771,6 +771,12 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
                 </th>
                 <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Order</th>
                 <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Member</th>
+                {status === 'Approved' && (
+                  <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Awaiting</th>
+                )}
+                {status === 'Confirmed' && (
+                  <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Confirmed by</th>
+                )}
                 <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Payment</th>
                 <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Qty</th>
                 <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Total</th>
@@ -786,6 +792,7 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
                       <td className="p-3"><div className="sakani-skeleton h-4 w-4 rounded" /></td>
                       <td className="p-3"><div className="sakani-skeleton h-4 w-24 rounded" /></td>
                       <td className="p-3"><div className="sakani-skeleton h-4 w-40 rounded" /></td>
+                      <td className="p-3"><div className="sakani-skeleton h-4 w-24 rounded" /></td>
                       <td className="p-3"><div className="sakani-skeleton h-4 w-16 rounded" /></td>
                       <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-4 w-10 rounded" /></td>
                       <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-4 w-20 rounded" /></td>
@@ -798,7 +805,7 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
 
               {!loading && orders.length === 0 && (
                 <tr>
-                  <td className="p-10 text-center" colSpan={8}>
+                  <td className="p-10 text-center" colSpan={status === 'Approved' || status === 'Confirmed' ? 9 : 8}>
                     <div className="mx-auto flex max-w-xs flex-col items-center gap-2">
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-subtle">
                         <Inbox className="h-6 w-6 text-subtext" />
@@ -845,6 +852,20 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
                         <div className="font-medium text-fg">{o.member_id}</div>
                         <div className="text-muted break-words">{o.member_name_snapshot || '-'}</div>
                       </td>
+                      {status === 'Approved' && (
+                        <td className="p-3 align-top text-muted">
+                          <div className="font-medium text-fg">Member receipt</div>
+                          <div className="text-chips text-subtext">Ready {fmtDate(o.approved_at)}</div>
+                        </td>
+                      )}
+                      {status === 'Confirmed' && (
+                        <td className="p-3 align-top">
+                          <div className="font-medium text-fg">
+                            {o.confirmed_by_role === 'admin' ? 'Admin override' : 'Member'}
+                          </div>
+                          <div className="text-chips text-subtext">{fmtDate(o.member_confirmed_at)}</div>
+                        </td>
+                      )}
                       <td className="p-3 align-top">
                         <span className="inline-flex items-center rounded-md bg-subtle px-2 py-0.5 text-xs font-medium text-fg">
                           {o.payment_option || '-'}

@@ -1,7 +1,8 @@
 // app/api/admin/exhibition/vendors/breakdown/route.js
 // Per-vendor handover breakdown for the admin, aggregated across ALL branches.
 // Across every branch's APPROVED orders in the active cycles, which vendors
-// still owe goods — i.e. lines the vendor has not yet marked delivered.
+// still owe goods. Approval means the order is ready, so every line is still
+// outstanding until the member confirms receipt.
 // Powers the vendor handover panel on the admin Approved view (the superuser
 // equivalent of the rep's branch-scoped panel).
 //   GET /api/admin/exhibition/vendors/breakdown?cycle_id=NNN
@@ -42,7 +43,7 @@ export async function GET(req) {
     if (orderIds.length) {
       const { data: lines, error: lErr } = await supabase
         .from('exhibition_order_lines')
-        .select('id, order_id, vendor_id, product_name, qty, amount, delivered, vendors:vendor_id(id, name, branches:branch_id(name))')
+        .select('id, order_id, vendor_id, product_name, qty, amount, vendors:vendor_id(id, name, branches:branch_id(name))')
         .in('order_id', orderIds)
         .order('id')
       if (lErr) return NextResponse.json({ ok: false, error: lErr.message }, { status: 500 })
@@ -55,19 +56,12 @@ export async function GET(req) {
           vendor_name: l.vendors?.name || '',
           branch_name: l.vendors?.branches?.name || '',
           orders: new Set(),
-          qty_delivered: 0,
           qty_outstanding: 0,
-          amount_delivered: 0,
           amount_outstanding: 0,
         }
         cur.orders.add(Number(l.order_id))
-        if (l.delivered) {
-          cur.qty_delivered += Number(l.qty || 0)
-          cur.amount_delivered += Number(l.amount || 0)
-        } else {
-          cur.qty_outstanding += Number(l.qty || 0)
-          cur.amount_outstanding += Number(l.amount || 0)
-        }
+        cur.qty_outstanding += Number(l.qty || 0)
+        cur.amount_outstanding += Number(l.amount || 0)
         by.set(k, cur)
       }
 
@@ -77,9 +71,7 @@ export async function GET(req) {
           vendor_name: v.vendor_name,
           branch_name: v.branch_name,
           orders: v.orders.size,
-          qty_delivered: v.qty_delivered,
           qty_outstanding: v.qty_outstanding,
-          amount_delivered: Math.round(v.amount_delivered),
           amount_outstanding: Math.round(v.amount_outstanding),
         })
       }

@@ -40,7 +40,32 @@ export async function POST(req) {
       (id) => String(byId.get(id)?.status || '') === 'Cancelled' && !closed.has(Number(byId.get(id)?.cycle_id))
     )
 
-    // Counter invoices carry no catalogue stock, so only the cycle gate applies.
+    // Shop-originated lines need their reserved units back before the order
+    // can return to Pending. Manual invoice lines have no product_id.
+    const { data: reservedLines } = await supabase
+      .from('exhibition_order_lines')
+      .select('order_id, product_id, qty')
+      .in('order_id', cycleOk)
+      .not('product_id', 'is', null)
+    const reserveByProduct = new Map()
+    for (const line of reservedLines || []) {
+      const pid = Number(line.product_id)
+      const qty = Number(line.qty || 0)
+      if (!Number.isFinite(pid) || pid <= 0 || qty <= 0) continue
+      reserveByProduct.set(pid, (reserveByProduct.get(pid) || 0) + qty)
+    }
+    if (reserveByProduct.size) {
+      const { error: reserveErr } = await supabase.rpc('exhibition_reserve_stock', {
+        p_items: [...reserveByProduct.entries()].map(([product_id, qty]) => ({ product_id, qty })),
+      })
+      if (reserveErr) {
+        return NextResponse.json(
+          { ok: false, error: 'Not enough stock to restore this order. Cancel or reduce another order first.' },
+          { status: 409 }
+        )
+      }
+    }
+
     const toRestore = cycleOk
 
     const failed = ids
@@ -66,7 +91,7 @@ export async function POST(req) {
     const now = new Date().toISOString()
     const { error: upErr } = await supabase
       .from('exhibition_orders')
-      .update({ status: 'Pending', approved_at: null, delivered_at: null, member_confirmed_at: null, member_confirmed_by: '', cancelled_at: null, cancelled_reason: '', restored_at: now, updated_at: now })
+      .update({ status: 'Pending', approved_at: null, delivered_at: null, member_confirmed_at: null, member_confirmed_by: '', confirmed_by_role: '', confirmed_by_code: '', cancelled_at: null, cancelled_reason: '', restored_at: now, updated_at: now })
       .in('id', toRestore)
       .eq('status', 'Cancelled')
     if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 })

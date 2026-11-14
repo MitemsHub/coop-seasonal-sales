@@ -1,8 +1,8 @@
 // app/api/admin/exhibition/payouts/route.js
 // Vendor payouts for an exhibition cycle. The co-op pays vendors after the
-// exhibition; amounts are the per-vendor line totals across DELIVERED lines
-// (goods handed over) minus the cycle's vendor deduction rate. Pending and
-// Approved lines are not owed yet.
+// exhibition; amounts are the per-vendor line totals across CONFIRMED orders
+// (the member has received the goods) minus the cycle's vendor deduction rate.
+// Pending and Approved orders are not owed yet.
 //   GET  — per-vendor summary: owed, paid, balance, orders
 //   POST — mark a vendor paid (or unmark) for the cycle { vendor_id, cycle_id, paid }
 import { NextResponse } from 'next/server'
@@ -38,8 +38,7 @@ export async function GET(request) {
         .from('exhibition_order_lines')
         .select('vendor_id, amount, orders:order_id!inner(status)')
         .eq('orders.cycle_id', cycleId)
-        .neq('orders.status', 'Cancelled')
-        .eq('delivered', true),
+        .eq('orders.status', 'Confirmed'),
       // One payment-status row per (order, vendor) — a vendor is "paid" only
       // when ALL of their rows for the cycle are paid. Cancelled orders' rows
       // are ignored entirely.

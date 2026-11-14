@@ -73,9 +73,9 @@ function ExhibitionOrdersContent() {
   }, [memberId])
 
   // ── Confirm receipt ──
-  // The vendor marks Delivered when the goods leave the stand; the member's
-  // confirmation is what closes the order. Ownership is decided server-side
-  // from the signed session, never from this payload.
+  // The admin approves; the member's confirmation is what closes the order.
+  // Ownership is decided server-side from the signed session, never from this
+  // payload.
   const confirmReceipt = async (orderId) => {
     if (!orderId || confirming) return
     setConfirming(orderId)
@@ -120,7 +120,7 @@ function ExhibitionOrdersContent() {
   }, [memberId, orders, announceExhPending])
 
   const stats = useMemo(() => {
-    const byStatus = { Pending: 0, Approved: 0, Delivered: 0, Confirmed: 0, Cancelled: 0 }
+    const byStatus = { Pending: 0, Approved: 0, Confirmed: 0, Cancelled: 0 }
     let total = 0
     for (const o of orders) {
       if (byStatus[o.status] !== undefined) byStatus[o.status]++
@@ -168,7 +168,7 @@ function ExhibitionOrdersContent() {
                 <div className="text-chips font-medium text-muted">Approved</div>
               </div>
               <div className="ui-card p-3 text-center">
-                <div className="text-xl font-bold tabular-nums text-success-fg">{stats.byStatus.Delivered + stats.byStatus.Confirmed}</div>
+                <div className="text-xl font-bold tabular-nums text-success-fg">{stats.byStatus.Confirmed}</div>
                 <div className="text-chips font-medium text-muted">Confirmed</div>
               </div>
               <div className="ui-card p-3 text-center">
@@ -227,15 +227,11 @@ function ExhibitionOrdersContent() {
                     </div>
 
                     {/* Member confirmation — the final step of the transaction */}
-                    {(o.status === 'Delivered' || o.status === 'Approved') && (
+                    {o.status === 'Approved' && (
                       <div className="flex flex-col gap-2 border-b border-line bg-success-bg/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-fg">Did you receive your goods?</p>
-                          <p className="text-chips text-muted">
-                            {o.status === 'Approved'
-                              ? 'Confirm once the goods are in your hands.'
-                              : 'Confirm to close this order.'}
-                          </p>
+                          <p className="text-chips text-muted">Confirm once the goods are in your hands.</p>
                         </div>
                         <Button
                           leftIcon={CheckCircle2}

@@ -6,7 +6,7 @@
 // Cancelled orders can be restored.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { CheckCircle2, ChevronLeft, ChevronRight, Inbox, Plus, RefreshCw, RotateCcw, Search, XCircle } from 'lucide-react'
+import { CheckCircle2, ChevronLeft, ChevronRight, Clock, Inbox, PackageCheck, Plus, RefreshCw, RotateCcw, Search, XCircle } from 'lucide-react'
 import CounterInvoiceModal from '../../components/CounterInvoiceModal'
 import ExportButton from '../../components/ui/ExportButton'
 import DraggableModal from '../../components/DraggableModal'
@@ -181,9 +181,11 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
       const path =
         type === 'approve'
           ? '/api/admin/exhibition/orders/approve'
-          : type === 'cancel'
-            ? '/api/admin/exhibition/orders/cancel'
-            : '/api/admin/exhibition/orders/restore'
+          : type === 'confirm'
+            ? '/api/admin/exhibition/orders/confirm'
+            : type === 'cancel'
+              ? '/api/admin/exhibition/orders/cancel'
+              : '/api/admin/exhibition/orders/restore'
       const res = await fetch(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -191,7 +193,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
       })
       const json = await safeJson(res, path)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Action failed')
-      const done = (json.approved || json.cancelled || json.delivered || json.restored || [])
+      const done = (json.approved || json.confirmed || json.cancelled || json.restored || [])
       const skipped = (json.failed || []).length
       setOrders((prev) => (prev || []).filter((o) => !done.includes(o.id)))
       setSelected(new Set())
@@ -199,7 +201,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
       setCancelReason('')
       setMsg({
         type: 'success',
-        text: `${done.length} order(s) ${type === 'approve' ? 'approved' : type === 'cancel' ? 'cancelled' : type === 'deliver' ? 'delivered' : 'restored'}${
+        text: `${done.length} order(s) ${type === 'approve' ? 'approved' : type === 'confirm' ? 'confirmed' : type === 'cancel' ? 'cancelled' : 'restored'}${
           skipped ? ` · ${skipped} skipped` : ''
         }`,
       })
@@ -357,6 +359,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
     if (value === 'view') { setViewOrder(o); return }
     if (value === 'edit') { setEditOrder(o); setInvoiceOpen(true) }
     if (value === 'approve') setModal({ type: 'approve', ids: [o.id] })
+    if (value === 'confirm') setModal({ type: 'confirm', ids: [o.id] })
     if (value === 'cancel') setModal({ type: 'cancel', ids: [o.id] })
     if (value === 'restore') setModal({ type: 'restore', ids: [o.id] })
   }
@@ -384,10 +387,48 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
       <option value="view">View items</option>
       {canEditRow(o) && <option value="edit">Edit invoice</option>}
       {canApprove && <option value="approve">Approve</option>}
+      {status === 'Approved' && <option value="confirm">Confirm receipt</option>}
       {canCancel && <option value="cancel">Cancel</option>}
       {canRestore && <option value="restore">Restore</option>}
     </select>
   )
+
+  const statusInfo = {
+    Pending: {
+      label: 'Decision queue',
+      copy: 'Shop orders and manual invoices waiting for approval. Edit a counter invoice before it is cleared.',
+      tone: 'border-warning-border bg-warning-bg/40 text-warning-fg',
+      icon: Clock,
+    },
+    Approved: {
+      label: 'Ready for collection',
+      copy: 'The member has been cleared to collect. Confirm receipt here only when they cannot use the portal.',
+      tone: 'border-info-border bg-info-bg/40 text-info-fg',
+      icon: CheckCircle2,
+    },
+    Confirmed: {
+      label: 'Closed orders',
+      copy: 'The member has received the goods. These orders are final and feed vendor payouts.',
+      tone: 'border-success-border bg-success-bg/40 text-success-fg',
+      icon: PackageCheck,
+    },
+    Cancelled: {
+      label: 'Exception queue',
+      copy: 'Cancelled orders keep their audit trail. Restore one to Pending if it was cancelled by mistake.',
+      tone: 'border-danger-border bg-danger-bg/40 text-danger-fg',
+      icon: XCircle,
+    },
+  }[status] || {
+    label: status,
+    copy: `Orders in the ${String(status).toLowerCase()} stage.`,
+    tone: 'border-line bg-subtle text-muted',
+    icon: Inbox,
+  }
+  const StatusIcon = statusInfo.icon
+  const pageAmount = orders.reduce((sum, o) => sum + Number(o.total_amount || 0), 0)
+  const shopCount = orders.filter((o) => o.source === 'storefront').length
+  const invoiceCount = orders.length - shopCount
+  const adminConfirmed = orders.filter((o) => o.confirmed_by_role === 'admin').length
 
   return (
     <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
@@ -413,6 +454,38 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
           )}
           <ExportButton format="excel" onClick={exportExcel} disabled={!orders.length} busy={exportBusy === 'excel'} />
           <ExportButton format="pdf" onClick={exportPDF} disabled={!orders.length} busy={exportBusy === 'pdf'} />
+        </div>
+      </div>
+
+      <div className={`mb-fluid-sm rounded-2xl border px-4 py-3 ${statusInfo.tone}`}>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface/70">
+              <StatusIcon className="h-4.5 w-4.5" strokeWidth={2.1} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-chips font-semibold uppercase tracking-wide">{statusInfo.label}</p>
+              <p className="mt-0.5 max-w-2xl text-sm text-fg/80">{statusInfo.copy}</p>
+            </div>
+          </div>
+          <div className="grid shrink-0 grid-cols-3 gap-2 text-center">
+            <div className="rounded-lg bg-surface/70 px-3 py-1.5">
+              <p className="text-chips text-muted">On this page</p>
+              <p className="text-sm font-bold tabular-nums text-fg">{orders.length}</p>
+            </div>
+            <div className="rounded-lg bg-surface/70 px-3 py-1.5">
+              <p className="text-chips text-muted">Value</p>
+              <p className="text-sm font-bold tabular-nums text-fg">{naira(pageAmount)}</p>
+            </div>
+            <div className="rounded-lg bg-surface/70 px-3 py-1.5">
+              <p className="text-chips text-muted">
+                {status === 'Pending' ? 'Shop / invoice' : status === 'Confirmed' ? 'Admin closed' : 'Total'}
+              </p>
+              <p className="text-sm font-bold tabular-nums text-fg">
+                {status === 'Pending' ? `${shopCount} / ${invoiceCount}` : status === 'Confirmed' ? adminConfirmed : totalCount}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -530,6 +603,17 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                 Approve ({selectedCount})
               </button>
             )}
+            {status === 'Approved' && (
+              <button
+                type="button"
+                onClick={() => selectedCount && setModal({ type: 'confirm', ids: Array.from(selected) })}
+                disabled={!selectedCount || bulkBusy}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-success-fg px-3 py-1.5 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:brightness-110 disabled:opacity-50"
+              >
+                <PackageCheck className="h-3.5 w-3.5" />
+                Confirm ({selectedCount})
+              </button>
+            )}
             {canCancel && (
               <button
                 type="button"
@@ -599,7 +683,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
         </div>
 
         <div className="hidden overflow-x-auto md:block">
-          <table className="w-full min-w-[980px] text-sm">
+          <table className="w-full min-w-[1040px] text-sm">
             <thead className="sticky top-0 z-10 bg-surface">
               <tr className="border-b border-line text-left">
                 <th className="p-3 w-10">
@@ -614,6 +698,15 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                 </th>
                 <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Order</th>
                 <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Member</th>
+                {status === 'Pending' && (
+                  <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Source</th>
+                )}
+                {status === 'Approved' && (
+                  <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Ready since</th>
+                )}
+                {status === 'Confirmed' && (
+                  <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Confirmed by</th>
+                )}
                 <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Delivery Location</th>
                 <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Payment</th>
                 <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Qty</th>
@@ -629,6 +722,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                       <td className="p-3"><div className="sakani-skeleton h-4 w-4 rounded" /></td>
                       <td className="p-3"><div className="sakani-skeleton h-4 w-24 rounded" /></td>
                       <td className="p-3"><div className="sakani-skeleton h-4 w-40 rounded" /></td>
+                      <td className="p-3"><div className="sakani-skeleton h-4 w-24 rounded" /></td>
                       <td className="p-3"><div className="sakani-skeleton h-4 w-32 rounded" /></td>
                       <td className="p-3"><div className="sakani-skeleton h-4 w-16 rounded" /></td>
                       <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-4 w-10 rounded" /></td>
@@ -641,7 +735,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
 
               {!loading && orders.length === 0 && (
                 <tr>
-                  <td className="p-10 text-center" colSpan={8}>
+                  <td className="p-10 text-center" colSpan={status === 'Cancelled' ? 8 : 9}>
                     <div className="mx-auto flex max-w-xs flex-col items-center gap-2">
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-subtle">
                         <Inbox className="h-6 w-6 text-subtext" />
@@ -701,6 +795,27 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                         <div className="font-medium text-fg">{o.member_id}</div>
                         <div className="text-muted break-words">{o.member_name_snapshot || '-'}</div>
                       </td>
+                      {status === 'Pending' && (
+                        <td className="p-3 align-top">
+                          <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${o.source === 'storefront' ? 'bg-brand-subtle text-brand' : 'bg-subtle text-muted'}`}>
+                            {o.source === 'storefront' ? 'Shop' : o.source === 'admin' ? 'Admin invoice' : 'Vendor invoice'}
+                          </span>
+                        </td>
+                      )}
+                      {status === 'Approved' && (
+                        <td className="p-3 align-top text-muted">
+                          {fmtDate(o.approved_at || o.ready_at)}
+                          <div className="text-chips text-subtext">Awaiting member</div>
+                        </td>
+                      )}
+                      {status === 'Confirmed' && (
+                        <td className="p-3 align-top">
+                          <div className="font-medium text-fg">
+                            {o.confirmed_by_role === 'admin' ? 'Admin override' : 'Member'}
+                          </div>
+                          <div className="text-chips text-subtext">{fmtDate(o.member_confirmed_at)}</div>
+                        </td>
+                      )}
                       <td className="p-3 align-top text-muted">{o.branch_name || `#${o.branch_id}`}</td>
                       <td className="p-3 align-top">
                         <span className="inline-flex items-center rounded-md bg-subtle px-2 py-0.5 text-xs font-medium text-fg">
@@ -903,9 +1018,11 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
         title={
           modal?.type === 'approve'
             ? 'Approve orders'
-            : modal?.type === 'cancel'
-              ? 'Cancel orders'
-              : 'Restore orders'
+            : modal?.type === 'confirm'
+              ? 'Confirm receipt'
+              : modal?.type === 'cancel'
+                ? 'Cancel orders'
+                : 'Restore orders'
         }
         footer={
           <div className="flex justify-end gap-2">
@@ -925,7 +1042,15 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
               onClick={() => runAction(modal?.type, modal?.ids || [], cancelReason)}
               disabled={bulkBusy}
             >
-              {bulkBusy ? 'Working…' : modal?.type === 'cancel' ? 'Cancel orders' : modal?.type === 'restore' ? 'Restore orders' : 'Approve orders'}
+              {bulkBusy
+                ? 'Working…'
+                : modal?.type === 'cancel'
+                  ? 'Cancel orders'
+                  : modal?.type === 'restore'
+                    ? 'Restore orders'
+                    : modal?.type === 'confirm'
+                      ? 'Confirm receipt'
+                      : 'Approve orders'}
             </button>
           </div>
         }
@@ -950,9 +1075,16 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
         ) : (
           <div className="text-sm text-muted">
             {modal?.type === 'restore'
-              ? `Restore `
-              : `Approve `}
-            <b className="text-fg">{modal?.ids?.length || 0}</b> order(s){modal?.type === 'restore' ? ' back to Pending' : ', and vendors will then hand over the goods'}?
+              ? 'Restore '
+              : modal?.type === 'confirm'
+                ? 'Confirm receipt for '
+                : 'Approve '}
+            <b className="text-fg">{modal?.ids?.length || 0}</b> order(s)
+            {modal?.type === 'restore'
+              ? ' back to Pending?'
+              : modal?.type === 'confirm'
+                ? '? This closes the order on the member\'s behalf.'
+                : ', and the member can then confirm receipt?'}
           </div>
         )}
       </DraggableModal>

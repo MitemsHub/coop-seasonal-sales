@@ -12,7 +12,7 @@ import { getRepBranch } from '../_session'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const STATUSES = ['Pending', 'Approved', 'Delivered', 'Confirmed', 'Cancelled']
+const STATUSES = ['Pending', 'Approved', 'Confirmed', 'Cancelled']
 
 export async function GET(req) {
   try {
@@ -27,7 +27,7 @@ export async function GET(req) {
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
     // ── Cycles: one row per exhibition season, newest first ───────────
-    // The active season drives "delivered this cycle"; the full list feeds
+    // The active season drives "confirmed this cycle"; the full list feeds
     // the per-cycle comparison so reps can see how seasons stack up.
     const cycles = []
     let activeCycle = null
@@ -72,8 +72,6 @@ export async function GET(req) {
     let todayTotal = 0
     let todayPendingCount = 0
     let todayPendingTotal = 0
-    let deliveredCycleCount = 0
-    let deliveredCycleTotal = 0
     let confirmedCycleCount = 0
     let confirmedCycleTotal = 0
 
@@ -82,10 +80,6 @@ export async function GET(req) {
       if (key) {
         statuses[key].count += 1
         statuses[key].total += Number(row.total_amount || 0)
-        if (key === 'Delivered' && cycleId && Number(row.cycle_id) === cycleId) {
-          deliveredCycleCount += 1
-          deliveredCycleTotal += Number(row.total_amount || 0)
-        }
         if (key === 'Confirmed' && cycleId && Number(row.cycle_id) === cycleId) {
           confirmedCycleCount += 1
           confirmedCycleTotal += Number(row.total_amount || 0)
@@ -131,7 +125,6 @@ export async function GET(req) {
       statuses,
       today: { count: todayCount, total: Math.round(todayTotal) },
       todayPending: { count: todayPendingCount, total: Math.round(todayPendingTotal) },
-      deliveredCycle: { count: deliveredCycleCount, total: Math.round(deliveredCycleTotal) },
       confirmedCycle: { count: confirmedCycleCount, total: Math.round(confirmedCycleTotal) },
       total: (data || []).length,
     })

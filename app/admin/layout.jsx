@@ -436,7 +436,7 @@ export default function AdminLayout({ children }) {
     if (pathname.startsWith('/admin/exhibition/pending')) return 'exh_pending'
     if (pathname.startsWith('/admin/exhibition/approved')) return 'exh_approved'
     if (pathname.startsWith('/admin/exhibition/confirmed')) return 'exh_confirmed'
-    if (pathname.startsWith('/admin/exhibition/delivered')) return 'exh_delivered'
+    if (pathname.startsWith('/admin/exhibition/products')) return 'exh_products'
     if (pathname.startsWith('/admin/exhibition/cancelled')) return 'exh_cancelled'
     if (pathname.startsWith('/admin/exhibition/cycles')) return 'exh_cycles'
     if (pathname.startsWith('/admin/exhibition/vendors')) return 'exh_vendors'
@@ -667,8 +667,7 @@ export default function AdminLayout({ children }) {
                 {exhOpsOpen && (
                   <div className="mt-0.5 space-y-0.5 pl-4">
                     <NavLink href="/admin/exhibition/vendors" label="Vendors" icon={Store} active={activeKey === 'exh_vendors'} collapsed={false} onNavigate={navOnClick} />
-                    {/* The 2026 counter flow sells without a catalogue, so the
-                        catalogue and discount pages have been removed. */}
+                    <NavLink href="/admin/exhibition/products" label="Products" icon={Package} active={activeKey === 'exh_products'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/banks" label="Banks" icon={Landmark} active={activeKey === 'exh_banks'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/data" label="Data" icon={Database} active={activeKey === 'exh_data'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/reports" label="Report" icon={BarChart3} active={activeKey === 'exh_reports'} collapsed={false} onNavigate={navOnClick} />

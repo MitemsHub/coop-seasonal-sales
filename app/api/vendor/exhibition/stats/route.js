@@ -11,29 +11,26 @@ export async function GET(req) {
     if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const supabase = createClient()
 
-    // My lines grouped by their order status
     const { data: lines } = await supabase
       .from('exhibition_order_lines')
-      .select('amount, delivered, orders:order_id(status)')
+      .select('amount, orders:order_id(status)')
       .eq('vendor_id', ctx.vendor_id)
 
     const byStatus = { Pending: 0, Approved: 0, Confirmed: 0, Cancelled: 0 }
     let revenue = 0
     let pendingAmount = 0
-    let deliveredQty = 0
-    let handoverPending = 0
+    let confirmedLines = 0
+    let awaitingConfirmation = 0
+
     for (const line of lines || []) {
-      // Delivered is the legacy handover state. Vendors now see that same
-      // final state as Confirmed, so fold old rows into the confirmed count.
-      const rawStatus = line.orders?.status || 'Pending'
-      const status = rawStatus === 'Delivered' ? 'Confirmed' : rawStatus
-      if (byStatus[status] !== undefined) byStatus[status]++
+      const status = line.orders?.status || 'Pending'
+      if (!byStatus[status] && status !== 'Cancelled') continue
+      if (byStatus[status] !== undefined) byStatus[status] += 1
       const amt = Number(line.amount || 0)
       if (status === 'Approved' || status === 'Confirmed') revenue += amt
       if (status === 'Pending') pendingAmount += amt
-      if (line.delivered) deliveredQty++
-      // Approved lines this vendor still needs to hand over
-      if (status === 'Approved' && !line.delivered) handoverPending++
+      if (status === 'Confirmed') confirmedLines += 1
+      if (status === 'Approved') awaitingConfirmation += 1
     }
 
     return NextResponse.json({
@@ -42,8 +39,8 @@ export async function GET(req) {
         orders: byStatus,
         revenue,
         pending_amount: pendingAmount,
-        delivered_lines: deliveredQty,
-        handover_pending: handoverPending,
+        confirmed_lines: confirmedLines,
+        awaiting_confirmation: awaitingConfirmation,
       },
     })
   } catch (e) {

@@ -2,11 +2,11 @@
 // POST /api/exhibition/orders/confirm  — the member confirms they received
 // their exhibition order.
 //
-// The pipeline is Pending → Approved → Delivered → Confirmed. A vendor (or an
-// admin) marks Delivered when the goods leave the stand; only the member can
-// move an order from Delivered to Confirmed, and that is what finalises the
-// transaction. Identification comes from the signed member session — never from
-// the request body — so one member cannot confirm another member's order.
+// The pipeline is Pending → Approved → Confirmed. The admin approves the
+// order; the member confirms when the goods are in their hands, and that is
+// what finalises the transaction. Identification comes from the signed member
+// session — never from the request body — so one member cannot confirm another
+// member's order. An admin can also confirm from the approval desk when needed.
 //
 // body: { order_id: 'EXH-2026-XXXXXX' }   (the display id the member sees)
 import { NextResponse } from 'next/server'
@@ -62,10 +62,9 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: 'This order was cancelled, so there is nothing to confirm.' }, { status: 409 })
     }
 
-    // The 2026 counter flow closes with the member: once the admin approves the
-    // invoice, the member confirms as the goods are handed over. Delivered stays
-    // valid for orders captured before this change.
-    const confirmable = ['Approved', 'Delivered']
+    // Once the admin has approved the invoice/order, the member can confirm
+    // receipt. There is no separate hand-over status.
+    const confirmable = ['Approved']
     if (!confirmable.includes(order.status)) {
       return NextResponse.json(
         {
@@ -82,10 +81,11 @@ export async function POST(request) {
       status: 'Confirmed',
       member_confirmed_at: now,
       member_confirmed_by: memberId,
+      confirmed_by_role: 'member',
+      confirmed_by_code: memberId,
+      delivered_at: now,
       updated_at: now,
     }
-    // Approved orders were never stamped as handed over.
-    if (!order.delivered_at) patch.delivered_at = now
     const { error: upErr } = await supabase
       .from('exhibition_orders')
       .update(patch)

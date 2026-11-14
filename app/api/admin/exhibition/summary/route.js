@@ -65,11 +65,9 @@ export async function GET(request) {
     const cycleRateMap = new Map(cycles.map((c) => [Number(c.id), Math.max(0, Number(c.loan_interest_rate_pct ?? 13)) / 100]))
     const activeCycleRate = activeCycle ? (cycleRateMap.get(Number(activeCycle.id)) || 0.13) : 0.13
 
-    // "Confirmed" is the current hand-over status. Legacy rows may still be
-    // stored as "Delivered", so fold those into the Confirmed bucket rather
-    // than exposing two names for the same stage.
+    // The exhibition pipeline has exactly four states now. There is no
+    // separate Delivered bucket to fold in.
     const byStatus = { Pending: 0, Approved: 0, Confirmed: 0, Cancelled: 0 }
-    const normalizeStatus = (value) => (value === 'Delivered' ? 'Confirmed' : value)
     const byPayment = { Loan: { orders: 0, amount: 0 }, Savings: { orders: 0, amount: 0 }, Cash: { orders: 0, amount: 0 } }
     const byCategory = new Map()
     const byLocation = new Map()
@@ -79,8 +77,7 @@ export async function GET(request) {
     let savingsAmount = 0
     let cashAmount = 0
     for (const o of activeOrders) {
-      const normalizedStatus = normalizeStatus(o.status)
-      if (byStatus[normalizedStatus] !== undefined) byStatus[normalizedStatus]++
+      if (byStatus[o.status] !== undefined) byStatus[o.status]++
       if (o.status === 'Cancelled') continue
       const total = Number(o.total_amount || 0)
       amount += total

@@ -1,7 +1,7 @@
 // app/api/rep/exhibition/orders/cancel/route.js
 // Reps do NOT cancel exhibition orders — cancellation is the admin's decision
 // (/api/admin/exhibition/orders/cancel). A rep's only action is marking an
-// approved order delivered.
+// approved order before the member confirms receipt.
 import { NextResponse } from 'next/server'
 import { getRepBranch } from '../../_session'
 

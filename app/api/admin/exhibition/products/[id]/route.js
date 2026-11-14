@@ -1,0 +1,159 @@
+// app/api/admin/exhibition/products/[id]/route.js
+// PATCH — update a product (price, qty, status, category…)
+// DELETE — remove a product (blocked when on an order — archive instead)
+import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabaseServer'
+import { validateSession, sanitizeString } from '@/lib/validation'
+import { notifyStandFollowers } from '@/lib/notifyStandFollowers'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+export async function PATCH(request, { params }) {
+  const session = await validateSession(request, 'admin')
+  if (!session.valid) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+
+  try {
+    const id = Math.trunc(Number(params?.id || 0))
+    if (!Number.isFinite(id) || id <= 0) return NextResponse.json({ ok: false, error: 'Invalid product' }, { status: 400 })
+
+    const body = await request.json().catch(() => ({}))
+    const supabase = createClient()
+
+    // ── Vendor approval ──────────────────────────────────────────────
+    // approve: publish the product (and apply any pending price change).
+    // reject:  clear the request; a live product keeps its approved price.
+    const approvalAction = String(body.approval_action || '').toLowerCase()
+    if (approvalAction) {
+      const { data: row } = await supabase
+        .from('exhibition_products')
+        .select('id, name, status, vendor_id, cycle_id, vendor_price, pending_vendor_price')
+        .eq('id', id)
+        .maybeSingle()
+      if (!row) return NextResponse.json({ ok: false, error: 'Product not found' }, { status: 404 })
+
+      if (approvalAction === 'approve') {
+        const applied = {}
+        if (row.pending_vendor_price != null) applied.vendor_price = Math.max(0, Math.trunc(Number(row.pending_vendor_price)))
+        const { error } = await supabase
+          .from('exhibition_products')
+          .update({
+            ...applied,
+            status: 'active',
+            approval_status: 'approved',
+            approval_note: '',
+            approval_reviewed_at: new Date().toISOString(),
+            pending_vendor_price: null,
+            approval_requested_at: null,
+          })
+          .eq('id', id)
+        if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+
+        if (Object.keys(applied).length) {
+          await supabase.from('exhibition_price_history').insert({
+            product_id: id,
+            cycle_id: row.cycle_id || null,
+            vendor_id: row.vendor_id || null,
+            old_vendor_price: Number(row.vendor_price || 0),
+            new_vendor_price: applied.vendor_price !== undefined ? Number(applied.vendor_price) : Number(row.vendor_price || 0),
+            changed_by: 'admin',
+            changed_by_label: 'Admin approval',
+            note: 'Pending price applied on approval',
+          })
+        }
+
+        // First publish only: members following this stand hear about a new
+        // product, but an approved price change is not a new product.
+        if (row.status !== 'active') {
+          await notifyStandFollowers(supabase, {
+            vendorId: row.vendor_id,
+            productId: id,
+            productName: row.name,
+          })
+        }
+
+        return NextResponse.json({ ok: true, approved: true })
+      }
+
+      if (approvalAction === 'reject') {
+        const { error } = await supabase
+          .from('exhibition_products')
+          .update({
+            approval_status: 'rejected',
+            approval_note: String(body.approval_note || '').trim().slice(0, 300),
+            approval_reviewed_at: new Date().toISOString(),
+            pending_vendor_price: null,
+            approval_requested_at: null,
+          })
+          .eq('id', id)
+        if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+        return NextResponse.json({ ok: true, rejected: true })
+      }
+
+      return NextResponse.json({ ok: false, error: 'approval_action must be approve or reject' }, { status: 400 })
+    }
+
+    const updates = {}
+
+    if (body.name !== undefined) {
+      const name = sanitizeString(body.name || '', { maxLength: 255, encodeHtml: false })
+      if (!name) return NextResponse.json({ ok: false, error: 'Product name cannot be empty' }, { status: 400 })
+      updates.name = name
+    }
+    if (body.unit !== undefined) updates.unit = sanitizeString(body.unit || 'each', { maxLength: 30, encodeHtml: false })
+    if (body.vendor_price !== undefined) {
+      const price = Math.max(0, Math.trunc(Number(body.vendor_price)))
+      if (price <= 0) return NextResponse.json({ ok: false, error: 'Price must be greater than zero' }, { status: 400 })
+      updates.vendor_price = price
+    }
+    if (body.qty !== undefined) updates.qty = body.qty === '' || body.qty === null ? null : Math.max(0, Math.trunc(Number(body.qty)))
+    if (body.category_id !== undefined) updates.category_id = body.category_id ? Math.trunc(Number(body.category_id)) : null
+    if (body.image_url !== undefined) updates.image_url = sanitizeString(body.image_url || '', { maxLength: 500, encodeHtml: false })
+    if (body.status !== undefined && ['draft', 'active', 'archived'].includes(body.status)) updates.status = body.status
+
+    if (!Object.keys(updates).length) return NextResponse.json({ ok: false, error: 'Nothing to update' }, { status: 400 })
+
+    const { data, error } = await supabase
+      .from('exhibition_products')
+      .update(updates)
+      .eq('id', id)
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, created_at')
+      .single()
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+
+    return NextResponse.json({
+      ok: true,
+      product: { ...data, final_price: Number(data.vendor_price || 0) },
+    })
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: e.message || 'Failed to update product' }, { status: 500 })
+  }
+}
+
+export async function DELETE(request, { params }) {
+  const session = await validateSession(request, 'admin')
+  if (!session.valid) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+
+  try {
+    const id = Math.trunc(Number(params?.id || 0))
+    if (!Number.isFinite(id) || id <= 0) return NextResponse.json({ ok: false, error: 'Invalid product' }, { status: 400 })
+
+    const supabase = createClient()
+    const { data: product } = await supabase.from('exhibition_products').select('id, name').eq('id', id).maybeSingle()
+    if (!product) return NextResponse.json({ ok: false, error: 'Product not found' }, { status: 404 })
+
+    const { data: lines } = await supabase.from('exhibition_order_lines').select('id').eq('product_id', id).limit(1)
+    if (lines?.length) {
+      return NextResponse.json(
+        { ok: false, error: `"${product.name}" is on an order and can't be deleted. Archive it instead.` },
+        { status: 409 }
+      )
+    }
+
+    const { error } = await supabase.from('exhibition_products').delete().eq('id', id)
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: e.message || 'Failed to delete product' }, { status: 500 })
+  }
+}

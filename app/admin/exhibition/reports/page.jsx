@@ -377,7 +377,6 @@ export default function ExhibitionReportsPage() {
             vendor_price: Number(l.vendor_price || 0),
             final_price: Number(l.final_price || 0),
             amount: Number(l.amount || 0),
-            delivered: l.delivered,
           })
           vendorLines.set(vid, arr)
         }

@@ -17,9 +17,8 @@ import { normalizeExhibitionStatus } from '@/lib/exhibitionStatus'
 export const EXHIBITION_STATUS_META = {
   Pending: { tone: 'warning', label: 'Pending', icon: Clock, step: 0 },
   Approved: { tone: 'info', label: 'Approved', icon: CheckCircle2, step: 1 },
-  Delivered: { tone: 'success', label: 'Delivered', icon: Truck, step: 2 },
   // The member's acknowledgement — the step that finalises the transaction.
-  Confirmed: { tone: 'success', label: 'Confirmed', icon: BadgeCheck, step: 3 },
+  Confirmed: { tone: 'success', label: 'Confirmed', icon: BadgeCheck, step: 2 },
   Cancelled: { tone: 'danger', label: 'Cancelled', icon: XCircle },
 }
 
@@ -46,7 +45,6 @@ const APPROVE_STEPS = [
 const EXHIBITION_STEPS = [
   { key: 'Pending', label: 'Pending', icon: Clock },
   { key: 'Approved', label: 'Approved', icon: CheckCircle2 },
-  { key: 'Delivered', label: 'Delivered', icon: Truck },
   { key: 'Confirmed', label: 'Confirmed', icon: BadgeCheck },
 ]
 

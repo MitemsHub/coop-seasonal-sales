@@ -1,16 +1,14 @@
 'use client'
 
 // app/components/ExhibitionOrderTimeline.jsx
-// The member's view of an exhibition order: Placed → Paid → Ready → Collected,
-// each stamped with the time it actually happened. The old stepper only showed
-// the current status, which is why "where is my order?" had no answer.
+// The member's view of an exhibition order:
+//   Placed -> Approved -> Confirmed
 //
 // Times come from the order itself:
 //   placed    created_at
-//   paid      approved_at   (the admin clears payment on approval)
-//   ready     ready_at      (falls back to approved_at — cleared for pickup)
-//   collected delivered_at
-import { CheckCircle2, Clock, Package, Truck, XCircle } from 'lucide-react'
+//   approved  approved_at
+//   confirmed member_confirmed_at (admin override also stamps this)
+import { BadgeCheck, CheckCircle2, Package, XCircle } from 'lucide-react'
 
 function fmt(iso) {
   if (!iso) return ''
@@ -45,9 +43,8 @@ export default function ExhibitionOrderTimeline({ order }) {
 
   const steps = [
     { key: 'placed', label: 'Placed', at: order.created_at, icon: Package },
-    { key: 'paid', label: 'Paid', at: order.approved_at, icon: CheckCircle2 },
-    { key: 'ready', label: 'Ready', at: order.ready_at || order.approved_at, icon: Clock },
-    { key: 'collected', label: 'Collected', at: order.delivered_at, icon: Truck },
+    { key: 'approved', label: 'Approved', at: order.approved_at, icon: CheckCircle2 },
+    { key: 'confirmed', label: 'Confirmed', at: order.member_confirmed_at, icon: BadgeCheck },
   ]
 
   const reachedIndex = steps.reduce((last, s, i) => (s.at ? i : last), 0)
@@ -94,11 +91,6 @@ export default function ExhibitionOrderTimeline({ order }) {
           )
         })}
       </ol>
-      {order.status === 'Confirmed' && (
-        <p className="mt-2 text-chips font-medium text-success-fg">
-          Receipt confirmed{order.member_confirmed_at ? ` · ${fmt(order.member_confirmed_at)}` : ''}
-        </p>
-      )}
     </div>
   )
 }
