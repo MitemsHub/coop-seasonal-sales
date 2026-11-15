@@ -205,103 +205,8 @@ export async function POST(req) {
       )
     }
 
-    const loanInterestRatePct = Math.max(0, Number(cycle.loan_interest_rate_pct ?? 13))
-    const loanInterestRate = loanInterestRatePct / 100
-
-    // Resolve products and the co-op-approved member price.
-    // The products must come from the DELIVERY branch — the same branch the
-    // catalog served the cart from. Filtering by the member's home branch here
-    // rejected every cart line when the member shopped a stand at another
-    // location ("A product in your cart is no longer available").
-    const ids = lines.map((l) => l.product_id)
-    const { data: productRows, error: pErr } = await supabase
-      .from('exhibition_products')
-      .select('id, vendor_id, name, sku, unit, vendor_price, qty, status')
-      .eq('cycle_id', cycleId)
-      .eq('branch_id', deliveryBranch.id)
-      .eq('approval_status', 'approved')
-      .in('id', ids)
-    if (pErr) return NextResponse.json({ ok: false, error: pErr.message }, { status: 500 })
-
-    const byId = new Map((productRows || []).map((p) => [Number(p.id), p]))
-    for (const l of lines) {
-      const p = byId.get(l.product_id)
-      if (!p || p.status !== 'active') {
-        return NextResponse.json({ ok: false, error: 'A product in your cart is no longer available.' }, { status: 400 })
-      }
-      if (p.qty !== null && Number(p.qty) < l.qty) {
-        return NextResponse.json({ ok: false, error: `Not enough stock for "${p.name}" (${Number(p.qty)} left).` }, { status: 400 })
-      }
-    }
-
-    // Price each line at the approved catalogue price.
-    const priced = lines.map((l) => {
-      const p = byId.get(l.product_id)
-      const price = Number(p.vendor_price || 0)
-      return {
-        product_id: l.product_id,
-        vendor_id: Number(p.vendor_id),
-        product_name: p.name,
-        sku: p.sku,
-        unit: p.unit || 'each',
-        vendor_price: Number(p.vendor_price || 0),
-        final_price: price,
-        qty: l.qty,
-        amount: price * l.qty,
-      }
-    })
-
-    const totalPrincipal = priced.reduce((s, l) => s + l.amount, 0)
-    const totalQty = priced.reduce((s, l) => s + l.qty, 0)
-    const loanInterest = paymentOption === 'Loan' ? Math.round(totalPrincipal * loanInterestRate) : 0
-    const totalAmount = paymentOption === 'Loan' ? totalPrincipal + loanInterest : totalPrincipal
-
-    // ── Eligibility ──────────────────────────────────────────────────────
-    // Atomic exposure check: locks the member row to prevent concurrent
-    // requests from both passing the exposure check.
-    const includeInterestInCap = cycle.exh_loan_cap_include_interest !== false
-    const capAmount = includeInterestInCap ? totalAmount : totalPrincipal
-    const { data: exposureResult, error: exposureErr } = await supabase.rpc('check_exhibition_exposure_atomic', {
-      p_member_id: memberId,
-      p_payment_option: paymentOption,
-      p_total_amount: capAmount,
-      p_cycle_id: cycleId || null,
-    })
-    if (exposureErr) return NextResponse.json({ ok: false, error: exposureErr.message }, { status: 500 })
-    if (!exposureResult?.ok) return NextResponse.json({ ok: false, error: exposureResult?.error }, { status: 400 })
-
-    const loanExposure = Number(exposureResult.loanExposure || 0)
-    const savingsExposure = Number(exposureResult.savingsExposure || 0)
-    const savingsEligible = Number(exposureResult.savingsEligible || 0)
-    // loanEligible is what this member can still take this cycle under the
-    // exhibition rules (annual limit minus loans taken, with the category /
-    // pensioner / retiree fallbacks) — computed inside the locked RPC, so the
-    // two never disagree.
-    const loanEligible = Number(exposureResult.loanEligible || 0)
-
-    // Enforce limits
-    if (paymentOption === 'Savings') {
-      if (savingsEligible <= 0) return NextResponse.json({ ok: false, error: 'Savings option is not available for this member.' }, { status: 400 })
-      if (totalPrincipal > savingsEligible) {
-        return NextResponse.json({ ok: false, error: `Total exceeds your Savings limit (₦${savingsEligible.toLocaleString()}).` }, { status: 400 })
-      }
-    }
-    if (paymentOption === 'Loan') {
-      if (loanEligible <= 0) return NextResponse.json({ ok: false, error: 'Loan option is not available for this member.' }, { status: 400 })
-      if (capAmount > loanEligible) {
-        return NextResponse.json(
-          {
-            ok: false,
-            error: includeInterestInCap
-              ? `Total (incl. ${loanInterestRatePct}% interest) ₦${totalAmount.toLocaleString()} exceeds Loan available ₦${loanEligible.toLocaleString()}`
-              : `Principal total ₦${totalPrincipal.toLocaleString()} exceeds Loan available ₦${loanEligible.toLocaleString()} (interest is excluded from the cap)`,
-          },
-          { status: 400 }
-        )
-      }
-    }
-
-    // Duplicate guard — same member, payment, products and qty within 30s
+    // Duplicate guard — same member, payment, products and qty within 30s.
+    // This is a courtesy check, not the race guard; the RPC below is atomic.
     const createdSince = new Date(Date.now() - 30_000).toISOString()
     const lineSig = [...lines]
       .map((l) => `${l.product_id}x${l.qty}`)
@@ -330,117 +235,69 @@ export async function POST(req) {
       }
     }
 
-    // Reserve stock ATOMICALLY before creating the order. The read-only check
-    // above is a friendly fast-fail; this RPC is the real oversell guard (a
-    // single guarded UPDATE per product inside one transaction — if any line
-    // can't be covered, everything rolls back and nothing is decremented).
-    // Drop this member's courtesy cart holds first: the order's atomic
-    // decrement is the real reservation, and keeping both would count the same
-    // units twice when the catalogue subtracted them.
-    await supabase
-      .from('exhibition_stock_holds')
-      .delete()
-      .eq('member_id', memberId)
-      .in('product_id', ids)
-
-    const reserveItems = priced.map((l) => ({ product_id: l.product_id, qty: l.qty }))
-    const { error: reserveErr } = await supabase.rpc('exhibition_reserve_stock', { p_items: reserveItems })
-    if (reserveErr) {
-      const msg = String(reserveErr.message || '')
-      if (msg.includes('EXHIBITION_OVERSELL')) {
-        return NextResponse.json(
-          { ok: false, error: 'Not enough stock for an item in your cart. Some items may have sold out.' },
-          { status: 400 }
-        )
-      }
-      return NextResponse.json({ ok: false, error: reserveErr.message }, { status: 500 })
-    }
-
-    // Create the order + lines + vendor payment rows.
-    // order_id is a short random string behind a UNIQUE constraint, so a
-    // collision must retry instead of surfacing as a checkout failure.
-    let orderId = ''
-    let inserted = null
-    let insErr = null
+    // ── Atomic checkout ────────────────────────────────────────────────
+    // The RPC locks the member, prices the products, enforces the cap,
+    // reserves stock, and writes the order + lines + vendor rows in one
+    // transaction. If any step fails, PostgreSQL rolls all of it back.
+    let lastError = 'Could not create the order.'
     for (let attempt = 0; attempt < 3; attempt++) {
-      orderId = makeOrderId()
-      const res = await supabase
-        .from('exhibition_orders')
-        .insert({
-          order_id: orderId,
-          cycle_id: cycleId,
-          branch_id: branchId,
-          member_id: memberId,
-          member_name_snapshot: member.full_name || '',
-          payment_option: paymentOption,
-          status: 'Pending',
-          source: 'storefront',
-          captured_by_role: 'member',
-          captured_by_code: memberId,
-          total_qty: totalQty,
-          total_amount: totalAmount,
-          exh_loan_grace_used: false,
-        })
-        .select('id')
-        .single()
-      inserted = res.data
-      insErr = res.error
-      if (!insErr || String(insErr?.code || '') !== '23505') break
-    }
-    if (insErr) {
-      // Roll the reservation back so we never lock stock without an order.
-      await supabase.rpc('exhibition_release_stock', { p_items: reserveItems }).catch(() => {})
-      return NextResponse.json({ ok: false, error: insErr.message || 'Failed to create order' }, { status: 500 })
-    }
-    const orderDbId = inserted.id
+      const orderId = makeOrderId()
+      const { data: result, error: rpcErr } = await supabase.rpc('create_exhibition_order_atomic', {
+        p_order_id: orderId,
+        p_cycle_id: cycleId,
+        p_branch_id: Number(deliveryBranch.id),
+        p_member_id: memberId,
+        p_payment_option: paymentOption,
+        p_lines: lines,
+      })
 
-    const { error: lineErr } = await supabase.from('exhibition_order_lines').insert(
-      priced.map((l) => ({
-        order_id: orderDbId,
-        vendor_id: l.vendor_id,
-        product_id: l.product_id,
-        product_name: l.product_name,
-        sku: l.sku,
-        unit: l.unit,
-        vendor_price: l.vendor_price,
-        final_price: l.final_price,
-        qty: l.qty,
-        amount: l.amount,
-      }))
-    )
-    if (lineErr) {
-      await supabase.rpc('exhibition_release_stock', { p_items: reserveItems }).catch(() => {})
-      return NextResponse.json({ ok: false, error: lineErr.message }, { status: 500 })
-    }
+      if (rpcErr) {
+        const msg = String(rpcErr.message || '')
+        if (msg.includes('EXHIBITION_DUPLICATE_ORDER')) {
+          lastError = 'Could not allocate an order number. Please try again.'
+          continue
+        }
+        if (msg.includes('EXHIBITION_OVERSELL')) {
+          return NextResponse.json(
+            { ok: false, error: 'Not enough stock for an item in your cart. Some items may have sold out.' },
+            { status: 400 }
+          )
+        }
+        if (msg.includes('EXHIBITION_CLOSED')) {
+          return NextResponse.json(
+            { ok: false, error: 'The Coop Exhibition is closed right now.' },
+            { status: 400 }
+          )
+        }
+        if (msg.includes('EXHIBITION_PRODUCT_UNAVAILABLE')) {
+          return NextResponse.json(
+            { ok: false, error: 'A product in your cart is no longer available.' },
+            { status: 400 }
+          )
+        }
+        return NextResponse.json({ ok: false, error: rpcErr.message || 'Failed to place order' }, { status: 500 })
+      }
 
-    // One payment row per vendor in this order (co-op pays vendors later)
-    const byVendor = new Map()
-    for (const l of priced) {
-      byVendor.set(l.vendor_id, (byVendor.get(l.vendor_id) || 0) + l.amount)
-    }
-    const { error: payErr } = await supabase.from('exhibition_vendor_payment_status').insert(
-      [...byVendor.entries()].map(([vendorId, amount]) => ({
-        cycle_id: cycleId,
-        vendor_id: vendorId,
-        order_id: orderDbId,
-        amount,
-        paid: false,
-      }))
-    )
-    if (payErr) {
-      await supabase.rpc('exhibition_release_stock', { p_items: reserveItems }).catch(() => {})
-      return NextResponse.json({ ok: false, error: payErr.message }, { status: 500 })
+      if (!result?.ok) {
+        return NextResponse.json({ ok: false, error: result?.error || 'Could not place the order.' }, { status: 400 })
+      }
+
+      return NextResponse.json({
+        ok: true,
+        order_id: result.order_id,
+        total: Number(result.total || 0),
+        principal: Number(result.principal || 0),
+        interest: Number(result.interest || 0),
+        payment_option: paymentOption,
+        eligibility: {
+          savingsEligible: Number(result.eligibility?.savingsEligible || 0),
+          loanEligible: Number(result.eligibility?.loanEligible || 0),
+        },
+      })
     }
 
-    return NextResponse.json({
-      ok: true,
-      order_id: orderId,
-      total: totalAmount,
-      principal: totalPrincipal,
-      interest: loanInterest,
-      payment_option: paymentOption,
-      eligibility: { savingsEligible, loanEligible },
-    })
+    return NextResponse.json({ ok: false, error: lastError }, { status: 500 })
+
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Failed to place order' }, { status: 500 })
   }
