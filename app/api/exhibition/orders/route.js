@@ -4,8 +4,11 @@
 // body: { member_id, delivery_branch_code, department_name, payment_option,
 //         lines: [{ product_id, qty }] }
 //
-// Business rules (mirrors the Food + Ram modules):
-//   - The member's branch determines the cycle + catalog.
+// Business rules:
+//   - The active exhibition cycle is org-wide, not per member branch.
+//   - The delivery branch determines which approved catalogue items are
+//     available, and is stored on the order so admin and rep views report it
+//     to the branch fulfilling the order.
 //   - Each product price = vendor_price (the member price).
 //   - Savings/Loan limits reuse the shared eligibility numbers, reduced by the
 //     member's open exhibition exposure (Pending/Approved orders).
