@@ -79,7 +79,13 @@ export async function POST(req) {
     if (body?.amount !== undefined) payload.amount = cleanAmount(body.amount)
     if (body?.bank_account_id !== undefined) {
       const raw = Math.trunc(Number(body.bank_account_id || 0))
-      payload.bank_account_id = Number.isFinite(raw) && raw > 0 ? raw : null
+      if (!Number.isFinite(raw) || raw <= 0) {
+        return NextResponse.json(
+          { ok: false, error: 'Choose the bank account this invoice belongs to.' },
+          { status: 400 }
+        )
+      }
+      payload.bank_account_id = raw
     }
 
     if (!Object.keys(payload).length) return NextResponse.json({ ok: false, error: 'Nothing to update' }, { status: 400 })
@@ -99,7 +105,18 @@ export async function POST(req) {
     if (selErr) return NextResponse.json({ ok: false, error: selErr.message }, { status: 500 })
     if (!inv) return NextResponse.json({ ok: false, error: 'Invoice not found' }, { status: 404 })
     if (Number(inv.branch_id) !== Number(branchId)) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
-    if (await isFoodBankAccountPaid(supabase, { accountId: inv.bank_account_id, branchId, cycleId })) {
+
+    const invoiceCycleId = Number(inv.cycle_id) || cycleId
+    if (Number(invoiceCycleId) !== Number(cycleId)) {
+      const invoiceLocked = await isPaidLocked(supabase, branchId, invoiceCycleId).catch(() => false)
+      if (invoiceLocked) {
+        return NextResponse.json(
+          { ok: false, error: 'This invoice cycle is marked as Paid. Editing is locked.' },
+          { status: 403 }
+        )
+      }
+    }
+    if (await isFoodBankAccountPaid(supabase, { accountId: inv.bank_account_id, branchId })) {
       return NextResponse.json(
         { ok: false, error: 'This invoice is marked as Paid. Editing is locked.' },
         { status: 403 }
@@ -112,7 +129,7 @@ export async function POST(req) {
         .select('id,is_paid')
         .eq('id', payload.bank_account_id)
         .eq('branch_id', branchId)
-        .eq('cycle_id', cycleId)
+        .eq('cycle_id', invoiceCycleId)
         .maybeSingle()
       if (acctErr && !isMissingTable(acctErr, 'food_vendor_bank_accounts')) {
         return NextResponse.json({ ok: false, error: acctErr.message }, { status: 500 })
@@ -132,6 +149,7 @@ export async function POST(req) {
       .from('food_vendor_invoices')
       .update(payload)
       .eq('id', invoiceId)
+      .eq('branch_id', branchId)
       .select('id,branch_id,cycle_id,bank_account_id,invoice_ref,invoice_date,amount,notes,storage_bucket,storage_path,file_name,mime_type,file_size,created_by_role,created_by_code,created_at')
       .single()
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })

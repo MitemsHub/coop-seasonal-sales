@@ -35,13 +35,23 @@ export async function POST(req) {
       )
     }
 
-    const { error: delErr } = await supabase
+    // Re-check the paid flag in the delete itself so an admin marking the
+    // account paid between the read above and this delete cannot lose it.
+    const { data: deleted, error: delErr } = await supabase
       .from('food_vendor_bank_accounts')
       .delete()
       .eq('id', accountId)
       .eq('branch_id', branchId)
       .eq('cycle_id', cycleId)
+      .eq('is_paid', false)
+      .select('id')
     if (delErr) return NextResponse.json({ ok: false, error: delErr.message }, { status: 500 })
+    if (!deleted?.length) {
+      return NextResponse.json(
+        { ok: false, error: 'This bank account could not be removed. It may have been marked as Paid.' },
+        { status: 409 }
+      )
+    }
 
     return NextResponse.json({ ok: true, deleted_id: accountId })
   } catch (e) {

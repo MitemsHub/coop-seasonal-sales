@@ -78,14 +78,25 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: 'Nothing to update' }, { status: 400 })
     }
 
+    // Re-check the paid flag in the write itself: an admin can mark the account
+    // paid between the read above and this update.
     const { data: bank, error } = await supabase
       .from('food_vendor_bank_accounts')
       .update(patch)
       .eq('id', accountId)
+      .eq('branch_id', branchId)
+      .eq('cycle_id', cycleId)
+      .eq('is_paid', false)
       .select(FOOD_BANK_SELECT)
-      .single()
+      .maybeSingle()
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    if (!bank) {
+      return NextResponse.json(
+        { ok: false, error: 'This bank account is marked as Paid. Editing is locked.' },
+        { status: 403 }
+      )
+    }
 
     return NextResponse.json({ ok: true, bank })
   } catch (e) {

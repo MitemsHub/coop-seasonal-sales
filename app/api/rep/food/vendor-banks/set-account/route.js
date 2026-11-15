@@ -1,69 +1,65 @@
 import { NextResponse } from 'next/server'
-import { validateSession } from '@/lib/validation'
-import { createClient } from '@/lib/supabaseServer'
-import { resolveFoodCycleId } from '@/lib/cycleResolve'
+import {
+  FOOD_BANK_SELECT,
+  MAX_FOOD_BANK_ACCOUNTS,
+  cleanText,
+  isMissingTable,
+  loadRepFoodWriteContext,
+  normalizeAccountNumber,
+} from '@/lib/repFoodBankGuard'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-function isMissingTable(error, tableName) {
-  const code = String(error?.code || '')
-  if (code === '42P01') return true
-  const msg = `${error?.message || ''} ${error?.details || ''}`.toLowerCase()
-  const t = String(tableName || '').toLowerCase()
-  if (!msg.includes(t)) return false
-  return msg.includes('does not exist') || msg.includes('could not find the table')
-}
-
-// Cycle resolution is shared with the other invoice routes (lib/cycleResolve).
-async function resolveActiveCycleId(supabase) {
-  return resolveFoodCycleId(supabase)
-}
-
-function cleanText(v, maxLen = 120) {
-  return String(v ?? '')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .slice(0, maxLen)
-}
-
-async function isPaidLocked(supabase, branchId, cycleId) {
-  if (!cycleId) return false
-  const { data, error } = await supabase
-    .from('food_vendor_payment_status')
-    .select('is_paid')
-    .eq('branch_id', branchId)
-    .eq('cycle_id', cycleId)
-    .maybeSingle()
-  if (error) {
-    if (isMissingTable(error, 'food_vendor_payment_status')) return false
-    throw error
-  }
-  return !!data?.is_paid
-}
-
+// Legacy single-account endpoint. The current Banks page uses accounts/add,
+// but older clients may still call this. It changes is_current on every
+// account, so it must be locked as soon as any account is paid.
 export async function POST(req) {
   try {
-    const session = await validateSession(req, 'rep')
-    if (!session.valid) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
-    if (session?.claims?.module && session.claims.module !== 'food') {
-      return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const branchId = Number(session?.claims?.branch_id)
-    if (!Number.isFinite(branchId) || branchId <= 0) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
+    const ctx = await loadRepFoodWriteContext(req)
+    if (ctx.response) return ctx.response
+    const { supabase, branchId, cycleId, createdByCode } = ctx
 
     const body = await req.json().catch(() => ({}))
     const bankName = cleanText(body.bank_name, 120)
     const accountName = cleanText(body.account_name, 120)
     const accountNumber = cleanText(body.account_number, 40)
 
-    const supabase = createClient()
-    const cycleId = await resolveActiveCycleId(supabase)
-    if (!cycleId) return NextResponse.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
+    if (!bankName) return NextResponse.json({ ok: false, error: 'Bank name is required' }, { status: 400 })
+    if (!accountName) return NextResponse.json({ ok: false, error: 'Account name is required' }, { status: 400 })
+    if (!accountNumber) return NextResponse.json({ ok: false, error: 'Account number is required' }, { status: 400 })
 
-    const locked = await isPaidLocked(supabase, branchId, cycleId).catch(() => false)
-    if (locked) return NextResponse.json({ ok: false, error: 'Branch is marked as Paid. Editing is locked.' }, { status: 403 })
+    const { data: existing, error: listErr } = await supabase
+      .from('food_vendor_bank_accounts')
+      .select('id,account_number,is_paid')
+      .eq('branch_id', branchId)
+      .eq('cycle_id', cycleId)
+
+    if (listErr && !isMissingTable(listErr, 'food_vendor_bank_accounts')) {
+      return NextResponse.json({ ok: false, error: listErr.message }, { status: 500 })
+    }
+
+    const rows = existing || []
+    if (rows.some((r) => r.is_paid)) {
+      return NextResponse.json(
+        { ok: false, error: 'A bank account is marked as Paid. Editing is locked.' },
+        { status: 403 }
+      )
+    }
+    if (rows.length >= MAX_FOOD_BANK_ACCOUNTS) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Up to ${MAX_FOOD_BANK_ACCOUNTS} bank accounts can be attached per cycle. Remove one first.`,
+        },
+        { status: 400 }
+      )
+    }
+
+    const target = normalizeAccountNumber(accountNumber)
+    if (rows.some((r) => normalizeAccountNumber(r.account_number) === target)) {
+      return NextResponse.json({ ok: false, error: 'That account number is already attached.' }, { status: 409 })
+    }
 
     const { error: clearErr } = await supabase
       .from('food_vendor_bank_accounts')
@@ -71,11 +67,11 @@ export async function POST(req) {
       .eq('branch_id', branchId)
       .eq('cycle_id', cycleId)
       .eq('is_current', true)
+      .eq('is_paid', false)
     if (clearErr && !isMissingTable(clearErr, 'food_vendor_bank_accounts')) {
       return NextResponse.json({ ok: false, error: clearErr.message }, { status: 500 })
     }
 
-    const createdByCode = cleanText(session?.claims?.branch_code || session?.claims?.rep_code || '', 120) || null
     const { data: bank, error } = await supabase
       .from('food_vendor_bank_accounts')
       .insert({
@@ -88,7 +84,7 @@ export async function POST(req) {
         created_by_role: 'rep',
         created_by_code: createdByCode,
       })
-      .select('id,branch_id,cycle_id,bank_name,account_name,account_number,is_current,created_at,created_by_role,created_by_code')
+      .select(FOOD_BANK_SELECT)
       .single()
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
@@ -97,4 +93,3 @@ export async function POST(req) {
     return NextResponse.json({ ok: false, error: e?.message || 'Internal server error' }, { status: 500 })
   }
 }
-

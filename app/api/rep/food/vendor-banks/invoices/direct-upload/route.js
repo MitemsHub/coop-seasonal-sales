@@ -121,6 +121,12 @@ export async function POST(req) {
         { status: 403 }
       )
     }
+    if (!account.bankAccountId) {
+      return NextResponse.json(
+        { ok: false, error: 'Choose the bank account this invoice belongs to.' },
+        { status: 400 }
+      )
+    }
 
     if (action === 'sign') {
       const fileName = safeName(body?.file_name)

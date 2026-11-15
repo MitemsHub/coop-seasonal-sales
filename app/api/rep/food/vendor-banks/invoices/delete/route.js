@@ -71,7 +71,18 @@ export async function DELETE(req) {
     if (selErr) return NextResponse.json({ ok: false, error: selErr.message }, { status: 500 })
     if (!inv) return NextResponse.json({ ok: false, error: 'Invoice not found' }, { status: 404 })
     if (Number(inv.branch_id) !== Number(branchId)) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
-    if (await isFoodBankAccountPaid(supabase, { accountId: inv.bank_account_id, branchId, cycleId })) {
+
+    const invoiceCycleId = Number(inv.cycle_id) || cycleId
+    if (Number(invoiceCycleId) !== Number(cycleId)) {
+      const invoiceLocked = await isPaidLocked(supabase, branchId, invoiceCycleId).catch(() => false)
+      if (invoiceLocked) {
+        return NextResponse.json(
+          { ok: false, error: 'This invoice cycle is marked as Paid. Editing is locked.' },
+          { status: 403 }
+        )
+      }
+    }
+    if (await isFoodBankAccountPaid(supabase, { accountId: inv.bank_account_id, branchId })) {
       return NextResponse.json(
         { ok: false, error: 'This invoice is marked as Paid. Editing is locked.' },
         { status: 403 }
@@ -85,7 +96,11 @@ export async function DELETE(req) {
       if (rmErr) return NextResponse.json({ ok: false, error: rmErr.message }, { status: 500 })
     }
 
-    const { error: delErr } = await supabase.from('food_vendor_invoices').delete().eq('id', invoiceId)
+    const { error: delErr } = await supabase
+      .from('food_vendor_invoices')
+      .delete()
+      .eq('id', invoiceId)
+      .eq('branch_id', branchId)
     if (delErr) return NextResponse.json({ ok: false, error: delErr.message }, { status: 500 })
 
     return NextResponse.json({ ok: true })

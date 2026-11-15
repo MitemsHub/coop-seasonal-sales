@@ -138,6 +138,13 @@ export async function POST(req) {
       bankAccountId = current?.id ? Number(current.id) : null
     }
 
+    if (!bankAccountId) {
+      return NextResponse.json(
+        { ok: false, error: 'Choose the bank account this invoice belongs to.' },
+        { status: 400 }
+      )
+    }
+
     const file = fd.get('file')
     if (!file || typeof file.arrayBuffer !== 'function') {
       return NextResponse.json({ ok: false, error: 'file required' }, { status: 400 })
