@@ -49,6 +49,7 @@ function RepPostedPageContent() {
   const [sheetOrder, setSheetOrder] = useState(null) // order row for the print sheet
   const [stats, setStats] = useState(null)
   const fetchCtl = useRef(null)
+  const loadingRequests = useRef(0)
   const { user } = useAuth()
 
   const naira = (v) => `₦${Number(v || 0).toLocaleString()}`
@@ -166,7 +167,11 @@ function RepPostedPageContent() {
 
   const fetchOrders = async (cursorOverride, opts = null) => {
     const silent = opts?.silent === true
-    if (!silent) { setLoading(true); setMsg(null) }
+    if (!silent) {
+      loadingRequests.current += 1
+      setLoading(true)
+      setMsg(null)
+    }
     if (fetchCtl.current) fetchCtl.current.abort()
     const ctl = new AbortController()
     fetchCtl.current = ctl
@@ -185,9 +190,16 @@ function RepPostedPageContent() {
       if (e.name !== 'AbortError' && !silent) setMsg({ type:'error', text:e.message })
     } finally {
       clearTimeout(timer)
+      // A silent refresh aborts an in-flight visible fetch. That fetch is no
+      // longer "current", but its loading request still has to be released.
+      // Count only visible fetches so a newer visible request keeps the
+      // spinner on until it also finishes.
+      if (!silent) {
+        loadingRequests.current = Math.max(0, loadingRequests.current - 1)
+        if (loadingRequests.current === 0) setLoading(false)
+      }
       const isCurrent = fetchCtl.current === ctl
       if (isCurrent) fetchCtl.current = null
-      if (!silent && isCurrent) setLoading(false)
       if (isCurrent) setDidLoadOnce(true)
     }
   }
