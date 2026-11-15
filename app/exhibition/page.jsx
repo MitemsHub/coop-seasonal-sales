@@ -24,6 +24,7 @@ import CartStickyBar from '../components/CartStickyBar'
 import useExhibitionCatalog from '../hooks/useExhibitionCatalog'
 import useExhibitionCart from '../hooks/useExhibitionCart'
 import ModuleClosedPanel from '../components/ModuleClosedPanel'
+import AmbientBackdrop from '../components/AmbientBackdrop'
 import Skeleton from '../components/ui/Skeleton'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -123,11 +124,9 @@ function ExhibitionShopContent() {
   if (!loading && catalog && !catalog.open) {
     return (
       <ProtectedRoute allowedRoles={['member']}>
-        <div className="min-h-screen bg-canvas">
-          <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
-            <div className="absolute -top-32 -left-24 h-80 w-80 rounded-full bg-brand/10 blur-3xl" />
-            <div className="absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-accent/10 blur-3xl" />
-          </div>
+        <div className="relative isolate min-h-screen bg-canvas">
+          <AmbientBackdrop />
+          <div className="relative z-10">
           <ModuleClosedPanel
             module="exhibition"
             variant="inline"
@@ -139,6 +138,7 @@ function ExhibitionShopContent() {
             onViewOrders={() => router.push('/orders')}
             onBack={() => router.push('/my-coop')}
           />
+          </div>
         </div>
       </ProtectedRoute>
     )
@@ -146,13 +146,10 @@ function ExhibitionShopContent() {
 
   return (
     <ProtectedRoute allowedRoles={['member']}>
-      <div className="min-h-screen bg-canvas">
-        <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
-          <div className="absolute -top-32 -left-24 h-80 w-80 rounded-full bg-brand/10 blur-3xl" />
-          <div className="absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-accent/10 blur-3xl" />
-        </div>
+      <div className="relative isolate min-h-screen bg-canvas">
+        <AmbientBackdrop />
 
-        <div className="relative p-fluid pb-28 sm:pb-32 md:pb-36 max-w-7xl mx-auto">
+        <div className="relative z-10 p-fluid pb-28 sm:pb-32 md:pb-36 max-w-7xl mx-auto">
           <ContinueShoppingBanner excludeModules={['exhibition']} className="mb-fluid-lg" />
 
           {/* Hero */}

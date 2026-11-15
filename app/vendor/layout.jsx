@@ -346,7 +346,9 @@ export default function VendorLayout({ children }) {
               {sidebarVisible ? <PanelLeftClose className="h-4.5 w-4.5" /> : <PanelLeftOpen className="h-4.5 w-4.5" />}
             </button>
             <Breadcrumbs items={crumbs} />
-            <CycleTag className="ml-1 hidden sm:inline-flex" />
+            <div className="ml-1 hidden sm:block">
+              <CycleTag />
+            </div>
             <button
               type="button"
               onClick={doLogout}

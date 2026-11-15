@@ -206,7 +206,6 @@ export default function VendorLoginPage() {
                       type="password"
                       value={passcode}
                       onChange={(e) => setPasscode(e.target.value)}
-                      placeholder="Provided by the administrator"
                       autoComplete="off"
                       className="w-full rounded-lg border border-line bg-surface py-2 pl-9 pr-3 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
                     />

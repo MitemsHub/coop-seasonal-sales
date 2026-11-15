@@ -210,37 +210,37 @@ export default function Navbar() {
 
         {/* Logo */}
         <Link href="/" className="flex min-w-0 items-center space-x-2 group">
-          <div className="w-8 h-8 bg-surface border border-line-subtle rounded-lg flex items-center justify-center overflow-hidden">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line-subtle bg-surface">
             <img src="/logo.png" alt="CBN Coop" className="w-7 h-7 object-contain" />
           </div>
           <div className="flex min-w-0 flex-col">
             {isOrdersNav ? (
               <>
-                <span className="font-bold text-[15px] sm:text-base lg:text-lg text-brand dark:text-fg leading-tight">
+                <span className="max-w-[52vw] truncate font-bold text-[15px] leading-tight text-brand dark:text-fg sm:max-w-none sm:text-base lg:text-lg">
                   CBN Coop
                 </span>
-                <span className="text-xs sm:text-sm text-muted -mt-1">Member Shopping Portal</span>
+                <span className="hidden max-w-[52vw] truncate text-xs text-muted -mt-1 sm:block sm:max-w-none sm:text-sm">Member Shopping Portal</span>
               </>
             ) : isRamMemberNav ? (
               <>
-                <span className="max-w-[52vw] truncate font-bold text-[15px] sm:max-w-none sm:text-base lg:text-lg text-brand dark:text-fg leading-tight">
+                <span className="max-w-[52vw] truncate font-bold text-[15px] leading-tight text-brand dark:text-fg sm:max-w-none sm:text-base lg:text-lg">
                   Coop Ram Distribution
                 </span>
-                <span className="max-w-[52vw] truncate text-xs sm:max-w-none sm:text-sm text-muted -mt-1">Members Distribution Portal</span>
+                <span className="hidden max-w-[52vw] truncate text-xs text-muted -mt-1 sm:block sm:max-w-none sm:text-sm">Members Distribution Portal</span>
               </>
             ) : isFoodMemberNav ? (
               <>
-                <span className="max-w-[52vw] truncate font-bold text-[15px] sm:max-w-none sm:text-base lg:text-lg text-brand dark:text-fg leading-tight">
+                <span className="max-w-[52vw] truncate font-bold text-[15px] leading-tight text-brand dark:text-fg sm:max-w-none sm:text-base lg:text-lg">
                   Coop Seasonal Sales
                 </span>
-                <span className="max-w-[52vw] truncate text-xs sm:max-w-none sm:text-sm text-muted -mt-1">Member Shopping Portal</span>
+                <span className="hidden max-w-[52vw] truncate text-xs text-muted -mt-1 sm:block sm:max-w-none sm:text-sm">Member Shopping Portal</span>
               </>
             ) : (
               <>
-                <span className="font-bold text-[15px] sm:text-base lg:text-lg text-brand dark:text-fg leading-tight">
+                <span className="max-w-[52vw] truncate font-bold text-[15px] leading-tight text-brand dark:text-fg sm:max-w-none sm:text-base lg:text-lg">
                   CBN Coop
                 </span>
-                <span className="text-xs sm:text-sm text-muted -mt-1">Seasonal Sales</span>
+                <span className="hidden max-w-[52vw] truncate text-xs text-muted -mt-1 sm:block sm:max-w-none sm:text-sm">Seasonal Sales</span>
               </>
             )}
           </div>
@@ -529,7 +529,9 @@ export default function Navbar() {
           )}
         </nav>
 
-        <CycleTag className="mr-1 hidden sm:inline-flex" />
+        <div className="mr-1 hidden lg:block">
+          <CycleTag />
+        </div>
 
         {/* Notification bell — members only */}
         {userType === 'member' && <NotificationBell memberId={memberIdKey} />}
@@ -537,7 +539,7 @@ export default function Navbar() {
         {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
-          className="ml-2 inline-flex items-center justify-center p-2 rounded-full text-muted hover:text-fg hover:bg-subtle transition-all duration-200"
+          className="ml-2 inline-flex shrink-0 items-center justify-center rounded-full p-2 text-muted transition-all duration-200 hover:bg-subtle hover:text-fg"
           aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
         >
@@ -599,7 +601,9 @@ export default function Navbar() {
                   </span>
                   <span className="text-sm font-bold text-brand dark:text-fg">CBN Coop</span>
                 </span>
-                <CycleTag className="ml-auto mr-1 sm:hidden" />
+                <div className="ml-auto mr-1 lg:hidden">
+                  <CycleTag />
+                </div>
                 <button
                   onClick={closeMobileMenu}
                   className="inline-flex items-center justify-center p-2 rounded-lg text-fg hover:bg-subtle focus:outline-none focus:ring-2 focus:ring-brand/40"

@@ -189,7 +189,7 @@ export default function NotificationBell({ memberId }) {
   }
 
   return (
-    <div ref={wrapRef} className="relative ml-auto lg:ml-2">
+    <div ref={wrapRef} className="relative ml-auto shrink-0 lg:ml-2">
       <button
         type="button"
         onClick={toggle}

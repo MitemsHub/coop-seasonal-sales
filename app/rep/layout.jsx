@@ -552,7 +552,9 @@ export default function RepLayout({ children }) {
           )}
 
           <div className="flex shrink-0 items-center gap-1.5">
-            <CycleTag className="mr-1 hidden md:inline-flex" />
+            <div className="mr-1 hidden md:block">
+              <CycleTag />
+            </div>
             <ThemeToggle />
             <button
               type="button"

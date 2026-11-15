@@ -287,7 +287,7 @@ export default function AdminLayout({ children }) {
       setRamSub(isOps ? 'ops' : 'orders')
     } else if (pathname.startsWith('/admin/exhibition')) {
       setOpenModule('exhibition')
-      const isOps = ['/admin/exhibition/vendors',
+      const isOps = ['/admin/exhibition/vendors', '/admin/exhibition/products',
         '/admin/exhibition/banks', '/admin/exhibition/cycles',
         '/admin/exhibition/payouts', '/admin/exhibition/data', '/admin/exhibition/audit',
         '/admin/exhibition/reports'].some((p) => pathname.startsWith(p))
@@ -754,7 +754,9 @@ export default function AdminLayout({ children }) {
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">
-            <CycleTag className="mr-1 hidden md:inline-flex" />
+            <div className="mr-1 hidden md:block">
+              <CycleTag />
+            </div>
             <ThemeToggle />
             <button
               type="button"

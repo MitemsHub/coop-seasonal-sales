@@ -39,6 +39,7 @@ import Button from '../components/ui/Button'
 import Skeleton from '../components/ui/Skeleton'
 import CycleCountdown from '../components/ui/CycleCountdown'
 import ModuleClosedPanel from '../components/ModuleClosedPanel'
+import AmbientBackdrop from '../components/AmbientBackdrop'
 
 const naira = (v) => `₦${Number(v || 0).toLocaleString()}`
 
@@ -269,14 +270,10 @@ function MyCoopContent() {
   // ── Render ────────────────────────────────────────────────────────
   return (
     <ProtectedRoute allowedRoles={['member']}>
-      <div className="min-h-screen bg-canvas">
-        {/* Ambient canvas glows (Sakani) */}
-        <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
-          <div className="absolute -top-32 -left-24 h-80 w-80 rounded-full bg-brand/10 blur-3xl" />
-          <div className="absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-accent/10 blur-3xl" />
-        </div>
+      <div className="relative isolate min-h-screen bg-canvas">
+        <AmbientBackdrop variant="coop" />
 
-        <div className="relative mx-auto max-w-6xl p-3 pb-16 sm:p-4 md:p-6">
+        <div className="relative z-10 mx-auto max-w-6xl p-3 pb-16 sm:p-4 md:p-6">
           {/* Hero */}
           <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
