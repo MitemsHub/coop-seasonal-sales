@@ -219,6 +219,7 @@ export default function ExhibitionVendorsPage() {
 
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmTarget, setConfirmTarget] = useState(null)
+  const [emailConfirm, setEmailConfirm] = useState(null)
 
   const removeVendor = async (v) => {
     setBusy(true)
@@ -273,28 +274,8 @@ export default function ExhibitionVendorsPage() {
     })
   }
 
-  const emailVendors = async (targets) => {
+  const sendVendorEmails = async (list) => {
     if (isEmailing) return
-    const list = []
-    const seen = new Set()
-    for (const v of targets || []) {
-      if (!v?.id || seen.has(v.id) || !String(v.email || '').trim()) continue
-      seen.add(v.id)
-      list.push(v)
-    }
-    if (!list.length) {
-      setMsg({ type: 'error', text: 'Select at least one vendor with an email address.' })
-      return
-    }
-
-    const minutes = Math.ceil((list.length * VENDOR_EMAIL_INTERVAL_MS) / 60000)
-    const confirmed = window.confirm(
-      `Send fresh login details to ${list.length} vendor${list.length === 1 ? '' : 's'}?\n\n` +
-      `Each vendor gets a new passcode, so any passcode you already shared will stop working. ` +
-      `Emails are paced at one every 10 seconds, so this takes about ${minutes} minute${minutes === 1 ? '' : 's'}. Keep this page open until it finishes.`
-    )
-    if (!confirmed) return
-
     setEmailing({ done: 0, total: list.length })
     setMsg(null)
     try {
@@ -332,6 +313,22 @@ export default function ExhibitionVendorsPage() {
     } finally {
       setEmailing(null)
     }
+  }
+
+  const emailVendors = (targets) => {
+    if (isEmailing) return
+    const list = []
+    const seen = new Set()
+    for (const v of targets || []) {
+      if (!v?.id || seen.has(v.id) || !String(v.email || '').trim()) continue
+      seen.add(v.id)
+      list.push(v)
+    }
+    if (!list.length) {
+      setMsg({ type: 'error', text: 'Select at least one vendor with an email address.' })
+      return
+    }
+    setEmailConfirm(list)
   }
 
   return (
@@ -484,8 +481,19 @@ export default function ExhibitionVendorsPage() {
               ) : null}
 
               <div className="hidden md:block">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
+                <div className="overflow-hidden">
+                  <table className="w-full table-fixed text-sm">
+                    <colgroup>
+                      <col className="w-10" />
+                      <col className="w-[23%]" />
+                      <col className="w-[7%]" />
+                      <col className="w-[10%]" />
+                      <col className="w-[11%]" />
+                      <col className="w-[18%]" />
+                      <col className="w-[8%]" />
+                      <col className="w-[8%]" />
+                      <col className="w-[10%]" />
+                    </colgroup>
                     <thead className="sticky top-0 z-10 bg-surface">
                       <tr className="border-b border-line text-left">
                         <th className="w-10 p-3">
@@ -524,13 +532,19 @@ export default function ExhibitionVendorsPage() {
                           </td>
                           <td className="p-3">
                             <div className="font-medium text-fg">{v.name}</div>
-                            {v.address ? <div className="mt-1 text-xs text-subtext">{v.address}</div> : null}
+                            {v.address ? (
+                              <div className="mt-1 truncate text-xs text-subtext" title={v.address}>{v.address}</div>
+                            ) : null}
                           </td>
                           <td className="p-3 font-mono text-xs text-muted">{v.code}</td>
-                          <td className="p-3 text-muted">{v.branch_name || `#${v.branch_id}`}</td>
-                          <td className="p-3 text-muted">{v.cycle_name || `#${v.cycle_id}`}</td>
+                          <td className="truncate p-3 text-muted" title={v.branch_name || `#${v.branch_id}`}>
+                            {v.branch_name || `#${v.branch_id}`}
+                          </td>
+                          <td className="truncate p-3 text-muted" title={v.cycle_name || `#${v.cycle_id}`}>
+                            {v.cycle_name || `#${v.cycle_id}`}
+                          </td>
                           <td className="p-3">
-                            <div className="text-xs text-muted">{v.email || '—'}</div>
+                            <div className="truncate text-xs text-muted" title={v.email || ''}>{v.email || '—'}</div>
                             <div className="text-xs text-subtext">{v.phone || '—'}</div>
                           </td>
                           <td className="p-3">
@@ -541,7 +555,7 @@ export default function ExhibitionVendorsPage() {
                           <td className="p-3 text-xs text-muted">{fmtDate(v.created_at)}</td>
                           <td className="p-3 text-right">
                             <select
-                              className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg focus:border-brand focus:outline-none disabled:opacity-50"
+                              className="w-full max-w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg focus:border-brand focus:outline-none disabled:opacity-50"
                               defaultValue=""
                               onChange={(e) => {
                                 const action = e.target.value
@@ -784,6 +798,24 @@ export default function ExhibitionVendorsPage() {
           message={`Delete vendor "${confirmTarget?.name}"? This cannot be undone.`}
           confirmLabel="Delete"
           variant="danger"
+        />
+
+        <ConfirmDialog
+          open={!!emailConfirm}
+          onClose={() => setEmailConfirm(null)}
+          onConfirm={() => {
+            const list = emailConfirm || []
+            setEmailConfirm(null)
+            sendVendorEmails(list)
+          }}
+          title="Send vendor logins?"
+          message={
+            emailConfirm
+              ? `Each vendor gets a new passcode, so any passcode you already shared will stop working. Emails are paced at one every 10 seconds, so ${emailConfirm.length} email${emailConfirm.length === 1 ? '' : 's'} will take about ${Math.ceil((emailConfirm.length * VENDOR_EMAIL_INTERVAL_MS) / 60000)} minute${Math.ceil((emailConfirm.length * VENDOR_EMAIL_INTERVAL_MS) / 60000) === 1 ? '' : 's'}. Keep this page open until sending finishes.`
+              : ''
+          }
+          confirmLabel={`Email ${emailConfirm?.length || 0} login${emailConfirm?.length === 1 ? '' : 's'}`}
+          variant="brand"
         />
 
         <VendorImportModal
