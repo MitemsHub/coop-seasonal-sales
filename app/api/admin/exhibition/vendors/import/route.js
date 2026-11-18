@@ -8,7 +8,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
 import { hashPasscode } from '@/lib/passcodeHash'
-import { generateVendorCode, generatePasscode } from '@/lib/vendorCredentials'
+import { generateVendorCode, generatePasscodeRecord } from '@/lib/vendorCredentials'
+import { addPasscodesToLookupSet } from '@/lib/vendorPasscodeLookup'
 import { isValidEmail, normalizeEmail } from '@/lib/emailAddress'
 
 export const runtime = 'nodejs'
@@ -44,17 +45,18 @@ export async function POST(request) {
     if (branchError) return NextResponse.json({ ok: false, error: branchError.message }, { status: 500 })
     if (!branch) return NextResponse.json({ ok: false, error: 'Branch not found' }, { status: 404 })
 
-    const { data: existing, error: codeError } = await supabase.from('exhibition_vendors').select('code')
+    const { data: existing, error: codeError } = await supabase
+      .from('exhibition_vendors')
+      .select('code, passcode_lookup')
     if (codeError) return NextResponse.json({ ok: false, error: codeError.message }, { status: 500 })
     const takenCodes = new Set((existing || []).map((v) => String(v.code || '').toUpperCase()))
+    const takenLookups = new Set((existing || []).map((v) => v.passcode_lookup).filter(Boolean))
     // The modal sends back passcodes from earlier chunks, so a 500-vendor
     // upload cannot generate the same passcode twice across chunks.
     const reservedPasscodes = Array.isArray(body?.reserved_passcodes)
       ? body.reserved_passcodes.slice(0, 1000)
       : []
-    const takenPasscodes = new Set(
-      reservedPasscodes.map((value) => String(value || '').toUpperCase()).filter(Boolean)
-    )
+    addPasscodesToLookupSet(takenLookups, reservedPasscodes)
 
     const failed = []
     const created = []
@@ -78,8 +80,8 @@ export async function POST(request) {
         continue
       }
       takenCodes.add(code)
-      const passcode = generatePasscode(takenPasscodes)
-      takenPasscodes.add(passcode)
+      const { passcode, lookup } = generatePasscodeRecord({ takenLookups })
+      takenLookups.add(lookup)
 
       const { data, error } = await supabase
         .from('exhibition_vendors')
@@ -89,6 +91,7 @@ export async function POST(request) {
           name,
           code,
           passcode: await hashPasscode(passcode),
+          passcode_lookup: lookup,
           email,
           phone: sanitizeString(rawRows[i]?.phone || '', { maxLength: 30, encodeHtml: false }),
           address: sanitizeString(rawRows[i]?.address || '', { maxLength: 300, encodeHtml: false }),

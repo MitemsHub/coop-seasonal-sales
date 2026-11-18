@@ -6,8 +6,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
-import { hashPasscode } from '@/lib/passcodeHash'
-import { generateVendorCode, generatePasscode } from '@/lib/vendorCredentials'
+import { hashPasscode, passcodeLookup } from '@/lib/passcodeHash'
+import { generateVendorCode, generatePasscodeRecord } from '@/lib/vendorCredentials'
 import { isValidEmail, normalizeEmail } from '@/lib/emailAddress'
 
 export const runtime = 'nodejs'
@@ -94,14 +94,18 @@ export async function POST(request) {
     const address = sanitizeString(body.address || '', { maxLength: 300, encodeHtml: false })
 
     const supabase = createClient()
+    const [{ data: existing, error: codeError }, branchResult] = await Promise.all([
+      supabase.from('exhibition_vendors').select('code, passcode_lookup'),
+      generatedCode
+        ? supabase.from('branches').select('id, code').eq('id', branchId).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ])
+    if (codeError) return NextResponse.json({ ok: false, error: codeError.message }, { status: 500 })
+    if (branchResult.error) return NextResponse.json({ ok: false, error: branchResult.error.message }, { status: 500 })
+
+    const takenLookups = new Set((existing || []).map((v) => v.passcode_lookup).filter(Boolean))
     if (generatedCode) {
-      const [{ data: branch, error: branchError }, { data: existing, error: codeError }] = await Promise.all([
-        supabase.from('branches').select('id, code').eq('id', branchId).maybeSingle(),
-        supabase.from('exhibition_vendors').select('code'),
-      ])
-      if (branchError) return NextResponse.json({ ok: false, error: branchError.message }, { status: 500 })
-      if (codeError) return NextResponse.json({ ok: false, error: codeError.message }, { status: 500 })
-      if (!branch) return NextResponse.json({ ok: false, error: 'Branch not found' }, { status: 404 })
+      if (!branchResult.data) return NextResponse.json({ ok: false, error: 'Branch not found' }, { status: 404 })
       try {
         code = generateVendorCode({
           taken: new Set((existing || []).map((v) => String(v.code || '').toUpperCase())),
@@ -110,7 +114,16 @@ export async function POST(request) {
         return NextResponse.json({ ok: false, error: e.message }, { status: 400 })
       }
     }
-    if (generatedPasscode) passcode = generatePasscode()
+
+    let lookup
+    if (generatedPasscode) {
+      ;({ passcode, lookup } = generatePasscodeRecord({ takenLookups }))
+    } else {
+      lookup = passcodeLookup(passcode)
+      if (takenLookups.has(lookup)) {
+        return NextResponse.json({ ok: false, error: 'That passcode is already assigned to another vendor.' }, { status: 409 })
+      }
+    }
 
     const { data, error } = await supabase
       .from('exhibition_vendors')
@@ -120,6 +133,7 @@ export async function POST(request) {
         name,
         code,
         passcode: await hashPasscode(passcode),
+        passcode_lookup: lookup,
         email,
         phone,
         address,
@@ -130,6 +144,9 @@ export async function POST(request) {
 
     if (error) {
       if (String(error.code || '') === '23505') {
+        if (String(error.constraint || '').includes('passcode_lookup')) {
+          return NextResponse.json({ ok: false, error: 'That passcode is already assigned to another vendor.' }, { status: 409 })
+        }
         return NextResponse.json({ ok: false, error: `Vendor code "${code}" already exists. Use a unique code.` }, { status: 409 })
       }
       if (isMissingTable(error, 'exhibition')) {

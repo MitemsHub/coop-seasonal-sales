@@ -6,12 +6,11 @@
 // Admins can edit the login details and email them to the vendor. Suspend,
 // edit and delete live here too.
 import { useCallback, useEffect, useState } from 'react'
-import { Mail, Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Mail, Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
 import Card from '../../../components/ui/Card'
-import { Table, THead, TBody, TR, TH, TD } from '../../../components/ui/Table'
 import Input from '../../../components/ui/Input'
 import Label from '../../../components/ui/Label'
 import Select from '../../../components/ui/Select'
@@ -19,6 +18,8 @@ import DraggableModal from '../../../components/DraggableModal'
 import Skeleton from '../../../components/ui/Skeleton'
 import ConfirmDialog from '../../../components/ui/ConfirmDialog'
 import VendorImportModal from '../../../components/VendorImportModal'
+import { VENDOR_EMAIL_INTERVAL_MS } from '../../../../lib/vendorEmailLimits'
+import { sendVendorLoginEmails } from '../../../../lib/vendorLoginEmailQueue'
 
 function fmtDate(iso) {
   if (!iso) return '—'
@@ -42,6 +43,10 @@ export default function ExhibitionVendorsPage() {
   const [importOpen, setImportOpen] = useState(false)
   const [form, setForm] = useState({})
   const [createdLogin, setCreatedLogin] = useState(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+  const [selected, setSelected] = useState(new Set())
+  const [emailing, setEmailing] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -55,8 +60,11 @@ export default function ExhibitionVendorsPage() {
         fetch('/api/admin/exhibition/cycles', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
         fetch('/api/branches/list').then((r) => r.json()).catch(() => null),
       ])
-      if (v?.ok) setVendors(v.vendors || [])
-      else setMsg({ type: 'error', text: v?.error || 'Failed to load vendors' })
+      if (v?.ok) {
+        setVendors(v.vendors || [])
+        setPage(1)
+        setSelected(new Set())
+      } else setMsg({ type: 'error', text: v?.error || 'Failed to load vendors' })
       if (c?.ok) setCycles(c.cycles || [])
       if (b?.ok) setBranches(b.branches || [])
     } catch (e) {
@@ -71,8 +79,14 @@ export default function ExhibitionVendorsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cycleFilter])
 
+  useEffect(() => {
+    const active = cycles.find((c) => c.status === 'active')
+    if (active) setCycleFilter((current) => current || String(active.id))
+  }, [cycles])
+
   const openCreate = () => {
-    setForm({ status: 'active', email: '', code: '', passcode: '' })
+    const active = cycles.find((c) => c.status === 'active')
+    setForm({ status: 'active', email: '', code: '', passcode: '', cycle_id: active?.id || '' })
     setModal('create')
   }
 
@@ -227,6 +241,99 @@ export default function ExhibitionVendorsPage() {
     setConfirmTarget(null)
   }
 
+  const isEmailing = Boolean(emailing)
+  const totalPages = Math.max(1, Math.ceil(vendors.length / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const pageStart = (currentPage - 1) * pageSize
+  const pageVendors = vendors.slice(pageStart, pageStart + pageSize)
+  const pageEmailable = pageVendors.filter((v) => String(v.email || '').trim())
+  const emailableVendors = vendors.filter((v) => String(v.email || '').trim())
+  const allPageSelected = pageEmailable.length > 0 && pageEmailable.every((v) => selected.has(v.id))
+  const selectedVendors = emailableVendors.filter((v) => selected.has(v.id))
+  const allEmailableSelected = emailableVendors.length > 0 && selectedVendors.length === emailableVendors.length
+
+  const toggleSelect = (id) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectPage = () => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (allPageSelected) {
+        for (const v of pageEmailable) next.delete(v.id)
+      } else {
+        for (const v of pageEmailable) next.add(v.id)
+      }
+      return next
+    })
+  }
+
+  const emailVendors = async (targets) => {
+    if (isEmailing) return
+    const list = []
+    const seen = new Set()
+    for (const v of targets || []) {
+      if (!v?.id || seen.has(v.id) || !String(v.email || '').trim()) continue
+      seen.add(v.id)
+      list.push(v)
+    }
+    if (!list.length) {
+      setMsg({ type: 'error', text: 'Select at least one vendor with an email address.' })
+      return
+    }
+
+    const minutes = Math.ceil((list.length * VENDOR_EMAIL_INTERVAL_MS) / 60000)
+    const confirmed = window.confirm(
+      `Send fresh login details to ${list.length} vendor${list.length === 1 ? '' : 's'}?\n\n` +
+      `Each vendor gets a new passcode, so any passcode you already shared will stop working. ` +
+      `Emails are paced at one every 10 seconds, so this takes about ${minutes} minute${minutes === 1 ? '' : 's'}. Keep this page open until it finishes.`
+    )
+    if (!confirmed) return
+
+    setEmailing({ done: 0, total: list.length })
+    setMsg(null)
+    try {
+      const { sent, failed } = await sendVendorLoginEmails({
+        vendors: list,
+        send: async (vendor) => {
+          const res = await fetch(`/api/admin/exhibition/vendors/${vendor.id}/send-login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}',
+          })
+          const json = await res.json().catch(() => null)
+          return { res, json }
+        },
+        onProgress: ({ done, total }) => setEmailing({ done, total }),
+      })
+
+      if (failed.length) {
+        const details = failed
+          .slice(0, 3)
+          .map(({ vendor, error }) => `${vendor.name}: ${error}`)
+          .join(' · ')
+        const more = failed.length > 3 ? ` · …and ${failed.length - 3} more` : ''
+        setMsg({ type: 'error', text: `Sent ${sent} of ${list.length}. ${details}${more}` })
+        setSelected(new Set(failed.map(({ vendor }) => vendor.id)))
+      } else {
+        setMsg({
+          type: 'success',
+          text: `Login details emailed to ${sent} vendor${sent === 1 ? '' : 's'}. Each vendor now has a new passcode.`,
+        })
+        setSelected(new Set())
+      }
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message || 'Could not send login details' })
+    } finally {
+      setEmailing(null)
+    }
+  }
+
   return (
     <ProtectedRoute allowedRoles={['admin']}>
       <div className="p-4 sm:p-6 lg:p-8">
@@ -236,13 +343,13 @@ export default function ExhibitionVendorsPage() {
             <p className="mt-0.5 text-sm text-muted">Codes and passcodes auto-generate. Vendors sign in with their stand and passcode; you can email the details.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" leftIcon={RefreshCw} onClick={load} disabled={loading || busy}>
+            <Button variant="ghost" size="sm" leftIcon={RefreshCw} onClick={load} disabled={loading || busy || isEmailing}>
               Refresh
             </Button>
-            <Button size="sm" variant="secondary" leftIcon={Upload} onClick={() => setImportOpen(true)}>
+            <Button size="sm" variant="secondary" leftIcon={Upload} onClick={() => setImportOpen(true)} disabled={isEmailing}>
               Import vendors
             </Button>
-            <Button size="sm" leftIcon={Plus} onClick={openCreate}>
+            <Button size="sm" leftIcon={Plus} onClick={openCreate} disabled={isEmailing}>
               New Vendor
             </Button>
           </div>
@@ -271,7 +378,7 @@ export default function ExhibitionVendorsPage() {
                   variant="secondary"
                   leftIcon={Mail}
                   onClick={emailCreatedLogin}
-                  disabled={busy || !createdLogin.email}
+                  disabled={busy || isEmailing || !createdLogin.email}
                 >
                   Email login
                 </Button>
@@ -303,7 +410,7 @@ export default function ExhibitionVendorsPage() {
           </Select>
         </div>
 
-        <Card className="p-0">
+        <Card className="gap-0 overflow-hidden p-0">
           {loading ? (
             <div className="space-y-3 p-4">
               {[0, 1, 2].map((i) => (
@@ -317,65 +424,168 @@ export default function ExhibitionVendorsPage() {
             </div>
           ) : (
             <>
+              <div className="flex flex-col gap-3 border-b border-line bg-subtle px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="flex items-center gap-2 text-xs font-medium text-muted">
+                    <input
+                      type="checkbox"
+                      checked={allPageSelected}
+                      onChange={toggleSelectPage}
+                      disabled={!pageEmailable.length || isEmailing}
+                      className="h-4 w-4 rounded border-line accent-brand"
+                    />
+                    Select all shown ({pageEmailable.length})
+                  </label>
+                  {selectedVendors.length > 0 && (
+                    <span className="rounded-full bg-brand-subtle px-2 py-0.5 text-xs font-semibold text-brand">
+                      {selectedVendors.length} selected
+                    </span>
+                  )}
+                  {!allEmailableSelected && !isEmailing && emailableVendors.length > pageEmailable.length && (
+                    <button
+                      type="button"
+                      onClick={() => setSelected(new Set(emailableVendors.map((v) => v.id)))}
+                      className="text-xs font-medium text-brand underline-offset-2 hover:underline"
+                    >
+                      Select all {emailableVendors.length} with email
+                    </button>
+                  )}
+                  {selected.size > 0 && !isEmailing && (
+                    <button
+                      type="button"
+                      onClick={() => setSelected(new Set())}
+                      className="text-xs font-medium text-muted underline-offset-2 hover:text-fg hover:underline"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  leftIcon={Mail}
+                  onClick={() => emailVendors(selectedVendors)}
+                  loading={isEmailing}
+                  disabled={!selectedVendors.length || isEmailing}
+                >
+                  {isEmailing
+                    ? `Sending ${emailing.done} / ${emailing.total}…`
+                    : `Email selected${selectedVendors.length ? ` (${selectedVendors.length})` : ''}`}
+                </Button>
+              </div>
+
+              {isEmailing ? (
+                <p className="border-b border-line bg-surface px-4 py-2 text-xs text-muted">
+                  Sending {Math.min(emailing.done + 1, emailing.total)} of {emailing.total} — emails are paced at one every 10 seconds. Keep this page open until sending finishes.
+                </p>
+              ) : selectedVendors.length > 0 ? (
+                <p className="border-b border-line bg-surface px-4 py-2 text-xs text-muted">
+                  Sending creates a new passcode for each selected vendor. {selectedVendors.length} email{selectedVendors.length === 1 ? '' : 's'} will take about {Math.ceil((selectedVendors.length * VENDOR_EMAIL_INTERVAL_MS) / 60000)} minute{Math.ceil((selectedVendors.length * VENDOR_EMAIL_INTERVAL_MS) / 60000) === 1 ? '' : 's'}.
+                </p>
+              ) : null}
+
               <div className="hidden md:block">
-                <Table>
-                  <THead>
-                <TR>
-                  <TH>Vendor</TH>
-                  <TH>Code</TH>
-                  <TH>Branch</TH>
-                  <TH>Cycle</TH>
-                  <TH>Contact</TH>
-                  <TH>Status</TH>
-                  <TH>Created</TH>
-                  <TH>Actions</TH>
-                </TR>
-              </THead>
-              <TBody>
-                {vendors.map((v) => (
-                  <TR key={v.id}>
-                    <TD className="font-medium text-fg">{v.name}</TD>
-                    <TD className="font-mono text-xs text-muted">{v.code}</TD>
-                    <TD className="text-muted">{v.branch_name || `#${v.branch_id}`}</TD>
-                    <TD className="text-muted">{v.cycle_name || `#${v.cycle_id}`}</TD>
-                    <TD>
-                      <div className="text-xs text-muted">{v.email || '—'}</div>
-                      <div className="text-xs text-muted">{v.phone || '—'}</div>
-                      <div className="text-xs text-muted">{v.address || ''}</div>
-                    </TD>
-                    <TD>
-                      <Badge tone={v.status === 'active' ? 'success' : 'neutral'} variant="subtle">
-                        {v.status}
-                      </Badge>
-                    </TD>
-                    <TD className="text-xs text-muted">{fmtDate(v.created_at)}</TD>
-                    <TD>
-                      <div className="flex items-center gap-1">
-                        <Button size="sm" variant="ghost" leftIcon={Pencil} onClick={() => openEdit(v)} disabled={busy}>
-                          Edit
-                        </Button>
-                        <Button size="sm" variant={v.status === 'active' ? 'warning' : 'success'} onClick={() => toggleStatus(v)} disabled={busy}>
-                          {v.status === 'active' ? 'Suspend' : 'Activate'}
-                        </Button>
-                        <Button size="sm" variant="danger" leftIcon={Trash2} onClick={() => { setConfirmTarget(v); setConfirmOpen(true) }} disabled={busy}>
-                          Delete
-                        </Button>
-                      </div>
-                    </TD>
-                  </TR>
-                ))}
-              </TBody>
-                </Table>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="sticky top-0 z-10 bg-surface">
+                      <tr className="border-b border-line text-left">
+                        <th className="w-10 p-3">
+                          <input
+                            type="checkbox"
+                            checked={allPageSelected}
+                            onChange={toggleSelectPage}
+                            disabled={!pageEmailable.length || isEmailing}
+                            aria-label="Select all vendors on this page"
+                            className="h-4 w-4 rounded border-line text-brand focus:ring-brand"
+                          />
+                        </th>
+                        <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Vendor</th>
+                        <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Code</th>
+                        <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Branch</th>
+                        <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Cycle</th>
+                        <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Contact</th>
+                        <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Status</th>
+                        <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Created</th>
+                        <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pageVendors.map((v) => (
+                        <tr key={v.id} className="border-b border-line transition-colors duration-150 ease-sakani last:border-0 hover:bg-subtle">
+                          <td className="p-3">
+                            <input
+                              type="checkbox"
+                              checked={selected.has(v.id)}
+                              onChange={() => toggleSelect(v.id)}
+                              disabled={!String(v.email || '').trim() || isEmailing}
+                              title={!String(v.email || '').trim() ? 'Add an email address for this vendor first' : undefined}
+                              aria-label={`Select ${v.name}`}
+                              className="h-4 w-4 rounded border-line text-brand focus:ring-brand disabled:opacity-40"
+                            />
+                          </td>
+                          <td className="p-3">
+                            <div className="font-medium text-fg">{v.name}</div>
+                            {v.address ? <div className="mt-1 text-xs text-subtext">{v.address}</div> : null}
+                          </td>
+                          <td className="p-3 font-mono text-xs text-muted">{v.code}</td>
+                          <td className="p-3 text-muted">{v.branch_name || `#${v.branch_id}`}</td>
+                          <td className="p-3 text-muted">{v.cycle_name || `#${v.cycle_id}`}</td>
+                          <td className="p-3">
+                            <div className="text-xs text-muted">{v.email || '—'}</div>
+                            <div className="text-xs text-subtext">{v.phone || '—'}</div>
+                          </td>
+                          <td className="p-3">
+                            <Badge tone={v.status === 'active' ? 'success' : 'neutral'} variant="subtle">
+                              {v.status}
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-xs text-muted">{fmtDate(v.created_at)}</td>
+                          <td className="p-3 text-right">
+                            <select
+                              className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg focus:border-brand focus:outline-none disabled:opacity-50"
+                              defaultValue=""
+                              onChange={(e) => {
+                                const action = e.target.value
+                                e.target.value = ''
+                                if (action === 'email') emailVendors([v])
+                                if (action === 'edit') openEdit(v)
+                                if (action === 'status') toggleStatus(v)
+                                if (action === 'delete') { setConfirmTarget(v); setConfirmOpen(true) }
+                              }}
+                              disabled={busy || isEmailing}
+                            >
+                              <option value="" disabled>Actions</option>
+                              <option value="email" disabled={!String(v.email || '').trim()}>Email login</option>
+                              <option value="edit">Edit</option>
+                              <option value="status">{v.status === 'active' ? 'Suspend' : 'Activate'}</option>
+                              <option value="delete">Delete</option>
+                            </select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
               {/* Phones get cards for the vendor details and actions. */}
               <div className="divide-y divide-line md:hidden">
-                {vendors.map((v) => (
+                {pageVendors.map((v) => (
                   <div key={v.id} className="p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="font-medium text-fg">{v.name}</div>
-                        <div className="font-mono text-xs text-muted">{v.code}</div>
+                      <div className="flex min-w-0 items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(v.id)}
+                          onChange={() => toggleSelect(v.id)}
+                          disabled={!String(v.email || '').trim() || isEmailing}
+                          title={!String(v.email || '').trim() ? 'Add an email address for this vendor first' : undefined}
+                          aria-label={`Select ${v.name}`}
+                          className="mt-0.5 h-4 w-4 shrink-0 rounded border-line accent-brand disabled:opacity-40"
+                        />
+                        <div className="min-w-0">
+                          <div className="font-medium text-fg">{v.name}</div>
+                          <div className="font-mono text-xs text-muted">{v.code}</div>
+                        </div>
                       </div>
                       <Badge tone={v.status === 'active' ? 'success' : 'neutral'} variant="subtle">
                         {v.status}
@@ -399,20 +609,75 @@ export default function ExhibitionVendorsPage() {
                       <div className="col-span-2 text-subtext">Created {fmtDate(v.created_at)}</div>
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2">
-                      <Button size="sm" variant="ghost" leftIcon={Pencil} onClick={() => openEdit(v)} disabled={busy}>
+                      <Button
+                        className="col-span-2"
+                        size="sm"
+                        variant="secondary"
+                        leftIcon={Mail}
+                        onClick={() => emailVendors([v])}
+                        disabled={busy || isEmailing || !String(v.email || '').trim()}
+                      >
+                        Email login
+                      </Button>
+                      <Button size="sm" variant="ghost" leftIcon={Pencil} onClick={() => openEdit(v)} disabled={busy || isEmailing}>
                         Edit
                       </Button>
-                      <Button size="sm" variant={v.status === 'active' ? 'warning' : 'success'} onClick={() => toggleStatus(v)} disabled={busy}>
+                      <Button size="sm" variant={v.status === 'active' ? 'warning' : 'success'} onClick={() => toggleStatus(v)} disabled={busy || isEmailing}>
                         {v.status === 'active' ? 'Suspend' : 'Activate'}
                       </Button>
                       <div className="col-span-2">
-                        <Button className="w-full" size="sm" variant="danger" leftIcon={Trash2} onClick={() => { setConfirmTarget(v); setConfirmOpen(true) }} disabled={busy}>
+                        <Button className="w-full" size="sm" variant="danger" leftIcon={Trash2} onClick={() => { setConfirmTarget(v); setConfirmOpen(true) }} disabled={busy || isEmailing}>
                           Delete
                         </Button>
                       </div>
                     </div>
                   </div>
                 ))}
+              </div>
+
+              <div className="flex flex-col gap-3 border-t border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-muted">
+                  Showing {pageStart + 1}–{Math.min(pageStart + pageSize, vendors.length)} of {vendors.length} vendors
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex items-center gap-2 text-xs text-muted">
+                    Rows
+                    <select
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(Number(e.target.value))
+                        setPage(1)
+                      }}
+                      disabled={isEmailing}
+                      className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-fg focus:border-brand focus:outline-none"
+                    >
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                  </label>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    leftIcon={ChevronLeft}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage <= 1 || isEmailing}
+                  >
+                    Previous
+                  </Button>
+                  <span className="px-1 text-xs font-medium text-muted">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    rightIcon={ChevronRight}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage >= totalPages || isEmailing}
+                  >
+                    Next
+                  </Button>
+                </div>
               </div>
             </>
           )}

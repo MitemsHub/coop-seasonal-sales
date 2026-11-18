@@ -6,7 +6,7 @@
 // quantities, status, and archive (delete is blocked for
 // products on orders — archive instead).
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Archive, ImageOff, Package, Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload } from 'lucide-react'
+import { Archive, ChevronLeft, ChevronRight, ImageOff, Package, Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
@@ -41,6 +41,8 @@ export default function ExhibitionProductsPage() {
   const [modal, setModal] = useState(null) // 'create' | product object (edit)
   const [importOpen, setImportOpen] = useState(false)
   const [form, setForm] = useState({})
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -56,8 +58,10 @@ export default function ExhibitionProductsPage() {
         fetch('/api/admin/exhibition/cycles', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
         fetch('/api/admin/exhibition/vendors', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
       ])
-      if (p?.ok) setProducts(p.products || [])
-      else setMsg({ type: 'error', text: p?.error || 'Failed to load products' })
+      if (p?.ok) {
+        setProducts(p.products || [])
+        setPage(1)
+      } else setMsg({ type: 'error', text: p?.error || 'Failed to load products' })
       if (c?.ok) setCycles(c.cycles || [])
       if (v?.ok) setVendors(v.vendors || [])
     } catch (e) {
@@ -72,8 +76,14 @@ export default function ExhibitionProductsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cycleFilter, vendorFilter, statusFilter])
 
+  useEffect(() => {
+    const active = cycles.find((c) => c.status === 'active')
+    if (active) setCycleFilter((current) => current || String(active.id))
+  }, [cycles])
+
   const openCreate = () => {
-    setForm({ status: 'active', unit: 'each' })
+    const active = cycles.find((c) => c.status === 'active')
+    setForm({ status: 'active', unit: 'each', cycle_id: active?.id || '' })
     setModal('create')
   }
 
@@ -275,6 +285,11 @@ export default function ExhibitionProductsPage() {
     [products]
   )
 
+  const totalPages = Math.max(1, Math.ceil(products.length / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const pageStart = (currentPage - 1) * pageSize
+  const pageProducts = products.slice(pageStart, pageStart + pageSize)
+
   return (
     <ProtectedRoute allowedRoles={['admin']}>
       <div className="p-4 sm:p-6 lg:p-8">
@@ -349,7 +364,7 @@ export default function ExhibitionProductsPage() {
           </div>
         )}
 
-        <Card className="p-0">
+        <Card className="gap-0 overflow-hidden p-0">
           {loading ? (
             <div className="space-y-3 p-4">
               {[0, 1, 2].map((i) => (
@@ -374,7 +389,7 @@ export default function ExhibitionProductsPage() {
                 </TR>
               </THead>
               <TBody>
-                {products.map((p) => (
+                {pageProducts.map((p) => (
                   <TR key={p.id}>
                     <TD>
                       <div className="flex items-center gap-2.5">
@@ -451,6 +466,51 @@ export default function ExhibitionProductsPage() {
                 ))}
               </TBody>
             </Table>
+          )}
+          {!loading && products.length > 0 && (
+            <div className="flex flex-col gap-3 border-t border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted">
+                Showing {pageStart + 1}–{Math.min(pageStart + pageSize, products.length)} of {products.length} products
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-2 text-xs text-muted">
+                  Rows
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value))
+                      setPage(1)
+                    }}
+                    className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-fg focus:border-brand focus:outline-none"
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </label>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  leftIcon={ChevronLeft}
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={currentPage <= 1}
+                >
+                  Previous
+                </Button>
+                <span className="px-1 text-xs font-medium text-muted">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  rightIcon={ChevronRight}
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  disabled={currentPage >= totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
           )}
         </Card>
 

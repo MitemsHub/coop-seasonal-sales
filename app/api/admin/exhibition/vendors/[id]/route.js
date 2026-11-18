@@ -6,7 +6,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
-import { hashPasscode } from '@/lib/passcodeHash'
+import { hashPasscode, passcodeLookup } from '@/lib/passcodeHash'
+import { loadPasscodeLookups } from '@/lib/vendorPasscodeLookup'
 import { isValidEmail, normalizeEmail } from '@/lib/emailAddress'
 
 export const runtime = 'nodejs'
@@ -48,8 +49,14 @@ export async function PATCH(request, { params }) {
       if (passcode.length < 4) {
         return NextResponse.json({ ok: false, error: 'Passcode must be at least 4 characters' }, { status: 400 })
       }
+      const takenLookups = await loadPasscodeLookups(supabase, { excludeVendorId: id })
+      const lookup = passcodeLookup(passcode)
+      if (takenLookups.has(lookup)) {
+        return NextResponse.json({ ok: false, error: 'That passcode is already assigned to another vendor.' }, { status: 409 })
+      }
       // Admin-initiated reset: re-hashed like any other passcode change.
       updates.passcode = await hashPasscode(passcode)
+      updates.passcode_lookup = lookup
     }
     if (body.status !== undefined && ['active', 'suspended'].includes(body.status)) updates.status = body.status
     if (body.cycle_id !== undefined) {
@@ -71,6 +78,9 @@ export async function PATCH(request, { params }) {
       .single()
     if (error) {
       if (String(error.code || '') === '23505') {
+        if (String(error.constraint || '').includes('passcode_lookup')) {
+          return NextResponse.json({ ok: false, error: 'That passcode is already assigned to another vendor.' }, { status: 409 })
+        }
         return NextResponse.json({ ok: false, error: `Vendor code "${updates.code || ''}" is already in use. Choose another code.` }, { status: 409 })
       }
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 })

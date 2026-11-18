@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { sign, verify } from '@/lib/signingEdge'
-import { hashPasscode, verifyPasscode } from '@/lib/passcodeHash'
+import { hashPasscode, passcodeLookup, verifyPasscode } from '@/lib/passcodeHash'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -136,7 +136,7 @@ export async function POST(req) {
 
     const { data: vendor, error } = await supabase
       .from('exhibition_vendors')
-      .select('id, cycle_id, branch_id, name, code, passcode, phone, status, branches:branch_id(name, code)')
+      .select('id, cycle_id, branch_id, name, code, passcode, passcode_lookup, phone, status, branches:branch_id(name, code)')
       .eq('code', code)
       .maybeSingle()
 
@@ -162,11 +162,12 @@ export async function POST(req) {
     }
     // Legacy rows still hold the passcode in plaintext — replace it the first
     // time the vendor signs in successfully so no plaintext credential survives.
-    if (passcodeCheck.needsRehash) {
-      await supabase
-        .from('exhibition_vendors')
-        .update({ passcode: await hashPasscode(passcode) })
-        .eq('id', vendor.id)
+    // This is also the earliest safe point to fingerprint an older passcode for
+    // the global uniqueness check, because only now is its plaintext known.
+    if (passcodeCheck.needsRehash || !vendor.passcode_lookup) {
+      const updates = { passcode_lookup: passcodeLookup(passcode) }
+      if (passcodeCheck.needsRehash) updates.passcode = await hashPasscode(passcode)
+      await supabase.from('exhibition_vendors').update(updates).eq('id', vendor.id)
     }
     if (vendor.status !== 'active') {
       return NextResponse.json({ ok: false, error: 'This vendor account is not active. Please contact your administrator.' }, { status: 403 })

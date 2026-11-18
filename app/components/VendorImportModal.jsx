@@ -12,12 +12,12 @@ import Button from './ui/Button'
 import Label from './ui/Label'
 import Select from './ui/Select'
 import { parseCsv, pick, toCsv } from '../../lib/csvParse'
+import { VENDOR_EMAIL_INTERVAL_MS } from '../../lib/vendorEmailLimits'
+import { sendVendorLoginEmails } from '../../lib/vendorLoginEmailQueue'
 
 const IMPORT_LIMIT = 500
 const CHUNK_SIZE = 50
 const MAX_FILE_BYTES = 5 * 1024 * 1024
-const EMAIL_INTERVAL_MS = 10000
-const EMAIL_RATE_LIMIT_RETRIES = 2
 
 const TEMPLATE = [
   'name,email,phone,address',
@@ -29,10 +29,6 @@ const NAME_KEYS = ['name', 'vendor', 'vendor name', 'business', 'stand name']
 const EMAIL_KEYS = ['email', 'email address', 'e-mail', 'mail']
 const PHONE_KEYS = ['phone', 'telephone', 'phone number', 'mobile', 'contact']
 const ADDRESS_KEYS = ['address', 'location', 'stand location', 'stand address']
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
 
 function saveFile(filename, text) {
   const blob = new Blob([text], { type: 'text/csv;charset=utf-8' })
@@ -184,42 +180,26 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
     setEmailing(true)
     setEmailNote('')
     setEmailProgress({ done: 0, total: emailable.length })
-    let sent = 0
-    const failed = []
 
-    const sendOne = async (vendor) => {
-      const res = await fetch(`/api/admin/exhibition/vendors/${vendor.id}/send-login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ passcode: vendor.passcode }),
-      })
-      const json = await res.json().catch(() => null)
-      return { res, json }
-    }
+    const { sent, failed } = await sendVendorLoginEmails({
+      vendors: emailable,
+      send: async (vendor) => {
+        const res = await fetch(`/api/admin/exhibition/vendors/${vendor.id}/send-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ passcode: vendor.passcode }),
+        })
+        const json = await res.json().catch(() => null)
+        return { res, json }
+      },
+      onProgress: ({ done, total }) => setEmailProgress({ done, total }),
+    })
 
-    for (let i = 0; i < emailable.length; i += 1) {
-      const vendor = emailable[i]
-      if (i > 0) await sleep(EMAIL_INTERVAL_MS)
-
-      try {
-        let { res, json } = await sendOne(vendor)
-        for (let attempt = 0; res.status === 429 && attempt < EMAIL_RATE_LIMIT_RETRIES; attempt += 1) {
-          const retryAfterSec = Number(json?.retryAfter || res.headers.get('retry-after') || 0)
-          await sleep(Math.max(EMAIL_INTERVAL_MS, retryAfterSec * 1000))
-          ;({ res, json } = await sendOne(vendor))
-        }
-        if (!res.ok || !json?.ok) throw new Error(json?.error || 'Send failed')
-        sent += 1
-      } catch (e) {
-        failed.push(`${vendor.name}: ${e.message}`)
-      }
-      setEmailProgress({ done: i + 1, total: emailable.length })
-    }
-
-    const visibleFailures = failed.slice(0, 5).join(' · ')
-    const hiddenFailures = failed.length > 5 ? ` · …and ${failed.length - 5} more` : ''
+    const failures = failed.map(({ vendor, error }) => `${vendor.name}: ${error}`)
+    const visibleFailures = failures.slice(0, 5).join(' · ')
+    const hiddenFailures = failures.length > 5 ? ` · …and ${failures.length - 5} more` : ''
     setEmailNote(
-      failed.length
+      failures.length
         ? `Sent ${sent} of ${emailable.length}. ${visibleFailures}${hiddenFailures}`
         : `Login details emailed to ${sent} vendor${sent === 1 ? '' : 's'}.`
     )
@@ -319,7 +299,7 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
 
           {!!emailable.length && !emailing && !emailNote && (
             <p className="text-xs text-muted">
-              Login emails are sent one at a time, about 6 per minute and no more than 450 per hour. {emailable.length} email{emailable.length === 1 ? '' : 's'} will take about {Math.ceil((emailable.length * EMAIL_INTERVAL_MS) / 60000)} minute{Math.ceil((emailable.length * EMAIL_INTERVAL_MS) / 60000) === 1 ? '' : 's'}. Keep this window open until sending finishes.
+              Login emails are sent one at a time, about 6 per minute and no more than 450 per hour. {emailable.length} email{emailable.length === 1 ? '' : 's'} will take about {Math.ceil((emailable.length * VENDOR_EMAIL_INTERVAL_MS) / 60000)} minute{Math.ceil((emailable.length * VENDOR_EMAIL_INTERVAL_MS) / 60000) === 1 ? '' : 's'}. Keep this window open until sending finishes.
             </p>
           )}
 

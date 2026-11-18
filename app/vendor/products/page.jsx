@@ -273,7 +273,7 @@ export default function VendorProductsPage() {
           </div>
 
           {/* Pagination — vendors with many items get pages instead of one endless list */}
-          {filtered.length > pageSize && (
+          {filtered.length > 0 && (
             <div className="flex flex-col gap-3 border-t border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm text-muted">
                 Showing <span className="font-medium text-fg">{(safePage - 1) * pageSize + 1}</span>–
@@ -289,7 +289,7 @@ export default function VendorProductsPage() {
                   }}
                   className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg"
                 >
-                  {[10, 25, 50].map((s) => (
+                  {[10, 25, 50, 100].map((s) => (
                     <option key={s} value={s}>{s} per page</option>
                   ))}
                 </select>

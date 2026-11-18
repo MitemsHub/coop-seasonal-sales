@@ -11,10 +11,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
-import { hashPasscode } from '@/lib/passcodeHash'
-import { generatePasscode } from '@/lib/vendorCredentials'
+import { hashPasscode, passcodeLookup } from '@/lib/passcodeHash'
+import { generatePasscodeRecord } from '@/lib/vendorCredentials'
+import { loadPasscodeLookups } from '@/lib/vendorPasscodeLookup'
 import { missingMailConfig, sendVendorLoginEmail } from '@/lib/vendorMailer'
 import { checkRateLimitShared, rateLimitResponse } from '@/lib/rateLimitShared'
+import { VENDOR_EMAIL_HOUR_LIMIT, VENDOR_EMAIL_MINUTE_LIMIT } from '@/lib/vendorEmailLimits'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -26,9 +28,19 @@ export async function POST(request, { params }) {
   // Backstop against a scripted burst. The admin UI paces bulk mail well below
   // these limits, and the bucket is shared so multiple admins cannot combine
   // into a burst against the same SMTP account.
-  const minuteLimit = await checkRateLimitShared('exhibition-vendor-email-minute', 'smtp', 8, 60_000)
+  const minuteLimit = await checkRateLimitShared(
+    'exhibition-vendor-email-minute',
+    'smtp',
+    VENDOR_EMAIL_MINUTE_LIMIT,
+    60_000
+  )
   if (!minuteLimit.allowed) return rateLimitResponse(minuteLimit.retryAfterMs)
-  const hourLimit = await checkRateLimitShared('exhibition-vendor-email-hour', 'smtp', 450, 60 * 60_000)
+  const hourLimit = await checkRateLimitShared(
+    'exhibition-vendor-email-hour',
+    'smtp',
+    VENDOR_EMAIL_HOUR_LIMIT,
+    60 * 60_000
+  )
   if (!hourLimit.allowed) return rateLimitResponse(hourLimit.retryAfterMs)
 
   try {
@@ -66,12 +78,33 @@ export async function POST(request, { params }) {
       )
     }
 
-    const passcode = requestedPasscode || generatePasscode()
+    const takenLookups = await loadPasscodeLookups(supabase, { excludeVendorId: id })
+    let passcode
+    let lookup
+    if (requestedPasscode) {
+      passcode = requestedPasscode
+      lookup = passcodeLookup(passcode)
+      if (takenLookups.has(lookup)) {
+        return NextResponse.json({ ok: false, error: 'That passcode is already assigned to another vendor.' }, { status: 409 })
+      }
+    } else {
+      ;({ passcode, lookup } = generatePasscodeRecord({ takenLookups }))
+    }
+
     const { error: saveError } = await supabase
       .from('exhibition_vendors')
-      .update({ passcode: await hashPasscode(passcode), updated_at: new Date().toISOString() })
+      .update({
+        passcode: await hashPasscode(passcode),
+        passcode_lookup: lookup,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', id)
-    if (saveError) return NextResponse.json({ ok: false, error: saveError.message }, { status: 500 })
+    if (saveError) {
+      if (String(saveError.code || '') === '23505') {
+        return NextResponse.json({ ok: false, error: 'That passcode is already assigned to another vendor.' }, { status: 409 })
+      }
+      return NextResponse.json({ ok: false, error: saveError.message }, { status: 500 })
+    }
 
     const siteUrl = String(process.env.NEXT_PUBLIC_SITE_URL || '').trim() || new URL(request.url).origin
     const loginUrl = `${siteUrl.replace(/\/+$/, '')}/vendor/login`
