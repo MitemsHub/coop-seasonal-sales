@@ -292,7 +292,7 @@ export async function GET(request) {
         recent_orders: [...activeOrders]
           .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
           .slice(0, 8)
-          .map((o) => ({ id: o.id, status: normalizeStatus(o.status), total_amount: o.total_amount, member_name_snapshot: o.member_name_snapshot || '', member_id: o.member_id, order_id: o.order_id, payment_option: o.payment_option, created_at: o.created_at })),
+          .map((o) => ({ id: o.id, status: o.status, total_amount: o.total_amount, member_name_snapshot: o.member_name_snapshot || '', member_id: o.member_id, order_id: o.order_id, payment_option: o.payment_option, created_at: o.created_at })),
       },
     })
   } catch (e) {

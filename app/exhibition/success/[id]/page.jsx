@@ -208,13 +208,26 @@ function SuccessContent() {
             )}
 
             <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-              <Button className="flex-1" leftIcon={Receipt} onClick={() => router.push('/exhibition/orders')}>
+              <Button
+                className="h-11 w-full px-5 text-[15px] sm:h-9 sm:w-auto sm:flex-1 sm:px-4 sm:text-sm"
+                leftIcon={Receipt}
+                onClick={() => router.push('/exhibition/orders')}
+              >
                 Track my orders
               </Button>
-              <Button variant="secondary" className="flex-1" leftIcon={Home} onClick={() => router.push('/my-coop')}>
+              <Button
+                variant="secondary"
+                className="h-11 w-full px-5 text-[15px] sm:h-9 sm:w-auto sm:flex-1 sm:px-4 sm:text-sm"
+                leftIcon={Home}
+                onClick={() => router.push('/my-coop')}
+              >
                 My Coop
               </Button>
-              <Button variant="ghost" className="flex-1" onClick={() => router.push('/exhibition')}>
+              <Button
+                variant="ghost"
+                className="h-11 w-full px-5 text-[15px] sm:h-9 sm:w-auto sm:flex-1 sm:px-4 sm:text-sm"
+                onClick={() => router.push('/exhibition')}
+              >
                 Keep browsing
               </Button>
             </div>
@@ -281,20 +294,20 @@ function SuccessContent() {
 
                 {/* Receipt lines */}
                 <div className="overflow-x-auto">
-                  <table className="receipt-table w-full text-sm">
+                  <table className="receipt-table w-full text-xs sm:text-sm">
                     <thead>
                       <tr className="border-b border-line bg-subtle/60">
-                        <th className="px-5 py-2 text-left text-chips font-semibold uppercase tracking-wider text-muted sm:px-6">Item</th>
-                        <th className="px-3 py-2 text-left text-chips font-semibold uppercase tracking-wider text-muted">Vendor</th>
-                        <th className="px-3 py-2 text-right text-chips font-semibold uppercase tracking-wider text-muted">Qty</th>
-                        <th className="px-3 py-2 text-right text-chips font-semibold uppercase tracking-wider text-muted">Unit</th>
-                        <th className="px-5 py-2 text-right text-chips font-semibold uppercase tracking-wider text-muted sm:px-6">Amount</th>
+                        <th className="px-3 py-2 text-left text-chips font-semibold uppercase tracking-wider text-muted sm:px-6">Item</th>
+                        <th className="px-2 py-2 text-left text-chips font-semibold uppercase tracking-wider text-muted sm:px-3">Vendor</th>
+                        <th className="px-2 py-2 text-right text-chips font-semibold uppercase tracking-wider text-muted sm:px-3">Qty</th>
+                        <th className="hidden px-3 py-2 text-right text-chips font-semibold uppercase tracking-wider text-muted sm:table-cell">Unit</th>
+                        <th className="px-3 py-2 text-right text-chips font-semibold uppercase tracking-wider text-muted sm:px-6">Amount</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(order.lines || []).map((l) => (
                         <tr key={l.id} className="border-b border-line/70 last:border-0">
-                          <td className="px-5 py-2.5 font-medium text-fg sm:px-6">
+                          <td className="px-3 py-2.5 font-medium text-fg sm:px-6">
                             <span className="flex items-center gap-2.5">
                               <span className="relative hidden h-8 w-8 shrink-0 overflow-hidden rounded-md bg-subtle sm:block">
                                 <Image
@@ -311,10 +324,10 @@ function SuccessContent() {
                               {l.product_name}
                             </span>
                           </td>
-                          <td className="px-3 py-2.5 text-muted">{l.vendor_name || '-'}</td>
-                          <td className="px-3 py-2.5 text-right tabular-nums text-fg">{l.qty}</td>
-                          <td className="px-3 py-2.5 text-right text-muted">{l.unit || '-'}</td>
-                          <td className="px-5 py-2.5 text-right font-semibold tabular-nums text-fg sm:px-6">{naira(l.amount)}</td>
+                          <td className="px-2 py-2.5 text-muted sm:px-3">{l.vendor_name || '-'}</td>
+                          <td className="px-2 py-2.5 text-right tabular-nums text-fg sm:px-3">{l.qty}</td>
+                          <td className="hidden px-3 py-2.5 text-right text-muted sm:table-cell">{l.unit || '-'}</td>
+                          <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-fg sm:px-6">{naira(l.amount)}</td>
                         </tr>
                       ))}
                     </tbody>

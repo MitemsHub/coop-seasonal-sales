@@ -1,33 +1,29 @@
 'use client'
 
 import { useState } from 'react'
+import { isSupportedProductImage, optimizeProductImage } from '@/lib/optimizeImage'
 
 export default function ImageUpload({ onImageUploaded, currentImageUrl = null, itemSku = '' }) {
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [previewUrl, setPreviewUrl] = useState(currentImageUrl)
+  const [processedKb, setProcessedKb] = useState(null)
 
   const handleFileSelect = async (file) => {
     if (!file) return
 
-    // Validate file type
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-    if (!validTypes.includes(file.type)) {
-      alert('Please select a valid image file (JPG, PNG, or WebP)')
-      return
-    }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert('File size must be less than 5MB')
+    if (!isSupportedProductImage(file)) {
+      alert('Please select a JPG, PNG, WebP or AVIF image')
       return
     }
 
     setUploading(true)
 
     try {
+      const { blob, kb } = await optimizeProductImage(file)
+      setProcessedKb(kb)
       const formData = new FormData()
-      formData.append('image', file)
+      formData.append('image', blob, `${itemSku || 'image'}.webp`)
       formData.append('sku', itemSku)
 
       const response = await fetch('/api/upload-item-image', {
@@ -84,6 +80,11 @@ export default function ImageUpload({ onImageUploaded, currentImageUrl = null, i
               alt="Item preview"
               className="w-32 h-32 object-cover rounded-lg border-2 border-line-subtle"
             />
+            {processedKb != null && (
+              <p className="mt-1.5 text-center text-[11px] text-muted">
+                Optimized: 900×900 WebP · <span className="font-medium text-success-fg">{processedKb} KB</span>
+              </p>
+            )}
             <button
               onClick={() => {
                 setPreviewUrl(null)
@@ -139,13 +140,13 @@ export default function ImageUpload({ onImageUploaded, currentImageUrl = null, i
                 id="image-upload"
                 type="file"
                 className="hidden"
-                accept="image/jpeg,image/jpg,image/png,image/webp"
+                accept="image/jpeg,image/jpg,image/png,image/webp,image/avif"
                 onChange={handleFileChange}
                 disabled={uploading}
               />
             </div>
             <p className="text-xs text-subtext mt-1">
-              JPG, PNG, WebP up to 5MB
+              JPG, PNG, WebP or AVIF — any size. Auto-optimized to 900×900 WebP.
             </p>
           </div>
         )}

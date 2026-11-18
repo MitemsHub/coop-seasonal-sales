@@ -653,7 +653,7 @@ function ExhibitionCartContent() {
                   </div>
                 )}
 
-                {!!submitDisabledReason && (
+                {!!submitDisabledReason && !overLimit && (
                   <div className="mt-3 flex items-start gap-2 rounded-lg border border-warning-border bg-warning-bg/60 p-3">
                     <Info className="mt-0.5 h-4 w-4 shrink-0 text-warning-fg" strokeWidth={2} />
                     <p className="text-xs font-medium text-warning-fg">{submitDisabledReason}</p>

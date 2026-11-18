@@ -31,6 +31,7 @@ export default function VendorProductsPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null) // product being edited or null for create
+  const [imageKey, setImageKey] = useState('') // unique storage key for a new draft's photo
   const [form, setForm] = useState(emptyForm())
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
@@ -52,6 +53,7 @@ export default function VendorProductsPage() {
 
   const openCreate = () => {
     setEditing(null)
+    setImageKey(`draft-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`)
     setForm(emptyForm())
     setMsg('')
     setModalOpen(true)
@@ -357,7 +359,7 @@ export default function VendorProductsPage() {
           <div className="sm:col-span-2">
             <Label>Product photo</Label>
             <ImageResizeUpload
-              itemSku={form.sku || 'product'}
+              itemSku={editing?.sku || imageKey || 'product'}
               currentImageUrl={form.image_url}
               onImageUploaded={(url) => setForm((f) => ({ ...f, image_url: url }))}
             />

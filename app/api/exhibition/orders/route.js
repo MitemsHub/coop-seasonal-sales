@@ -33,10 +33,18 @@ function isMissingTable(error, table) {
 // Statuses that still consume this cycle's loan allowance. Confirmed orders
 // have already been spent — excluding them would free the cap.
 
+// Fallback for databases that have not run the short-order-number migration
+// yet. New deployments get EXH001-style ids from the sequence RPC below.
 function makeOrderId() {
   const y = new Date().getFullYear()
   const rand = Math.random().toString(36).slice(2, 8).toUpperCase()
   return `EXH-${y}-${rand}`
+}
+
+async function allocateOrderId(supabase) {
+  const { data, error } = await supabase.rpc('next_exhibition_order_id')
+  if (!error && data) return String(data)
+  return makeOrderId()
 }
 
 // GET /api/exhibition/orders?member_id=XXX — the member's exhibition orders
@@ -244,7 +252,7 @@ export async function POST(req) {
     // transaction. If any step fails, PostgreSQL rolls all of it back.
     let lastError = 'Could not create the order.'
     for (let attempt = 0; attempt < 3; attempt++) {
-      const orderId = makeOrderId()
+      const orderId = await allocateOrderId(supabase)
       const { data: result, error: rpcErr } = await supabase.rpc('create_exhibition_order_atomic', {
         p_order_id: orderId,
         p_cycle_id: cycleId,

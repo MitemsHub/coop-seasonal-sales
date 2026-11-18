@@ -6,7 +6,7 @@
 // quantities, status, and archive (delete is blocked for
 // products on orders — archive instead).
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Archive, ChevronLeft, ChevronRight, ImageOff, Package, Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ImageOff, Plus, RefreshCw, Search, Store, Upload } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
@@ -290,6 +290,37 @@ export default function ExhibitionProductsPage() {
   const pageStart = (currentPage - 1) * pageSize
   const pageProducts = products.slice(pageStart, pageStart + pageSize)
 
+  // One compact action control per row, mirroring the Food Distribution order
+  // desk. Native selects stay usable on phones and never clip inside a table.
+  const productActionSelect = (p, className = '') => (
+    <select
+      aria-label={`Actions for ${p.name}`}
+      defaultValue=""
+      disabled={busy}
+      className={`rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm font-medium text-fg focus:border-brand focus:outline-none disabled:opacity-50 ${className}`}
+      onChange={(e) => {
+        const action = e.target.value
+        e.target.value = ''
+        if (action === 'edit') openEdit(p)
+        if (action === 'approve' || action === 'reject') setApproval(p, action)
+        if (action === 'archive') setStatus(p, 'archived')
+        if (action === 'restore') setStatus(p, 'active')
+        if (action === 'delete') { setConfirmTarget(p); setConfirmOpen(true) }
+      }}
+    >
+      <option value="" disabled>Actions</option>
+      <option value="edit">Edit</option>
+      {p.approval_status === 'pending' && <option value="approve">Approve</option>}
+      {p.approval_status === 'pending' && <option value="reject">Reject</option>}
+      {p.status === 'archived' ? (
+        <option value="restore">Restore</option>
+      ) : (
+        <option value="archive">Archive</option>
+      )}
+      <option value="delete">Delete</option>
+    </select>
+  )
+
   return (
     <ProtectedRoute allowedRoles={['admin']}>
       <div className="p-4 sm:p-6 lg:p-8">
@@ -377,7 +408,9 @@ export default function ExhibitionProductsPage() {
               No products match. Create the first product for a vendor.
             </div>
           ) : (
-            <Table>
+            <>
+            <div className="hidden lg:block">
+            <Table className="min-w-[920px]">
               <THead>
                 <TR>
                   <TH>Product</TH>
@@ -433,39 +466,60 @@ export default function ExhibitionProductsPage() {
                         )}
                       </div>
                     </TD>
-                    <TD>
-                      <div className="flex items-center gap-1">
-                        {p.approval_status === 'pending' && (
-                          <>
-                            <Button size="sm" variant="success" onClick={() => setApproval(p, 'approve')} disabled={busy}>
-                              Approve
-                            </Button>
-                            <Button size="sm" variant="danger" onClick={() => setApproval(p, 'reject')} disabled={busy}>
-                              Reject
-                            </Button>
-                          </>
-                        )}
-                        <Button size="sm" variant="ghost" leftIcon={Pencil} onClick={() => openEdit(p)} disabled={busy}>
-                          Edit
-                        </Button>
-                        {p.status !== 'archived' ? (
-                          <Button size="sm" variant="warning" leftIcon={Archive} onClick={() => setStatus(p, 'archived')} disabled={busy}>
-                            Archive
-                          </Button>
-                        ) : (
-                          <Button size="sm" variant="success" onClick={() => setStatus(p, 'active')} disabled={busy}>
-                            Restore
-                          </Button>
-                        )}
-                        <Button size="sm" variant="danger" leftIcon={Trash2} onClick={() => { setConfirmTarget(p); setConfirmOpen(true) }} disabled={busy}>
-                          Delete
-                        </Button>
-                      </div>
-                    </TD>
+                    <TD className="text-right">{productActionSelect(p)}</TD>
                   </TR>
                 ))}
               </TBody>
             </Table>
+            </div>
+
+            {/* Phones get cards; a six-column table cannot stay readable. */}
+            <div className="divide-y divide-line lg:hidden">
+              {pageProducts.map((p) => (
+                <div key={`product-card-${p.id}`} className="p-4">
+                  <div className="flex items-start gap-3">
+                    {p.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.image_url} alt="" className="h-14 w-14 shrink-0 rounded-xl border border-line-subtle object-cover" />
+                    ) : (
+                      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-subtle text-subtext">
+                        <ImageOff className="h-5 w-5" strokeWidth={1.5} />
+                      </span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="break-words text-sm font-semibold text-fg">{p.name}</p>
+                      <p className="font-mono text-xs text-muted">{p.sku}</p>
+                      <div className="mt-1 flex flex-wrap gap-1.5">
+                        <Badge tone={STATUS_STYLES[p.status] || 'neutral'} variant="subtle">{p.status}</Badge>
+                        {p.approval_status === 'pending' && <Badge tone="warning" variant="subtle">Pending approval</Badge>}
+                        {p.approval_status === 'rejected' && <Badge tone="danger" variant="subtle">Rejected</Badge>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg bg-subtle/50 p-2.5 text-xs">
+                    <div className="col-span-2 min-w-0">
+                      <p className="text-chips text-muted">Vendor</p>
+                      <p className="break-words font-medium text-fg">{p.vendor_name || `#${p.vendor_id}`}</p>
+                    </div>
+                    <div>
+                      <p className="text-chips text-muted">Price</p>
+                      <p className="font-semibold tabular-nums text-fg">
+                        {naira(p.vendor_price)}
+                        {p.pending_vendor_price != null && (
+                          <span className="block text-chips text-warning-fg">→ {naira(p.pending_vendor_price)}</span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-chips text-muted">Qty</p>
+                      <p className="font-semibold tabular-nums text-fg">{p.qty == null ? '∞' : Number(p.qty).toLocaleString()}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3">{productActionSelect(p, 'w-full')}</div>
+                </div>
+              ))}
+            </div>
+            </>
           )}
           {!loading && products.length > 0 && (
             <div className="flex flex-col gap-3 border-t border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between">

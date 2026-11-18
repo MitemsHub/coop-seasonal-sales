@@ -2,34 +2,7 @@
 
 import { useState } from 'react'
 import { ImagePlus, Loader2, Sparkles, X } from 'lucide-react'
-
-// Standard processed size — uniform 1:1 product images (Jumia-style cards).
-const CANVAS = 900
-const WEBP_QUALITY = 0.82
-
-// Cover-crop to a square, resize to CANVAS, export as WebP. Runs entirely in
-// the browser so uploads are small and every product image is uniform.
-async function processImage(file) {
-  const bitmap = await createImageBitmap(file)
-  const canvas = document.createElement('canvas')
-  canvas.width = CANVAS
-  canvas.height = CANVAS
-  const ctx = canvas.getContext('2d')
-  ctx.imageSmoothingEnabled = true
-  ctx.imageSmoothingQuality = 'high'
-
-  const side = Math.min(bitmap.width, bitmap.height)
-  const sx = (bitmap.width - side) / 2
-  const sy = (bitmap.height - side) / 2
-  ctx.fillStyle = '#ffffff'
-  ctx.fillRect(0, 0, CANVAS, CANVAS)
-  ctx.drawImage(bitmap, sx, sy, side, side, 0, 0, CANVAS, CANVAS)
-  bitmap.close?.()
-
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', WEBP_QUALITY))
-  if (!blob) throw new Error('Could not process this image')
-  return { blob, kb: Math.round(blob.size / 1024) }
-}
+import { isSupportedProductImage, optimizeProductImage } from '@/lib/optimizeImage'
 
 export default function ImageResizeUpload({ onImageUploaded, currentImageUrl = null, itemSku = '' }) {
   const [uploading, setUploading] = useState(false)
@@ -39,20 +12,15 @@ export default function ImageResizeUpload({ onImageUploaded, currentImageUrl = n
 
   const handleFile = async (file) => {
     if (!file) return
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-    if (!validTypes.includes(file.type)) {
-      alert('Please select a JPG, PNG or WebP image')
-      return
-    }
-    if (file.size > 8 * 1024 * 1024) {
-      alert('Please choose an image under 8MB')
+    if (!isSupportedProductImage(file)) {
+      alert('Please select a JPG, PNG, WebP or AVIF image')
       return
     }
 
     setUploading(true)
     setProcessed(null)
     try {
-      const { blob, kb } = await processImage(file)
+      const { blob, kb } = await optimizeProductImage(file)
       const formData = new FormData()
       formData.append('image', blob, `${itemSku || 'product'}.webp`)
       formData.append('sku', itemSku)
@@ -135,10 +103,10 @@ export default function ImageResizeUpload({ onImageUploaded, currentImageUrl = n
               <span className="font-medium text-brand">Click to upload</span>
               <span className="text-muted"> or drag &amp; drop</span>
             </label>
-            <input id="exh-image-upload" type="file" accept="image/jpeg,image/jpg,image/png,image/webp" className="hidden" onChange={onChange} />
+            <input id="exh-image-upload" type="file" accept="image/jpeg,image/jpg,image/png,image/webp,image/avif" className="hidden" onChange={onChange} />
             <p className="mt-2 flex items-center gap-1 text-chips text-muted">
               <Sparkles className="h-3 w-3 text-accent" />
-              Auto-cropped square, resized &amp; compressed to WebP
+              Any size — auto-cropped square, resized &amp; compressed to WebP
             </p>
           </>
         )}

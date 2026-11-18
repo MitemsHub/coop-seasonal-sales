@@ -5,6 +5,7 @@
 // Confirmed, Cancelled). The admin approves; the member confirms receipt.
 // Cancelled orders can be restored.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
 import { CheckCircle2, ChevronLeft, ChevronRight, Clock, Inbox, PackageCheck, Plus, RefreshCw, RotateCcw, Search, XCircle } from 'lucide-react'
 import CounterInvoiceModal from '../../components/CounterInvoiceModal'
@@ -37,6 +38,7 @@ function fmtDate(iso) {
 export default function ExhibitionOrdersContent({ status = 'Pending' }) {
   const [orders, setOrders] = useState([])
   const [totalCount, setTotalCount] = useState(0)
+  const [statusCounts, setStatusCounts] = useState(null)
   const [cycles, setCycles] = useState([])
   const [cycleFilter, setCycleFilter] = useState('')
   const [payment, setPayment] = useState('')
@@ -142,6 +144,20 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // The same stage counts the Food Distribution desk shows, so an admin can
+  // see the whole exhibition queue before switching pages.
+  useEffect(() => {
+    let alive = true
+    const qs = cycleFilter ? `?cycle_id=${encodeURIComponent(cycleFilter)}` : ''
+    fetch(`/api/admin/exhibition/summary${qs}`, { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((json) => {
+        if (alive && json?.ok) setStatusCounts(json.summary?.byStatus || null)
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [cycleFilter, totalCount])
 
   const pageCount = useMemo(() => Math.max(1, Math.ceil((totalCount || 0) / Math.max(1, pageSize))), [totalCount, pageSize])
   const safePage = Math.min(Math.max(1, page), pageCount)
@@ -457,6 +473,37 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
         </div>
       </div>
 
+      <div className="scrollbar-hide mb-3 -mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
+        {[
+          ['Pending', 'Pending'],
+          ['Approved', 'Approved'],
+          ['Confirmed', 'Confirmed'],
+          ['Cancelled', 'Cancelled'],
+        ].map(([key, label]) => {
+          const active = status === key
+          const count = statusCounts?.[key]
+          return (
+            <Link
+              key={key}
+              href={`/admin/exhibition/${key.toLowerCase()}`}
+              className={[
+                'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors duration-150',
+                active
+                  ? 'border-brand bg-brand text-on-accent'
+                  : 'border-line bg-surface text-muted hover:border-line-strong hover:text-fg',
+              ].join(' ')}
+            >
+              {label}
+              {count != null && (
+                <span className={['rounded-full px-1.5 text-[11px] tabular-nums', active ? 'bg-white/20' : 'bg-subtle text-subtext'].join(' ')}>
+                  {count}
+                </span>
+              )}
+            </Link>
+          )
+        })}
+      </div>
+
       <div className={`mb-fluid-sm rounded-2xl border px-4 py-3 ${statusInfo.tone}`}>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-start gap-3">
@@ -567,6 +614,12 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
             </div>
           </div>
 
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-sm text-muted">
+            <span>Total on this page</span>
+            <span className="font-semibold tabular-nums text-fg">
+              {naira(pageAmount)} · {orders.length} order{orders.length === 1 ? '' : 's'}
+            </span>
+          </div>
         </div>
       </div>
 
