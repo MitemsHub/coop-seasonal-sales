@@ -1,13 +1,15 @@
 // app/api/admin/exhibition/vendors/import/route.js
-// Admin batch upload of vendor accounts. The admin supplies only the stand
-// name, phone and address; the system makes a readable code (V-ABJ-03) and a
-// memorable passcode (mango-4821). Passcodes are hashed before storage, so the
-// plaintext exists only in this response — the admin must hand it over.
+// Admin batch upload of vendor accounts. The admin supplies the stand name,
+// optional email, phone and address; the system makes a readable code
+// (V-ABJ-03) and a memorable passcode (mango-4821). Passcodes are hashed before
+// storage, so the plaintext exists only in this response — the admin must hand
+// it over or email it from the import result.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
 import { hashPasscode } from '@/lib/passcodeHash'
 import { generateVendorCode, generatePasscode } from '@/lib/vendorCredentials'
+import { isValidEmail, normalizeEmail } from '@/lib/emailAddress'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -54,6 +56,11 @@ export async function POST(request) {
         failed.push({ row: i + 1, error: 'Vendor name is missing' })
         continue
       }
+      const email = normalizeEmail(rawRows[i]?.email)
+      if (email && !isValidEmail(email)) {
+        failed.push({ row: i + 1, error: 'Email address is not valid' })
+        continue
+      }
 
       let code
       try {
@@ -74,11 +81,12 @@ export async function POST(request) {
           name,
           code,
           passcode: await hashPasscode(passcode),
+          email,
           phone: sanitizeString(rawRows[i]?.phone || '', { maxLength: 30, encodeHtml: false }),
           address: sanitizeString(rawRows[i]?.address || '', { maxLength: 300, encodeHtml: false }),
           status: 'active',
         })
-        .select('id, name, code, phone')
+        .select('id, name, code, email, phone')
         .single()
 
       if (error) failed.push({ row: i + 1, error: error.message })

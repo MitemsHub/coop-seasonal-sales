@@ -1,10 +1,13 @@
 // app/api/admin/exhibition/vendors/[id]/route.js
-// PATCH — update a vendor (name, phone, address, passcode, status, cycle/branch)
+// PATCH — update a vendor (name, code, email, phone, address, passcode,
+//         status, cycle/branch). Editing the code or passcode changes what the
+//         vendor signs in with; both are stored exactly as the login expects.
 // DELETE — remove a vendor (blocked when products exist — suspend instead)
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
 import { hashPasscode } from '@/lib/passcodeHash'
+import { isValidEmail, normalizeEmail } from '@/lib/emailAddress'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -24,6 +27,18 @@ export async function PATCH(request, { params }) {
       const name = sanitizeString(body.name || '', { maxLength: 255, encodeHtml: false })
       if (!name) return NextResponse.json({ ok: false, error: 'Vendor name cannot be empty' }, { status: 400 })
       updates.name = name
+    }
+    if (body.code !== undefined) {
+      const code = sanitizeString(body.code || '', { maxLength: 50, encodeHtml: false }).toUpperCase()
+      if (!code) return NextResponse.json({ ok: false, error: 'Vendor code cannot be empty' }, { status: 400 })
+      updates.code = code
+    }
+    if (body.email !== undefined) {
+      const email = normalizeEmail(body.email)
+      if (email && !isValidEmail(email)) {
+        return NextResponse.json({ ok: false, error: 'Enter a valid email address' }, { status: 400 })
+      }
+      updates.email = email
     }
     if (body.phone !== undefined) updates.phone = sanitizeString(body.phone || '', { maxLength: 30, encodeHtml: false })
     if (body.address !== undefined) updates.address = sanitizeString(body.address || '', { maxLength: 300, encodeHtml: false })
@@ -52,9 +67,14 @@ export async function PATCH(request, { params }) {
       .from('exhibition_vendors')
       .update(updates)
       .eq('id', id)
-      .select('id, cycle_id, branch_id, name, code, phone, address, status, created_at')
+      .select('id, cycle_id, branch_id, name, code, email, phone, address, status, login_sent_at, created_at')
       .single()
-    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    if (error) {
+      if (String(error.code || '') === '23505') {
+        return NextResponse.json({ ok: false, error: `Vendor code "${updates.code || ''}" is already in use. Choose another code.` }, { status: 409 })
+      }
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    }
     return NextResponse.json({ ok: true, vendor: data })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Failed to update vendor' }, { status: 500 })

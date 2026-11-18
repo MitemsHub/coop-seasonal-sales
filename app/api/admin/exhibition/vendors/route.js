@@ -1,12 +1,14 @@
 // app/api/admin/exhibition/vendors/route.js
 // Admin management of exhibition vendors (accounts are admin-created; vendors
-// sign in with code + passcode).
+// sign in with code + passcode). Code and passcode are generated when omitted.
 //   GET  — list vendors (filter: cycle_id, branch_id, q)
-//   POST — create a vendor account
+//   POST — create a vendor account; returns the plaintext login once
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
 import { hashPasscode } from '@/lib/passcodeHash'
+import { generateVendorCode, generatePasscode } from '@/lib/vendorCredentials'
+import { isValidEmail, normalizeEmail } from '@/lib/emailAddress'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -31,12 +33,12 @@ export async function GET(request) {
     const supabase = createClient()
     let query = supabase
       .from('exhibition_vendors')
-      .select('id, cycle_id, branch_id, name, code, phone, address, status, created_at, branches:branch_id(name, code), cycles:cycle_id(name, code)')
+      .select('id, cycle_id, branch_id, name, code, email, phone, address, status, login_sent_at, created_at, branches:branch_id(name, code), cycles:cycle_id(name, code)')
       .order('name')
 
     if (cycleId > 0) query = query.eq('cycle_id', cycleId)
     if (branchId > 0) query = query.eq('branch_id', branchId)
-    if (q) query = query.or(`name.ilike.%${q}%,code.ilike.%${q}%,phone.ilike.%${q}%`)
+    if (q) query = query.or(`name.ilike.%${q}%,code.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`)
 
     const { data, error } = await query
     if (error) {
@@ -75,12 +77,16 @@ export async function POST(request) {
     const name = sanitizeString(body.name || '', { maxLength: 255, encodeHtml: false })
     if (!name) return NextResponse.json({ ok: false, error: 'Vendor name is required' }, { status: 400 })
 
-    const code = sanitizeString(body.code || '', { maxLength: 50, encodeHtml: false }).toUpperCase()
-    if (!code) return NextResponse.json({ ok: false, error: 'Vendor code is required' }, { status: 400 })
+    const email = normalizeEmail(body.email)
+    if (email && !isValidEmail(email)) {
+      return NextResponse.json({ ok: false, error: 'Enter a valid email address' }, { status: 400 })
+    }
 
-    const passcode = sanitizeString(body.passcode || '', { maxLength: 50, encodeHtml: false })
-    if (!passcode) return NextResponse.json({ ok: false, error: 'Passcode is required' }, { status: 400 })
-    if (passcode.length < 4) {
+    let code = sanitizeString(body.code || '', { maxLength: 50, encodeHtml: false }).toUpperCase()
+    const generatedCode = !code
+    let passcode = sanitizeString(body.passcode || '', { maxLength: 50, encodeHtml: false })
+    const generatedPasscode = !passcode
+    if (!generatedPasscode && passcode.length < 4) {
       return NextResponse.json({ ok: false, error: 'Passcode must be at least 4 characters' }, { status: 400 })
     }
 
@@ -88,6 +94,25 @@ export async function POST(request) {
     const address = sanitizeString(body.address || '', { maxLength: 300, encodeHtml: false })
 
     const supabase = createClient()
+    if (generatedCode) {
+      const [{ data: branch, error: branchError }, { data: existing, error: codeError }] = await Promise.all([
+        supabase.from('branches').select('id, code').eq('id', branchId).maybeSingle(),
+        supabase.from('exhibition_vendors').select('code'),
+      ])
+      if (branchError) return NextResponse.json({ ok: false, error: branchError.message }, { status: 500 })
+      if (codeError) return NextResponse.json({ ok: false, error: codeError.message }, { status: 500 })
+      if (!branch) return NextResponse.json({ ok: false, error: 'Branch not found' }, { status: 404 })
+      try {
+        code = generateVendorCode({
+          branchCode: branch.code,
+          taken: new Set((existing || []).map((v) => String(v.code || '').toUpperCase())),
+        })
+      } catch (e) {
+        return NextResponse.json({ ok: false, error: e.message }, { status: 400 })
+      }
+    }
+    if (generatedPasscode) passcode = generatePasscode()
+
     const { data, error } = await supabase
       .from('exhibition_vendors')
       .insert({
@@ -96,11 +121,12 @@ export async function POST(request) {
         name,
         code,
         passcode: await hashPasscode(passcode),
+        email,
         phone,
         address,
         status: body.status === 'suspended' ? 'suspended' : 'active',
       })
-      .select('id, cycle_id, branch_id, name, code, phone, address, status, created_at')
+      .select('id, cycle_id, branch_id, name, code, email, phone, address, status, login_sent_at, created_at')
       .single()
 
     if (error) {
@@ -113,7 +139,16 @@ export async function POST(request) {
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ ok: true, vendor: data })
+    return NextResponse.json({
+      ok: true,
+      vendor: data,
+      credentials: {
+        code,
+        passcode,
+        generated_code: generatedCode,
+        generated_passcode: generatedPasscode,
+      },
+    })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Failed to create vendor' }, { status: 500 })
   }

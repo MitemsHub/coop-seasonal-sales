@@ -1,10 +1,12 @@
 'use client'
 
 // app/admin/exhibition/vendors/page.jsx
-// Vendor accounts for the exhibition — admin creates them (code + passcode),
-// vendors sign into /vendor with those credentials. Suspend, edit and delete.
+// Vendor accounts for the exhibition — admin creates them (code + passcode are
+// generated when left blank), vendors sign into /vendor with those credentials.
+// Admins can edit the login details and email them to the vendor. Suspend,
+// edit and delete live here too.
 import { useCallback, useEffect, useState } from 'react'
-import { Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload } from 'lucide-react'
+import { Mail, Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
@@ -39,6 +41,7 @@ export default function ExhibitionVendorsPage() {
   const [modal, setModal] = useState(null) // 'create' | vendor object (edit)
   const [importOpen, setImportOpen] = useState(false)
   const [form, setForm] = useState({})
+  const [createdLogin, setCreatedLogin] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -69,13 +72,15 @@ export default function ExhibitionVendorsPage() {
   }, [cycleFilter])
 
   const openCreate = () => {
-    setForm({ status: 'active' })
+    setForm({ status: 'active', email: '', code: '', passcode: '' })
     setModal('create')
   }
 
   const openEdit = (v) => {
     setForm({
       name: v.name || '',
+      code: v.code || '',
+      email: v.email || '',
       phone: v.phone || '',
       address: v.address || '',
       passcode: '',
@@ -83,6 +88,21 @@ export default function ExhibitionVendorsPage() {
       branch_id: v.branch_id,
     })
     setModal(v)
+  }
+
+  const sendLoginFor = async (vendorId, passcode = '') => {
+    const res = await fetch(`/api/admin/exhibition/vendors/${vendorId}/send-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(passcode ? { passcode } : {}),
+    })
+    const json = await res.json().catch(() => null)
+    if (!res.ok || !json?.ok) throw new Error(json?.error || 'Could not send login details')
+    setMsg({
+      type: 'success',
+      text: `Login details sent to ${json.sent_to}. Passcode: ${json.passcode}`,
+    })
+    return json
   }
 
   const saveCreate = async () => {
@@ -98,6 +118,7 @@ export default function ExhibitionVendorsPage() {
           name: form.name,
           code: form.code,
           passcode: form.passcode,
+          email: form.email,
           phone: form.phone,
           address: form.address,
           status: form.status,
@@ -105,6 +126,13 @@ export default function ExhibitionVendorsPage() {
       })
       const json = await res.json()
       if (!json.ok) throw new Error(json.error || 'Failed to create vendor')
+      setCreatedLogin({
+        id: json.vendor.id,
+        name: json.vendor.name,
+        email: json.vendor.email || '',
+        code: json.credentials.code,
+        passcode: json.credentials.passcode,
+      })
       setModal(null)
       await load()
     } catch (e) {
@@ -114,11 +142,15 @@ export default function ExhibitionVendorsPage() {
     }
   }
 
-  const saveEdit = async () => {
+  const saveEdit = async (emailLogin = false) => {
+    if (emailLogin && !String(form.email || '').trim()) {
+      setMsg({ type: 'error', text: 'Add an email address for this vendor first.' })
+      return
+    }
     setBusy(true)
     setMsg(null)
     try {
-      const payload = { name: form.name, phone: form.phone, address: form.address }
+      const payload = { name: form.name, code: form.code, email: form.email, phone: form.phone, address: form.address }
       if (form.passcode) payload.passcode = form.passcode
       if (form.cycle_id) payload.cycle_id = Number(form.cycle_id)
       if (form.branch_id) payload.branch_id = Number(form.branch_id)
@@ -131,6 +163,20 @@ export default function ExhibitionVendorsPage() {
       if (!json.ok) throw new Error(json.error || 'Failed to update vendor')
       setModal(null)
       await load()
+      if (emailLogin) await sendLoginFor(modal.id, form.passcode)
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const emailCreatedLogin = async () => {
+    if (!createdLogin?.email) return
+    setBusy(true)
+    setMsg(null)
+    try {
+      await sendLoginFor(createdLogin.id, createdLogin.passcode)
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
     } finally {
@@ -187,7 +233,7 @@ export default function ExhibitionVendorsPage() {
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-h2 font-bold tracking-tight text-fg">Exhibition Vendors</h1>
-            <p className="mt-0.5 text-sm text-muted">Accounts are created here. Vendors sign in with their code and passcode.</p>
+            <p className="mt-0.5 text-sm text-muted">Codes and passcodes auto-generate. Vendors sign in with their stand and passcode; you can email the details.</p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" leftIcon={RefreshCw} onClick={load} disabled={loading || busy}>
@@ -208,6 +254,35 @@ export default function ExhibitionVendorsPage() {
           </div>
         )}
 
+        {createdLogin && (
+          <div className="mb-4 rounded-xl border border-success-border bg-success-bg px-4 py-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-success-fg">
+                <p className="font-semibold">{createdLogin.name} created</p>
+                <p className="mt-0.5 text-xs">
+                  Code <span className="font-mono font-semibold">{createdLogin.code}</span> · Passcode{' '}
+                  <span className="font-mono font-semibold">{createdLogin.passcode}</span>
+                  {createdLogin.email ? ` · ${createdLogin.email}` : ' · no email on file'}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  leftIcon={Mail}
+                  onClick={emailCreatedLogin}
+                  disabled={busy || !createdLogin.email}
+                >
+                  Email login
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setCreatedLogin(null)}>
+                  Dismiss
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Filters */}
         <div className="mb-4 flex flex-col gap-3 sm:flex-row">
           <div className="relative sm:max-w-xs sm:flex-1">
@@ -216,7 +291,7 @@ export default function ExhibitionVendorsPage() {
               value={term}
               onChange={(e) => setTerm(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && load()}
-              placeholder="Search name, code or phone…"
+              placeholder="Search name, code, email or phone…"
               className="w-full rounded-xl border border-line bg-surface py-2 pl-9 pr-3 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
             />
           </div>
@@ -264,6 +339,7 @@ export default function ExhibitionVendorsPage() {
                     <TD className="text-muted">{v.branch_name || `#${v.branch_id}`}</TD>
                     <TD className="text-muted">{v.cycle_name || `#${v.cycle_id}`}</TD>
                     <TD>
+                      <div className="text-xs text-muted">{v.email || '—'}</div>
                       <div className="text-xs text-muted">{v.phone || '—'}</div>
                       <div className="text-xs text-muted">{v.address || ''}</div>
                     </TD>
@@ -316,6 +392,7 @@ export default function ExhibitionVendorsPage() {
                       </div>
                       <div className="col-span-2">
                         <div className="text-subtext">Contact</div>
+                        <div className="text-fg">{v.email || '—'}</div>
                         <div className="text-fg">{v.phone || '—'}</div>
                         {v.address ? <div className="text-muted">{v.address}</div> : null}
                       </div>
@@ -349,8 +426,13 @@ export default function ExhibitionVendorsPage() {
                 <Input id="exh-v-name" value={form.name || ''} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Abuja Foods" />
               </div>
               <div>
-                <Label htmlFor="exh-v-code">Code</Label>
-                <Input id="exh-v-code" value={form.code || ''} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder="e.g. VND-001" disabled={modal !== 'create'} />
+                <Label htmlFor="exh-v-code">Vendor code</Label>
+                <Input
+                  id="exh-v-code"
+                  value={form.code || ''}
+                  onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                  placeholder={modal === 'create' ? 'Blank = auto-generate' : 'e.g. V-ABJ-03'}
+                />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -375,21 +457,54 @@ export default function ExhibitionVendorsPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
+                <Label htmlFor="exh-v-email">Email</Label>
+                <Input
+                  id="exh-v-email"
+                  type="email"
+                  value={form.email || ''}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  placeholder="vendor@example.com"
+                />
+              </div>
+              <div>
                 <Label htmlFor="exh-v-phone">Phone</Label>
                 <Input id="exh-v-phone" value={form.phone || ''} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="exh-v-passcode">{modal === 'create' ? 'Passcode' : 'New passcode (blank = keep)'}</Label>
-                <Input id="exh-v-passcode" value={form.passcode || ''} onChange={(e) => setForm({ ...form, passcode: e.target.value })} />
+                <Input
+                  id="exh-v-passcode"
+                  value={form.passcode || ''}
+                  onChange={(e) => setForm({ ...form, passcode: e.target.value })}
+                  placeholder={modal === 'create' ? 'Blank = auto-generate' : 'Blank = unchanged'}
+                />
+              </div>
+              <div>
+                <Label htmlFor="exh-v-address">Address / stand location</Label>
+                <Input id="exh-v-address" value={form.address || ''} onChange={(e) => setForm({ ...form, address: e.target.value })} />
               </div>
             </div>
-            <div>
-              <Label htmlFor="exh-v-address">Address / stand location</Label>
-              <Input id="exh-v-address" value={form.address || ''} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
+            {modal !== 'create' && (
+              <p className="text-xs text-muted">
+                Changing the code or passcode changes what the vendor signs in with. “Save & email login” saves these edits first, then sends the new details.
+              </p>
+            )}
+            <div className="flex flex-wrap justify-end gap-2 pt-2">
               <Button variant="secondary" onClick={() => setModal(null)}>Cancel</Button>
-              <Button loading={busy} onClick={modal === 'create' ? saveCreate : saveEdit}>
+              {modal !== 'create' && (
+                <Button
+                  variant="secondary"
+                  leftIcon={Mail}
+                  loading={busy}
+                  onClick={() => saveEdit(true)}
+                  disabled={!String(form.email || '').trim()}
+                >
+                  Save &amp; email login
+                </Button>
+              )}
+              <Button loading={busy} onClick={() => (modal === 'create' ? saveCreate() : saveEdit(false))}>
                 {modal === 'create' ? 'Create vendor' : 'Save changes'}
               </Button>
             </div>

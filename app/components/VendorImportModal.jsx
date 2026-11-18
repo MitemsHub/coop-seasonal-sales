@@ -1,12 +1,12 @@
 'use client'
 
 // app/components/VendorImportModal.jsx
-// Admin batch upload of vendor accounts. The admin only supplies names (and
-// optionally phone/address); the system generates a code and a memorable
-// passcode per stand and shows them once, with a CSV download to hand out.
-// Passcodes are hashed at rest, so this table is the only place they appear.
+// Admin batch upload of vendor accounts. The admin supplies names (and
+// optionally email/phone/address); the system generates a code and a memorable
+// passcode per stand and shows them once, with a CSV download or email to hand
+// out. Passcodes are hashed at rest, so this table is the only place they appear.
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Download, FileSpreadsheet, Upload } from 'lucide-react'
+import { CheckCircle2, Download, FileSpreadsheet, Mail, Upload } from 'lucide-react'
 import Modal from './ui/Modal'
 import Button from './ui/Button'
 import Label from './ui/Label'
@@ -14,12 +14,13 @@ import Select from './ui/Select'
 import { parseCsv, pick, toCsv } from '../../lib/csvParse'
 
 const TEMPLATE = [
-  'name,phone,address',
-  'Mitams Foods,08030000000,Stand 12 - Main hall',
-  'Abuja Cars,08031111111,Stand 4 - Car park',
+  'name,email,phone,address',
+  'Mitams Foods,mitams@example.com,08030000000,Stand 12 - Main hall',
+  'Abuja Cars,abujacars@example.com,08031111111,Stand 4 - Car park',
 ].join('\n')
 
 const NAME_KEYS = ['name', 'vendor', 'vendor name', 'business', 'stand name']
+const EMAIL_KEYS = ['email', 'email address', 'e-mail', 'mail']
 const PHONE_KEYS = ['phone', 'telephone', 'phone number', 'mobile', 'contact']
 const ADDRESS_KEYS = ['address', 'location', 'stand location', 'stand address']
 
@@ -41,6 +42,8 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  const [emailing, setEmailing] = useState(false)
+  const [emailNote, setEmailNote] = useState('')
 
   useEffect(() => {
     if (!open) return
@@ -51,6 +54,8 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
     setBusy(false)
     setError('')
     setResult(null)
+    setEmailing(false)
+    setEmailNote('')
   }, [open])
 
   const cycleBranches = useMemo(() => branches, [branches])
@@ -61,6 +66,7 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
     if (!file) return
     setError('')
     setResult(null)
+    setEmailNote('')
     setRows([])
     setFileName(file.name)
     if (file.size > 1024 * 1024) {
@@ -80,6 +86,7 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
     setRows(
       records.map((record) => ({
         name: pick(record, NAME_KEYS),
+        email: pick(record, EMAIL_KEYS),
         phone: pick(record, PHONE_KEYS),
         address: pick(record, ADDRESS_KEYS),
       }))
@@ -117,12 +124,43 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
     toCsv(
       [
         { header: 'name', value: (v) => v.name },
+        { header: 'email', value: (v) => v.email },
         { header: 'code', value: (v) => v.code },
         { header: 'passcode', value: (v) => v.passcode },
         { header: 'phone', value: (v) => v.phone },
       ],
       result?.created || []
     )
+
+  const emailable = (result?.created || []).filter((v) => v.email)
+
+  const emailLogins = async () => {
+    if (!emailable.length) return
+    setEmailing(true)
+    setEmailNote('')
+    let sent = 0
+    const failed = []
+    for (const vendor of emailable) {
+      try {
+        const res = await fetch(`/api/admin/exhibition/vendors/${vendor.id}/send-login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ passcode: vendor.passcode }),
+        })
+        const json = await res.json().catch(() => null)
+        if (!res.ok || !json?.ok) throw new Error(json?.error || 'Send failed')
+        sent += 1
+      } catch (e) {
+        failed.push(`${vendor.name}: ${e.message}`)
+      }
+    }
+    setEmailNote(
+      failed.length
+        ? `Sent ${sent} of ${emailable.length}. ${failed.join(' · ')}`
+        : `Login details emailed to ${sent} vendor${sent === 1 ? '' : 's'}.`
+    )
+    setEmailing(false)
+  }
 
   return (
     <Modal
@@ -136,6 +174,15 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
           <>
             <Button variant="secondary" leftIcon={Download} onClick={() => saveFile('vendor-logins.csv', loginsCsv())}>
               Download logins
+            </Button>
+            <Button
+              variant="secondary"
+              leftIcon={Mail}
+              onClick={emailLogins}
+              loading={emailing}
+              disabled={!emailable.length || emailing}
+            >
+              Email {emailable.length ? `${emailable.length} login${emailable.length === 1 ? '' : 's'}` : 'logins'}
             </Button>
             <Button variant="brand" onClick={close}>
               Done
@@ -177,6 +224,7 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
                 <thead className="bg-subtle text-muted">
                   <tr>
                     <th className="px-3 py-2 font-medium">Vendor</th>
+                    <th className="px-3 py-2 font-medium">Email</th>
                     <th className="px-3 py-2 font-medium">Code</th>
                     <th className="px-3 py-2 font-medium">Passcode</th>
                   </tr>
@@ -185,6 +233,7 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
                   {result.created.map((vendor) => (
                     <tr key={vendor.id || vendor.code}>
                       <td className="px-3 py-2 text-fg">{vendor.name}</td>
+                      <td className="px-3 py-2 text-muted">{vendor.email || '—'}</td>
                       <td className="px-3 py-2 font-mono text-muted">{vendor.code}</td>
                       <td className="px-3 py-2 font-mono font-semibold text-fg">{vendor.passcode}</td>
                     </tr>
@@ -192,6 +241,12 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
                 </tbody>
               </table>
             </div>
+          )}
+
+          {!!emailNote && (
+            <p className={`text-xs ${emailNote.startsWith('Login details emailed') ? 'text-success-fg' : 'text-warning-fg'}`}>
+              {emailNote}
+            </p>
           )}
 
           {!!result.failed?.length && (
@@ -237,7 +292,7 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
           <div className="rounded-xl border border-dashed border-line bg-subtle px-4 py-6 text-center">
             <FileSpreadsheet className="mx-auto mb-2 h-7 w-7 text-muted" strokeWidth={1.6} />
             <p className="text-sm font-medium text-fg">{fileName || 'Choose a CSV file'}</p>
-            <p className="mt-0.5 text-xs text-muted">Columns: name, phone, address. Only name is required — codes and passcodes are generated.</p>
+            <p className="mt-0.5 text-xs text-muted">Columns: name, email, phone, address. Only name is required — codes and passcodes are generated.</p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
               <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-on-accent">
                 <Upload className="h-3.5 w-3.5" />
@@ -260,6 +315,7 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
                   <thead className="bg-surface text-muted">
                     <tr>
                       <th className="px-3 py-2 font-medium">Name</th>
+                      <th className="px-3 py-2 font-medium">Email</th>
                       <th className="px-3 py-2 font-medium">Phone</th>
                       <th className="px-3 py-2 font-medium">Stand</th>
                     </tr>
@@ -268,6 +324,7 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
                     {rows.slice(0, 8).map((row, index) => (
                       <tr key={`${row.name}-${index}`}>
                         <td className="px-3 py-2 text-fg">{row.name || '—'}</td>
+                        <td className="px-3 py-2 text-muted">{row.email || '—'}</td>
                         <td className="px-3 py-2 text-muted">{row.phone || '—'}</td>
                         <td className="px-3 py-2 text-muted">{row.address || '—'}</td>
                       </tr>
