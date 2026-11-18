@@ -32,6 +32,7 @@ export async function GET(request) {
   try {
     const supabase = createClient()
     const { searchParams } = new URL(request.url)
+    const hasDirect = !!process.env.SUPABASE_DB_URL
     const ordersHasCycle = await hasColumn(supabase, 'orders', 'cycle_id')
     const cycleId = await resolveCycleId(supabase, searchParams, ordersHasCycle)
     if (ordersHasCycle && !cycleId) {
@@ -49,12 +50,16 @@ export async function GET(request) {
     }
 
     const canFilterViews = ordersHasCycle && cycleId
+    // The direct SQL fallback below is cycle-aware. When it is available, do
+    // not probe the legacy views for a cycle_id column — PostgREST records
+    // each failed probe as a 42703 error even though it is only a capability
+    // check.
     const [
       byBranchHasCycle,
       byBranchDeptHasCycle,
       byDeliveryMemberHasCycle,
       byCategoryHasCycle
-    ] = canFilterViews
+    ] = canFilterViews && !hasDirect
       ? await Promise.all([
           hasColumn(supabase, 'v_applications_by_branch', 'cycle_id'),
           hasColumn(supabase, 'v_applications_by_branch_department', 'cycle_id'),
@@ -65,8 +70,6 @@ export async function GET(request) {
 
     const viewsAreCycleSafe =
       !ordersHasCycle || (byBranchHasCycle && byBranchDeptHasCycle && byDeliveryMemberHasCycle && byCategoryHasCycle)
-
-    const hasDirect = !!process.env.SUPABASE_DB_URL
 
     let breakdowns = {
       byBranch: [],

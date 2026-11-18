@@ -48,7 +48,10 @@ export async function GET(req) {
       return NextResponse.json({ ok: false, error: 'No active cycle found' }, { status: 400 })
     }
 
-    const viewHasCycle = ordersHasCycle && (await hasColumn(supabase, 'v_applications_by_delivery_branch_member_branch', 'cycle_id'))
+    // Skip the capability probe when the direct database is configured: the
+    // fallback below already filters by cycle. The probe itself is recorded as
+    // a 42703 error in Postgres logs when the legacy view lacks cycle_id.
+    const viewHasCycle = ordersHasCycle && !process.env.SUPABASE_DB_URL && (await hasColumn(supabase, 'v_applications_by_delivery_branch_member_branch', 'cycle_id'))
     if (viewHasCycle) {
       let q = supabase
         .from('v_applications_by_delivery_branch_member_branch')
