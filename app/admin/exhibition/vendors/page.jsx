@@ -431,7 +431,7 @@ export default function ExhibitionVendorsPage() {
                   id="exh-v-code"
                   value={form.code || ''}
                   onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
-                  placeholder={modal === 'create' ? 'Blank = auto-generate' : 'e.g. V-ABJ-03'}
+                  placeholder={modal === 'create' ? 'Blank = auto-generate' : 'e.g. V0001'}
                 />
               </div>
             </div>

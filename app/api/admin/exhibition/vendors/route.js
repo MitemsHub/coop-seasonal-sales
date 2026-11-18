@@ -104,7 +104,6 @@ export async function POST(request) {
       if (!branch) return NextResponse.json({ ok: false, error: 'Branch not found' }, { status: 404 })
       try {
         code = generateVendorCode({
-          branchCode: branch.code,
           taken: new Set((existing || []).map((v) => String(v.code || '').toUpperCase())),
         })
       } catch (e) {

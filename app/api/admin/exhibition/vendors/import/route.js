@@ -1,7 +1,7 @@
 // app/api/admin/exhibition/vendors/import/route.js
 // Admin batch upload of vendor accounts. The admin supplies the stand name,
 // optional email, phone and address; the system makes a readable code
-// (V-ABJ-03) and a memorable passcode (mango-4821). Passcodes are hashed before
+// (V0001) and a professional passcode (K7Q2M9). Passcodes are hashed before
 // storage, so the plaintext exists only in this response — the admin must hand
 // it over or email it from the import result.
 import { NextResponse } from 'next/server'
@@ -14,7 +14,8 @@ import { isValidEmail, normalizeEmail } from '@/lib/emailAddress'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// Passcodes are scrypt-hashed one at a time, so keep batches modest.
+// Passcodes are scrypt-hashed one at a time, so keep each request modest.
+// The import modal sends larger uploads (up to 500) in 50-row chunks.
 const MAX_ROWS = 50
 
 export async function POST(request) {
@@ -46,7 +47,14 @@ export async function POST(request) {
     const { data: existing, error: codeError } = await supabase.from('exhibition_vendors').select('code')
     if (codeError) return NextResponse.json({ ok: false, error: codeError.message }, { status: 500 })
     const takenCodes = new Set((existing || []).map((v) => String(v.code || '').toUpperCase()))
-    const takenPasscodes = new Set()
+    // The modal sends back passcodes from earlier chunks, so a 500-vendor
+    // upload cannot generate the same passcode twice across chunks.
+    const reservedPasscodes = Array.isArray(body?.reserved_passcodes)
+      ? body.reserved_passcodes.slice(0, 1000)
+      : []
+    const takenPasscodes = new Set(
+      reservedPasscodes.map((value) => String(value || '').toUpperCase()).filter(Boolean)
+    )
 
     const failed = []
     const created = []
@@ -64,7 +72,7 @@ export async function POST(request) {
 
       let code
       try {
-        code = generateVendorCode({ branchCode: branch.code, taken: takenCodes })
+        code = generateVendorCode({ taken: takenCodes })
       } catch (e) {
         failed.push({ row: i + 1, error: e.message })
         continue

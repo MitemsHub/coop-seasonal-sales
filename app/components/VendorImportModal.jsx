@@ -2,8 +2,8 @@
 
 // app/components/VendorImportModal.jsx
 // Admin batch upload of vendor accounts. The admin supplies names (and
-// optionally email/phone/address); the system generates a code and a memorable
-// passcode per stand and shows them once, with a CSV download or email to hand
+// optionally email/phone/address); the system generates a code and a
+// professional passcode per stand and shows them once, with a CSV download or email to hand
 // out. Passcodes are hashed at rest, so this table is the only place they appear.
 import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, Download, FileSpreadsheet, Mail, Upload } from 'lucide-react'
@@ -12,6 +12,12 @@ import Button from './ui/Button'
 import Label from './ui/Label'
 import Select from './ui/Select'
 import { parseCsv, pick, toCsv } from '../../lib/csvParse'
+
+const IMPORT_LIMIT = 500
+const CHUNK_SIZE = 50
+const MAX_FILE_BYTES = 5 * 1024 * 1024
+const EMAIL_INTERVAL_MS = 10000
+const EMAIL_RATE_LIMIT_RETRIES = 2
 
 const TEMPLATE = [
   'name,email,phone,address',
@@ -23,6 +29,10 @@ const NAME_KEYS = ['name', 'vendor', 'vendor name', 'business', 'stand name']
 const EMAIL_KEYS = ['email', 'email address', 'e-mail', 'mail']
 const PHONE_KEYS = ['phone', 'telephone', 'phone number', 'mobile', 'contact']
 const ADDRESS_KEYS = ['address', 'location', 'stand location', 'stand address']
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 function saveFile(filename, text) {
   const blob = new Blob([text], { type: 'text/csv;charset=utf-8' })
@@ -44,6 +54,8 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
   const [result, setResult] = useState(null)
   const [emailing, setEmailing] = useState(false)
   const [emailNote, setEmailNote] = useState('')
+  const [emailProgress, setEmailProgress] = useState({ done: 0, total: 0 })
+  const [progress, setProgress] = useState({ done: 0, total: 0 })
 
   useEffect(() => {
     if (!open) return
@@ -56,6 +68,8 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
     setResult(null)
     setEmailing(false)
     setEmailNote('')
+    setEmailProgress({ done: 0, total: 0 })
+    setProgress({ done: 0, total: 0 })
   }, [open])
 
   const cycleBranches = useMemo(() => branches, [branches])
@@ -69,14 +83,18 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
     setEmailNote('')
     setRows([])
     setFileName(file.name)
-    if (file.size > 1024 * 1024) {
-      setError('That file is larger than 1 MB. Split it into smaller lists.')
+    if (file.size > MAX_FILE_BYTES) {
+      setError('That file is larger than 5 MB. Split it into smaller lists.')
       return
     }
     const text = await file.text().catch(() => '')
     const { headers, records } = parseCsv(text)
     if (!records.length) {
       setError('No vendor rows found. Keep the header row and add at least one vendor.')
+      return
+    }
+    if (records.length > IMPORT_LIMIT) {
+      setError(`Import at most ${IMPORT_LIMIT} vendors at a time. Split the file into smaller lists.`)
       return
     }
     if (!NAME_KEYS.some((key) => headers.includes(key))) {
@@ -98,25 +116,52 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
     if (!cycleId || !branchId) return setError('Pick the season and the branch first.')
     if (!rows.length) return setError('Choose a CSV file first.')
     setBusy(true)
+    setProgress({ done: 0, total: rows.length })
+    const created = []
+    const failed = []
     try {
-      const res = await fetch('/api/admin/exhibition/vendors/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cycle_id: Number(cycleId), branch_id: Number(branchId), rows }),
-      })
-      const json = await res.json().catch(() => null)
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Import failed')
-      setResult(json)
-      if (json.created?.length) onDone?.()
+      // The import API hashes passcodes, so it accepts a safe batch size only.
+      // Send larger uploads in chunks and keep the admin on one progress screen.
+      for (let start = 0; start < rows.length; start += CHUNK_SIZE) {
+        const chunk = rows.slice(start, start + CHUNK_SIZE)
+        const end = start + chunk.length
+        const res = await fetch('/api/admin/exhibition/vendors/import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cycle_id: Number(cycleId),
+            branch_id: Number(branchId),
+            rows: chunk,
+            reserved_passcodes: created.map((vendor) => vendor.passcode),
+          }),
+        })
+        const json = await res.json().catch(() => null)
+        if (!res.ok || !json?.ok) {
+          throw new Error(`Rows ${start + 1}–${end}: ${json?.error || 'Import failed'}`)
+        }
+        created.push(...(json.created || []))
+        for (const item of json.failed || []) {
+          failed.push({ ...item, row: start + Number(item.row || 0) })
+        }
+        setProgress({ done: end, total: rows.length })
+      }
+      setResult({ ok: true, created, failed })
+      if (created.length) onDone?.()
     } catch (e) {
-      setError(e.message || 'Import failed')
+      if (created.length) {
+        setResult({ ok: true, created, failed })
+        setError(`${e.message}. ${created.length} vendor${created.length === 1 ? ' was' : 's were'} created before the import stopped — download their logins before closing.`)
+        onDone?.()
+      } else {
+        setError(e.message || 'Import failed')
+      }
     } finally {
       setBusy(false)
     }
   }
 
   const close = () => {
-    if (busy) return
+    if (busy || emailing) return
     onClose()
   }
 
@@ -138,25 +183,44 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
     if (!emailable.length) return
     setEmailing(true)
     setEmailNote('')
+    setEmailProgress({ done: 0, total: emailable.length })
     let sent = 0
     const failed = []
-    for (const vendor of emailable) {
+
+    const sendOne = async (vendor) => {
+      const res = await fetch(`/api/admin/exhibition/vendors/${vendor.id}/send-login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passcode: vendor.passcode }),
+      })
+      const json = await res.json().catch(() => null)
+      return { res, json }
+    }
+
+    for (let i = 0; i < emailable.length; i += 1) {
+      const vendor = emailable[i]
+      if (i > 0) await sleep(EMAIL_INTERVAL_MS)
+
       try {
-        const res = await fetch(`/api/admin/exhibition/vendors/${vendor.id}/send-login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ passcode: vendor.passcode }),
-        })
-        const json = await res.json().catch(() => null)
+        let { res, json } = await sendOne(vendor)
+        for (let attempt = 0; res.status === 429 && attempt < EMAIL_RATE_LIMIT_RETRIES; attempt += 1) {
+          const retryAfterSec = Number(json?.retryAfter || res.headers.get('retry-after') || 0)
+          await sleep(Math.max(EMAIL_INTERVAL_MS, retryAfterSec * 1000))
+          ;({ res, json } = await sendOne(vendor))
+        }
         if (!res.ok || !json?.ok) throw new Error(json?.error || 'Send failed')
         sent += 1
       } catch (e) {
         failed.push(`${vendor.name}: ${e.message}`)
       }
+      setEmailProgress({ done: i + 1, total: emailable.length })
     }
+
+    const visibleFailures = failed.slice(0, 5).join(' · ')
+    const hiddenFailures = failed.length > 5 ? ` · …and ${failed.length - 5} more` : ''
     setEmailNote(
       failed.length
-        ? `Sent ${sent} of ${emailable.length}. ${failed.join(' · ')}`
+        ? `Sent ${sent} of ${emailable.length}. ${visibleFailures}${hiddenFailures}`
         : `Login details emailed to ${sent} vendor${sent === 1 ? '' : 's'}.`
     )
     setEmailing(false)
@@ -167,7 +231,7 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
       open={open}
       onClose={close}
       title="Import vendors"
-      description="Upload a list of stands — the system creates a code and passcode for each one."
+      description={`Upload up to ${IMPORT_LIMIT} stands — the system creates a code and passcode for each one.`}
       size="lg"
       footer={
         result ? (
@@ -182,9 +246,11 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
               loading={emailing}
               disabled={!emailable.length || emailing}
             >
-              Email {emailable.length ? `${emailable.length} login${emailable.length === 1 ? '' : 's'}` : 'logins'}
+              {emailing && emailProgress.total
+                ? `Sending ${emailProgress.done} / ${emailProgress.total}…`
+                : `Email ${emailable.length ? `${emailable.length} login${emailable.length === 1 ? '' : 's'}` : 'logins'}`}
             </Button>
-            <Button variant="brand" onClick={close}>
+            <Button variant="brand" onClick={close} disabled={emailing}>
               Done
             </Button>
           </>
@@ -194,7 +260,9 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
               Cancel
             </Button>
             <Button variant="brand" onClick={importRows} loading={busy} disabled={!rows.length}>
-              Import {rows.length ? `${rows.length} vendor${rows.length === 1 ? '' : 's'}` : ''}
+              {busy && progress.total
+                ? `Importing ${progress.done} / ${progress.total}…`
+                : `Import ${rows.length ? `${rows.length} vendor${rows.length === 1 ? '' : 's'}` : ''}`}
             </Button>
           </>
         )
@@ -241,6 +309,18 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
                 </tbody>
               </table>
             </div>
+          )}
+
+          {emailing && (
+            <p className="text-xs text-muted">
+              Sending {Math.min(emailProgress.done + 1, emailProgress.total)} of {emailProgress.total} — emails are paced to protect the SMTP account.
+            </p>
+          )}
+
+          {!!emailable.length && !emailing && !emailNote && (
+            <p className="text-xs text-muted">
+              Login emails are sent one at a time, about 6 per minute and no more than 450 per hour. {emailable.length} email{emailable.length === 1 ? '' : 's'} will take about {Math.ceil((emailable.length * EMAIL_INTERVAL_MS) / 60000)} minute{Math.ceil((emailable.length * EMAIL_INTERVAL_MS) / 60000) === 1 ? '' : 's'}. Keep this window open until sending finishes.
+            </p>
           )}
 
           {!!emailNote && (

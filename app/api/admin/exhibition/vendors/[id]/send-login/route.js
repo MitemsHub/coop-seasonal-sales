@@ -3,8 +3,8 @@
 //
 // Body: { passcode? }
 //   - With passcode, that passcode is saved and sent.
-//   - Without one, a fresh easy-to-read passcode is generated and sent, so an
-//     admin can recover a vendor who has lost their details.
+//   - Without one, a fresh passcode is generated and sent, so an admin can
+//     recover a vendor who has lost their details.
 //
 // The plaintext passcode is returned to the signed-in admin as a fallback if
 // mail delivery fails. It is never stored in plaintext.
@@ -14,6 +14,7 @@ import { validateSession, sanitizeString } from '@/lib/validation'
 import { hashPasscode } from '@/lib/passcodeHash'
 import { generatePasscode } from '@/lib/vendorCredentials'
 import { missingMailConfig, sendVendorLoginEmail } from '@/lib/vendorMailer'
+import { checkRateLimitShared, rateLimitResponse } from '@/lib/rateLimitShared'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -21,6 +22,14 @@ export const dynamic = 'force-dynamic'
 export async function POST(request, { params }) {
   const session = await validateSession(request, 'admin')
   if (!session.valid) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+
+  // Backstop against a scripted burst. The admin UI paces bulk mail well below
+  // these limits, and the bucket is shared so multiple admins cannot combine
+  // into a burst against the same SMTP account.
+  const minuteLimit = await checkRateLimitShared('exhibition-vendor-email-minute', 'smtp', 8, 60_000)
+  if (!minuteLimit.allowed) return rateLimitResponse(minuteLimit.retryAfterMs)
+  const hourLimit = await checkRateLimitShared('exhibition-vendor-email-hour', 'smtp', 450, 60 * 60_000)
+  if (!hourLimit.allowed) return rateLimitResponse(hourLimit.retryAfterMs)
 
   try {
     const id = Math.trunc(Number(params?.id || 0))
