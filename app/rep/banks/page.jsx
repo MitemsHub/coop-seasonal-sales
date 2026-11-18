@@ -225,16 +225,17 @@ function RepFoodBanksContent() {
     )
   }, [banks, invoiceListOpen])
 
+  // Paid status locks an individual account, not the page: a rep whose
+  // accounts are all paid must still be able to attach a fresh account for the
+  // next payment. Only the branch-level paid flag locks adding.
   const openBank = (row = null) => {
-    const locked = row ? isAccountPaid(row) : branchPaid || allAccountsPaid
+    const locked = row ? isAccountPaid(row) : branchPaid
     if (locked) {
       setMsg({
         type: 'error',
         text: branchPaid
           ? 'Branch is marked as Paid. Editing is locked.'
-          : row
-            ? 'This bank account is marked as Paid. Editing is locked.'
-            : 'All bank accounts are marked as Paid. Editing is locked.',
+          : 'This bank account is marked as Paid. Editing is locked.',
       })
       return
     }
@@ -780,7 +781,7 @@ function RepFoodBanksContent() {
                     <button
                       type="button"
                       onClick={() => openBank(null)}
-                      disabled={branchPaid || allAccountsPaid || banks.length >= 10}
+                      disabled={branchPaid || banks.length >= 10}
                       className="inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent transition-colors duration-200 ease-sakani hover:bg-accent-hover disabled:opacity-50"
                     >
                       Add Account

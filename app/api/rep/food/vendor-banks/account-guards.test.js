@@ -162,7 +162,7 @@ describe('rep food bank-account paid locks', () => {
 })
 
 describe('rep food bank-account add locks', () => {
-  it('blocks adding an account when every existing account is Paid', async () => {
+  it('allows adding an account when every existing account is Paid', async () => {
     const { client, state } = makeSupabase({
       rows: [
         { id: 1, account_number: '111', is_current: false, is_paid: true },
@@ -180,9 +180,35 @@ describe('rep food bank-account add locks', () => {
     )
     const body = await res.json()
 
+    expect(res.status).toBe(200)
+    expect(body.ok).toBe(true)
+    expect(state.inserted).toBe(1)
+  })
+
+  it('still blocks adding an account when the branch itself is marked Paid', async () => {
+    const { client, state } = makeSupabase({
+      rows: [{ id: 1, account_number: '111', is_current: false, is_paid: false }],
+    })
+    loadRepFoodWriteContext.mockReturnValue({
+      response: Response.json(
+        { ok: false, error: 'Branch is marked as Paid. Editing is locked.' },
+        { status: 403 }
+      ),
+    })
+
+    const res = await addAccount(
+      jsonRequest({
+        bank_name: 'First Bank',
+        account_name: 'Rep One',
+        account_number: '3333333333',
+      })
+    )
+    const body = await res.json()
+
     expect(res.status).toBe(403)
-    expect(body.error).toMatch(/All bank accounts are marked as Paid/)
+    expect(body.error).toMatch(/Branch is marked as Paid/)
     expect(state.inserted).toBe(0)
+    expect(client).toBeTruthy()
   })
 
   it('still allows adding an account while another account is unpaid', async () => {

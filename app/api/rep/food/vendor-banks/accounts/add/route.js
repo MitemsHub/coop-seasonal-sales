@@ -46,12 +46,9 @@ export async function POST(req) {
         { status: 400 }
       )
     }
-    if (rows.length && rows.every((r) => r.is_paid)) {
-      return NextResponse.json(
-        { ok: false, error: 'All bank accounts are marked as Paid. Editing is locked.' },
-        { status: 403 }
-      )
-    }
+    // Paid is per account, not per branch: a rep whose existing accounts are
+    // all paid can still attach a new one for the next payment. The branch
+    // paid lock is enforced by loadRepFoodWriteContext.
 
     const target = normalizeAccountNumber(accountNumber)
     if (rows.some((r) => normalizeAccountNumber(r.account_number) === target)) {
