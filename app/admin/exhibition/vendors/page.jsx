@@ -465,7 +465,7 @@ export default function ExhibitionVendorsPage() {
                   disabled={!selectedVendors.length || isEmailing}
                 >
                   {isEmailing
-                    ? `Sending ${emailing.done} / ${emailing.total}…`
+                    ? `Sending ${Math.min(emailing.done + 1, emailing.total)} / ${emailing.total}…`
                     : `Email selected${selectedVendors.length ? ` (${selectedVendors.length})` : ''}`}
                 </Button>
               </div>
@@ -485,14 +485,14 @@ export default function ExhibitionVendorsPage() {
                   <table className="w-full table-fixed text-sm">
                     <colgroup>
                       <col className="w-10" />
-                      <col className="w-[23%]" />
+                      <col className="w-[22%]" />
                       <col className="w-[7%]" />
                       <col className="w-[10%]" />
                       <col className="w-[11%]" />
-                      <col className="w-[18%]" />
+                      <col className="w-[17%]" />
                       <col className="w-[8%]" />
                       <col className="w-[8%]" />
-                      <col className="w-[10%]" />
+                      <col className="w-[12%]" />
                     </colgroup>
                     <thead className="sticky top-0 z-10 bg-surface">
                       <tr className="border-b border-line text-left">
