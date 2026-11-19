@@ -7,14 +7,28 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 // ── Rate limiting & brute-force protection ───────────────────────
-// In-memory stores — production deployments should swap these for Redis.
-const attemptStore = new Map()   // key → { count, windowStart }
-const lockoutStore = new Map()   // key → lockoutExpiresAt
+// Two independent, in-memory guards (swap for Redis if the app runs on more
+// than one instance):
+//
+//  1. Per vendor code — the real account protection, with escalating backoff.
+//     Locking follows the code the attacker guesses, not the network it came
+//     from, so a hub sharing one IP never loses access because a neighbour
+//     mistyped their passcode.
+//  2. Per IP — a coarse abuse guard with a deliberately high ceiling. At a
+//     market, dozens of vendors can sit behind one NAT address, so ordinary
+//     typos must not trip it.
+const codeFailures = new Map() // code → { failures, windowStart, lockedUntil }
+const ipAttempts = new Map()   // ip → { count, windowStart, lockedUntil }
 
-const MAX_ATTEMPTS = 5           // per window
-const WINDOW_MS = 15 * 60 * 1000 // 15 minutes
-const LOCKOUT_THRESHOLD = 10     // attempts before lockout
-const LOCKOUT_MS = 60 * 60 * 1000 // 1 hour
+const CODE_FAILURE_WINDOW_MS = 15 * 60 * 1000 // failures older than this don't accumulate
+const CODE_LOCK_THRESHOLD = 5                 // failures in the window before any lock
+const CODE_BACKOFF_MS = [60 * 1000, 5 * 60 * 1000, 15 * 60 * 1000, 60 * 60 * 1000]
+
+const IP_MAX_ATTEMPTS = 60              // across every code, per window
+const IP_WINDOW_MS = 10 * 60 * 1000
+const IP_LOCKOUT_MS = 10 * 60 * 1000
+
+const STORE_PRUNE_AT = 1000
 
 function getClientIP(req) {
   const forwarded = req.headers.get('x-forwarded-for')
@@ -22,37 +36,77 @@ function getClientIP(req) {
   return req.headers.get('x-real-ip') || req.headers.get('x-vercel-forwarded-for') || 'unknown'
 }
 
-function checkBruteForce(ip) {
+// Drop expired codes and IPs so the maps cannot grow without bound.
+function pruneStores(now) {
+  for (const [code, state] of codeFailures) {
+    const expiresAt = Math.max(state.lockedUntil || 0, state.windowStart + CODE_FAILURE_WINDOW_MS)
+    if (now > expiresAt) codeFailures.delete(code)
+  }
+  for (const [ip, state] of ipAttempts) {
+    const expiresAt = Math.max(state.lockedUntil || 0, state.windowStart + IP_WINDOW_MS)
+    if (now > expiresAt) ipAttempts.delete(ip)
+  }
+}
+
+function checkIpThrottle(ip) {
   const now = Date.now()
+  if (codeFailures.size > STORE_PRUNE_AT || ipAttempts.size > STORE_PRUNE_AT) pruneStores(now)
 
-  // Check lockout
-  const lockExpiry = lockoutStore.get(ip)
-  if (lockExpiry && now < lockExpiry) {
-    return { allowed: false, reason: 'locked' }
+  const record = ipAttempts.get(ip)
+  if (record?.lockedUntil && now < record.lockedUntil) {
+    return { allowed: false, retryAfterMs: record.lockedUntil - now }
   }
-  if (lockExpiry && now >= lockExpiry) {
-    lockoutStore.delete(ip)
-    attemptStore.delete(ip)
-  }
-
-  // Check rate limit window
-  const record = attemptStore.get(ip)
-  if (!record || now - record.windowStart > WINDOW_MS) {
-    attemptStore.set(ip, { count: 1, windowStart: now })
+  if (!record || now - record.windowStart > IP_WINDOW_MS) {
+    ipAttempts.set(ip, { count: 1, windowStart: now, lockedUntil: 0 })
     return { allowed: true }
   }
 
-  record.count++
-  if (record.count > MAX_ATTEMPTS) {
-    if (record.count >= LOCKOUT_THRESHOLD) {
-      lockoutStore.set(ip, now + LOCKOUT_MS)
-      console.warn(`Vendor login lockout triggered for IP: ${ip}`)
-      return { allowed: false, reason: 'locked' }
-    }
-    return { allowed: false, reason: 'rate_limited' }
+  record.count += 1
+  if (record.count > IP_MAX_ATTEMPTS) {
+    record.lockedUntil = now + IP_LOCKOUT_MS
+    console.warn(`Coarse IP throttle tripped for ${ip} (${record.count} attempts)`)
+    return { allowed: false, retryAfterMs: IP_LOCKOUT_MS }
   }
 
   return { allowed: true }
+}
+
+function checkCodeLock(code) {
+  const now = Date.now()
+  const state = codeFailures.get(code)
+  if (!state?.lockedUntil || now >= state.lockedUntil) return { allowed: true }
+  return { allowed: false, retryAfterMs: state.lockedUntil - now }
+}
+
+function recordCodeFailure(code) {
+  const now = Date.now()
+  const state = codeFailures.get(code) || { failures: 0, windowStart: now, lockedUntil: 0 }
+  if (now - state.windowStart > CODE_FAILURE_WINDOW_MS) {
+    state.failures = 0
+    state.windowStart = now
+  }
+  state.failures += 1
+  if (state.failures >= CODE_LOCK_THRESHOLD) {
+    const step = Math.min(state.failures - CODE_LOCK_THRESHOLD, CODE_BACKOFF_MS.length - 1)
+    state.lockedUntil = now + CODE_BACKOFF_MS[step]
+  }
+  codeFailures.set(code, state)
+  return state
+}
+
+function clearCodeFailures(code) {
+  codeFailures.delete(code)
+}
+
+function tooManyAttemptsResponse(retryAfterMs) {
+  const minutes = Math.max(1, Math.ceil(retryAfterMs / 60000))
+  return NextResponse.json(
+    {
+      ok: false,
+      error: `Too many failed attempts. Please try again in about ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+    },
+    { status: 429, headers: { 'Retry-After': String(Math.ceil(retryAfterMs / 1000)) } }
+  )
 }
 
 
@@ -144,16 +198,6 @@ async function recordFailedLogin(supabase, vendorId) {
 export async function POST(req) {
   try {
     const ip = getClientIP(req)
-
-    // Brute-force check
-    const bf = checkBruteForce(ip)
-    if (!bf.allowed) {
-      const msg = bf.reason === 'locked'
-        ? 'Too many failed attempts. Sign-in is temporarily locked — please try again in about an hour.'
-        : 'Too many attempts. Please wait a few minutes and try again.'
-      return NextResponse.json({ ok: false, error: msg }, { status: 429 })
-    }
-
     const supabase = createClient()
     const body = await req.json().catch(() => ({}))
     const code = String(body?.code || '').trim().toUpperCase()
@@ -161,6 +205,13 @@ export async function POST(req) {
     if (!code || !passcode) {
       return NextResponse.json({ ok: false, error: 'Vendor code and passcode are required' }, { status: 400 })
     }
+
+    // Coarse network guard first, then the per-code backoff that actually
+    // protects the account.
+    const ipGuard = checkIpThrottle(ip)
+    if (!ipGuard.allowed) return tooManyAttemptsResponse(ipGuard.retryAfterMs)
+    const codeGuard = checkCodeLock(code)
+    if (!codeGuard.allowed) return tooManyAttemptsResponse(codeGuard.retryAfterMs)
 
     const { data: vendor, error } = await supabase
       .from('exhibition_vendors')
@@ -180,11 +231,15 @@ export async function POST(req) {
     }
 
     if (!vendor) {
+      // Guess attempts against unknown codes back off too, but there is no
+      // vendor row to count them against in the database.
+      recordCodeFailure(code)
       console.warn(`Failed vendor login attempt for code=${code} from IP: ${ip}`)
       return NextResponse.json({ ok: false, error: 'Unknown vendor code. Please select your hub and try again.' }, { status: 401 })
     }
     const passcodeCheck = await verifyPasscode(passcode, String(vendor.passcode || ''))
     if (!passcodeCheck.ok) {
+      recordCodeFailure(code)
       console.warn(`Failed vendor login attempt for code=${code} from IP: ${ip}`)
       await recordFailedLogin(supabase, vendor.id)
       return NextResponse.json({ ok: false, error: 'Incorrect passcode. Please check it and try again.' }, { status: 401 })
@@ -202,16 +257,35 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: 'This vendor account is not active. Please contact your administrator.' }, { status: 403 })
     }
 
+    // A correct passcode clears that code's backoff: a vendor who finally gets
+    // in starts fresh, even if their neighbours keep failing.
+    clearCodeFailures(code)
+
     // Record the sign-in for the admin's "signed in X / Y" counter. Failure
     // here (e.g. the column isn't migrated yet) must never block the login.
     try {
+      const signedInAt = new Date().toISOString()
+      // Clear the failed-attempt counter too: a vendor who struggled once and
+      // then got in should stop showing up as a credential problem.
       const { error: stampError } = await supabase
         .from('exhibition_vendors')
-        .update({ last_login_at: new Date().toISOString() })
+        .update({ last_login_at: signedInAt, failed_login_count: 0 })
         .eq('id', vendor.id)
-      if (stampError) console.error('Vendor last_login_at update failed:', stampError)
+      if (stampError) {
+        if (String(stampError.code || '') === '42703' && String(stampError.message || '').includes('failed_login_count')) {
+          // Schema without the failed-attempt columns: the sign-in timestamp
+          // still matters, so retry with just that.
+          const { error: retryError } = await supabase
+            .from('exhibition_vendors')
+            .update({ last_login_at: signedInAt })
+            .eq('id', vendor.id)
+          if (retryError) console.error('Vendor last_login_at update failed:', retryError)
+        } else {
+          console.error('Vendor sign-in update failed:', stampError)
+        }
+      }
     } catch (e) {
-      console.error('Vendor last_login_at update failed:', e)
+      console.error('Vendor sign-in update failed:', e)
     }
 
     // Resolve the vendor's cycle for context (name/status surfaced in the portal).

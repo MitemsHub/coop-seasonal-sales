@@ -6,7 +6,7 @@
 // Admins can edit the login details and email them to the vendor. Suspend,
 // edit and delete live here too.
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ChevronLeft, ChevronRight, Mail, Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload, UserCheck } from 'lucide-react'
+import { AlertTriangle, ChevronLeft, ChevronRight, Mail, Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload, UserCheck, Users } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
@@ -30,6 +30,15 @@ function fmtDate(iso) {
   }
 }
 
+function fmtDayMonth(iso) {
+  if (!iso) return ''
+  try {
+    return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+  } catch {
+    return ''
+  }
+}
+
 function fmtTime(iso) {
   if (!iso) return ''
   try {
@@ -38,6 +47,31 @@ function fmtTime(iso) {
     return ''
   }
 }
+
+// How each sign-in cohort should be chased. Keys match the `loginCohorts`
+// buckets built below.
+const SIGN_IN_COHORTS = [
+  {
+    key: 'delivery',
+    label: 'Likely delivery problem',
+    hint: 'Credentials were emailed but never used, and no passcode was rejected. The email probably never arrived — re-send to the vendor, check the address, or call them.',
+  },
+  {
+    key: 'credential',
+    label: 'Credential problem',
+    hint: 'The vendor tried to sign in and the passcode was rejected. Confirm the code and passcode they are using, then reset the passcode and send the new one.',
+  },
+  {
+    key: 'signedIn',
+    label: 'Signed in',
+    hint: 'At least one successful sign-in recorded. No action needed.',
+  },
+  {
+    key: 'neverEmailed',
+    label: 'Never emailed',
+    hint: 'No login details sent yet (or no email address on file). Send their login details.',
+  },
+]
 
 function fmtDateTime(iso) {
   if (!iso) return '—'
@@ -52,6 +86,18 @@ function fmtDateTime(iso) {
   } catch {
     return '—'
   }
+}
+
+const failedCountOf = (v) => Number(v.failed_login_count || 0)
+
+// A rejected passcode only matters while it is newer than the vendor's last
+// successful sign-in. Once they get in, the earlier attempt is settled, so it
+// stops flagging them as a credential problem.
+function hasOpenFailures(v) {
+  if (failedCountOf(v) === 0) return false
+  if (!v.last_login_at) return true
+  if (!v.last_failed_login_at) return false
+  return new Date(v.last_failed_login_at) > new Date(v.last_login_at)
 }
 
 export default function ExhibitionVendorsPage() {
@@ -73,6 +119,8 @@ export default function ExhibitionVendorsPage() {
   const [emailing, setEmailing] = useState(null)
   const [signedInOpen, setSignedInOpen] = useState(false)
   const [failedOpen, setFailedOpen] = useState(false)
+  const [cohortOpen, setCohortOpen] = useState(false)
+  const [cohortTab, setCohortTab] = useState('delivery')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -130,17 +178,21 @@ export default function ExhibitionVendorsPage() {
     setModal(v)
   }
 
-  const sendLoginFor = async (vendorId, passcode = '') => {
+  // 'reminder' repeats the sign-in steps without rotating the passcode;
+  // 'reset' is the only path that invalidates what the vendor already holds.
+  const sendLoginFor = async (vendorId, { passcode = '', mode = 'reminder' } = {}) => {
     const res = await fetch(`/api/admin/exhibition/vendors/${vendorId}/send-login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(passcode ? { passcode } : {}),
+      body: JSON.stringify(passcode ? { passcode } : { mode }),
     })
     const json = await res.json().catch(() => null)
     if (!res.ok || !json?.ok) throw new Error(json?.error || 'Could not send login details')
     setMsg({
       type: 'success',
-      text: `Login details sent to ${json.sent_to}. Passcode: ${json.passcode}`,
+      text: json.passcode
+        ? `Login details sent to ${json.sent_to}. Passcode: ${json.passcode}`
+        : `Reminder sent to ${json.sent_to}. Their existing passcode still works.`,
     })
     return json
   }
@@ -203,7 +255,17 @@ export default function ExhibitionVendorsPage() {
       if (!json.ok) throw new Error(json.error || 'Failed to update vendor')
       setModal(null)
       await load()
-      if (emailLogin) await sendLoginFor(modal.id, form.passcode)
+      if (emailLogin) {
+        const emailChanged =
+          String(form.email || '').trim().toLowerCase() !== String(modal.email || '').trim().toLowerCase()
+        await sendLoginFor(modal.id, {
+          passcode: form.passcode,
+          // A new passcode was typed, the address changed (the new address never
+          // received the old passcode), or the vendor was never sent details:
+          // send fresh details. Otherwise just remind them, no rotation.
+          mode: form.passcode || emailChanged || !modal.login_sent_at ? 'reset' : 'reminder',
+        })
+      }
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
     } finally {
@@ -216,7 +278,7 @@ export default function ExhibitionVendorsPage() {
     setBusy(true)
     setMsg(null)
     try {
-      await sendLoginFor(createdLogin.id, createdLogin.passcode)
+      await sendLoginFor(createdLogin.id, { passcode: createdLogin.passcode })
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
     } finally {
@@ -287,15 +349,41 @@ export default function ExhibitionVendorsPage() {
         .sort((a, b) => new Date(b.last_login_at) - new Date(a.last_login_at)),
     [vendors]
   )
-  const failedCount = (v) => Number(v.failed_login_count || 0)
-  // Vendors whose passcode was rejected at least once, most recent first.
+  // Vendors whose passcode was rejected and who have not signed in since,
+  // most recent first.
   const failedLoginVendors = useMemo(
     () =>
       vendors
-        .filter((v) => Number(v.failed_login_count || 0) > 0)
+        .filter((v) => hasOpenFailures(v))
         .sort((a, b) => new Date(b.last_failed_login_at || 0) - new Date(a.last_failed_login_at || 0)),
     [vendors]
   )
+  // Split the vendors we emailed by what actually happened next, so the two
+  // kinds of silence are chased differently: an email that never landed vs a
+  // passcode that was rejected. Vendors who got in are excluded from both.
+  const loginCohorts = useMemo(() => {
+    const cohorts = { delivery: [], credential: [], signedIn: [], neverEmailed: [] }
+    for (const v of vendors) {
+      if (v.last_login_at) cohorts.signedIn.push(v)
+      else if (!String(v.email || '').trim() || !v.login_sent_at) cohorts.neverEmailed.push(v)
+      else if (hasOpenFailures(v)) cohorts.credential.push(v)
+      else cohorts.delivery.push(v)
+    }
+    cohorts.delivery.sort((a, b) => new Date(a.login_sent_at || 0) - new Date(b.login_sent_at || 0))
+    cohorts.credential.sort((a, b) => new Date(b.last_failed_login_at || 0) - new Date(a.last_failed_login_at || 0))
+    cohorts.signedIn.sort((a, b) => new Date(b.last_login_at || 0) - new Date(a.last_login_at || 0))
+    cohorts.neverEmailed.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+    return cohorts
+  }, [vendors])
+  const chaseCount = loginCohorts.delivery.length + loginCohorts.credential.length
+  const activeCohort = SIGN_IN_COHORTS.find((c) => c.key === cohortTab) || SIGN_IN_COHORTS[0]
+  const cohortRows = loginCohorts[activeCohort.key] || []
+  const cohortMeta = (v) => {
+    if (cohortTab === 'delivery') return `Sent ${fmtDate(v.login_sent_at)}`
+    if (cohortTab === 'credential') return `${failedCountOf(v)} failed · ${fmtDate(v.last_failed_login_at)}`
+    if (cohortTab === 'signedIn') return fmtDateTime(v.last_login_at)
+    return v.email || 'No email address'
+  }
 
   const toggleSelect = (id) => {
     setSelected((prev) => {
@@ -318,18 +406,27 @@ export default function ExhibitionVendorsPage() {
     })
   }
 
-  const sendVendorEmails = async (list) => {
+  // 'auto' keeps vendors who already hold details on a reminder and only issues
+  // credentials to vendors who have never been sent any.
+  const sendVendorEmails = async (list, mode = 'auto') => {
     if (isEmailing) return
+    const planned = list.map((vendor) => ({
+      id: vendor.id,
+      mode: mode === 'auto' ? (vendor.login_sent_at ? 'reminder' : 'reset') : mode,
+    }))
+    const reminderCount = planned.filter((p) => p.mode === 'reminder').length
+    const resetCount = planned.length - reminderCount
     setEmailing({ done: 0, total: list.length })
     setMsg(null)
     try {
       const { sent, failed } = await sendVendorLoginEmails({
         vendors: list,
         send: async (vendor) => {
+          const entry = planned.find((p) => p.id === vendor.id)
           const res = await fetch(`/api/admin/exhibition/vendors/${vendor.id}/send-login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: '{}',
+            body: JSON.stringify({ mode: entry?.mode || 'reminder' }),
           })
           const json = await res.json().catch(() => null)
           return { res, json }
@@ -346,9 +443,16 @@ export default function ExhibitionVendorsPage() {
         setMsg({ type: 'error', text: `Sent ${sent} of ${list.length}. ${details}${more}` })
         setSelected(new Set(failed.map(({ vendor }) => vendor.id)))
       } else {
+        const parts = []
+        if (reminderCount) {
+          parts.push(`${reminderCount} reminder${reminderCount === 1 ? '' : 's'} (passcode unchanged)`)
+        }
+        if (resetCount) {
+          parts.push(`${resetCount} with new login details`)
+        }
         setMsg({
           type: 'success',
-          text: `Login details emailed to ${sent} vendor${sent === 1 ? '' : 's'}. Each vendor now has a new passcode.`,
+          text: `Sent ${sent} email${sent === 1 ? '' : 's'}: ${parts.join(' and ')}.`,
         })
         setSelected(new Set())
       }
@@ -359,7 +463,11 @@ export default function ExhibitionVendorsPage() {
     }
   }
 
-  const emailVendors = (targets) => {
+  const emailConfirmList = emailConfirm?.list || []
+  const emailConfirmMode = emailConfirm?.mode || 'auto'
+  const emailConfirmMinutes = Math.ceil((emailConfirmList.length * VENDOR_EMAIL_INTERVAL_MS) / 60000)
+
+  const emailVendors = (targets, mode = 'auto') => {
     if (isEmailing) return
     const list = []
     const seen = new Set()
@@ -372,7 +480,7 @@ export default function ExhibitionVendorsPage() {
       setMsg({ type: 'error', text: 'Select at least one vendor with an email address.' })
       return
     }
-    setEmailConfirm(list)
+    setEmailConfirm({ list, mode })
   }
 
   return (
@@ -381,7 +489,7 @@ export default function ExhibitionVendorsPage() {
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-h2 font-bold tracking-tight text-fg">Exhibition Vendors</h1>
-            <p className="mt-0.5 text-sm text-muted">Codes and passcodes auto-generate. Vendors sign in with their stand and passcode; you can email the details.</p>
+            <p className="mt-0.5 text-sm text-muted">Codes and passcodes auto-generate. Vendors sign in with their stand and passcode. Send a reminder to keep their passcode unchanged, or reset it to issue a new one.</p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" leftIcon={RefreshCw} onClick={load} disabled={loading || busy || isEmailing}>
@@ -481,7 +589,7 @@ export default function ExhibitionVendorsPage() {
                     onClick={() => setFailedOpen(true)}
                     title="See which vendors tried and could not sign in"
                     className={[
-                      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors',
+                      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
                       failedLoginVendors.length > 0
                         ? 'border-warning-border bg-warning-bg text-warning-fg hover:brightness-105'
                         : 'border-line bg-surface text-fg hover:bg-line-subtle',
@@ -489,6 +597,20 @@ export default function ExhibitionVendorsPage() {
                   >
                     <AlertTriangle className="h-3.5 w-3.5" />
                     Failed {failedLoginVendors.length} / {vendors.length}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCohortOpen(true)}
+                    title="See who to chase and how"
+                    className={[
+                      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
+                      chaseCount > 0
+                        ? 'border-brand bg-brand-subtle text-brand hover:brightness-105'
+                        : 'border-line bg-surface text-fg hover:bg-line-subtle',
+                    ].join(' ')}
+                  >
+                    <Users className="h-3.5 w-3.5" />
+                    Cohorts {chaseCount}
                   </button>
                   <label className="flex items-center gap-2 text-xs font-medium text-muted">
                     <input
@@ -543,28 +665,19 @@ export default function ExhibitionVendorsPage() {
                 </p>
               ) : selectedVendors.length > 0 ? (
                 <p className="border-b border-line bg-surface px-4 py-2 text-xs text-muted">
-                  Sending creates a new passcode for each selected vendor. {selectedVendors.length} email{selectedVendors.length === 1 ? '' : 's'} will take about {Math.ceil((selectedVendors.length * VENDOR_EMAIL_INTERVAL_MS) / 60000)} minute{Math.ceil((selectedVendors.length * VENDOR_EMAIL_INTERVAL_MS) / 60000) === 1 ? '' : 's'}.
+                  Vendors already sent details get a reminder and keep their current passcode; anyone never sent details gets a new passcode. {selectedVendors.length} email{selectedVendors.length === 1 ? '' : 's'} will take about {Math.ceil((selectedVendors.length * VENDOR_EMAIL_INTERVAL_MS) / 60000)} minute{Math.ceil((selectedVendors.length * VENDOR_EMAIL_INTERVAL_MS) / 60000) === 1 ? '' : 's'}.
                 </p>
               ) : null}
 
               <div className="hidden md:block">
                 <div className="overflow-hidden">
                   <table className="w-full table-fixed text-sm">
-                    <colgroup>
-                      <col className="w-10" />
-                      <col className="w-[18%]" />
-                      <col className="w-[7%]" />
-                      <col className="w-[10%]" />
-                      <col className="w-[9%]" />
-                      <col className="w-[15%]" />
-                      <col className="w-[8%]" />
-                      <col className="w-[8%]" />
-                      <col className="w-[10%]" />
-                      <col className="w-[12%]" />
-                    </colgroup>
+                    {/* Column widths live on the header cells so the optional
+                        columns (Cycle, Created) can disappear below xl, where a
+                        ten-column table only leaves a few pixels per column. */}
                     <thead className="sticky top-0 z-10 bg-surface">
                       <tr className="border-b border-line text-left">
-                        <th className="w-10 p-3">
+                        <th className="w-9 p-2 xl:w-10 xl:p-3">
                           <input
                             type="checkbox"
                             checked={allPageSelected}
@@ -574,21 +687,24 @@ export default function ExhibitionVendorsPage() {
                             className="h-4 w-4 rounded border-line text-brand focus:ring-brand"
                           />
                         </th>
-                        <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Vendor</th>
-                        <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Code</th>
-                        <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Branch</th>
-                        <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Cycle</th>
-                        <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Contact</th>
-                        <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Status</th>
-                        <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Created</th>
-                        <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Last sign-in</th>
-                        <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Actions</th>
+                        <th className="p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:p-3">Vendor</th>
+                        <th className="w-[56px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[62px] xl:p-3">Code</th>
+                        <th className="w-[72px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[96px] xl:p-3">Branch</th>
+                        <th className="hidden p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:table-cell xl:w-[112px] xl:p-3">Cycle</th>
+                        <th className="w-[108px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[150px] xl:p-3">Contact</th>
+                        <th className="w-[70px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[84px] xl:p-3">Status</th>
+                        <th className="hidden p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:table-cell xl:w-[76px] xl:p-3">Created</th>
+                        <th className="w-[74px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[88px] xl:p-3">
+                          <span className="xl:hidden">Sign-in</span>
+                          <span className="hidden xl:inline">Last sign-in</span>
+                        </th>
+                        <th className="w-[104px] p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[116px] xl:p-3">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {pageVendors.map((v) => (
                         <tr key={v.id} className="border-b border-line transition-colors duration-150 ease-sakani last:border-0 hover:bg-subtle">
-                          <td className="p-3">
+                          <td className="p-2 xl:p-3">
                             <input
                               type="checkbox"
                               checked={selected.has(v.id)}
@@ -599,55 +715,59 @@ export default function ExhibitionVendorsPage() {
                               className="h-4 w-4 rounded border-line text-brand focus:ring-brand disabled:opacity-40"
                             />
                           </td>
-                          <td className="p-3">
-                            <div className="font-medium text-fg">{v.name}</div>
+                          <td className="p-2 xl:p-3">
+                            <div className="break-words font-medium text-fg">{v.name}</div>
                             {v.address ? (
                               <div className="mt-1 truncate text-xs text-subtext" title={v.address}>{v.address}</div>
                             ) : null}
                           </td>
-                          <td className="p-3 font-mono text-xs text-muted">{v.code}</td>
-                          <td className="truncate p-3 text-muted" title={v.branch_name || `#${v.branch_id}`}>
+                          <td className="whitespace-nowrap p-2 font-mono text-xs text-muted xl:p-3">{v.code}</td>
+                          <td className="truncate p-2 text-muted xl:p-3" title={v.branch_name || `#${v.branch_id}`}>
                             {v.branch_name || `#${v.branch_id}`}
                           </td>
-                          <td className="truncate p-3 text-muted" title={v.cycle_name || `#${v.cycle_id}`}>
+                          <td className="hidden truncate p-2 text-muted xl:table-cell xl:p-3" title={v.cycle_name || `#${v.cycle_id}`}>
                             {v.cycle_name || `#${v.cycle_id}`}
                           </td>
-                          <td className="p-3">
+                          <td className="p-2 xl:p-3">
                             <div className="truncate text-xs text-muted" title={v.email || ''}>{v.email || '—'}</div>
                             <div className="text-xs text-subtext">{v.phone || '—'}</div>
                           </td>
-                          <td className="p-3">
+                          <td className="p-2 xl:p-3">
                             <Badge tone={v.status === 'active' ? 'success' : 'neutral'} variant="subtle">
                               {v.status}
                             </Badge>
-                            {failedCount(v) > 0 ? (
+                            {hasOpenFailures(v) ? (
                               <div
                                 className="mt-1 whitespace-nowrap text-xs font-semibold text-warning-fg"
                                 title={`Last failed attempt ${fmtDateTime(v.last_failed_login_at)}`}
                               >
-                                {failedCount(v)} failed
+                                {failedCountOf(v)} failed
                               </div>
                             ) : null}
                           </td>
-                          <td className="p-3 text-xs text-muted">{fmtDate(v.created_at)}</td>
-                          <td className="p-3 text-xs" title={v.last_login_at ? fmtDateTime(v.last_login_at) : 'Has never signed in'}>
+                          <td className="hidden p-2 text-xs text-muted xl:table-cell xl:p-3">{fmtDate(v.created_at)}</td>
+                          <td
+                            className="p-2 text-xs xl:p-3"
+                            title={v.last_login_at ? fmtDateTime(v.last_login_at) : 'Has never signed in'}
+                          >
                             {v.last_login_at ? (
                               <>
-                                <div className="whitespace-nowrap text-muted">{fmtDate(v.last_login_at)}</div>
+                                <div className="whitespace-nowrap text-muted">{fmtDayMonth(v.last_login_at)}</div>
                                 <div className="whitespace-nowrap text-subtext">{fmtTime(v.last_login_at)}</div>
                               </>
                             ) : (
                               <span className="text-subtext">Never</span>
                             )}
                           </td>
-                          <td className="p-3 text-right">
+                          <td className="p-2 text-right xl:p-3">
                             <select
-                              className="w-full max-w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg focus:border-brand focus:outline-none disabled:opacity-50"
+                              className="w-full max-w-full rounded-lg border border-line bg-surface px-1.5 py-1.5 text-xs text-fg focus:border-brand focus:outline-none disabled:opacity-50 xl:px-2 xl:text-sm"
                               defaultValue=""
                               onChange={(e) => {
                                 const action = e.target.value
                                 e.target.value = ''
-                                if (action === 'email') emailVendors([v])
+                                if (action === 'remind') emailVendors([v], 'reminder')
+                                if (action === 'reset') emailVendors([v], 'reset')
                                 if (action === 'edit') openEdit(v)
                                 if (action === 'status') toggleStatus(v)
                                 if (action === 'delete') { setConfirmTarget(v); setConfirmOpen(true) }
@@ -655,7 +775,12 @@ export default function ExhibitionVendorsPage() {
                               disabled={busy || isEmailing}
                             >
                               <option value="" disabled>Actions</option>
-                              <option value="email" disabled={!String(v.email || '').trim()}>Email login</option>
+                              <option value="remind" disabled={!String(v.email || '').trim() || !v.login_sent_at}>
+                                Send reminder (keeps passcode)
+                              </option>
+                              <option value="reset" disabled={!String(v.email || '').trim()}>
+                                Reset passcode &amp; send
+                              </option>
                               <option value="edit">Edit</option>
                               <option value="status">{v.status === 'active' ? 'Suspend' : 'Activate'}</option>
                               <option value="delete">Delete</option>
@@ -711,9 +836,9 @@ export default function ExhibitionVendorsPage() {
                       <div className="col-span-2 text-subtext">
                         Last sign-in {v.last_login_at ? fmtDateTime(v.last_login_at) : 'Never'}
                       </div>
-                      {failedCount(v) > 0 ? (
+                      {hasOpenFailures(v) ? (
                         <div className="col-span-2 font-medium text-warning-fg">
-                          {failedCount(v)} failed sign-in{failedCount(v) === 1 ? '' : 's'} · last{' '}
+                          {failedCountOf(v)} failed sign-in{failedCountOf(v) === 1 ? '' : 's'} · last{' '}
                           {fmtDateTime(v.last_failed_login_at)}
                         </div>
                       ) : null}
@@ -724,10 +849,19 @@ export default function ExhibitionVendorsPage() {
                         size="sm"
                         variant="secondary"
                         leftIcon={Mail}
-                        onClick={() => emailVendors([v])}
+                        onClick={() => emailVendors([v], 'reminder')}
+                        disabled={busy || isEmailing || !String(v.email || '').trim() || !v.login_sent_at}
+                      >
+                        Send reminder
+                      </Button>
+                      <Button
+                        className="col-span-2"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => emailVendors([v], 'reset')}
                         disabled={busy || isEmailing || !String(v.email || '').trim()}
                       >
-                        Email login
+                        Reset passcode &amp; send
                       </Button>
                       <Button size="sm" variant="ghost" leftIcon={Pencil} onClick={() => openEdit(v)} disabled={busy || isEmailing}>
                         Edit
@@ -835,8 +969,8 @@ export default function ExhibitionVendorsPage() {
           <div className="space-y-3">
             <p className="text-sm text-muted">
               <span className="font-semibold text-fg">{failedLoginVendors.length}</span> of{' '}
-              <span className="font-semibold text-fg">{vendors.length}</span> vendors have had a passcode rejected at
-              least once. Only wrong passcodes on a known vendor code are counted.
+              <span className="font-semibold text-fg">{vendors.length}</span>               vendors have had a passcode rejected since their last successful sign-in. A vendor who got in
+              after a failed attempt is no longer counted here.
             </p>
             {failedLoginVendors.length === 0 ? (
               <p className="rounded-xl bg-subtle px-4 py-8 text-center text-sm text-muted">
@@ -855,10 +989,72 @@ export default function ExhibitionVendorsPage() {
                     </div>
                     <div className="shrink-0 text-right">
                       <div className="text-xs font-semibold text-warning-fg">
-                        {failedCount(v)} failed
+                        {failedCountOf(v)} failed
                       </div>
                       <div className="text-xs text-muted">{fmtDateTime(v.last_failed_login_at)}</div>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DraggableModal>
+
+        <DraggableModal
+          open={cohortOpen}
+          onClose={() => setCohortOpen(false)}
+          title="Vendor sign-in cohorts"
+        >
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {SIGN_IN_COHORTS.map((cohort) => {
+                const active = cohortTab === cohort.key
+                return (
+                  <button
+                    key={cohort.key}
+                    type="button"
+                    onClick={() => setCohortTab(cohort.key)}
+                    className={[
+                      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors',
+                      active
+                        ? 'border-brand bg-brand-subtle text-brand'
+                        : 'border-line bg-surface text-muted hover:bg-line-subtle',
+                    ].join(' ')}
+                  >
+                    {cohort.label}
+                    <span className="tabular-nums">{loginCohorts[cohort.key].length}</span>
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-xs text-muted">
+              Counts follow the current cycle filter and search ({vendors.length} vendor
+              {vendors.length === 1 ? '' : 's'} loaded).
+            </p>
+            <p className="rounded-xl bg-subtle px-3 py-2 text-xs text-muted">{activeCohort.hint}</p>
+            {cohortRows.length === 0 ? (
+              <p className="rounded-xl bg-subtle px-4 py-8 text-center text-sm text-muted">
+                No vendors in this cohort.
+              </p>
+            ) : (
+              <div className="max-h-[55vh] divide-y divide-line overflow-y-auto rounded-xl border border-line">
+                {cohortRows.map((v) => (
+                  <div key={v.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-fg" title={v.name}>{v.name}</p>
+                      <p className="truncate text-xs text-muted">
+                        <span className="font-mono">{v.code}</span>
+                        {v.branch_name ? ` · ${v.branch_name}` : ''}
+                      </p>
+                    </div>
+                    <span
+                      className={[
+                        'shrink-0 text-right text-xs',
+                        cohortTab === 'credential' ? 'font-semibold text-warning-fg' : 'text-muted',
+                      ].join(' ')}
+                    >
+                      {cohortMeta(v)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -936,7 +1132,7 @@ export default function ExhibitionVendorsPage() {
             </div>
             {modal !== 'create' && (
               <p className="text-xs text-muted">
-                Changing the code or passcode changes what the vendor signs in with. “Save & email login” saves these edits first, then sends the new details.
+                Changing the code or passcode changes what the vendor signs in with. “Save &amp; email login” saves these edits first, then emails a reminder — or new details, if you typed a passcode.
               </p>
             )}
             <div className="flex flex-wrap justify-end gap-2 pt-2">
@@ -973,17 +1169,31 @@ export default function ExhibitionVendorsPage() {
           open={!!emailConfirm}
           onClose={() => setEmailConfirm(null)}
           onConfirm={() => {
-            const list = emailConfirm || []
+            const pending = emailConfirm
             setEmailConfirm(null)
-            sendVendorEmails(list)
+            if (pending) sendVendorEmails(pending.list, pending.mode)
           }}
-          title="Send vendor logins?"
+          title={
+            emailConfirmMode === 'reset'
+              ? 'Reset passcodes and send?'
+              : emailConfirmMode === 'reminder'
+                ? 'Send sign-in reminders?'
+                : 'Send vendor emails?'
+          }
           message={
             emailConfirm
-              ? `Each vendor gets a new passcode, so any passcode you already shared will stop working. Emails are paced at one every 10 seconds, so ${emailConfirm.length} email${emailConfirm.length === 1 ? '' : 's'} will take about ${Math.ceil((emailConfirm.length * VENDOR_EMAIL_INTERVAL_MS) / 60000)} minute${Math.ceil((emailConfirm.length * VENDOR_EMAIL_INTERVAL_MS) / 60000) === 1 ? '' : 's'}. Keep this page open until sending finishes.`
+              ? `${emailConfirmMode === 'reset'
+                  ? 'Each vendor gets a new passcode, so the passcode in their inbox will stop working. '
+                  : emailConfirmMode === 'reminder'
+                    ? 'Existing passcodes stay valid — nothing is rotated. '
+                    : 'Vendors already sent details get a reminder and keep their passcode; vendors never sent details get new login details. '}Emails are paced at one every 10 seconds, so ${emailConfirmList.length} email${emailConfirmList.length === 1 ? '' : 's'} will take about ${emailConfirmMinutes} minute${emailConfirmMinutes === 1 ? '' : 's'}. Keep this page open until sending finishes.`
               : ''
           }
-          confirmLabel={`Email ${emailConfirm?.length || 0} login${emailConfirm?.length === 1 ? '' : 's'}`}
+          confirmLabel={
+            emailConfirmMode === 'reset'
+              ? `Reset ${emailConfirmList.length} passcode${emailConfirmList.length === 1 ? '' : 's'}`
+              : `Send ${emailConfirmList.length} email${emailConfirmList.length === 1 ? '' : 's'}`
+          }
           variant="brand"
         />
 

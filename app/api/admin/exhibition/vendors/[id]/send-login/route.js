@@ -1,10 +1,15 @@
 // POST /api/admin/exhibition/vendors/[id]/send-login
 // Email a vendor their sign-in details.
 //
-// Body: { passcode? }
-//   - With passcode, that passcode is saved and sent.
-//   - Without one, a fresh passcode is generated and sent, so an admin can
-//     recover a vendor who has lost their details.
+// Body: { mode?: 'reminder' | 'reset', passcode? }
+//   - mode 'reminder' (default without a passcode): re-sends the sign-in steps
+//     without touching the stored passcode, so the details already in the
+//     vendor's inbox keep working.
+//   - mode 'reset', or any request carrying a passcode: rotates the passcode
+//     and emails the new one. Rotation is always an explicit admin action.
+//
+// Rotation used to be the default on every send, which silently invalidated
+// passcodes the vendors already had and made failed sign-ins ambiguous.
 //
 // The plaintext passcode is returned to the signed-in admin as a fallback if
 // mail delivery fails. It is never stored in plaintext.
@@ -54,11 +59,12 @@ export async function POST(request, { params }) {
     if (requestedPasscode && requestedPasscode.length < 4) {
       return NextResponse.json({ ok: false, error: 'Passcode must be at least 4 characters' }, { status: 400 })
     }
+    const mode = requestedPasscode || String(body?.mode || '') === 'reset' ? 'reset' : 'reminder'
 
     const supabase = createClient()
     const { data: vendor, error } = await supabase
       .from('exhibition_vendors')
-      .select('id, cycle_id, name, code, email, status, cycles:cycle_id(name)')
+      .select('id, cycle_id, name, code, email, status, login_sent_at, cycles:cycle_id(name)')
       .eq('id', id)
       .maybeSingle()
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
@@ -76,6 +82,45 @@ export async function POST(request, { params }) {
         },
         { status: 503 }
       )
+    }
+
+    const siteUrl = String(process.env.NEXT_PUBLIC_SITE_URL || '').trim() || new URL(request.url).origin
+    const loginUrl = `${siteUrl.replace(/\/+$/, '')}/vendor/login`
+
+    // Reminder: repeat the code and the sign-in steps, never the passcode, and
+    // leave login_sent_at alone so it still records when credentials went out.
+    if (mode === 'reminder') {
+      if (!vendor.login_sent_at) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'No login details have been sent to this vendor yet. Send their login details instead of a reminder.',
+          },
+          { status: 400 }
+        )
+      }
+      try {
+        await sendVendorLoginEmail({
+          to: vendor.email,
+          vendorName: vendor.name,
+          code: vendor.code,
+          loginUrl,
+          cycleName: vendor.cycles?.name || '',
+          reminder: true,
+        })
+      } catch (e) {
+        return NextResponse.json(
+          { ok: false, error: `Could not send the email: ${e.message || 'mail delivery failed'}` },
+          { status: 502 }
+        )
+      }
+      return NextResponse.json({
+        ok: true,
+        reminder: true,
+        sent_to: vendor.email,
+        sent_at: new Date().toISOString(),
+        code: vendor.code,
+      })
     }
 
     const takenLookups = await loadPasscodeLookups(supabase, { excludeVendorId: id })
@@ -105,9 +150,6 @@ export async function POST(request, { params }) {
       }
       return NextResponse.json({ ok: false, error: saveError.message }, { status: 500 })
     }
-
-    const siteUrl = String(process.env.NEXT_PUBLIC_SITE_URL || '').trim() || new URL(request.url).origin
-    const loginUrl = `${siteUrl.replace(/\/+$/, '')}/vendor/login`
 
     try {
       await sendVendorLoginEmail({

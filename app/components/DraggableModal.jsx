@@ -62,6 +62,7 @@ export default function DraggableModal({
           onClick={onClose}
           role="dialog"
           aria-modal="true"
+          aria-labelledby="draggable-modal-title"
           tabIndex={-1}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -84,7 +85,7 @@ export default function DraggableModal({
                 className="flex items-center justify-between mb-4 cursor-move select-none touch-none"
                 onPointerDown={onPointerDown}
               >
-                <h3 className="min-w-0 pr-2 text-[15px] font-semibold text-fg">{title}</h3>
+                <h3 id="draggable-modal-title" className="min-w-0 pr-2 text-[15px] font-semibold text-fg">{title}</h3>
                 <button
                   type="button"
                   aria-label="Close"
