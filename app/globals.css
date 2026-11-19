@@ -698,3 +698,25 @@ button:disabled,
 .receipt-sheet [class*="border-line"] {
   border-color: #dbdad7 !important;
 }
+/* ─── Micro-interactions ──────────────────────────────────────────
+   The one shared motion primitive the shop, vendor portal and admin
+   console need. Everything else (press, hover lift) is a Tailwind
+   utility at the call site, so a component's own transition-property
+   list is never overridden by an unlayered rule here. The global
+   prefers-reduced-motion rule above collapses the duration. */
+
+/* A value or badge that just changed pops once, then rests. */
+@keyframes pop-in {
+  0% {
+    transform: scale(0.86);
+  }
+  60% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.pop {
+  animation: pop-in 260ms var(--ease-out-sakani) both;
+}

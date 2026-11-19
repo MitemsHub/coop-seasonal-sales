@@ -15,6 +15,7 @@
 
 import { ChevronDown, ChevronUp, ShoppingCart } from 'lucide-react'
 import Button from './ui/Button'
+import AnimatedNumber from './ui/AnimatedNumber'
 
 const naira = (v) => `₦${Number(v || 0).toLocaleString()}`
 
@@ -51,12 +52,15 @@ export default function CartStickyBar({
             <div className="flex items-center gap-2 text-sm font-semibold text-fg">
               <span className="relative inline-flex">
                 <ShoppingCart className="h-4.5 w-4.5 text-brand" strokeWidth={2} />
-                <span className="absolute -right-2 -top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-bold text-on-accent">
+                <span
+                  key={count}
+                  className="pop absolute -right-2 -top-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-bold text-on-accent"
+                >
                   {count}
                 </span>
               </span>
-              <span className="truncate">
-                {count} {count === 1 ? 'item' : 'items'} · {naira(total)}
+              <span className="min-w-0 truncate">
+                {count} {count === 1 ? 'item' : 'items'} · <AnimatedNumber value={naira(total)} />
               </span>
             </div>
             {subtitle && <p className="text-chips text-muted">{subtitle}</p>}
@@ -79,7 +83,7 @@ export default function CartStickyBar({
           </div>
           <div className="rounded-xl bg-subtle/70 px-1.5 py-2 text-center sm:px-3">
             <div className="text-chips font-medium text-muted">Total</div>
-            <div className="text-xs font-semibold tabular-nums text-fg sm:text-sm">{naira(total)}</div>
+            <AnimatedNumber value={naira(total)} className="text-xs font-semibold tabular-nums text-fg sm:text-sm" />
             {paymentOption === 'Loan' && loanInterest > 0 && (
               <div className="text-chips font-medium text-muted">incl. {naira(loanInterest)} interest</div>
             )}

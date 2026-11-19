@@ -45,8 +45,10 @@ const Button = forwardRef(function Button(
       type={type}
       disabled={disabled || loading}
       className={[
-        'inline-flex select-none items-center justify-center whitespace-nowrap rounded-lg font-medium',
-        'transition-[background-color,border-color,box-shadow,color,opacity] duration-200 ease-sakani',
+        'inline-flex select-none items-center justify-center whitespace-nowrap rounded-lg font-medium active:scale-[0.97]',
+        // `scale` is listed explicitly: Tailwind v4's scale utilities set the
+        // individual `scale` property, not `transform`.
+        'transition-[background-color,border-color,box-shadow,color,opacity,transform,scale] duration-200 ease-sakani',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas',
         'disabled:pointer-events-none disabled:opacity-60',
         VARIANTS[variant],

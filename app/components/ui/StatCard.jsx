@@ -5,6 +5,7 @@
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react'
 import Link from 'next/link'
 import Skeleton from './Skeleton'
+import AnimatedNumber from './AnimatedNumber'
 
 function Sparkline({ points, trend }) {
   const width = 200
@@ -76,7 +77,10 @@ export default function StatCard({
       {loading ? (
         <Skeleton className="h-8 w-24" />
       ) : (
-        <div className="text-[clamp(1.25rem,1.25rem+0.38vw,1.875rem)] font-semibold leading-[1.1] tracking-[-0.02em] text-fg">{value}</div>
+        <AnimatedNumber
+          value={value}
+          className="text-[clamp(1.25rem,1.25rem+0.38vw,1.875rem)] font-semibold leading-[1.1] tracking-[-0.02em] text-fg"
+        />
       )}
 
       <div className="flex items-center gap-1 text-[13px] font-medium">

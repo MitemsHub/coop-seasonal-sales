@@ -73,7 +73,7 @@ export default function VendorOrdersPage() {
             type="button"
             onClick={() => setFilter(f.key)}
             className={[
-              'rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors duration-150',
+              'rounded-full border px-3.5 py-1.5 text-sm font-medium transition-[color,background-color,scale] duration-150 active:scale-[0.97]',
               filter === f.key
                 ? 'border-brand bg-brand text-on-accent'
                 : 'border-line bg-surface text-muted hover:border-line-strong hover:text-fg',
@@ -99,7 +99,10 @@ export default function VendorOrdersPage() {
       ) : (
         <div className="space-y-4">
           {orders.map((o) => (
-            <div key={o.order_id} className="rounded-2xl border border-line bg-surface">
+            <div
+              key={o.order_id}
+              className="rounded-2xl border border-line bg-surface transition-[border-color,box-shadow] duration-200 ease-sakani hover:border-line-strong hover:shadow-sm"
+            >
               <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">

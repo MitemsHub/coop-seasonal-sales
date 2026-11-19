@@ -744,15 +744,23 @@ const itemCards = useMemo(() => (
             onClick={() => setQtySafe(it.sku, currentQty - 1)}
             disabled={!canDecrease}
             className={[
-              'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors duration-150',
+              'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-[color,background-color,scale] duration-150 active:scale-[0.97]',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
               canDecrease ? 'bg-subtle text-fg hover:bg-line-subtle' : 'bg-subtle text-subtext',
             ].join(' ')}
           >
             <Minus className="h-3.5 w-3.5" strokeWidth={2.5} />
           </button>
+          {/* Keyed on the value so each landed quantity replays the pop — the
+              confirmation that the stepper click actually changed the cart. */}
           <div className="flex h-7 w-12 items-center justify-center rounded-md border border-line-subtle bg-surface text-center text-xs font-semibold tabular-nums text-fg">
-            {isLoading ? <Spinner size={13} className="text-muted" /> : currentQty}
+            {isLoading ? (
+              <Spinner size={13} className="text-muted" />
+            ) : (
+              <span key={currentQty} className="pop">
+                {currentQty}
+              </span>
+            )}
           </div>
           <button
             type="button"
@@ -760,7 +768,7 @@ const itemCards = useMemo(() => (
             onClick={() => setQtySafe(it.sku, currentQty + 1)}
             disabled={!canIncrease}
             className={[
-              'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-colors duration-150',
+              'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-[color,background-color,scale] duration-150 active:scale-[0.97]',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
               canIncrease ? 'bg-brand-subtle text-brand hover:bg-brand/20' : 'bg-brand-subtle text-brand/40',
             ].join(' ')}
@@ -1243,7 +1251,7 @@ const itemCards = useMemo(() => (
                     type="button"
                     onClick={() => setSelectedCategory(null)}
                     className={[
-                      'rounded-full border px-3 py-1.5 text-chips font-medium transition-colors duration-150',
+                      'rounded-full border px-3 py-1.5 text-chips font-medium transition-[color,background-color,scale] duration-150 active:scale-[0.97]',
                       selectedCategory === null
                         ? 'border-brand bg-brand text-on-accent'
                         : 'border-line bg-surface text-muted hover:border-line-strong hover:text-fg',
@@ -1257,7 +1265,7 @@ const itemCards = useMemo(() => (
                       type="button"
                       onClick={() => setSelectedCategory(selectedCategory === cat ? null : cat)}
                       className={[
-                        'rounded-full border px-3 py-1.5 text-chips font-medium transition-colors duration-150',
+                        'rounded-full border px-3 py-1.5 text-chips font-medium transition-[color,background-color,scale] duration-150 active:scale-[0.97]',
                         selectedCategory === cat
                           ? 'border-brand bg-brand text-on-accent'
                           : 'border-line bg-surface text-muted hover:border-line-strong hover:text-fg',

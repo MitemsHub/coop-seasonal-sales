@@ -47,14 +47,19 @@ export default function CartDropdown({ food = 0, ram = 0 }) {
         aria-haspopup="true"
         aria-label={`Cart, ${total} item${total === 1 ? '' : 's'} across all shops`}
         className={[
-          'inline-flex items-center gap-1 rounded-full px-2 py-1 text-sm font-medium transition-all duration-200 lg:px-3 lg:py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
+          'inline-flex items-center gap-1 rounded-full px-2 py-1 text-sm font-medium transition-all duration-200 active:scale-[0.97] lg:px-3 lg:py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
           open ? 'bg-brand text-on-accent shadow-md' : 'text-fg hover:bg-subtle',
         ].join(' ')}
       >
         <ShoppingCart className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
         Cart
         {total > 0 && (
-          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-accent-fg ring-2 ring-surface">
+          // Keyed on the count so a newly added item remounts the badge and
+          // plays its pop — the visible proof that the add landed.
+          <span
+            key={total}
+            className="pop inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-accent-fg ring-2 ring-surface"
+          >
             {total}
           </span>
         )}

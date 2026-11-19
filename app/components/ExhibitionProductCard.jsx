@@ -84,7 +84,7 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
               onClick={() => onAdd(-1)}
               disabled={qty <= 0}
               className={[
-                'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors duration-150',
+                'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-[color,background-color,scale] duration-150 active:scale-[0.97]',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
                 qty > 0 ? 'bg-subtle text-fg hover:bg-line-subtle' : 'bg-subtle text-subtext',
               ].join(' ')}
@@ -92,7 +92,10 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
               <Minus className="h-3.5 w-3.5" strokeWidth={2.5} />
             </button>
             <div className="flex h-6 w-9 items-center justify-center rounded-md border border-line-subtle bg-surface text-center text-xs font-semibold tabular-nums text-fg">
-              {qty}
+              {/* Remounts per value so the new quantity pops into place. */}
+              <span key={qty} className="pop">
+                {qty}
+              </span>
             </div>
             <button
               type="button"
@@ -101,7 +104,7 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
               disabled={p.qty !== null && p.qty !== undefined && qty >= p.qty}
               title={p.qty !== null && p.qty !== undefined && qty >= p.qty ? 'No more stock available' : undefined}
               className={[
-                'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors duration-150',
+                'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-[color,background-color,scale] duration-150 active:scale-[0.97]',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
                 p.qty !== null && p.qty !== undefined && qty >= p.qty
                   ? 'bg-subtle text-subtext'

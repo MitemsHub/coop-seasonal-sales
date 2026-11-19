@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Calendar, ShoppingBag, Store, TrendingUp } from 'lucide-react'
 import Skeleton from '../../components/ui/Skeleton'
+import AnimatedNumber from '../../components/ui/AnimatedNumber'
 import { getTrail } from '@/lib/breadcrumbs'
 
 const STATUS_STYLES = {
@@ -165,7 +166,11 @@ export default function VendorDashboardPage() {
               <c.icon className="h-4.5 w-4.5 text-brand/70" strokeWidth={2} />
             </div>
             <div className="mt-2 text-2xl font-bold tracking-tight text-fg">
-              {stats || c.value === 'Manage' ? c.value : <Skeleton className="h-7 w-24" />}
+              {stats || c.value === 'Manage' ? (
+                <AnimatedNumber value={c.value} className="tabular-nums" />
+              ) : (
+                <Skeleton className="h-7 w-24" />
+              )}
             </div>
             <p className="mt-1 text-chips text-muted">{c.hint}</p>
           </Link>
@@ -189,7 +194,11 @@ export default function VendorDashboardPage() {
                 </span>
               </div>
               <div className="mt-3 text-xl font-bold text-fg">
-                {stats ? stats.orders?.[s] || 0 : <Skeleton className="h-6 w-10" />}
+                {stats ? (
+                  <AnimatedNumber value={stats.orders?.[s] || 0} className="tabular-nums" />
+                ) : (
+                  <Skeleton className="h-6 w-10" />
+                )}
               </div>
             </div>
           ))}
