@@ -39,7 +39,7 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
           className="relative block aspect-[4/3] w-full overflow-hidden bg-subtle"
         >
           {image}
-          <span className="absolute left-2 top-2 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+          <span className="absolute left-2 top-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
             {p.vendor_name}
           </span>
         </button>
@@ -48,7 +48,9 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
       )}
 
       <div className="flex flex-1 flex-col p-2">
-        <div className="text-xs font-semibold leading-snug break-words text-fg">{p.name}</div>
+        {/* Two lines max so a very long product name can't stretch the card
+            (or the grid row) and squash the price and stepper. */}
+        <div className="line-clamp-2 break-words text-xs font-semibold leading-snug text-fg" title={p.name}>{p.name}</div>
         <div className="mb-1.5 mt-0.5 flex flex-wrap items-center gap-x-1 text-chips text-muted">
           <span>{p.unit}</span>
           {p.qty !== null && p.qty !== undefined && p.qty > 0 && (

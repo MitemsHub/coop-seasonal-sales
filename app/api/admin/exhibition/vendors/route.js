@@ -31,16 +31,25 @@ export async function GET(request) {
     const q = String(searchParams.get('q') || '').trim()
 
     const supabase = createClient()
-    let query = supabase
-      .from('exhibition_vendors')
-      .select('id, cycle_id, branch_id, name, code, email, phone, address, status, login_sent_at, created_at, branches:branch_id(name, code), cycles:cycle_id(name, code)')
-      .order('name')
+    const selectVendors = (withLastLogin) => {
+      let query = supabase
+        .from('exhibition_vendors')
+        .select(
+          `id, cycle_id, branch_id, name, code, email, phone, address, status, login_sent_at, ${withLastLogin ? 'last_login_at, ' : ''}created_at, branches:branch_id(name, code), cycles:cycle_id(name, code)`
+        )
+        .order('name')
+      if (cycleId > 0) query = query.eq('cycle_id', cycleId)
+      if (branchId > 0) query = query.eq('branch_id', branchId)
+      if (q) query = query.or(`name.ilike.%${q}%,code.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`)
+      return query
+    }
 
-    if (cycleId > 0) query = query.eq('cycle_id', cycleId)
-    if (branchId > 0) query = query.eq('branch_id', branchId)
-    if (q) query = query.or(`name.ilike.%${q}%,code.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`)
-
-    const { data, error } = await query
+    let { data, error } = await selectVendors(true)
+    // The sign-in column needs migrations/add-exhibition-vendor-last-login.sql.
+    // Until that runs the list still loads — it just has no sign-in counts.
+    if (error && String(error.code || '') === '42703' && String(error.message || '').includes('last_login_at')) {
+      ;({ data, error } = await selectVendors(false))
+    }
     if (error) {
       if (isMissingTable(error, 'exhibition')) {
         return NextResponse.json({ ok: false, error: 'Coop Exhibition is not set up yet. Run migrations/add-coop-exhibition-module.sql in Supabase.' }, { status: 500 })

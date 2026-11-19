@@ -225,7 +225,7 @@ export default function VendorProductsPage() {
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-fg">{p.name}</p>
+                    <p className="min-w-0 break-words text-sm font-semibold text-fg">{p.name}</p>
                     <span className="text-chips text-muted">{p.sku}</span>
                     <Badge tone={p.status === 'active' ? 'success' : p.status === 'draft' ? 'warning' : 'muted'}>
                       {p.status}

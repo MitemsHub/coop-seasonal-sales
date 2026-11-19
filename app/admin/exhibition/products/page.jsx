@@ -410,7 +410,7 @@ export default function ExhibitionProductsPage() {
           ) : (
             <>
             <div className="hidden lg:block">
-            <Table className="min-w-[920px]">
+            <Table className="min-w-[720px]">
               <THead>
                 <TR>
                   <TH>Product</TH>
@@ -424,7 +424,7 @@ export default function ExhibitionProductsPage() {
               <TBody>
                 {pageProducts.map((p) => (
                   <TR key={p.id}>
-                    <TD>
+                    <TD className="w-[40%]">
                       <div className="flex items-center gap-2.5">
                         {p.image_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -435,19 +435,25 @@ export default function ExhibitionProductsPage() {
                           </span>
                         )}
                         <div className="min-w-0">
-                          <div className="truncate font-medium text-fg">{p.name}</div>
-                          <div className="font-mono text-xs text-muted">{p.sku}</div>
+                          {/* Long catalog names wrap to two lines instead of
+                              widening the table into a horizontal scroll. */}
+                          <div className="line-clamp-2 break-words font-medium text-fg" title={p.name}>{p.name}</div>
+                          <div className="truncate font-mono text-xs text-muted">{p.sku}</div>
                         </div>
                       </div>
                     </TD>
-                    <TD className="text-muted">{p.vendor_name || `#${p.vendor_id}`}</TD>
-                    <TD className="text-right tabular-nums">
+                    <TD className="w-[16%]">
+                      <div className="line-clamp-2 break-words text-muted" title={p.vendor_name || ''}>
+                        {p.vendor_name || `#${p.vendor_id}`}
+                      </div>
+                    </TD>
+                    <TD className="whitespace-nowrap text-right tabular-nums">
                       {naira(p.vendor_price)}
                       {p.pending_vendor_price != null && (
                         <div className="text-chips text-warning-fg">→ {naira(p.pending_vendor_price)}</div>
                       )}
                     </TD>
-                    <TD className="text-right tabular-nums">{p.qty == null ? '∞' : Number(p.qty).toLocaleString()}</TD>
+                    <TD className="whitespace-nowrap text-right tabular-nums">{p.qty == null ? '∞' : Number(p.qty).toLocaleString()}</TD>
                     <TD>
                       <div className="flex flex-col items-start gap-1">
                         <Badge tone={STATUS_STYLES[p.status] || 'neutral'} variant="subtle">{p.status}</Badge>
@@ -466,7 +472,7 @@ export default function ExhibitionProductsPage() {
                         )}
                       </div>
                     </TD>
-                    <TD className="text-right">{productActionSelect(p)}</TD>
+                    <TD className="w-[1%] whitespace-nowrap text-right">{productActionSelect(p)}</TD>
                   </TR>
                 ))}
               </TBody>

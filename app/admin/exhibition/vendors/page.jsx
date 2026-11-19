@@ -5,8 +5,8 @@
 // generated when left blank), vendors sign into /vendor with those credentials.
 // Admins can edit the login details and email them to the vendor. Suspend,
 // edit and delete live here too.
-import { useCallback, useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, Mail, Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ChevronLeft, ChevronRight, Mail, Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload, UserCheck } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
@@ -30,6 +30,21 @@ function fmtDate(iso) {
   }
 }
 
+function fmtDateTime(iso) {
+  if (!iso) return '—'
+  try {
+    return new Date(iso).toLocaleString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return '—'
+  }
+}
+
 export default function ExhibitionVendorsPage() {
   const [vendors, setVendors] = useState([])
   const [cycles, setCycles] = useState([])
@@ -47,6 +62,7 @@ export default function ExhibitionVendorsPage() {
   const [pageSize, setPageSize] = useState(25)
   const [selected, setSelected] = useState(new Set())
   const [emailing, setEmailing] = useState(null)
+  const [signedInOpen, setSignedInOpen] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -252,6 +268,15 @@ export default function ExhibitionVendorsPage() {
   const allPageSelected = pageEmailable.length > 0 && pageEmailable.every((v) => selected.has(v.id))
   const selectedVendors = emailableVendors.filter((v) => selected.has(v.id))
   const allEmailableSelected = emailableVendors.length > 0 && selectedVendors.length === emailableVendors.length
+  // Who has actually signed in at least once (last_login_at is set by the
+  // vendor login route), most recent first.
+  const signedInVendors = useMemo(
+    () =>
+      vendors
+        .filter((v) => v.last_login_at)
+        .sort((a, b) => new Date(b.last_login_at) - new Date(a.last_login_at)),
+    [vendors]
+  )
 
   const toggleSelect = (id) => {
     setSelected((prev) => {
@@ -423,6 +448,15 @@ export default function ExhibitionVendorsPage() {
             <>
               <div className="flex flex-col gap-3 border-b border-line bg-subtle px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setSignedInOpen(true)}
+                    title="See which vendors have signed in"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-semibold text-fg transition-colors hover:bg-line-subtle"
+                  >
+                    <UserCheck className="h-3.5 w-3.5 text-brand" />
+                    Signed in {signedInVendors.length} / {vendors.length}
+                  </button>
                   <label className="flex items-center gap-2 text-xs font-medium text-muted">
                     <input
                       type="checkbox"
@@ -696,6 +730,40 @@ export default function ExhibitionVendorsPage() {
             </>
           )}
         </Card>
+
+        <DraggableModal
+          open={signedInOpen}
+          onClose={() => setSignedInOpen(false)}
+          title="Vendors who have signed in"
+        >
+          <div className="space-y-3">
+            <p className="text-sm text-muted">
+              <span className="font-semibold text-fg">{signedInVendors.length}</span> of{' '}
+              <span className="font-semibold text-fg">{vendors.length}</span> vendors in this view have signed in at
+              least once.
+            </p>
+            {signedInVendors.length === 0 ? (
+              <p className="rounded-xl bg-subtle px-4 py-8 text-center text-sm text-muted">
+                No vendor has signed in yet. Sign-ins are counted from now on.
+              </p>
+            ) : (
+              <div className="max-h-[60vh] divide-y divide-line overflow-y-auto rounded-xl border border-line">
+                {signedInVendors.map((v) => (
+                  <div key={v.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-fg" title={v.name}>{v.name}</p>
+                      <p className="truncate text-xs text-muted">
+                        <span className="font-mono">{v.code}</span>
+                        {v.branch_name ? ` · ${v.branch_name}` : ''}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-right text-xs text-muted">{fmtDateTime(v.last_login_at)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DraggableModal>
 
         <DraggableModal open={!!modal} onClose={() => setModal(null)} title={modal === 'create' ? 'New vendor account' : 'Edit vendor'}>
           <div className="space-y-4">

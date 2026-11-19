@@ -173,6 +173,18 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: 'This vendor account is not active. Please contact your administrator.' }, { status: 403 })
     }
 
+    // Record the sign-in for the admin's "signed in X / Y" counter. Failure
+    // here (e.g. the column isn't migrated yet) must never block the login.
+    try {
+      const { error: stampError } = await supabase
+        .from('exhibition_vendors')
+        .update({ last_login_at: new Date().toISOString() })
+        .eq('id', vendor.id)
+      if (stampError) console.error('Vendor last_login_at update failed:', stampError)
+    } catch (e) {
+      console.error('Vendor last_login_at update failed:', e)
+    }
+
     // Resolve the vendor's cycle for context (name/status surfaced in the portal).
     const { data: cycle, error: cycleErr } = await supabase
       .from('exhibition_cycles')
