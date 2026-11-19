@@ -113,6 +113,34 @@ export async function DELETE() {
   return res
 }
 
+// Best-effort: remember a wrong-passcode attempt against the vendor so admins
+// can see who tried the credentials we sent but could not get in. Never blocks
+// the response, and keeps working before migrations/add-exhibition-vendor-failed-logins.sql
+// has run.
+async function recordFailedLogin(supabase, vendorId) {
+  try {
+    const { data: current, error: readError } = await supabase
+      .from('exhibition_vendors')
+      .select('failed_login_count')
+      .eq('id', vendorId)
+      .maybeSingle()
+    if (readError) {
+      console.error('Vendor failed_login_count read failed:', readError)
+      return
+    }
+    const { error: writeError } = await supabase
+      .from('exhibition_vendors')
+      .update({
+        failed_login_count: Number(current?.failed_login_count || 0) + 1,
+        last_failed_login_at: new Date().toISOString(),
+      })
+      .eq('id', vendorId)
+    if (writeError) console.error('Vendor failed_login_count update failed:', writeError)
+  } catch (e) {
+    console.error('Vendor failed sign-in tracking failed:', e)
+  }
+}
+
 export async function POST(req) {
   try {
     const ip = getClientIP(req)
@@ -158,6 +186,7 @@ export async function POST(req) {
     const passcodeCheck = await verifyPasscode(passcode, String(vendor.passcode || ''))
     if (!passcodeCheck.ok) {
       console.warn(`Failed vendor login attempt for code=${code} from IP: ${ip}`)
+      await recordFailedLogin(supabase, vendor.id)
       return NextResponse.json({ ok: false, error: 'Incorrect passcode. Please check it and try again.' }, { status: 401 })
     }
     // Legacy rows still hold the passcode in plaintext — replace it the first

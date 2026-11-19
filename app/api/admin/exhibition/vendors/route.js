@@ -31,11 +31,17 @@ export async function GET(request) {
     const q = String(searchParams.get('q') || '').trim()
 
     const supabase = createClient()
-    const selectVendors = (withLastLogin) => {
+    const selectVendors = ({ lastLogin, failedLogins }) => {
+      const signInColumns = [
+        lastLogin ? 'last_login_at' : null,
+        failedLogins ? 'failed_login_count, last_failed_login_at' : null,
+      ]
+        .filter(Boolean)
+        .join(', ')
       let query = supabase
         .from('exhibition_vendors')
         .select(
-          `id, cycle_id, branch_id, name, code, email, phone, address, status, login_sent_at, ${withLastLogin ? 'last_login_at, ' : ''}created_at, branches:branch_id(name, code), cycles:cycle_id(name, code)`
+          `id, cycle_id, branch_id, name, code, email, phone, address, status, login_sent_at, ${signInColumns ? `${signInColumns}, ` : ''}created_at, branches:branch_id(name, code), cycles:cycle_id(name, code)`
         )
         .order('name')
       if (cycleId > 0) query = query.eq('cycle_id', cycleId)
@@ -44,11 +50,17 @@ export async function GET(request) {
       return query
     }
 
-    let { data, error } = await selectVendors(true)
-    // The sign-in column needs migrations/add-exhibition-vendor-last-login.sql.
-    // Until that runs the list still loads — it just has no sign-in counts.
-    if (error && String(error.code || '') === '42703' && String(error.message || '').includes('last_login_at')) {
-      ;({ data, error } = await selectVendors(false))
+    const isMissingColumn = (err, column) =>
+      String(err?.code || '') === '42703' && String(err?.message || '').includes(column)
+
+    // Sign-in columns come from migrations; until they run the list still loads
+    // without them, dropping one group of columns at a time.
+    let { data, error } = await selectVendors({ lastLogin: true, failedLogins: true })
+    if (isMissingColumn(error, 'failed_login_count') || isMissingColumn(error, 'last_failed_login_at')) {
+      ;({ data, error } = await selectVendors({ lastLogin: true, failedLogins: false }))
+    }
+    if (isMissingColumn(error, 'last_login_at')) {
+      ;({ data, error } = await selectVendors({ lastLogin: false, failedLogins: false }))
     }
     if (error) {
       if (isMissingTable(error, 'exhibition')) {

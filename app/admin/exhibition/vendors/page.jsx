@@ -6,7 +6,7 @@
 // Admins can edit the login details and email them to the vendor. Suspend,
 // edit and delete live here too.
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Mail, Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload, UserCheck } from 'lucide-react'
+import { AlertTriangle, ChevronLeft, ChevronRight, Mail, Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload, UserCheck } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
@@ -27,6 +27,15 @@ function fmtDate(iso) {
     return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
   } catch {
     return '—'
+  }
+}
+
+function fmtTime(iso) {
+  if (!iso) return ''
+  try {
+    return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  } catch {
+    return ''
   }
 }
 
@@ -63,6 +72,7 @@ export default function ExhibitionVendorsPage() {
   const [selected, setSelected] = useState(new Set())
   const [emailing, setEmailing] = useState(null)
   const [signedInOpen, setSignedInOpen] = useState(false)
+  const [failedOpen, setFailedOpen] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -277,6 +287,15 @@ export default function ExhibitionVendorsPage() {
         .sort((a, b) => new Date(b.last_login_at) - new Date(a.last_login_at)),
     [vendors]
   )
+  const failedCount = (v) => Number(v.failed_login_count || 0)
+  // Vendors whose passcode was rejected at least once, most recent first.
+  const failedLoginVendors = useMemo(
+    () =>
+      vendors
+        .filter((v) => Number(v.failed_login_count || 0) > 0)
+        .sort((a, b) => new Date(b.last_failed_login_at || 0) - new Date(a.last_failed_login_at || 0)),
+    [vendors]
+  )
 
   const toggleSelect = (id) => {
     setSelected((prev) => {
@@ -457,6 +476,20 @@ export default function ExhibitionVendorsPage() {
                     <UserCheck className="h-3.5 w-3.5 text-brand" />
                     Signed in {signedInVendors.length} / {vendors.length}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setFailedOpen(true)}
+                    title="See which vendors tried and could not sign in"
+                    className={[
+                      'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors',
+                      failedLoginVendors.length > 0
+                        ? 'border-warning-border bg-warning-bg text-warning-fg hover:brightness-105'
+                        : 'border-line bg-surface text-fg hover:bg-line-subtle',
+                    ].join(' ')}
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Failed {failedLoginVendors.length} / {vendors.length}
+                  </button>
                   <label className="flex items-center gap-2 text-xs font-medium text-muted">
                     <input
                       type="checkbox"
@@ -519,13 +552,14 @@ export default function ExhibitionVendorsPage() {
                   <table className="w-full table-fixed text-sm">
                     <colgroup>
                       <col className="w-10" />
-                      <col className="w-[22%]" />
+                      <col className="w-[18%]" />
                       <col className="w-[7%]" />
                       <col className="w-[10%]" />
-                      <col className="w-[11%]" />
-                      <col className="w-[17%]" />
+                      <col className="w-[9%]" />
+                      <col className="w-[15%]" />
                       <col className="w-[8%]" />
                       <col className="w-[8%]" />
+                      <col className="w-[10%]" />
                       <col className="w-[12%]" />
                     </colgroup>
                     <thead className="sticky top-0 z-10 bg-surface">
@@ -547,6 +581,7 @@ export default function ExhibitionVendorsPage() {
                         <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Contact</th>
                         <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Status</th>
                         <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Created</th>
+                        <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Last sign-in</th>
                         <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Actions</th>
                       </tr>
                     </thead>
@@ -585,8 +620,26 @@ export default function ExhibitionVendorsPage() {
                             <Badge tone={v.status === 'active' ? 'success' : 'neutral'} variant="subtle">
                               {v.status}
                             </Badge>
+                            {failedCount(v) > 0 ? (
+                              <div
+                                className="mt-1 whitespace-nowrap text-xs font-semibold text-warning-fg"
+                                title={`Last failed attempt ${fmtDateTime(v.last_failed_login_at)}`}
+                              >
+                                {failedCount(v)} failed
+                              </div>
+                            ) : null}
                           </td>
                           <td className="p-3 text-xs text-muted">{fmtDate(v.created_at)}</td>
+                          <td className="p-3 text-xs" title={v.last_login_at ? fmtDateTime(v.last_login_at) : 'Has never signed in'}>
+                            {v.last_login_at ? (
+                              <>
+                                <div className="whitespace-nowrap text-muted">{fmtDate(v.last_login_at)}</div>
+                                <div className="whitespace-nowrap text-subtext">{fmtTime(v.last_login_at)}</div>
+                              </>
+                            ) : (
+                              <span className="text-subtext">Never</span>
+                            )}
+                          </td>
                           <td className="p-3 text-right">
                             <select
                               className="w-full max-w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg focus:border-brand focus:outline-none disabled:opacity-50"
@@ -655,6 +708,15 @@ export default function ExhibitionVendorsPage() {
                         {v.address ? <div className="text-muted">{v.address}</div> : null}
                       </div>
                       <div className="col-span-2 text-subtext">Created {fmtDate(v.created_at)}</div>
+                      <div className="col-span-2 text-subtext">
+                        Last sign-in {v.last_login_at ? fmtDateTime(v.last_login_at) : 'Never'}
+                      </div>
+                      {failedCount(v) > 0 ? (
+                        <div className="col-span-2 font-medium text-warning-fg">
+                          {failedCount(v)} failed sign-in{failedCount(v) === 1 ? '' : 's'} · last{' '}
+                          {fmtDateTime(v.last_failed_login_at)}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2">
                       <Button
@@ -758,6 +820,45 @@ export default function ExhibitionVendorsPage() {
                       </p>
                     </div>
                     <span className="shrink-0 text-right text-xs text-muted">{fmtDateTime(v.last_login_at)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DraggableModal>
+
+        <DraggableModal
+          open={failedOpen}
+          onClose={() => setFailedOpen(false)}
+          title="Vendors who could not sign in"
+        >
+          <div className="space-y-3">
+            <p className="text-sm text-muted">
+              <span className="font-semibold text-fg">{failedLoginVendors.length}</span> of{' '}
+              <span className="font-semibold text-fg">{vendors.length}</span> vendors have had a passcode rejected at
+              least once. Only wrong passcodes on a known vendor code are counted.
+            </p>
+            {failedLoginVendors.length === 0 ? (
+              <p className="rounded-xl bg-subtle px-4 py-8 text-center text-sm text-muted">
+                No failed sign-in attempts recorded yet.
+              </p>
+            ) : (
+              <div className="max-h-[60vh] divide-y divide-line overflow-y-auto rounded-xl border border-line">
+                {failedLoginVendors.map((v) => (
+                  <div key={v.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-fg" title={v.name}>{v.name}</p>
+                      <p className="truncate text-xs text-muted">
+                        <span className="font-mono">{v.code}</span>
+                        {v.branch_name ? ` · ${v.branch_name}` : ''}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="text-xs font-semibold text-warning-fg">
+                        {failedCount(v)} failed
+                      </div>
+                      <div className="text-xs text-muted">{fmtDateTime(v.last_failed_login_at)}</div>
+                    </div>
                   </div>
                 ))}
               </div>
