@@ -29,7 +29,6 @@ import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import Select from '../components/ui/Select'
 import Spinner from '../components/ui/Spinner'
-import AnimatedNumber from '../components/ui/AnimatedNumber'
 
 // Map order status -> Sakani badge tone
 const STATUS_TONES = {
@@ -492,10 +491,7 @@ function OrdersPageContent() {
                           <CreditCard className="h-3 w-3" strokeWidth={2} />
                           {order.payment_option}
                         </span>
-                        <AnimatedNumber
-                          value={`₦${Number(order.total_amount || 0).toLocaleString()}`}
-                          className="text-sm font-bold tabular-nums text-fg"
-                        />
+                        <span className="text-sm font-bold tabular-nums text-fg">₦{Number(order.total_amount || 0).toLocaleString()}</span>
                       </div>
 
                       {/* Pending → Approved → Confirmed progress */}
@@ -551,10 +547,7 @@ function OrdersPageContent() {
                           <CreditCard className="h-3 w-3" strokeWidth={2} />
                           {order.payment_option}
                         </span>
-                        <AnimatedNumber
-                          value={`₦${Number(order.total_amount || 0).toLocaleString()}`}
-                          className="text-sm font-bold tabular-nums text-fg"
-                        />
+                        <span className="text-sm font-bold tabular-nums text-fg">₦{Number(order.total_amount || 0).toLocaleString()}</span>
                       </div>
 
                       {/* Pending → Approved → Delivered progress */}
@@ -607,10 +600,7 @@ function OrdersPageContent() {
                           <CreditCard className="h-3 w-3" strokeWidth={2} />
                           {order.payment_option}
                         </span>
-                        <AnimatedNumber
-                          value={`₦${Number(order.total_amount || 0).toLocaleString()}`}
-                          className="text-sm font-bold tabular-nums text-fg"
-                        />
+                        <span className="text-sm font-bold tabular-nums text-fg">₦{Number(order.total_amount || 0).toLocaleString()}</span>
                       </div>
 
                       {/* Pending → Posted → Delivered progress */}

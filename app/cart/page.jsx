@@ -702,7 +702,7 @@ function CartPageContent() {
                   </div>
                   <div className="flex justify-between text-xs text-muted">
                     <span>Total</span>
-                    <AnimatedNumber value={`₦${cartTotal.toLocaleString()}`} className="font-semibold text-fg" />
+                    <span className="font-semibold text-fg">₦{cartTotal.toLocaleString()}</span>
                   </div>
                 </div>
               </div>
@@ -795,9 +795,9 @@ function CartPageContent() {
                             >
                               <Minus className="h-3.5 w-3.5" strokeWidth={2.5} />
                             </button>
-                            <div className="w-12 text-center text-sm font-bold tabular-nums text-fg sm:w-14">
+                            <div className="flex w-12 items-center justify-center text-center text-sm font-bold tabular-nums text-fg sm:w-14">
                               {/* Remounts per value so the new quantity pops. */}
-                              <span key={item.qty} className="pop">
+                              <span key={Number(item.qty || 0)} className="pop">
                                 {Number(item.qty || 0)}
                               </span>
                             </div>
