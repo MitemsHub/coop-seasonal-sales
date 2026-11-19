@@ -735,11 +735,14 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
           </div>
         </div>
 
-        <div className="hidden overflow-x-auto md:block">
-          <table className="w-full min-w-[1040px] text-sm">
+        <div className="hidden overflow-x-auto lg:block">
+          {/* Fixed columns with a width budget that fits the card from md up, so
+              the table never forces a horizontal scrollbar. Long values truncate
+              (with a title) instead of pushing the row wider. */}
+          <table className="w-full table-fixed text-xs xl:text-sm">
             <thead className="sticky top-0 z-10 bg-surface">
               <tr className="border-b border-line text-left">
-                <th className="p-3 w-10">
+                <th className="w-8 p-2 xl:w-10 xl:p-3">
                   <input
                     type="checkbox"
                     checked={allSelectedOnPage}
@@ -749,22 +752,22 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                     aria-label="Select all"
                   />
                 </th>
-                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Order</th>
-                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Member</th>
+                <th className="w-[88px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[120px] xl:p-3">Order</th>
+                <th className="w-[96px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[140px] xl:p-3">Member</th>
                 {status === 'Pending' && (
-                  <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Source</th>
+                  <th className="w-[80px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[104px] xl:p-3">Source</th>
                 )}
                 {status === 'Approved' && (
-                  <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Ready since</th>
+                  <th className="w-[80px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[104px] xl:p-3">Ready since</th>
                 )}
                 {status === 'Confirmed' && (
-                  <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Confirmed by</th>
+                  <th className="w-[80px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[104px] xl:p-3">Confirmed by</th>
                 )}
-                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Delivery Location</th>
-                <th className="p-3 text-xs font-semibold uppercase tracking-wide text-subtext">Payment</th>
-                <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Qty</th>
-                <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Total + Int</th>
-                <th className="p-3 text-right text-xs font-semibold uppercase tracking-wide text-subtext">Actions</th>
+                <th className="w-[100px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[150px] xl:p-3">Delivery Location</th>
+                <th className="w-[68px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[88px] xl:p-3">Payment</th>
+                <th className="w-[40px] p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[56px] xl:p-3">Qty</th>
+                <th className="w-[84px] p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[104px] xl:p-3">Total + Int</th>
+                <th className="w-[96px] p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[116px] xl:p-3">Actions</th>
               </tr>
             </thead>
             <motion.tbody layout>
@@ -772,15 +775,15 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                 <>
                   {Array.from({ length: 6 }).map((_, i) => (
                     <tr key={`sk-${i}`} className="border-b border-line">
-                      <td className="p-3"><div className="sakani-skeleton h-4 w-4 rounded" /></td>
-                      <td className="p-3"><div className="sakani-skeleton h-4 w-24 rounded" /></td>
-                      <td className="p-3"><div className="sakani-skeleton h-4 w-40 rounded" /></td>
-                      <td className="p-3"><div className="sakani-skeleton h-4 w-24 rounded" /></td>
-                      <td className="p-3"><div className="sakani-skeleton h-4 w-32 rounded" /></td>
-                      <td className="p-3"><div className="sakani-skeleton h-4 w-16 rounded" /></td>
-                      <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-4 w-10 rounded" /></td>
-                      <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-4 w-20 rounded" /></td>
-                      <td className="p-3 text-right"><div className="sakani-skeleton ml-auto h-8 w-24 rounded" /></td>
+                      <td className="p-2 xl:p-3"><div className="sakani-skeleton h-4 w-4 rounded" /></td>
+                      <td className="p-2 xl:p-3"><div className="sakani-skeleton h-4 w-full rounded" /></td>
+                      <td className="p-2 xl:p-3"><div className="sakani-skeleton h-4 w-full rounded" /></td>
+                      <td className="p-2 xl:p-3"><div className="sakani-skeleton h-4 w-full rounded" /></td>
+                      <td className="p-2 xl:p-3"><div className="sakani-skeleton h-4 w-full rounded" /></td>
+                      <td className="p-2 xl:p-3"><div className="sakani-skeleton h-4 w-full rounded" /></td>
+                      <td className="p-2 xl:p-3"><div className="sakani-skeleton ml-auto h-4 w-6 rounded" /></td>
+                      <td className="p-2 xl:p-3"><div className="sakani-skeleton ml-auto h-4 w-full rounded" /></td>
+                      <td className="p-2 xl:p-3"><div className="sakani-skeleton ml-auto h-8 w-full rounded" /></td>
                     </tr>
                   ))}
                 </>
@@ -788,7 +791,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
 
               {!loading && orders.length === 0 && (
                 <tr>
-                  <td className="p-10 text-center" colSpan={status === 'Cancelled' ? 8 : 9}>
+                  <td className="p-10 text-center" colSpan={status === 'Pending' || status === 'Approved' || status === 'Confirmed' ? 9 : 8}>
                     <div className="mx-auto flex max-w-xs flex-col items-center gap-2">
                       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-subtle">
                         <Inbox className="h-6 w-6 text-subtext" />
@@ -816,7 +819,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                       transition={{ duration: 0.16, ease: 'easeOut' }}
                       className="border-b border-line last:border-b-0 transition-colors duration-150 ease-sakani hover:bg-subtle"
                     >
-                      <td className="p-3 align-top">
+                      <td className="p-2 align-top xl:p-3">
                         <input
                           type="checkbox"
                           checked={selected.has(o.id)}
@@ -825,12 +828,12 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                           aria-label={`Select order ${o.order_id}`}
                         />
                       </td>
-                      <td className="p-3 align-top">
-                        <div className="font-medium text-fg">{o.order_id || `#${o.id}`}</div>
+                      <td className="p-2 align-top xl:p-3">
+                        <div className="truncate font-medium text-fg" title={o.order_id || `#${o.id}`}>{o.order_id || `#${o.id}`}</div>
                         <div className="text-xs text-subtext">{fmtDate(o.created_at)}</div>
-                        <div className="text-xs text-subtext">{o.cycle_name || o.cycle_code || ''}</div>
+                        <div className="truncate text-xs text-subtext" title={o.cycle_name || o.cycle_code || ''}>{o.cycle_name || o.cycle_code || ''}</div>
                         {o.per_vendor?.length > 0 && (
-                          <div className="mt-1 max-w-[190px] space-y-0.5">
+                          <div className="mt-1 space-y-0.5">
                             {o.per_vendor.map((v) => (
                               <div key={v.vendor_id} className="truncate text-xs text-subtext" title={v.vendor_name}>
                                 {v.vendor_name}: {v.qty}
@@ -839,45 +842,47 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                           </div>
                         )}
                         {status === 'Cancelled' && (
-                          <div className="mt-1 max-w-[220px] text-xs text-subtext">
+                          <div className="mt-1 line-clamp-2 text-xs text-subtext" title={String(o.cancelled_reason || '—').trim()}>
                             Reason: {String(o.cancelled_reason || '—').trim()}
                           </div>
                         )}
                       </td>
-                      <td className="p-3 align-top">
+                      <td className="p-2 align-top xl:p-3">
                         <div className="font-medium text-fg">{o.member_id}</div>
-                        <div className="text-muted break-words">{o.member_name_snapshot || '-'}</div>
+                        <div className="truncate text-muted" title={o.member_name_snapshot || ''}>{o.member_name_snapshot || '-'}</div>
                       </td>
                       {status === 'Pending' && (
-                        <td className="p-3 align-top">
-                          <span className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${o.source === 'storefront' ? 'bg-brand-subtle text-brand' : 'bg-subtle text-muted'}`}>
+                        <td className="p-2 align-top xl:p-3">
+                          <span className={`inline-flex max-w-full truncate rounded-md px-2 py-0.5 text-xs font-medium ${o.source === 'storefront' ? 'bg-brand-subtle text-brand' : 'bg-subtle text-muted'}`}>
                             {o.source === 'storefront' ? 'Shop' : o.source === 'admin' ? 'Admin invoice' : 'Vendor invoice'}
                           </span>
                         </td>
                       )}
                       {status === 'Approved' && (
-                        <td className="p-3 align-top text-muted">
+                        <td className="p-2 align-top text-muted xl:p-3">
                           {fmtDate(o.approved_at || o.ready_at)}
                           <div className="text-chips text-subtext">Awaiting member</div>
                         </td>
                       )}
                       {status === 'Confirmed' && (
-                        <td className="p-3 align-top">
+                        <td className="p-2 align-top xl:p-3">
                           <div className="font-medium text-fg">
                             {o.confirmed_by_role === 'admin' ? 'Admin override' : 'Member'}
                           </div>
                           <div className="text-chips text-subtext">{fmtDate(o.member_confirmed_at)}</div>
                         </td>
                       )}
-                      <td className="p-3 align-top text-muted">{o.branch_name || `#${o.branch_id}`}</td>
-                      <td className="p-3 align-top">
-                        <span className="inline-flex items-center rounded-md bg-subtle px-2 py-0.5 text-xs font-medium text-fg">
+                      <td className="p-2 align-top text-muted xl:p-3">
+                        <div className="truncate" title={o.branch_name || `${o.branch_id}`}>{o.branch_name || `#${o.branch_id}`}</div>
+                      </td>
+                      <td className="p-2 align-top xl:p-3">
+                        <span className="inline-flex max-w-full truncate items-center rounded-md bg-subtle px-2 py-0.5 text-xs font-medium text-fg" title={o.payment_option || ''}>
                           {o.payment_option || '-'}
                         </span>
                       </td>
-                      <td className="p-3 align-top text-right">{Number(o.total_qty || 0).toLocaleString()}</td>
-                      <td className="p-3 align-top text-right font-medium text-fg">{naira(o.total_amount)}</td>
-                      <td className="p-3 align-top text-right">{orderActionSelect(o)}</td>
+                      <td className="p-2 align-top text-right xl:p-3">{Number(o.total_qty || 0).toLocaleString()}</td>
+                      <td className="p-2 align-top text-right font-medium text-fg xl:p-3">{naira(o.total_amount)}</td>
+                      <td className="p-2 align-top text-right xl:p-3">{orderActionSelect(o, 'w-full text-xs xl:text-sm')}</td>
                     </motion.tr>
                   ))}
               </AnimatePresence>
@@ -885,8 +890,9 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
           </table>
         </div>
 
-        {/* Phones get cards: the full table becomes unreadable below md. */}
-        <div className="divide-y divide-line md:hidden">
+        {/* Below lg the sidebar is an off-canvas drawer and nine columns cannot
+            fit; the order cards carry the same details and actions instead. */}
+        <div className="divide-y divide-line lg:hidden">
           {loading &&
             Array.from({ length: 4 }).map((_, i) => (
               <div key={`card-sk-${i}`} className="space-y-2 p-4">

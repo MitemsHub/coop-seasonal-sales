@@ -669,7 +669,11 @@ export default function ExhibitionVendorsPage() {
                 </p>
               ) : null}
 
-              <div className="hidden md:block">
+              {/* The table only appears once the sidebar docks at lg. Below that
+                  the sidebar is an off-canvas drawer that overlays the content,
+                  so a fixed-width ten-column table ends up half under it (its
+                  headers and the Actions select clipped at the drawer edge). */}
+              <div className="hidden lg:block">
                 <div className="overflow-hidden">
                   <table className="w-full table-fixed text-sm">
                     {/* Column widths live on the header cells so the optional
@@ -793,8 +797,8 @@ export default function ExhibitionVendorsPage() {
                 </div>
               </div>
 
-              {/* Phones get cards for the vendor details and actions. */}
-              <div className="divide-y divide-line md:hidden">
+              {/* Phones and tablets get cards for the vendor details and actions. */}
+              <div className="divide-y divide-line lg:hidden">
                 {pageVendors.map((v) => (
                   <div key={v.id} className="p-4">
                     <div className="flex items-start justify-between gap-3">
