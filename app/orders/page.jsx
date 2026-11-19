@@ -29,6 +29,7 @@ import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import Select from '../components/ui/Select'
 import Spinner from '../components/ui/Spinner'
+import AnimatedNumber from '../components/ui/AnimatedNumber'
 
 // Map order status -> Sakani badge tone
 const STATUS_TONES = {
@@ -331,7 +332,7 @@ function OrdersPageContent() {
                   aria-selected={activeTab === 'food'}
                   onClick={() => router.push(ordersUrl('food'))}
                   className={[
-                    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all duration-200 ease-sakani sm:text-sm',
+                    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all duration-200 ease-sakani active:scale-[0.97] sm:text-sm',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
                     activeTab === 'food' ? 'bg-brand text-on-accent shadow-xs' : 'text-muted hover:text-fg',
                   ].join(' ')}
@@ -345,7 +346,7 @@ function OrdersPageContent() {
                   aria-selected={activeTab === 'ram'}
                   onClick={() => router.push(ordersUrl('ram'))}
                   className={[
-                    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all duration-200 ease-sakani sm:text-sm',
+                    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all duration-200 ease-sakani active:scale-[0.97] sm:text-sm',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
                     activeTab === 'ram' ? 'bg-brand text-on-accent shadow-xs' : 'text-muted hover:text-fg',
                   ].join(' ')}
@@ -359,7 +360,7 @@ function OrdersPageContent() {
                   aria-selected={activeTab === 'exhibition'}
                   onClick={() => router.push(ordersUrl('exhibition'))}
                   className={[
-                    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all duration-200 ease-sakani sm:text-sm',
+                    'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold transition-all duration-200 ease-sakani active:scale-[0.97] sm:text-sm',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
                     activeTab === 'exhibition' ? 'bg-brand text-on-accent shadow-xs' : 'text-muted hover:text-fg',
                   ].join(' ')}
@@ -491,7 +492,10 @@ function OrdersPageContent() {
                           <CreditCard className="h-3 w-3" strokeWidth={2} />
                           {order.payment_option}
                         </span>
-                        <span className="text-sm font-bold tabular-nums text-fg">₦{Number(order.total_amount || 0).toLocaleString()}</span>
+                        <AnimatedNumber
+                          value={`₦${Number(order.total_amount || 0).toLocaleString()}`}
+                          className="text-sm font-bold tabular-nums text-fg"
+                        />
                       </div>
 
                       {/* Pending → Approved → Confirmed progress */}
@@ -547,7 +551,10 @@ function OrdersPageContent() {
                           <CreditCard className="h-3 w-3" strokeWidth={2} />
                           {order.payment_option}
                         </span>
-                        <span className="text-sm font-bold tabular-nums text-fg">₦{Number(order.total_amount || 0).toLocaleString()}</span>
+                        <AnimatedNumber
+                          value={`₦${Number(order.total_amount || 0).toLocaleString()}`}
+                          className="text-sm font-bold tabular-nums text-fg"
+                        />
                       </div>
 
                       {/* Pending → Approved → Delivered progress */}
@@ -600,7 +607,10 @@ function OrdersPageContent() {
                           <CreditCard className="h-3 w-3" strokeWidth={2} />
                           {order.payment_option}
                         </span>
-                        <span className="text-sm font-bold tabular-nums text-fg">₦{Number(order.total_amount || 0).toLocaleString()}</span>
+                        <AnimatedNumber
+                          value={`₦${Number(order.total_amount || 0).toLocaleString()}`}
+                          className="text-sm font-bold tabular-nums text-fg"
+                        />
                       </div>
 
                       {/* Pending → Posted → Delivered progress */}

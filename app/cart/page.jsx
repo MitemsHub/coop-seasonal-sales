@@ -28,6 +28,7 @@ import Badge from '../components/ui/Badge'
 import EmptyState from '../components/ui/EmptyState'
 import Label from '../components/ui/Label'
 import Select from '../components/ui/Select'
+import AnimatedNumber from '../components/ui/AnimatedNumber'
 import Spinner from '../components/ui/Spinner'
 
 function CartPageContent() {
@@ -701,7 +702,7 @@ function CartPageContent() {
                   </div>
                   <div className="flex justify-between text-xs text-muted">
                     <span>Total</span>
-                    <span className="font-semibold text-fg">₦{cartTotal.toLocaleString()}</span>
+                    <AnimatedNumber value={`₦${cartTotal.toLocaleString()}`} className="font-semibold text-fg" />
                   </div>
                 </div>
               </div>
@@ -790,17 +791,20 @@ function CartPageContent() {
                             <button
                               onClick={() => updateQuantity(item.sku, item.qty - 1)}
                               aria-label={`Decrease ${item.name || 'item'}`}
-                              className="inline-flex h-9 w-9 items-center justify-center bg-subtle text-fg transition-colors duration-150 hover:bg-danger-bg hover:text-danger-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                              className="inline-flex h-9 w-9 items-center justify-center bg-subtle text-fg transition-[color,background-color,scale] duration-150 active:scale-[0.97] hover:bg-danger-bg hover:text-danger-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
                             >
                               <Minus className="h-3.5 w-3.5" strokeWidth={2.5} />
                             </button>
                             <div className="w-12 text-center text-sm font-bold tabular-nums text-fg sm:w-14">
-                              {Number(item.qty || 0)}
+                              {/* Remounts per value so the new quantity pops. */}
+                              <span key={item.qty} className="pop">
+                                {Number(item.qty || 0)}
+                              </span>
                             </div>
                             <button
                               onClick={() => updateQuantity(item.sku, item.qty + 1)}
                               aria-label={`Increase ${item.name || 'item'}`}
-                              className="inline-flex h-9 w-9 items-center justify-center bg-subtle text-fg transition-colors duration-150 hover:bg-success-bg hover:text-success-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                              className="inline-flex h-9 w-9 items-center justify-center bg-subtle text-fg transition-[color,background-color,scale] duration-150 active:scale-[0.97] hover:bg-success-bg hover:text-success-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
                             >
                               <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
                             </button>
@@ -810,7 +814,10 @@ function CartPageContent() {
                         {/* Line Total */}
                         <div className="mb-3 flex items-center justify-between rounded-lg bg-success-bg px-2.5 py-1.5">
                           <span className="text-chips font-medium text-success-fg">Line Total</span>
-                          <span className="text-sm font-bold tabular-nums text-success-fg">₦{(item.price * item.qty).toLocaleString()}</span>
+                          <AnimatedNumber
+                            value={`₦${(item.price * item.qty).toLocaleString()}`}
+                            className="text-sm font-bold tabular-nums text-success-fg"
+                          />
                         </div>
 
                         {/* Remove */}
@@ -846,7 +853,10 @@ function CartPageContent() {
                     <div className="text-chips font-medium text-muted">Items in Cart</div>
                   </div>
                   <div className="rounded-xl border border-line-subtle bg-subtle/60 px-2 py-2.5 text-center">
-                    <div className="text-sm font-bold tabular-nums text-fg sm:text-base">₦{cartTotal.toLocaleString()}</div>
+                    <AnimatedNumber
+                      value={`₦${cartTotal.toLocaleString()}`}
+                      className="text-sm font-bold tabular-nums text-fg sm:text-base"
+                    />
                     <div className="text-chips font-medium text-muted">Cart Total</div>
                   </div>
                   {paymentOption === 'Loan' && (
