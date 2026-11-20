@@ -598,18 +598,6 @@ export default function ExhibitionVendorsPage() {
             <Button variant="ghost" size="sm" leftIcon={RefreshCw} onClick={load} disabled={loading || busy || isEmailing}>
               Refresh
             </Button>
-            <ExportButton
-              format="excel"
-              onClick={exportExcel}
-              disabled={loading || !vendors.length || !!exportBusy || isEmailing}
-              busy={exportBusy === 'excel'}
-            />
-            <ExportButton
-              format="pdf"
-              onClick={exportPDF}
-              disabled={loading || !vendors.length || !!exportBusy || isEmailing}
-              busy={exportBusy === 'pdf'}
-            />
             <Button size="sm" variant="secondary" leftIcon={Upload} onClick={() => setImportOpen(true)} disabled={isEmailing}>
               Import vendors
             </Button>
@@ -672,6 +660,20 @@ export default function ExhibitionVendorsPage() {
               <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
             ))}
           </Select>
+          <div className="flex items-center gap-2 sm:ml-auto">
+            <ExportButton
+              format="excel"
+              onClick={exportExcel}
+              disabled={loading || !vendors.length || !!exportBusy || isEmailing}
+              busy={exportBusy === 'excel'}
+            />
+            <ExportButton
+              format="pdf"
+              onClick={exportPDF}
+              disabled={loading || !vendors.length || !!exportBusy || isEmailing}
+              busy={exportBusy === 'pdf'}
+            />
+          </div>
         </div>
 
         <Card className="gap-0 overflow-hidden p-0">
