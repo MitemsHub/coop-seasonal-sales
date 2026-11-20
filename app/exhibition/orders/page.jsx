@@ -20,6 +20,7 @@ import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import { EXHIBITION_STATUS_META } from '../../components/ui/OrderStepper'
 import { normalizeExhibitionStatus } from '@/lib/exhibitionStatus'
 import ExhibitionOrderTimeline from '../../components/ExhibitionOrderTimeline'
@@ -48,6 +49,10 @@ function ExhibitionOrdersContent() {
 
   const [orders, setOrders] = useState([])
   const [confirming, setConfirming] = useState('')
+  // Confirmation is final (it closes the order), so it goes through the same
+  // dialog the Orders page uses instead of firing on a single stray tap.
+  const [confirmTarget, setConfirmTarget] = useState('')
+  const [notice, setNotice] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -76,10 +81,12 @@ function ExhibitionOrdersContent() {
   // The admin approves; the member's confirmation is what closes the order.
   // Ownership is decided server-side from the signed session, never from this
   // payload.
-  const confirmReceipt = async (orderId) => {
+  const confirmReceipt = async () => {
+    const orderId = confirmTarget
     if (!orderId || confirming) return
     setConfirming(orderId)
     setError('')
+    setNotice('')
     try {
       const res = await fetch('/api/exhibition/orders/confirm', {
         method: 'POST',
@@ -88,6 +95,7 @@ function ExhibitionOrdersContent() {
       })
       const json = await res.json().catch(() => null)
       if (!res.ok || !json?.ok) {
+        setConfirmTarget('')
         setError(json?.error || 'Could not confirm this order. Please try again.')
         return
       }
@@ -96,7 +104,10 @@ function ExhibitionOrdersContent() {
           o.order_id === orderId ? { ...o, status: 'Confirmed', member_confirmed_at: json.confirmed_at } : o
         )
       )
+      setNotice(`Order ${orderId} confirmed. Thank you!`)
+      setConfirmTarget('')
     } catch {
+      setConfirmTarget('')
       setError('Could not reach the Coop right now. Please try again.')
     } finally {
       setConfirming('')
@@ -154,6 +165,10 @@ function ExhibitionOrdersContent() {
 
           {!!error && (
             <div className="mb-4 rounded-xl border border-danger-border bg-danger-bg px-4 py-3 text-sm text-danger-fg">{error}</div>
+          )}
+
+          {!!notice && (
+            <div className="mb-4 rounded-xl border border-success-border bg-success-bg/60 px-4 py-3 text-sm text-success-fg">{notice}</div>
           )}
 
           {/* Summary strip */}
@@ -235,8 +250,8 @@ function ExhibitionOrdersContent() {
                         </div>
                         <Button
                           leftIcon={CheckCircle2}
-                          onClick={() => confirmReceipt(o.order_id)}
-                          disabled={confirming === o.order_id}
+                          onClick={() => setConfirmTarget(o.order_id)}
+                          disabled={!!confirming}
                         >
                           {confirming === o.order_id ? 'Confirming…' : 'Confirm received'}
                         </Button>
@@ -282,6 +297,21 @@ function ExhibitionOrdersContent() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!confirmTarget}
+        onClose={() => (confirming ? null : setConfirmTarget(''))}
+        onConfirm={confirmReceipt}
+        title="Confirm you received this order?"
+        message={
+          confirmTarget
+            ? `Order ${confirmTarget}. This closes the order and cannot be undone.`
+            : ''
+        }
+        confirmLabel="Yes, confirm received"
+        variant="brand"
+        loading={!!confirming}
+      />
     </ProtectedRoute>
   )
 }
