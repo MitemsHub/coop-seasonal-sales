@@ -59,13 +59,14 @@ function OrdersPageContent() {
   // order. { order } while the dialog is open, and the order_id being saved.
   const [confirmOrder, setConfirmOrder] = useState(null)
   const [confirmingId, setConfirmingId] = useState('')
-  // ?confirm=EXH001 opens that order's confirm dialog straight away — the link
-  // the My Coop prompt uses. Guarded so closing the dialog does not reopen it.
-  const confirmParam = (searchParams.get('confirm') || '').trim().toUpperCase()
   const openedConfirmParam = useRef('')
-  
+
   const router = useRouter()
   const searchParams = useSearchParams()
+  // ?confirm=EXH001 opens that order's confirm dialog straight away — the link
+  // the My Coop prompt uses. Guarded so closing the dialog does not reopen it.
+  // Declared after useSearchParams(): reading it any earlier is a TDZ crash.
+  const confirmParam = (searchParams.get('confirm') || '').trim().toUpperCase()
   const isAdmin = searchParams.get('admin') === 'true'
   const tabParam = (searchParams.get('tab') || '').trim().toLowerCase()
   const statusParam = (searchParams.get('status') || '').trim()
@@ -244,7 +245,9 @@ function OrdersPageContent() {
   // The member confirms the goods arrived. Ownership is decided by the server
   // from the signed session, so only the order id is sent.
   const confirmReceipt = async () => {
-    const orderId = confirmOrder?.order_id
+    // The dialog state is { order }, not a bare order — reading `.order_id`
+    // straight off it left orderId undefined, so every tap returned early.
+    const orderId = confirmOrder?.order?.order_id
     if (!orderId || confirmingId) return
     setConfirmingId(orderId)
     try {
@@ -255,6 +258,8 @@ function OrdersPageContent() {
       })
       const json = await res.json().catch(() => null)
       if (!res.ok || !json?.ok) {
+        // Close the dialog so the error is actually visible behind it.
+        setConfirmOrder(null)
         setMessage({ type: 'error', text: json?.error || 'Could not confirm this order. Please try again.' })
         return
       }
@@ -266,6 +271,7 @@ function OrdersPageContent() {
       setMessage({ type: 'success', text: `Order #${orderId} confirmed. Thank you!` })
       setConfirmOrder(null)
     } catch {
+      setConfirmOrder(null)
       setMessage({ type: 'error', text: 'Network error. Please try again.' })
     } finally {
       setConfirmingId('')
