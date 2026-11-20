@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getCrossModuleExposure } from '@/lib/crossModuleExposure'
 import { facilityAvailable } from '@/lib/foodLoanMath'
+import { resolveMemberScope, normalizeMemberId } from '@/lib/memberScope'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -19,7 +20,17 @@ async function hasColumn(table, column) {
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url)
-    const memberId = (searchParams.get('member_id') || searchParams.get('id') || '').trim()
+    // Whose eligibility may this call read? Ownership comes from the signed
+    // session: a member is pinned to their own id, admins may name a member
+    // for the assisted cart/shop, and anyone else is refused.
+    const requested = searchParams.get('member_id') || searchParams.get('id') || ''
+    const scope = await resolveMemberScope(req, requested, {
+      allow: ['member', 'admin'],
+      signedOutError: 'Please sign in to view member eligibility.',
+    })
+    if (!scope.ok) return scope.response
+
+    const memberId = normalizeMemberId(scope.memberId)
     if (!memberId) {
       return NextResponse.json({ ok: false, error: 'member_id or id required' }, { status: 400 })
     }

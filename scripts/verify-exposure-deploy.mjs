@@ -2,11 +2,17 @@
 // eligibility endpoint returns cycle-scoped exposure for the test member.
 const BASE = process.env.PROD_BASE_URL || 'https://sales.cbncoopng.com'
 const MEMBER = process.argv[2] || 'P03117'
+// The eligibility route is session-scoped now, so this needs a real cookie.
+// Pass it as MEMBER_COOKIE="member_token=..." (mint one with
+// scripts/mint-member-cookie.mjs).
+const COOKIE = process.env.MEMBER_COOKIE || ''
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 for (let attempt = 1; attempt <= 10; attempt += 1) {
   try {
-    const res = await fetch(`${BASE}/api/members/eligibility?member_id=${MEMBER}`, { headers: { accept: 'application/json' } })
+    const res = await fetch(`${BASE}/api/members/eligibility?member_id=${MEMBER}`, {
+      headers: { accept: 'application/json', ...(COOKIE ? { cookie: COOKIE } : {}) },
+    })
     const j = await res.json().catch(() => ({}))
     const e = j.eligibility || j
     if (j.ok) {
