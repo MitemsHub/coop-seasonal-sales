@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Calendar,
   ClipboardList,
+  CheckCircle2,
   CreditCard,
   Download,
   MapPin,
@@ -21,6 +22,7 @@ import ProtectedRoute from '../components/ProtectedRoute'
 import useCartCount from '../hooks/useCartCount'
 import { ExhibitionOrderStepper, FoodOrderStepper, RamOrderStepper } from '../components/ui/OrderStepper'
 import OrderReceiptModal from '../components/OrderReceiptModal'
+import ConfirmDialog from '../components/ui/ConfirmDialog'
 import { supabase } from '@/lib/supabaseClient'
 import { writePendingIds, markPendingSeen } from '../lib/exhibitionPendingBadge'
 import { normalizeExhibitionStatus } from '@/lib/exhibitionStatus'
@@ -53,6 +55,10 @@ function OrdersPageContent() {
   // Receipt modal state — { module, order } so any order (any status) can be
   // printed or saved as PDF straight from the list.
   const [receiptOrder, setReceiptOrder] = useState(null)
+  // Exhibition receipt confirmation — the member's final step on an approved
+  // order. { order } while the dialog is open, and the order_id being saved.
+  const [confirmOrder, setConfirmOrder] = useState(null)
+  const [confirmingId, setConfirmingId] = useState('')
   
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -231,6 +237,37 @@ function OrdersPageContent() {
     }
   }
 
+  // The member confirms the goods arrived. Ownership is decided by the server
+  // from the signed session, so only the order id is sent.
+  const confirmReceipt = async () => {
+    const orderId = confirmOrder?.order_id
+    if (!orderId || confirmingId) return
+    setConfirmingId(orderId)
+    try {
+      const res = await fetch('/api/exhibition/orders/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId }),
+      })
+      const json = await res.json().catch(() => null)
+      if (!res.ok || !json?.ok) {
+        setMessage({ type: 'error', text: json?.error || 'Could not confirm this order. Please try again.' })
+        return
+      }
+      setExhibitionOrders((prev) =>
+        prev.map((o) =>
+          o.order_id === orderId ? { ...o, status: 'Confirmed', member_confirmed_at: json.confirmed_at } : o
+        )
+      )
+      setMessage({ type: 'success', text: `Order #${orderId} confirmed. Thank you!` })
+      setConfirmOrder(null)
+    } catch {
+      setMessage({ type: 'error', text: 'Network error. Please try again.' })
+    } finally {
+      setConfirmingId('')
+    }
+  }
+
   const loadAll = async () => {
     try {
       setLoading(true)
@@ -277,6 +314,10 @@ function OrdersPageContent() {
         )
 
   const ramLocationMap = new Map(ramLocations.map((l) => [String(l.id), l]))
+
+  // Approved exhibition orders still waiting on the member's confirmation —
+  // surfaced as a call-to-action above the list so it is never missed.
+  const awaitingConfirmation = (exhibitionOrders || []).filter((o) => normalizeExhibitionStatus(o.status) === 'Approved')
 
   const formatDate = (d) =>
     new Date(d).toLocaleDateString('en-US', {
@@ -445,6 +486,24 @@ function OrdersPageContent() {
               </div>
             )}
 
+            {/* Confirm-receipt call to action — approved exhibition orders are
+                waiting on the member, so say so up front. */}
+            {!isAdmin && activeTab === 'exhibition' && awaitingConfirmation.length > 0 && (
+              <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-success-border bg-success-bg/50 p-3">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success-fg" strokeWidth={2.2} />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-fg">
+                    {awaitingConfirmation.length === 1
+                      ? '1 order is ready — confirm you received it'
+                      : `${awaitingConfirmation.length} orders are ready — confirm you received them`}
+                  </p>
+                  <p className="mt-0.5 text-chips text-muted">
+                    Tap “Confirm received” on the order once the goods are in your hands.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {filteredOrders.length === 0 ? (
               <EmptyState
                 icon={Package}
@@ -512,6 +571,28 @@ function OrdersPageContent() {
                           Items: <span className="font-medium text-fg">{order.total_qty || 0}</span>
                         </div>
                       </div>
+
+                      {/* Member confirmation — the final step of the order */}
+                      {!isAdmin && order.status === 'Approved' && (
+                        <div className="mt-3 rounded-lg border border-success-border bg-success-bg/40 p-2.5">
+                          <p className="text-chips font-semibold text-fg">Did you receive your goods?</p>
+                          <p className="mt-0.5 text-chips text-muted">Confirm once they are in your hands.</p>
+                          <Button
+                            className="mt-2 w-full"
+                            size="sm"
+                            leftIcon={CheckCircle2}
+                            onClick={() => setConfirmOrder({ order })}
+                          >
+                            Confirm received
+                          </Button>
+                        </div>
+                      )}
+                      {order.status === 'Confirmed' && (
+                        <p className="mt-3 flex items-center gap-1.5 text-chips font-medium text-success-fg">
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
+                          Receipt confirmed
+                        </p>
+                      )}
 
                       <div className="mt-3 flex items-center justify-end border-t border-line-subtle pt-2.5">
                         <Button
@@ -638,6 +719,21 @@ function OrdersPageContent() {
             )}
           </div>
         </div>
+
+        <ConfirmDialog
+          open={!!confirmOrder}
+          onClose={() => (confirmingId ? null : setConfirmOrder(null))}
+          onConfirm={confirmReceipt}
+          title="Confirm you received this order?"
+          message={
+            confirmOrder?.order
+              ? `Order #${confirmOrder.order.order_id} · ₦${Number(confirmOrder.order.total_amount || 0).toLocaleString()}. This closes the order and cannot be undone.`
+              : ''
+          }
+          confirmLabel="Yes, confirm received"
+          variant="brand"
+          loading={!!confirmingId}
+        />
 
         {/* Print-friendly receipt — any order, any status */}
         <OrderReceiptModal
