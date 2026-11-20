@@ -4,12 +4,17 @@
 // with the anon browser client.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
+import { resolveMemberScope } from '@/lib/memberScope'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET(request) {
   try {
+    // A member only ever reads their own order; admins and reps may open any.
+    const scope = await resolveMemberScope(request, null, { allow: ['member', 'admin', 'rep'] })
+    if (!scope.ok) return scope.response
+
     const idRaw = String(new URL(request.url).searchParams.get('id') || '').trim()
     const id = Number(idRaw)
     if (!idRaw || !Number.isFinite(id)) {
@@ -27,6 +32,10 @@ export async function GET(request) {
       .maybeSingle()
     if (oErr) return NextResponse.json({ ok: false, error: oErr.message }, { status: 500 })
     if (!o) return NextResponse.json({ ok: false, error: 'Order not found' }, { status: 404 })
+
+    if (scope.role === 'member' && String(o.member_id || '').trim().toUpperCase() !== scope.memberId) {
+      return NextResponse.json({ ok: false, error: 'Order not found' }, { status: 404 })
+    }
 
     const [mRes, lRes] = await Promise.all([
       supabase

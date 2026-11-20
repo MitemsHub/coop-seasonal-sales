@@ -1,28 +1,26 @@
 // app/api/exhibition/follows/route.js
 // Following a stand.
-//   GET  ?member_id=XXX            → the member's followed stands
-//   POST { member_id, vendor_id, follow: true|false }
+//   GET  → the member's followed stands
+//   POST { vendor_id, follow: true|false }
+//
+// The member comes from the signed session, never from the request.
 //
 // Followers are notified when the admin approves a new product for that stand
 // (see lib/notifyStandFollowers.js) — a draft the vendor uploaded is never
 // announced, because members cannot buy it yet.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
-import { validateMemberId } from '@/lib/validation'
+import { resolveMemberScope } from '@/lib/memberScope'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-function normalizeMemberId(raw) {
-  const res = validateMemberId(String(raw || ''))
-  return res.isValid ? res.sanitized.toUpperCase() : ''
-}
-
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url)
-    const memberId = normalizeMemberId(searchParams.get('member_id'))
-    if (!memberId) return NextResponse.json({ ok: false, error: 'member_id is required' }, { status: 400 })
+    const scope = await resolveMemberScope(req, searchParams.get('member_id'))
+    if (!scope.ok) return scope.response
+    const memberId = scope.memberId
 
     const supabase = createClient()
     const { data, error } = await supabase
@@ -48,8 +46,9 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}))
-    const memberId = normalizeMemberId(body.member_id)
-    if (!memberId) return NextResponse.json({ ok: false, error: 'member_id is required' }, { status: 400 })
+    const scope = await resolveMemberScope(req, body.member_id)
+    if (!scope.ok) return scope.response
+    const memberId = scope.memberId
 
     const vendorId = Math.trunc(Number(body.vendor_id))
     if (!Number.isFinite(vendorId) || vendorId <= 0) {

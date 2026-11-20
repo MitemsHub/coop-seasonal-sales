@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateMemberId } from '@/lib/validation'
+import { resolveMemberScope } from '@/lib/memberScope'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -155,8 +156,17 @@ function computeMaxAffordableQty({ unitPrice, maxCap, eligibleAmount, includeInt
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url)
-    const memberIdRaw = (searchParams.get('member_id') || searchParams.get('id') || '').trim()
-    const memberIdRes = validateMemberId(memberIdRaw)
+
+    // The figures are the signed-in member's own; an admin may inspect another
+    // member by passing ?member_id=.
+    const scope = await resolveMemberScope(
+      req,
+      searchParams.get('member_id') || searchParams.get('id'),
+      { allow: ['member', 'admin'] }
+    )
+    if (!scope.ok) return scope.response
+
+    const memberIdRes = validateMemberId(String(scope.memberId || ''))
     if (!memberIdRes.isValid) {
       return NextResponse.json({ ok: false, error: memberIdRes.error }, { status: 400 })
     }

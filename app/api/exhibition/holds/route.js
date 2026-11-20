@@ -1,10 +1,13 @@
 // app/api/exhibition/holds/route.js
 // The exhibition cart's 10-minute courtesy hold.
 //
-//   POST   { member_id, branch_code, lines: [{ product_id, qty }] }
+//   POST   { branch_code, lines: [{ product_id, qty }] }
 //          Replaces the member's holds with this cart and returns expires_at.
-//   GET    ?member_id=XXX   → the member's live holds
-//   DELETE { member_id }    → release everything (empty cart, sign-out)
+//   GET    → the member's live holds
+//   DELETE → release everything (empty cart, sign-out)
+//
+// The member always comes from the signed session, never from the request, and
+// the endpoint is member-only (a hold belongs to a member's own cart).
 //
 // A hold never decrements exhibition_products.qty. Checkout still reserves
 // stock atomically (exhibition_reserve_stock) and deletes the hold first, so a
@@ -12,7 +15,8 @@
 // as available to *other* members while someone is checking out.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
-import { validateMemberId, validateNumber } from '@/lib/validation'
+import { validateNumber } from '@/lib/validation'
+import { resolveMemberScope } from '@/lib/memberScope'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -20,16 +24,12 @@ export const dynamic = 'force-dynamic'
 const HOLD_MINUTES = 10
 const MAX_LINES = 60
 
-function normalizeMemberId(raw) {
-  const res = validateMemberId(String(raw || ''))
-  return res.isValid ? res.sanitized.toUpperCase() : ''
-}
-
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url)
-    const memberId = normalizeMemberId(searchParams.get('member_id'))
-    if (!memberId) return NextResponse.json({ ok: false, error: 'member_id is required' }, { status: 400 })
+    const scope = await resolveMemberScope(req, searchParams.get('member_id'))
+    if (!scope.ok) return scope.response
+    const memberId = scope.memberId
 
     const supabase = createClient()
     const { data, error } = await supabase
@@ -49,8 +49,9 @@ export async function GET(req) {
 export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}))
-    const memberId = normalizeMemberId(body.member_id)
-    if (!memberId) return NextResponse.json({ ok: false, error: 'member_id is required' }, { status: 400 })
+    const scope = await resolveMemberScope(req, body.member_id)
+    if (!scope.ok) return scope.response
+    const memberId = scope.memberId
 
     const linesRaw = Array.isArray(body.lines) ? body.lines : []
     if (linesRaw.length > MAX_LINES) return NextResponse.json({ ok: false, error: 'Too many items to hold' }, { status: 400 })
@@ -160,8 +161,9 @@ export async function POST(req) {
 export async function DELETE(req) {
   try {
     const body = await req.json().catch(() => ({}))
-    const memberId = normalizeMemberId(body.member_id)
-    if (!memberId) return NextResponse.json({ ok: false, error: 'member_id is required' }, { status: 400 })
+    const scope = await resolveMemberScope(req, body.member_id)
+    if (!scope.ok) return scope.response
+    const memberId = scope.memberId
 
     const supabase = createClient()
     const { error } = await supabase.from('exhibition_stock_holds').delete().eq('member_id', memberId)

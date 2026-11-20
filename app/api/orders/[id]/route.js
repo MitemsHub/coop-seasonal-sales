@@ -1,12 +1,17 @@
 // app/api/orders/[id]/route.js
 import { NextResponse } from 'next/server'
 import { createClient } from '../../../../lib/supabaseServer'
+import { resolveMemberScope } from '../../../../lib/memberScope'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET(_req, { params }) {
   try {
+    // A member only ever reads their own order; admins and reps may open any.
+    const scope = await resolveMemberScope(_req, null, { allow: ['member', 'admin', 'rep'] })
+    if (!scope.ok) return scope.response
+
     const supabase = createClient()
     const resolvedParams = await params
     const id = Number(resolvedParams?.id)
@@ -40,6 +45,10 @@ export async function GET(_req, { params }) {
       .single()
 
     if (error || !data) {
+      return NextResponse.json({ ok: false, error: 'Order not found' }, { status: 404 })
+    }
+
+    if (scope.role === 'member' && String(data.member_id || '').trim().toUpperCase() !== scope.memberId) {
       return NextResponse.json({ ok: false, error: 'Order not found' }, { status: 404 })
     }
 

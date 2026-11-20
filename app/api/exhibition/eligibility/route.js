@@ -3,9 +3,11 @@
 // checkout enforces (annual limit minus loans taken, with the category /
 // pensioner / retiree rules). The RPC is called with a zero amount, so it
 // locks the member row, returns the figures and spends nothing.
-//   GET /api/exhibition/eligibility?member_id=A12345
+//   GET /api/exhibition/eligibility — the signed-in member's figures (an admin
+//   may pass ?member_id= to inspect another member).
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
+import { resolveMemberScope } from '@/lib/memberScope'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,7 +15,9 @@ export const dynamic = 'force-dynamic'
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
-    const memberId = String(searchParams.get('member_id') || '').trim()
+    const scope = await resolveMemberScope(request, searchParams.get('member_id'), { allow: ['member', 'admin'] })
+    if (!scope.ok) return scope.response
+    const memberId = scope.memberId
     if (!memberId) return NextResponse.json({ ok: false, error: 'member_id is required' }, { status: 400 })
 
     const supabase = createClient()

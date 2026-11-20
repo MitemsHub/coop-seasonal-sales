@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { csrfGuard } from '@/lib/csrf'
+import { resolveMemberScope } from '@/lib/memberScope'
 import { getCrossModuleExposure } from '@/lib/crossModuleExposure'
 import { facilityAvailable } from '@/lib/foodLoanMath'
 
@@ -25,8 +26,15 @@ export async function POST(req) {
       return !error
     }
     
-    const body = await req.json()
-    const { memberId, deliveryBranchCode, departmentName, paymentOption, lines } = body || {}
+    const body = (await req.json().catch(() => ({}))) || {}
+    const { deliveryBranchCode, departmentName, paymentOption, lines } = body
+
+    // The order belongs to the signed-in member. Only an admin may place one
+    // for another member (the assisted/admin cart sends memberId); a member's
+    // memberId in the body is ignored.
+    const scope = await resolveMemberScope(req, body.memberId, { allow: ['member', 'admin'] })
+    if (!scope.ok) return scope.response
+    const memberId = scope.memberId
 
     if (!memberId || !deliveryBranchCode || !departmentName || !paymentOption || !Array.isArray(lines) || lines.length === 0) {
       return NextResponse.json({ ok: false, error: 'Missing required fields' }, { status: 400 })

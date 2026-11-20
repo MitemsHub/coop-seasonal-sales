@@ -7,18 +7,28 @@ import {
   validatePaymentOption,
 } from '@/lib/validation'
 import { getCrossModuleExposure } from '@/lib/crossModuleExposure'
+import { resolveMemberScope } from '@/lib/memberScope'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// GET /api/ram/orders?member_id=XXX — the member's ram orders, newest first.
+// GET /api/ram/orders — the signed-in member's ram orders, newest first.
 // Pass &status_only=1 to fetch just id + status (used by the member's
 // status-toast poll so it stays light), mirroring the food/exhibition
-// status-only views.
+// status-only views. An admin may pass ?member_id= for another member.
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url)
-    const memberId = String(searchParams.get('member_id') || '').trim().toUpperCase()
+
+    const scope = await resolveMemberScope(req, searchParams.get('member_id'), {
+      allow: ['member', 'admin', 'rep'],
+    })
+    if (!scope.ok) return scope.response
+
+    // Rep sessions carry no member identity; their member-facing RAM list is empty.
+    if (scope.role === 'rep') return NextResponse.json({ ok: true, orders: [] })
+
+    const memberId = scope.memberId
     if (!memberId) return NextResponse.json({ ok: false, error: 'member_id is required' }, { status: 400 })
 
     const statusOnly = searchParams.get('status_only') === '1'
@@ -374,7 +384,12 @@ export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}))
 
-    const memberIdRes = validateMemberId(String(body.member_id || ''))
+    // The order belongs to the signed-in member. Only an admin may place one for
+    // another member (assisted/admin flow); a member's body.member_id is ignored.
+    const scope = await resolveMemberScope(req, body.member_id, { allow: ['member', 'admin'] })
+    if (!scope.ok) return scope.response
+
+    const memberIdRes = validateMemberId(String(scope.memberId || ''))
     if (!memberIdRes.isValid) {
       return NextResponse.json({ ok: false, error: memberIdRes.error }, { status: 400 })
     }

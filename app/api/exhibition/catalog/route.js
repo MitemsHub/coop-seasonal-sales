@@ -1,6 +1,7 @@
 // app/api/exhibition/catalog/route.js
 // Member-facing catalog for the Coop Exhibition shop.
-//   GET /api/exhibition/catalog?member_id=XXX
+//   GET /api/exhibition/catalog — the signed-in member's catalog (an admin may
+//   pass ?member_id= for another member). The member comes from the session.
 // Returns the exhibition catalog: active cycle, vendors, categories and
 // active products.  The exhibition is GLOBALLY visible — any member can
 // browse and shop from any open exhibition.  The cycle's branch is the
@@ -13,6 +14,7 @@
 // can show the shared closed-module panel.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
+import { resolveMemberScope } from '@/lib/memberScope'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -61,7 +63,9 @@ async function loadCatalogCore(supabase, cycleId) {
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url)
-    const memberId = String(searchParams.get('member_id') || '').trim().toUpperCase()
+    const scope = await resolveMemberScope(req, searchParams.get('member_id'), { allow: ['member', 'admin'] })
+    if (!scope.ok) return scope.response
+    const memberId = scope.memberId
     if (!memberId) return NextResponse.json({ ok: false, error: 'member_id is required' }, { status: 400 })
 
     const supabase = createClient()

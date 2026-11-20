@@ -1,57 +1,33 @@
 // app/api/orders/member/route.js
+// GET ?member_id=XXX — a member's food orders.
+//
+// Ownership comes from the signed session: a member only ever sees their own
+// orders, whatever member_id the URL carries. Admins and reps may name another
+// member (reps stay narrowed to their delivery branch).
 import { NextResponse } from 'next/server'
-// Service-role client: this route validates its own admin/rep session (or
-// serves the public per-member lookup shaped above) and must keep working
-// under full RLS, which the anon-key cookie client would not bypass.
+// Service-role client: this route validates its own admin/rep session and must
+// keep working under full RLS, which the anon-key cookie client would not
+// bypass.
 import { createClient } from '../../../../lib/supabaseServer'
-import { validateSession } from '../../../../lib/validation'
+import { resolveMemberScope } from '../../../../lib/memberScope'
 
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
-    const memberId = searchParams.get('member_id')
     const statusOnly = searchParams.get('status_only') === '1'
-    
+
+    const scope = await resolveMemberScope(request, searchParams.get('member_id'), {
+      allow: ['member', 'admin', 'rep'],
+    })
+    if (!scope.ok) return scope.response
+
+    const memberId = scope.memberId
+    const role = scope.role
+    const branch_id = scope.claims?.branch_id || null
+
     if (!memberId) {
       return NextResponse.json({ ok: false, error: 'Member ID is required' }, { status: 400 })
     }
-
-    // Try to validate session for reps and admins
-    // Members don't have session tokens, so we allow requests without tokens
-    const adminToken = request.cookies.get('admin_token')?.value
-    const repToken = request.cookies.get('rep_token')?.value
-    
-    let role = null
-    let sessionMemberId = null
-    let branch_id = null
-
-    if (adminToken || repToken) {
-      // A staff cookie is advisory here, not a gate. This GET serves the
-      // member's own order list and the member_id is supplied by the caller
-      // either way, so a stale or expired admin/rep cookie left over from
-      // another session must never blank a member's orders (that is what made
-      // "Recent orders" show nothing and the status watcher think every order
-      // had vanished).
-      let sessionResult = null
-      try {
-        sessionResult = adminToken ? await validateSession(request, 'admin') : await validateSession(request, 'rep')
-      } catch {
-        sessionResult = null
-      }
-
-      if (sessionResult?.valid) {
-        const claims = sessionResult.claims || {}
-        role = claims.role || null
-        sessionMemberId = claims.member_id || null
-        branch_id = claims.branch_id || null
-
-        if (role === 'member' && sessionMemberId !== memberId) {
-          return NextResponse.json({ ok: false, error: 'Access denied' }, { status: 403 })
-        }
-      }
-    }
-    // If no session tokens, assume it's a member request (members access via URL params)
-    // This is acceptable since the UI controls access to member data
 
     const supabase = createClient()
 
@@ -96,9 +72,8 @@ export async function GET(request) {
       query = query.neq('status', 'Cancelled')
     }
 
-    // A rep looking at ANOTHER member's orders only sees their delivery
-    // branch. The member's own view is never narrowed by a rep cookie.
-    if (role === 'rep' && branch_id && sessionMemberId !== memberId) {
+    // A rep looking at another member's orders only sees their delivery branch.
+    if (role === 'rep' && branch_id && !scope.isOwn) {
       query = query.eq('delivery_branch_id', branch_id)
     }
 
