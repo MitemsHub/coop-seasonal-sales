@@ -2,36 +2,51 @@
 
 // app/components/ProductImportModal.jsx
 // Shared batch upload of products for the vendor portal and the admin console.
-// The browser reads the CSV, shows a preview, then posts the rows; the API
-// generates a SKU for every line and reports per-row failures. Photos and fine
-// tuning happen afterwards from the normal edit screen.
+// The browser reads the uploaded Excel (or CSV) file, shows a preview, then
+// posts the rows; the API generates a SKU for every line and reports per-row
+// failures. Photos and fine tuning happen afterwards from the normal edit
+// screen.
 import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, Download, FileSpreadsheet, Upload } from 'lucide-react'
 import Modal from './ui/Modal'
 import Button from './ui/Button'
 import Label from './ui/Label'
 import Select from './ui/Select'
-import { parseCsv, pick } from '../../lib/csvParse'
+import { pick } from '../../lib/csvParse'
+import { IMPORT_ACCEPT, readImportFile } from '../../lib/importSheet'
+import { downloadExcelWorkbook } from '../../lib/excelExport'
 
-const TEMPLATE = [
-  'name,price,unit,qty',
-  'Handwoven Ankara Tote,15000,each,25',
-  'Fresh tomatoes (basket),8500,basket,40',
-].join('\n')
+const TEMPLATE_ROWS = [
+  {
+    name: 'Handwoven Ankara Tote',
+    description: 'Handwoven tote in Ankara print, leather handles, fits a laptop.',
+    price: 15000,
+    unit: 'each',
+    qty: 25,
+  },
+  {
+    name: 'Fresh tomatoes (basket)',
+    description: 'Farm-fresh tomatoes, one basket of about 20 kg.',
+    price: 8500,
+    unit: 'basket',
+    qty: 40,
+  },
+]
 
-const NAME_KEYS = ['name', 'product', 'product name', 'item', 'description']
-const PRICE_KEYS = ['price', 'amount', 'vendor_price', 'vendor price', 'unit price']
+const NAME_KEYS = ['name', 'product', 'product name', 'item']
+const DESCRIPTION_KEYS = ['description', 'product description', 'details', 'about']
+const PRICE_KEYS = ['price', 'price (ngn)', 'amount', 'vendor_price', 'vendor price', 'unit price']
 const UNIT_KEYS = ['unit', 'uom', 'measure']
 const QTY_KEYS = ['qty', 'quantity', 'stock', 'quantity in stock']
 
-function saveFile(filename, text) {
-  const blob = new Blob([text], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
+function downloadTemplate() {
+  downloadExcelWorkbook('product-import-template.xlsx', [
+    {
+      name: 'Products',
+      headers: { name: 'Product name', description: 'Description', price: 'Price', unit: 'Unit', qty: 'Quantity' },
+      rows: TEMPLATE_ROWS,
+    },
+  ])
 }
 
 export default function ProductImportModal({
@@ -75,12 +90,11 @@ export default function ProductImportModal({
     setResult(null)
     setRows([])
     setFileName(file.name)
-    if (file.size > 2 * 1024 * 1024) {
-      setError('That file is larger than 2 MB. Split it into smaller lists.')
+    if (file.size > 5 * 1024 * 1024) {
+      setError('That file is larger than 5 MB. Split it into smaller lists.')
       return
     }
-    const text = await file.text().catch(() => '')
-    const { headers, records } = parseCsv(text)
+    const { headers, records } = await readImportFile(file)
     if (!records.length) {
       setError('No product rows found. Keep the header row and add at least one product.')
       return
@@ -92,6 +106,7 @@ export default function ProductImportModal({
     setRows(
       records.map((record) => ({
         name: pick(record, NAME_KEYS),
+        description: pick(record, DESCRIPTION_KEYS),
         price: pick(record, PRICE_KEYS),
         unit: pick(record, UNIT_KEYS) || 'each',
         qty: pick(record, QTY_KEYS),
@@ -101,7 +116,7 @@ export default function ProductImportModal({
 
   const importRows = async () => {
     setError('')
-    if (!rows.length) return setError('Choose a CSV file first.')
+    if (!rows.length) return setError('Choose a CSV or Excel file first.')
     if (requireTarget && (!cycleId || !vendorId)) {
       return setError('Pick the season and the vendor stand these products belong to.')
     }
@@ -138,7 +153,7 @@ export default function ProductImportModal({
       open={open}
       onClose={close}
       title="Import products"
-      description="Upload a CSV list. Every product gets a SKU automatically — edit details and add photos afterwards."
+      description="Upload an Excel list (or a CSV). Every product gets a SKU automatically — edit details and add photos afterwards."
       size="lg"
       footer={
         result ? (
@@ -248,16 +263,16 @@ export default function ProductImportModal({
 
           <div className="rounded-xl border border-dashed border-line bg-subtle px-4 py-6 text-center">
             <FileSpreadsheet className="mx-auto mb-2 h-7 w-7 text-muted" strokeWidth={1.6} />
-            <p className="text-sm font-medium text-fg">{fileName || 'Choose a CSV file'}</p>
-            <p className="mt-0.5 text-xs text-muted">Columns: name, price, unit, qty (only name and price are required). Add product photos after importing.</p>
+            <p className="text-sm font-medium text-fg">{fileName || 'Choose a CSV or Excel file'}</p>
+            <p className="mt-0.5 text-xs text-muted">Columns: name, description, price, unit, qty (only name and price are required). Add product photos after importing.</p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
               <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-on-accent">
                 <Upload className="h-3.5 w-3.5" />
                 Choose file
-                <input type="file" accept=".csv,text/csv" className="hidden" onChange={onFile} />
+                <input type="file" accept={IMPORT_ACCEPT} className="hidden" onChange={onFile} />
               </label>
-              <Button variant="secondary" size="sm" leftIcon={Download} onClick={() => saveFile('product-import-template.csv', TEMPLATE)}>
-                Template
+              <Button variant="secondary" size="sm" leftIcon={Download} onClick={downloadTemplate}>
+                Excel template
               </Button>
             </div>
           </div>

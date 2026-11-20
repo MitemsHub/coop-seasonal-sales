@@ -61,7 +61,7 @@ export default function ImageResizeUpload({ onImageUploaded, currentImageUrl = n
             <img
               src={previewUrl}
               alt="Product preview"
-              className="h-24 w-24 rounded-xl border border-line-subtle object-cover"
+              className="h-24 w-24 rounded-xl border border-line-subtle bg-subtle object-contain"
             />
             <button
               type="button"
@@ -106,7 +106,7 @@ export default function ImageResizeUpload({ onImageUploaded, currentImageUrl = n
             <input id="exh-image-upload" type="file" accept="image/jpeg,image/jpg,image/png,image/webp,image/avif" className="hidden" onChange={onChange} />
             <p className="mt-2 flex items-center gap-1 text-chips text-muted">
               <Sparkles className="h-3 w-3 text-accent" />
-              Any size — auto-cropped square, resized &amp; compressed to WebP
+              Any size — resized &amp; compressed to WebP, the whole photo is kept
             </p>
           </>
         )}

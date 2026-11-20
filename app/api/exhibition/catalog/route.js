@@ -34,7 +34,7 @@ function isMissingTable(error, table) {
 // shop.
 
 async function loadCatalogCore(supabase, cycleId) {
-  const [vendorsRes, categoriesRes, productsRes] = await Promise.all([
+  const [vendorsRes, categoriesRes, productsAttempt] = await Promise.all([
     supabase
       .from('exhibition_vendors')
       .select('id, name, code, phone, address, banner_url, stand_number, hall, opening_hours, whatsapp, min_order, pickup_instructions')
@@ -49,12 +49,27 @@ async function loadCatalogCore(supabase, cycleId) {
       .order('name', { ascending: true }),
     supabase
       .from('exhibition_products')
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, vendors:vendor_id(name, code), categories:category_id(name)')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, qty, image_url, status, vendors:vendor_id(name, code), categories:category_id(name)')
       .eq('cycle_id', cycleId)
       .eq('status', 'active')
       .eq('approval_status', 'approved')
       .order('name'),
   ])
+
+  let productsRes = productsAttempt
+
+  // The description column arrives with migrations/add-exhibition-product-description.sql.
+  // If a deploy lands before that SQL runs, retry without the column instead of
+  // failing the whole shop for every member.
+  if (productsRes.error && /description/i.test(String(productsRes.error.message || ''))) {
+    productsRes = await supabase
+      .from('exhibition_products')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, vendors:vendor_id(name, code), categories:category_id(name)')
+      .eq('cycle_id', cycleId)
+      .eq('status', 'active')
+      .eq('approval_status', 'approved')
+      .order('name')
+  }
 
   return { vendorsRes, categoriesRes, productsRes }
 }
@@ -189,6 +204,7 @@ export async function GET(req) {
         category_id: p.category_id ? Number(p.category_id) : null,
         category_name: p.categories?.name || '',
         name: p.name,
+        description: p.description || '',
         sku: p.sku,
         unit: p.unit,
         price,

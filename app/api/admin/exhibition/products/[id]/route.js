@@ -109,6 +109,7 @@ export async function PATCH(request, { params }) {
     if (body.qty !== undefined) updates.qty = body.qty === '' || body.qty === null ? null : Math.max(0, Math.trunc(Number(body.qty)))
     if (body.category_id !== undefined) updates.category_id = body.category_id ? Math.trunc(Number(body.category_id)) : null
     if (body.image_url !== undefined) updates.image_url = sanitizeString(body.image_url || '', { maxLength: 500, encodeHtml: false })
+    if (body.description !== undefined) updates.description = sanitizeString(body.description || '', { maxLength: 2000, encodeHtml: false })
     if (body.status !== undefined && ['draft', 'active', 'archived'].includes(body.status)) updates.status = body.status
 
     if (!Object.keys(updates).length) return NextResponse.json({ ok: false, error: 'Nothing to update' }, { status: 400 })
@@ -117,7 +118,7 @@ export async function PATCH(request, { params }) {
       .from('exhibition_products')
       .update(updates)
       .eq('id', id)
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, created_at')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, qty, image_url, status, created_at')
       .single()
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 

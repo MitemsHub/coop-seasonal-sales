@@ -20,7 +20,9 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
       alt={p.name}
       fill
       sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 18vw"
-      className="object-cover transition-transform duration-500 ease-sakani group-hover:scale-[1.05]"
+      // Contain, not cover: a photo the vendor framed themselves should show
+      // in full instead of losing its edges to the card.
+      className="object-contain transition-transform duration-500 ease-sakani group-hover:scale-[1.03]"
       loading="lazy"
       onError={(e) => {
         e.currentTarget.src = '/images/items/placeholder.svg'
@@ -36,7 +38,7 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
           type="button"
           onClick={() => router.push(`/exhibition/vendor/${p.vendor_id}`)}
           aria-label={`View ${p.vendor_name || 'vendor'} hub`}
-          className="relative block aspect-[4/3] w-full overflow-hidden bg-subtle"
+          className="relative block aspect-[4/3] w-full overflow-hidden bg-white p-1 dark:bg-subtle"
         >
           {image}
           <span className="absolute left-2 top-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
@@ -44,13 +46,18 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
           </span>
         </button>
       ) : (
-        <div className="relative block aspect-[4/3] w-full overflow-hidden bg-subtle">{image}</div>
+        <div className="relative block aspect-[4/3] w-full overflow-hidden bg-white p-1 dark:bg-subtle">{image}</div>
       )}
 
       <div className="flex flex-1 flex-col p-2">
         {/* Two lines max so a very long product name can't stretch the card
             (or the grid row) and squash the price and stepper. */}
         <div className="line-clamp-2 break-words text-xs font-semibold leading-snug text-fg" title={p.name}>{p.name}</div>
+        {!!p.description && (
+          <p className="mt-0.5 line-clamp-2 break-words text-[11px] leading-snug text-muted" title={p.description}>
+            {p.description}
+          </p>
+        )}
         <div className="mb-1.5 mt-0.5 flex flex-wrap items-center gap-x-1 text-chips text-muted">
           <span>{p.unit}</span>
           {p.qty !== null && p.qty !== undefined && p.qty > 0 && (

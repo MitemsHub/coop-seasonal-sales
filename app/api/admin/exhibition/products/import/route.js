@@ -61,6 +61,7 @@ export async function POST(request) {
       }
       clean.push({
         name: name.slice(0, 255),
+        description: String(row?.description || '').trim().slice(0, 2000),
         vendor_price: price,
         unit: String(row?.unit || 'each').trim().slice(0, 30) || 'each',
         qty: toQty(row?.qty),
@@ -87,6 +88,7 @@ export async function POST(request) {
       vendor_id: vendorId,
       branch_id: vendor.branch_id,
       name: row.name,
+      description: row.description,
       sku: skus[index],
       unit: row.unit,
       vendor_price: row.vendor_price,

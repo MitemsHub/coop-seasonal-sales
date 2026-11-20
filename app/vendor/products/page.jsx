@@ -21,6 +21,7 @@ const emptyForm = () => ({
   unit: 'each',
   vendor_price: '',
   qty: '',
+  description: '',
   image_url: '',
 })
 
@@ -66,6 +67,7 @@ export default function VendorProductsPage() {
       unit: p.unit || 'each',
       vendor_price: String(p.vendor_price ?? ''),
       qty: p.qty === null || p.qty === undefined ? '' : String(p.qty),
+      description: p.description || '',
       image_url: p.image_url || '',
     })
     setMsg('')
@@ -81,6 +83,7 @@ export default function VendorProductsPage() {
         unit: form.unit.trim() || 'each',
         vendor_price: Number(form.vendor_price || 0),
         qty: form.qty === '' ? null : Number(form.qty),
+        description: form.description,
         image_url: form.image_url,
       }
       const res = await fetch(
@@ -242,6 +245,9 @@ export default function VendorProductsPage() {
                       Admin note: {p.approval_note}
                     </p>
                   )}
+                  {!!p.description && (
+                    <p className="mt-0.5 line-clamp-2 break-words text-chips text-muted">{p.description}</p>
+                  )}
                   <p className="mt-0.5 text-chips text-muted">
                     {p.unit || 'each'} · {p.qty === null ? 'Unlimited qty' : `${p.qty} in stock`}
                   </p>
@@ -332,6 +338,18 @@ export default function VendorProductsPage() {
           <div className="sm:col-span-2">
             <Label htmlFor="p-name">Product name</Label>
             <Input id="p-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Handwoven Ankara Tote" />
+            <div className="mt-3">
+              <Label htmlFor="p-description">Description (optional)</Label>
+              <textarea
+                id="p-description"
+                rows={3}
+                maxLength={2000}
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder="What it is, size, material, condition — anything a buyer should know."
+                className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
+              />
+            </div>
           </div>
           <div>
             <Label htmlFor="p-unit">Unit</Label>

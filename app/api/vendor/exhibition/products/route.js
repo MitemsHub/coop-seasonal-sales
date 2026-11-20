@@ -18,14 +18,26 @@ export async function GET(req) {
 
     let query = supabase
       .from('exhibition_products')
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, approval_status, approval_note, approval_requested_at, pending_vendor_price, categories:category_id(name)')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, qty, image_url, status, approval_status, approval_note, approval_requested_at, pending_vendor_price, categories:category_id(name)')
       .eq('vendor_id', ctx.vendor_id)
       .order('created_at', { ascending: false })
 
     if (status && status !== 'all') query = query.eq('status', status)
     if (q) query = query.ilike('name', `%${q}%`)
 
-    const { data, error } = await query
+    let { data, error } = await query
+    // Deploy ahead of migrations/add-exhibition-product-description.sql: read
+    // the products without the new column instead of failing the page.
+    if (error && /description/i.test(String(error.message || ''))) {
+      let retry = supabase
+        .from('exhibition_products')
+        .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, approval_status, approval_note, approval_requested_at, pending_vendor_price, categories:category_id(name)')
+        .eq('vendor_id', ctx.vendor_id)
+        .order('created_at', { ascending: false })
+      if (status && status !== 'all') retry = retry.eq('status', status)
+      if (q) retry = retry.ilike('name', `%${q}%`)
+      ;({ data, error } = await retry)
+    }
     if (error) return NextResponse.json({ error: error.message || 'Failed to load products' }, { status: 500 })
 
     return NextResponse.json({
@@ -55,6 +67,7 @@ export async function POST(req) {
     const qty = body?.qty === '' || body?.qty === null || body?.qty === undefined ? null : Math.max(0, Number(body?.qty))
     const categoryId = body?.category_id ? Number(body.category_id) : null
     const imageUrl = String(body?.image_url || '').trim()
+    const description = String(body?.description || '').trim().slice(0, 2000)
     // A vendor's submission never goes live directly: it lands as a draft and
     // waits in the admin's approval queue.
     const status = 'draft'
@@ -86,6 +99,7 @@ export async function POST(req) {
         name,
         sku,
         unit,
+        description,
         vendor_price: vendorPrice,
         qty,
         image_url: imageUrl,
@@ -93,7 +107,7 @@ export async function POST(req) {
         approval_status: 'pending',
         approval_requested_at: new Date().toISOString(),
       })
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, approval_status, pending_vendor_price, created_at')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, qty, image_url, status, approval_status, pending_vendor_price, created_at')
       .single()
 
     if (error) {

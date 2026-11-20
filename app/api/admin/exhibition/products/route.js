@@ -31,7 +31,7 @@ export async function GET(request) {
     const supabase = createClient()
     let query = supabase
       .from('exhibition_products')
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, approval_status, pending_vendor_price, approval_requested_at, created_at, vendors:vendor_id(name, code), categories:category_id(name), branches:branch_id(name)')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, qty, image_url, status, approval_status, pending_vendor_price, approval_requested_at, created_at, vendors:vendor_id(name, code), categories:category_id(name), branches:branch_id(name)')
       .order('created_at', { ascending: false })
 
     if (cycleId > 0) query = query.eq('cycle_id', cycleId)
@@ -39,7 +39,20 @@ export async function GET(request) {
     if (status && status !== 'all') query = query.eq('status', status)
     if (q) query = query.or(`name.ilike.%${q}%,sku.ilike.%${q}%`)
 
-    const { data, error } = await query
+    let { data, error } = await query
+    // Deploy ahead of migrations/add-exhibition-product-description.sql: read
+    // the products without the new column instead of failing the page.
+    if (error && /description/i.test(String(error.message || ''))) {
+      let retry = supabase
+        .from('exhibition_products')
+        .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, approval_status, pending_vendor_price, approval_requested_at, created_at, vendors:vendor_id(name, code), categories:category_id(name), branches:branch_id(name)')
+        .order('created_at', { ascending: false })
+      if (cycleId > 0) retry = retry.eq('cycle_id', cycleId)
+      if (vendorId > 0) retry = retry.eq('vendor_id', vendorId)
+      if (status && status !== 'all') retry = retry.eq('status', status)
+      if (q) retry = retry.or(`name.ilike.%${q}%,sku.ilike.%${q}%`)
+      ;({ data, error } = await retry)
+    }
     if (error) {
       if (isMissingTable(error, 'exhibition')) {
         return NextResponse.json({ ok: false, error: 'Coop Exhibition is not set up yet. Run migrations/add-coop-exhibition-module.sql in Supabase.' }, { status: 500 })
@@ -79,6 +92,7 @@ export async function POST(request) {
     if (!name) return NextResponse.json({ ok: false, error: 'Product name is required' }, { status: 400 })
     const vendorPrice = Math.max(0, Math.trunc(Number(body.vendor_price || 0)))
     if (vendorPrice <= 0) return NextResponse.json({ ok: false, error: 'Price must be greater than zero' }, { status: 400 })
+    const description = sanitizeString(body.description || '', { maxLength: 2000, encodeHtml: false })
 
     const supabase = createClient()
     const { data: vendorRow } = await supabase
@@ -110,6 +124,7 @@ export async function POST(request) {
         name,
         sku,
         unit: sanitizeString(body.unit || 'each', { maxLength: 30, encodeHtml: false }),
+        description,
         vendor_price: vendorPrice,
         qty: body.qty === '' || body.qty === null || body.qty === undefined ? null : Math.max(0, Math.trunc(Number(body.qty))),
         image_url: sanitizeString(body.image_url || '', { maxLength: 500, encodeHtml: false }),
@@ -117,7 +132,7 @@ export async function POST(request) {
         approval_status: 'approved',
         approval_reviewed_at: new Date().toISOString(),
       })
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, created_at')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, qty, image_url, status, created_at')
       .single()
     if (error) {
       if (String(error.code || '') === '23505') {

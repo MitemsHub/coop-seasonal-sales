@@ -6,7 +6,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const SELECT_COLS =
-  'id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, approval_status, pending_vendor_price, approval_requested_at, created_at'
+  'id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, qty, image_url, status, approval_status, pending_vendor_price, approval_requested_at, created_at'
 
 export async function PATCH(req, { params }) {
   try {
@@ -36,6 +36,7 @@ export async function PATCH(req, { params }) {
     }
     if (body.category_id !== undefined) patch.category_id = body.category_id ? Number(body.category_id) : null
     if (body.image_url !== undefined) patch.image_url = String(body.image_url || '').trim()
+    if (body.description !== undefined) patch.description = String(body.description || '').trim().slice(0, 2000)
 
     const { data: existing, error: existingError } = await supabase
       .from('exhibition_products')

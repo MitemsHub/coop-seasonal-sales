@@ -11,7 +11,9 @@ import Modal from './ui/Modal'
 import Button from './ui/Button'
 import Label from './ui/Label'
 import Select from './ui/Select'
-import { parseCsv, pick, toCsv } from '../../lib/csvParse'
+import { pick, toCsv } from '../../lib/csvParse'
+import { IMPORT_ACCEPT, readImportFile } from '../../lib/importSheet'
+import { downloadExcelWorkbook } from '../../lib/excelExport'
 import { VENDOR_EMAIL_INTERVAL_MS } from '../../lib/vendorEmailLimits'
 import { sendVendorLoginEmails } from '../../lib/vendorLoginEmailQueue'
 
@@ -19,16 +21,25 @@ const IMPORT_LIMIT = 500
 const CHUNK_SIZE = 50
 const MAX_FILE_BYTES = 5 * 1024 * 1024
 
-const TEMPLATE = [
-  'name,email,phone,address',
-  'Mitams Foods,mitams@example.com,08030000000,Stand 12 - Main hall',
-  'Abuja Cars,abujacars@example.com,08031111111,Stand 4 - Car park',
-].join('\n')
+const TEMPLATE_ROWS = [
+  { name: 'Mitams Foods', email: 'mitams@example.com', phone: '08030000000', address: 'Stand 12 - Main hall' },
+  { name: 'Abuja Cars', email: 'abujacars@example.com', phone: '08031111111', address: 'Stand 4 - Car park' },
+]
+
+function downloadTemplate() {
+  downloadExcelWorkbook('vendor-import-template.xlsx', [
+    {
+      name: 'Vendors',
+      headers: { name: 'Vendor name', email: 'Email', phone: 'Phone', address: 'Address' },
+      rows: TEMPLATE_ROWS,
+    },
+  ])
+}
 
 const NAME_KEYS = ['name', 'vendor', 'vendor name', 'business', 'stand name']
 const EMAIL_KEYS = ['email', 'email address', 'e-mail', 'mail']
 const PHONE_KEYS = ['phone', 'telephone', 'phone number', 'mobile', 'contact']
-const ADDRESS_KEYS = ['address', 'location', 'stand location', 'stand address']
+const ADDRESS_KEYS = ['address', 'address / stand', 'address/stand', 'location', 'stand location', 'stand address', 'stand']
 
 function saveFile(filename, text) {
   const blob = new Blob([text], { type: 'text/csv;charset=utf-8' })
@@ -83,8 +94,7 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
       setError('That file is larger than 5 MB. Split it into smaller lists.')
       return
     }
-    const text = await file.text().catch(() => '')
-    const { headers, records } = parseCsv(text)
+    const { headers, records } = await readImportFile(file)
     if (!records.length) {
       setError('No vendor rows found. Keep the header row and add at least one vendor.')
       return
@@ -110,7 +120,7 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
   const importRows = async () => {
     setError('')
     if (!cycleId || !branchId) return setError('Pick the season and the branch first.')
-    if (!rows.length) return setError('Choose a CSV file first.')
+    if (!rows.length) return setError('Choose a CSV or Excel file first.')
     setBusy(true)
     setProgress({ done: 0, total: rows.length })
     const created = []
@@ -211,7 +221,7 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
       open={open}
       onClose={close}
       title="Import vendors"
-      description={`Upload up to ${IMPORT_LIMIT} stands — the system creates a code and passcode for each one.`}
+      description={`Upload an Excel list (or a CSV) of up to ${IMPORT_LIMIT} stands — the system creates a code and passcode for each one.`}
       size="lg"
       footer={
         result ? (
@@ -351,16 +361,16 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
 
           <div className="rounded-xl border border-dashed border-line bg-subtle px-4 py-6 text-center">
             <FileSpreadsheet className="mx-auto mb-2 h-7 w-7 text-muted" strokeWidth={1.6} />
-            <p className="text-sm font-medium text-fg">{fileName || 'Choose a CSV file'}</p>
+            <p className="text-sm font-medium text-fg">{fileName || 'Choose a CSV or Excel file'}</p>
             <p className="mt-0.5 text-xs text-muted">Columns: name, email, phone, address. Only name is required — codes and passcodes are generated.</p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
               <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-on-accent">
                 <Upload className="h-3.5 w-3.5" />
                 Choose file
-                <input type="file" accept=".csv,text/csv" className="hidden" onChange={onFile} />
+                <input type="file" accept={IMPORT_ACCEPT} className="hidden" onChange={onFile} />
               </label>
-              <Button variant="secondary" size="sm" leftIcon={Download} onClick={() => saveFile('vendor-import-template.csv', TEMPLATE)}>
-                Template
+              <Button variant="secondary" size="sm" leftIcon={Download} onClick={downloadTemplate}>
+                Excel template
               </Button>
             </div>
           </div>

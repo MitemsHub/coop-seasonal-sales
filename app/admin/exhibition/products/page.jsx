@@ -103,6 +103,7 @@ export default function ExhibitionProductsPage() {
       vendor_price: p.vendor_price,
       qty: p.qty ?? '',
       status: p.status || 'active',
+      description: p.description || '',
       image_url: p.image_url || '',
     })
     setModal(p)
@@ -188,6 +189,7 @@ export default function ExhibitionProductsPage() {
           vendor_price: Number(form.vendor_price),
           qty: form.qty,
           image_url: form.image_url,
+          description: form.description || '',
           status: form.status,
         }),
       })
@@ -215,6 +217,7 @@ export default function ExhibitionProductsPage() {
           vendor_price: Number(form.vendor_price),
           qty: form.qty,
           status: form.status,
+          description: form.description || '',
           ...(form.image_url !== undefined ? { image_url: form.image_url } : {}),
         }),
       })
@@ -619,6 +622,18 @@ export default function ExhibitionProductsPage() {
                 <Label htmlFor="exh-p-qty">Qty (blank = ∞)</Label>
                 <Input id="exh-p-qty" type="number" value={form.qty ?? ''} onChange={(e) => setForm({ ...form, qty: e.target.value })} />
               </div>
+            </div>
+            <div>
+              <Label htmlFor="exh-p-description">Description (optional)</Label>
+              <textarea
+                id="exh-p-description"
+                rows={3}
+                maxLength={2000}
+                value={form.description || ''}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder="What it is, size, material, condition — anything a buyer should know."
+                className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
+              />
             </div>
             <div>
               <Label htmlFor="exh-p-unit">Unit</Label>
