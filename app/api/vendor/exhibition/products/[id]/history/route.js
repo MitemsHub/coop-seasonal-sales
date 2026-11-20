@@ -16,11 +16,14 @@ export async function GET(req, { params }) {
     if (!Number.isFinite(id) || id <= 0) return NextResponse.json({ ok: false, error: 'Invalid product' }, { status: 400 })
 
     const supabase = createClient()
-    const { data: product } = await supabase
+    const { data: product, error: productError } = await supabase
       .from('exhibition_products')
       .select('id, vendor_id')
       .eq('id', id)
       .maybeSingle()
+    if (productError) {
+      return NextResponse.json({ ok: false, error: productError.message || 'Failed to load history' }, { status: 500 })
+    }
     if (!product || Number(product.vendor_id) !== Number(ctx.vendor_id)) {
       return NextResponse.json({ ok: false, error: 'Product not found' }, { status: 404 })
     }

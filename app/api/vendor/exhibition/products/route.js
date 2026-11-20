@@ -64,11 +64,12 @@ export async function POST(req) {
     if (!ctx.cycle_id) return NextResponse.json({ error: 'No active exhibition cycle for this vendor' }, { status: 400 })
 
     // The SKU is generated, never typed: <vendor><name><sequence>.
-    const { data: existingSkus } = await supabase
+    const { data: existingSkus, error: skuError } = await supabase
       .from('exhibition_products')
       .select('sku')
       .eq('cycle_id', ctx.cycle_id)
       .eq('vendor_id', ctx.vendor_id)
+    if (skuError) return NextResponse.json({ error: skuError.message || 'Failed to read existing SKUs' }, { status: 500 })
     const [sku] = reserveSkus({
       vendorCode: ctx.vendor_code,
       names: [name],

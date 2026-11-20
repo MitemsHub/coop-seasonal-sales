@@ -37,12 +37,15 @@ export async function PATCH(req, { params }) {
     if (body.category_id !== undefined) patch.category_id = body.category_id ? Number(body.category_id) : null
     if (body.image_url !== undefined) patch.image_url = String(body.image_url || '').trim()
 
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from('exhibition_products')
       .select('id, status, approval_status, vendor_price')
       .eq('id', id)
       .eq('vendor_id', ctx.vendor_id)
       .maybeSingle()
+    if (existingError) {
+      return NextResponse.json({ error: existingError.message || 'Failed to load product' }, { status: 500 })
+    }
     if (!existing) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
 
     if (body.status !== undefined) {
@@ -119,12 +122,15 @@ export async function DELETE(req, { params }) {
     const id = Number(params?.id)
     if (!Number.isFinite(id) || id <= 0) return NextResponse.json({ error: 'Invalid product' }, { status: 400 })
 
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from('exhibition_products')
       .select('id, name')
       .eq('id', id)
       .eq('vendor_id', ctx.vendor_id)
       .maybeSingle()
+    if (existingError) {
+      return NextResponse.json({ error: existingError.message || 'Failed to load product' }, { status: 500 })
+    }
     if (!existing) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
 
     const { error } = await supabase.from('exhibition_products').delete().eq('id', id).eq('vendor_id', ctx.vendor_id)

@@ -11,10 +11,19 @@ export async function GET(req) {
     if (!ctx) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const supabase = createClient()
 
-    const { data: lines } = await supabase
+    const { data: lines, error } = await supabase
       .from('exhibition_order_lines')
       .select('amount, orders:order_id(status)')
       .eq('vendor_id', ctx.vendor_id)
+    // A failed query must not pass for an empty one: this endpoint drives the
+    // dashboard's order and earnings cards, so zeros would be a lie.
+    if (error) {
+      console.error('Vendor stats query failed:', error)
+      return NextResponse.json(
+        { ok: false, error: error.message || 'Failed to load dashboard figures' },
+        { status: 500 }
+      )
+    }
 
     const byStatus = { Pending: 0, Approved: 0, Confirmed: 0, Cancelled: 0 }
     let revenue = 0

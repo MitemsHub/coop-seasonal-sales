@@ -44,7 +44,9 @@ export async function GET(req) {
       .order('created_at', { ascending: true })
     if (error) {
       // Audit table not migrated yet — return an empty trail rather than fail.
-      return NextResponse.json({ ok: true, events: [] })
+      if (String(error?.code || '') === '42P01') return NextResponse.json({ ok: true, events: [] })
+      // Anything else is a real failure and must not read as "no history".
+      return NextResponse.json({ ok: false, error: error.message || 'Failed to load audit trail' }, { status: 500 })
     }
 
     const events = (rows || []).map((r) => {

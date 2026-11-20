@@ -120,18 +120,27 @@ export async function GET(req) {
     }
 
     const supabase = createClient()
-    const { data: vendor } = await supabase
+    const { data: vendor, error: vendorErr } = await supabase
       .from('exhibition_vendors')
       .select('id, cycle_id, branch_id, name, code, phone, address, status, branches:branch_id(name, code)')
       .eq('id', claim.vendor_id)
       .maybeSingle()
+    if (vendorErr) {
+      // A failed lookup is not a signed-out vendor — say so instead of a 401.
+      console.error('Vendor session lookup failed:', vendorErr)
+      return NextResponse.json({ ok: false, error: 'Something went wrong. Please try again.' }, { status: 500 })
+    }
     if (!vendor) return NextResponse.json({ ok: false, error: 'Vendor not found' }, { status: 401 })
 
-    const { data: cycle } = await supabase
+    const { data: cycle, error: cycleErr } = await supabase
       .from('exhibition_cycles')
       .select('id, name, status, starts_at, ends_at')
       .eq('id', vendor.cycle_id)
       .maybeSingle()
+    if (cycleErr) {
+      console.error('Vendor cycle lookup failed:', cycleErr)
+      return NextResponse.json({ ok: false, error: 'Something went wrong. Please try again.' }, { status: 500 })
+    }
 
     return NextResponse.json({
       ok: true,
