@@ -24,8 +24,11 @@ export async function GET(req) {
 
     for (const line of lines || []) {
       const status = line.orders?.status || 'Pending'
-      if (!byStatus[status] && status !== 'Cancelled') continue
-      if (byStatus[status] !== undefined) byStatus[status] += 1
+      // Only count the four known states. This must test the key, not the
+      // count: `!byStatus[status]` is true while the counter is still 0, so it
+      // skipped every line and the dashboard could never leave zero.
+      if (byStatus[status] === undefined) continue
+      byStatus[status] += 1
       const amt = Number(line.amount || 0)
       if (status === 'Approved' || status === 'Confirmed') revenue += amt
       if (status === 'Pending') pendingAmount += amt
