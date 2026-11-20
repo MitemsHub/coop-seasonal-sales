@@ -18,8 +18,16 @@ import DraggableModal from '../../../components/DraggableModal'
 import Skeleton from '../../../components/ui/Skeleton'
 import ConfirmDialog from '../../../components/ui/ConfirmDialog'
 import VendorImportModal from '../../../components/VendorImportModal'
+import ExportButton from '../../../components/ui/ExportButton'
+import { downloadExcelWorkbook } from '../../../../lib/excelExport'
+import { createManifestDoc, addManifestTable, sanitizePdfText } from '../../../lib/pdfExport'
 import { VENDOR_EMAIL_INTERVAL_MS } from '../../../../lib/vendorEmailLimits'
 import { sendVendorLoginEmails } from '../../../../lib/vendorLoginEmailQueue'
+
+function fileStamp() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 function fmtDate(iso) {
   if (!iso) return '—'
@@ -121,6 +129,7 @@ export default function ExhibitionVendorsPage() {
   const [failedOpen, setFailedOpen] = useState(false)
   const [cohortOpen, setCohortOpen] = useState(false)
   const [cohortTab, setCohortTab] = useState('delivery')
+  const [exportBusy, setExportBusy] = useState('') // '' | 'excel' | 'pdf'
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -331,6 +340,100 @@ export default function ExhibitionVendorsPage() {
   }
 
   const isEmailing = Boolean(emailing)
+
+  // ── Exports ─────────────────────────────────────────────────────
+  // Both exports cover every vendor in the current view (cycle filter + search),
+  // not just the visible page, so an onboarding list is never truncated.
+  const exportRows = () =>
+    vendors.map((v) => ({
+      code: v.code || '',
+      name: v.name || '',
+      branch: v.branch_name || (v.branch_id ? `#${v.branch_id}` : ''),
+      cycle: v.cycle_name || (v.cycle_id ? `#${v.cycle_id}` : ''),
+      email: v.email || '',
+      phone: v.phone || '',
+      address: v.address || '',
+      status: v.status || '',
+      email_sent: v.login_sent_at ? fmtDate(v.login_sent_at) : 'Never',
+      signed_in: v.last_login_at ? fmtDateTime(v.last_login_at) : 'Never',
+      failed: failedCountOf(v),
+      created_at: v.created_at ? fmtDate(v.created_at) : '',
+    }))
+
+  const exportScopeLabel = () => {
+    const cycle = cycles.find((c) => String(c.id) === String(cycleFilter))
+    return [cycle ? `Cycle: ${cycle.name}` : 'Cycle: All', `Search: ${term.trim() || 'All'}`].join(' | ')
+  }
+
+  const exportExcel = async () => {
+    const rows = exportRows()
+    if (!rows.length) return
+    setExportBusy('excel')
+    setMsg(null)
+    try {
+      await downloadExcelWorkbook(`exhibition_vendors_${fileStamp()}.xlsx`, [
+        {
+          name: 'Vendors',
+          rows,
+          headers: {
+            code: 'Vendor Code',
+            name: 'Vendor Name',
+            branch: 'Branch',
+            cycle: 'Cycle',
+            email: 'Email',
+            phone: 'Phone',
+            address: 'Address / Stand',
+            status: 'Status',
+            email_sent: 'Login Sent',
+            signed_in: 'Last Sign-in',
+            failed: 'Failed Sign-ins',
+            created_at: 'Onboarded',
+          },
+        },
+      ])
+      setMsg({ type: 'success', text: `Exported ${rows.length} vendor${rows.length === 1 ? '' : 's'} to Excel.` })
+    } catch (e) {
+      setMsg({ type: 'error', text: e?.message || 'Excel export failed' })
+    } finally {
+      setExportBusy('')
+    }
+  }
+
+  const exportPDF = async () => {
+    const rows = exportRows()
+    if (!rows.length) return
+    setExportBusy('pdf')
+    setMsg(null)
+    try {
+      const sanitize = sanitizePdfText
+      const doc = await createManifestDoc({
+        title: 'Coop Exhibition · Onboarded Vendors',
+        meta: `${sanitize(exportScopeLabel())} | ${rows.length} vendor${rows.length === 1 ? '' : 's'}`,
+      })
+      await addManifestTable(doc, {
+        head: [['Code', 'Vendor', 'Branch', 'Phone', 'Email', 'Status', 'Signed in', 'Onboarded']],
+        body: rows.map((r) => [
+          sanitize(r.code),
+          sanitize(r.name),
+          sanitize(r.branch),
+          sanitize(r.phone || '-'),
+          sanitize(r.email || '-'),
+          sanitize(r.status),
+          sanitize(r.signed_in),
+          sanitize(r.created_at),
+        ]),
+        startY: 30,
+        variant: 'ram',
+      })
+      doc.save(`exhibition_vendors_${fileStamp()}.pdf`)
+      setMsg({ type: 'success', text: `Exported ${rows.length} vendor${rows.length === 1 ? '' : 's'} to PDF.` })
+    } catch (e) {
+      setMsg({ type: 'error', text: e?.message || 'PDF export failed' })
+    } finally {
+      setExportBusy('')
+    }
+  }
+
   const totalPages = Math.max(1, Math.ceil(vendors.length / pageSize))
   const currentPage = Math.min(page, totalPages)
   const pageStart = (currentPage - 1) * pageSize
@@ -491,10 +594,22 @@ export default function ExhibitionVendorsPage() {
             <h1 className="text-h2 font-bold tracking-tight text-fg">Exhibition Vendors</h1>
             <p className="mt-0.5 text-sm text-muted">Codes and passcodes auto-generate. Vendors sign in with their stand and passcode. Send a reminder to keep their passcode unchanged, or reset it to issue a new one.</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="ghost" size="sm" leftIcon={RefreshCw} onClick={load} disabled={loading || busy || isEmailing}>
               Refresh
             </Button>
+            <ExportButton
+              format="excel"
+              onClick={exportExcel}
+              disabled={loading || !vendors.length || !!exportBusy || isEmailing}
+              busy={exportBusy === 'excel'}
+            />
+            <ExportButton
+              format="pdf"
+              onClick={exportPDF}
+              disabled={loading || !vendors.length || !!exportBusy || isEmailing}
+              busy={exportBusy === 'pdf'}
+            />
             <Button size="sm" variant="secondary" leftIcon={Upload} onClick={() => setImportOpen(true)} disabled={isEmailing}>
               Import vendors
             </Button>
