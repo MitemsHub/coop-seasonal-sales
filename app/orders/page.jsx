@@ -1,7 +1,7 @@
 // app/orders/page.jsx
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useRef, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertTriangle,
@@ -59,6 +59,10 @@ function OrdersPageContent() {
   // order. { order } while the dialog is open, and the order_id being saved.
   const [confirmOrder, setConfirmOrder] = useState(null)
   const [confirmingId, setConfirmingId] = useState('')
+  // ?confirm=EXH001 opens that order's confirm dialog straight away — the link
+  // the My Coop prompt uses. Guarded so closing the dialog does not reopen it.
+  const confirmParam = (searchParams.get('confirm') || '').trim().toUpperCase()
+  const openedConfirmParam = useRef('')
   
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -312,6 +316,18 @@ function OrdersPageContent() {
       : listForTab.filter((order) =>
           (activeTab === 'exhibition' ? normalizeExhibitionStatus(order.status) : order.status) === selectedStatus
         )
+
+  useEffect(() => {
+    if (!confirmParam || isAdmin) return
+    if (openedConfirmParam.current === confirmParam) return
+    const match = (exhibitionOrders || []).find(
+      (o) => String(o.order_id || '').toUpperCase() === confirmParam
+    )
+    if (match && normalizeExhibitionStatus(match.status) === 'Approved') {
+      openedConfirmParam.current = confirmParam
+      setConfirmOrder({ order: match })
+    }
+  }, [confirmParam, exhibitionOrders, isAdmin])
 
   const ramLocationMap = new Map(ramLocations.map((l) => [String(l.id), l]))
 

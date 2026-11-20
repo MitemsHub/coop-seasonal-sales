@@ -12,6 +12,7 @@ import {
   Banknote,
   Beef,
   Calendar,
+  CheckCircle2,
   ClipboardList,
   Clock,
   CreditCard,
@@ -67,6 +68,7 @@ function MyCoopContent() {
   const [profile, setProfile] = useState(null)
   const [elig, setElig] = useState(null)
   const [orders, setOrders] = useState([])
+  const [exhibitionOrders, setExhibitionOrders] = useState([])
   const [foodCycle, setFoodCycle] = useState(null)
   const [ramCycle, setRamCycle] = useState(null)
   const [ramStats, setRamStats] = useState(null)
@@ -84,7 +86,7 @@ function MyCoopContent() {
     if (!memberId) return
     let cancelled = false
 
-      setLoading({ profile: true, elig: true, orders: true, cycles: true, ram: true, modules: true })
+      setLoading({ profile: true, elig: true, orders: true, cycles: true, ram: true, modules: true, exhibition: true })
       setError('')
 
       // Every request below is started up front: the dashboard used to await
@@ -101,6 +103,7 @@ function MyCoopContent() {
       const profileReq = request(`/api/members/lookup?member_id=${encodeURIComponent(memberId)}`)
       const eligibilityReq = request(`/api/members/eligibility?member_id=${encodeURIComponent(memberId)}`)
       const ordersReq = request(`/api/orders/member?member_id=${encodeURIComponent(memberId)}`)
+      const exhibitionOrdersReq = request(`/api/exhibition/orders?member_id=${encodeURIComponent(memberId)}`)
       const cyclesReq = request('/api/cycles/active')
       const ramOrdersReq = request(`/api/ram/orders?member_id=${encodeURIComponent(memberId)}`)
       const shoppingReq = request('/api/system/shopping')
@@ -131,6 +134,15 @@ function MyCoopContent() {
         if (cancelled) return
         setOrders(res?.json?.ok ? (res.json.orders || []) : [])
         setLoading((s) => ({ ...s, orders: false }))
+      })
+
+      // Exhibition orders feed the confirm-receipt prompt — approved orders are
+      // waiting on the member, so the dashboard surfaces them without a detour
+      // through the Orders page.
+      exhibitionOrdersReq.then((res) => {
+        if (cancelled) return
+        setExhibitionOrders(res?.json?.ok ? (res.json.orders || []) : [])
+        setLoading((s) => ({ ...s, exhibition: false }))
       })
 
       // RAM totals need the cycle id, so this pair resolves together — and only
@@ -263,6 +275,8 @@ function MyCoopContent() {
 
   const outstanding = elig ? Number(elig.outstandingLoansTotal || 0) : null
   const recentOrders = orders.filter((o) => o.status !== 'Cancelled').slice(0, 4)
+  // Approved exhibition orders still waiting on the member's confirmation.
+  const awaitingConfirmation = exhibitionOrders.filter((o) => o.status === 'Approved')
 
   const formatDate = (d) =>
     new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
@@ -313,6 +327,48 @@ function MyCoopContent() {
           </div>
 
           <ContinueShoppingBanner className="mb-4" />
+
+          {/* Exhibition orders awaiting the member's confirmation — small,
+              visible, and one tap from the confirm action on /orders. */}
+          {!loading.exhibition && awaitingConfirmation.length > 0 && (
+            <div className="mb-4 flex flex-col gap-2.5 rounded-2xl border border-success-border bg-success-bg/40 p-3 shadow-xs sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-success-bg text-success-fg">
+                  <CheckCircle2 className="h-4 w-4" strokeWidth={2.2} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-fg">
+                    {awaitingConfirmation.length === 1
+                      ? '1 exhibition order is ready to confirm'
+                      : `${awaitingConfirmation.length} exhibition orders are ready to confirm`}
+                  </p>
+                  <p className="text-chips text-muted">Confirm once the goods are in your hands.</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {awaitingConfirmation.slice(0, 3).map((o) => (
+                  <Button
+                    key={o.order_id}
+                    size="sm"
+                    leftIcon={CheckCircle2}
+                    onClick={() => router.push(`/orders?tab=exhibition&confirm=${encodeURIComponent(o.order_id)}`)}
+                  >
+                    Confirm #{o.order_id}
+                  </Button>
+                ))}
+                {awaitingConfirmation.length > 3 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    rightIcon={ArrowRight}
+                    onClick={() => router.push('/orders?tab=exhibition')}
+                  >
+                    +{awaitingConfirmation.length - 3} more
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
 
           {!!error && (
             <div className="mb-4 rounded-lg border border-danger-border bg-danger-bg/60 p-3 text-xs font-medium text-danger-fg">
