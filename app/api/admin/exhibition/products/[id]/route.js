@@ -27,7 +27,7 @@ export async function PATCH(request, { params }) {
     if (approvalAction) {
       const { data: row } = await supabase
         .from('exhibition_products')
-        .select('id, name, status, vendor_id, cycle_id, vendor_price, pending_vendor_price')
+        .select('id, name, status, vendor_id, cycle_id, vendor_price, pending_vendor_price, discount_pct, pending_discount_pct')
         .eq('id', id)
         .maybeSingle()
       if (!row) return NextResponse.json({ ok: false, error: 'Product not found' }, { status: 404 })
@@ -35,6 +35,9 @@ export async function PATCH(request, { params }) {
       if (approvalAction === 'approve') {
         const applied = {}
         if (row.pending_vendor_price != null) applied.vendor_price = Math.max(0, Math.trunc(Number(row.pending_vendor_price)))
+        if (row.pending_discount_pct != null) {
+          applied.discount_pct = Math.min(90, Math.max(0, Math.trunc(Number(row.pending_discount_pct))))
+        }
         const { error } = await supabase
           .from('exhibition_products')
           .update({
@@ -44,6 +47,7 @@ export async function PATCH(request, { params }) {
             approval_note: '',
             approval_reviewed_at: new Date().toISOString(),
             pending_vendor_price: null,
+            pending_discount_pct: null,
             approval_requested_at: null,
           })
           .eq('id', id)
@@ -58,7 +62,9 @@ export async function PATCH(request, { params }) {
             new_vendor_price: applied.vendor_price !== undefined ? Number(applied.vendor_price) : Number(row.vendor_price || 0),
             changed_by: 'admin',
             changed_by_label: 'Admin approval',
-            note: 'Pending price applied on approval',
+            note: applied.discount_pct !== undefined
+              ? `Pending discount applied on approval (${applied.discount_pct}% off)`
+              : 'Pending price applied on approval',
           })
         }
 
@@ -83,6 +89,7 @@ export async function PATCH(request, { params }) {
             approval_note: String(body.approval_note || '').trim().slice(0, 300),
             approval_reviewed_at: new Date().toISOString(),
             pending_vendor_price: null,
+            pending_discount_pct: null,
             approval_requested_at: null,
           })
           .eq('id', id)
@@ -106,6 +113,13 @@ export async function PATCH(request, { params }) {
       if (price <= 0) return NextResponse.json({ ok: false, error: 'Price must be greater than zero' }, { status: 400 })
       updates.vendor_price = price
     }
+    if (body.discount_pct !== undefined && body.discount_pct !== null && body.discount_pct !== '') {
+      const pct = Math.trunc(Number(body.discount_pct))
+      if (!Number.isFinite(pct) || pct < 0 || pct > 90) {
+        return NextResponse.json({ ok: false, error: 'Discount must be between 0 and 90%' }, { status: 400 })
+      }
+      updates.discount_pct = pct
+    }
     if (body.qty !== undefined) updates.qty = body.qty === '' || body.qty === null ? null : Math.max(0, Math.trunc(Number(body.qty)))
     if (body.category_id !== undefined) updates.category_id = body.category_id ? Math.trunc(Number(body.category_id)) : null
     if (body.image_url !== undefined) updates.image_url = sanitizeString(body.image_url || '', { maxLength: 500, encodeHtml: false })
@@ -118,13 +132,17 @@ export async function PATCH(request, { params }) {
       .from('exhibition_products')
       .update(updates)
       .eq('id', id)
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, qty, image_url, status, created_at')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, discount_pct, qty, image_url, status, created_at')
       .single()
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
     return NextResponse.json({
       ok: true,
-      product: { ...data, final_price: Number(data.vendor_price || 0) },
+      product: {
+        ...data,
+        final_price: Number(data.vendor_price || 0),
+        member_price: Math.round((Number(data.vendor_price || 0) * (100 - Number(data.discount_pct || 0))) / 100),
+      },
     })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Failed to update product' }, { status: 500 })

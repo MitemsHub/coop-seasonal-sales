@@ -6,7 +6,7 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const SELECT_COLS =
-  'id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, qty, image_url, status, approval_status, pending_vendor_price, approval_requested_at, created_at'
+  'id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, discount_pct, pending_discount_pct, qty, image_url, status, approval_status, pending_vendor_price, approval_requested_at, created_at'
 
 export async function PATCH(req, { params }) {
   try {
@@ -19,6 +19,7 @@ export async function PATCH(req, { params }) {
     const body = await req.json().catch(() => ({}))
     const patch = {}
     const priceChanges = {}
+    const discountChanges = {}
 
     if (body.name !== undefined) {
       const name = String(body.name).trim()
@@ -30,6 +31,13 @@ export async function PATCH(req, { params }) {
       const price = Math.max(0, Number(body.vendor_price))
       if (price <= 0) return NextResponse.json({ error: 'Price must be greater than zero' }, { status: 400 })
       priceChanges.vendor_price = price
+    }
+    if (body.discount_pct !== undefined && body.discount_pct !== null && body.discount_pct !== '') {
+      const pct = Math.trunc(Number(body.discount_pct))
+      if (!Number.isFinite(pct) || pct < 0 || pct > 90) {
+        return NextResponse.json({ error: 'Discount must be between 0 and 90%' }, { status: 400 })
+      }
+      discountChanges.discount_pct = pct
     }
     if (body.qty !== undefined) {
       patch.qty = body.qty === '' || body.qty === null ? null : Math.max(0, Number(body.qty))
@@ -64,15 +72,17 @@ export async function PATCH(req, { params }) {
       patch.status = body.status
     }
 
-    // A price change on a product that is already on sale is a request, not an
-    // edit: the shop keeps selling at the approved price until an admin
-    // approves the new one. Drafts can be edited freely.
-    if (Object.keys(priceChanges).length && existing.status === 'active') {
+    // A price or discount change on a product that is already on sale is a
+    // request, not an edit: the shop keeps selling at the approved terms until
+    // an admin approves the new ones. Drafts can be edited freely.
+    const hasTermsChange = Object.keys(priceChanges).length > 0 || Object.keys(discountChanges).length > 0
+    if (hasTermsChange && existing.status === 'active') {
       if (priceChanges.vendor_price !== undefined) patch.pending_vendor_price = priceChanges.vendor_price
+      if (discountChanges.discount_pct !== undefined) patch.pending_discount_pct = discountChanges.discount_pct
       patch.approval_status = 'pending'
       patch.approval_requested_at = new Date().toISOString()
     } else {
-      Object.assign(patch, priceChanges)
+      Object.assign(patch, priceChanges, discountChanges)
     }
 
     if (Object.keys(patch).length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
@@ -87,7 +97,8 @@ export async function PATCH(req, { params }) {
     if (error) return NextResponse.json({ error: error.message || 'Failed to update product' }, { status: 500 })
 
     // Every price edit is written down, so a dispute has a record of what was
-    // asked for, when, and by whom.
+    // asked for, when, and by whom. A discount-only change is noted on the
+    // price row only when the price itself moved.
     if (Object.keys(priceChanges).length) {
       await supabase.from('exhibition_price_history').insert({
         product_id: id,
@@ -108,7 +119,11 @@ export async function PATCH(req, { params }) {
     return NextResponse.json({
       ok: true,
       pending_approval: data.approval_status === 'pending',
-      product: { ...data, final_price: Number(data.vendor_price || 0) },
+      product: {
+        ...data,
+        final_price: Number(data.vendor_price || 0),
+        member_price: Math.round((Number(data.vendor_price || 0) * (100 - Number(data.discount_pct || 0))) / 100),
+      },
     })
   } catch (e) {
     return NextResponse.json({ error: e.message || 'Failed to update product' }, { status: 500 })

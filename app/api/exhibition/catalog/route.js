@@ -7,8 +7,9 @@
 // browse and shop from any open exhibition.  The cycle's branch is the
 // delivery/pickup location, not a visibility filter.
 // Each product carries:
-//   - final_price  = vendor_price (the catalog price)
-//   - price        = the price THIS member pays (their negotiated price wins)
+//   - final_price  = vendor_price (the list price, struck through on sale)
+//   - price        = the price THIS member pays (approved discount applied)
+//   - discount_pct = the product's approved percentage discount (0 when none)
 //   - negotiated   = true when a per-member price overrides the catalog
 // When no cycle is active, returns { ok: true, open: false } so the shop
 // can show the shared closed-module panel.
@@ -33,8 +34,31 @@ function isMissingTable(error, table) {
 // three indexed queries per request is the honest price of an always-current
 // shop.
 
+const PRODUCT_COLS =
+  'id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, vendors:vendor_id(name, code), categories:category_id(name)'
+
+// description and discount_pct arrive with their own migrations. Try the full
+// read first, then drop whichever column the database has not got yet, so a
+// deploy ahead of the SQL cannot empty the shop for every member.
+async function loadProducts(supabase, cycleId) {
+  let lastError = null
+  for (const extra of [', description, discount_pct', ', description', '']) {
+    const { data, error } = await supabase
+      .from('exhibition_products')
+      .select(PRODUCT_COLS + extra)
+      .eq('cycle_id', cycleId)
+      .eq('status', 'active')
+      .eq('approval_status', 'approved')
+      .order('name')
+    if (!error) return { data, error: null }
+    lastError = error
+    if (!/description|discount_pct|schema cache/i.test(String(error.message || ''))) break
+  }
+  return { data: null, error: lastError }
+}
+
 async function loadCatalogCore(supabase, cycleId) {
-  const [vendorsRes, categoriesRes, productsAttempt] = await Promise.all([
+  const [vendorsRes, categoriesRes, productsRes] = await Promise.all([
     supabase
       .from('exhibition_vendors')
       .select('id, name, code, phone, address, banner_url, stand_number, hall, opening_hours, whatsapp, min_order, pickup_instructions')
@@ -47,29 +71,8 @@ async function loadCatalogCore(supabase, cycleId) {
       .eq('cycle_id', cycleId)
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true }),
-    supabase
-      .from('exhibition_products')
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, qty, image_url, status, vendors:vendor_id(name, code), categories:category_id(name)')
-      .eq('cycle_id', cycleId)
-      .eq('status', 'active')
-      .eq('approval_status', 'approved')
-      .order('name'),
+    loadProducts(supabase, cycleId),
   ])
-
-  let productsRes = productsAttempt
-
-  // The description column arrives with migrations/add-exhibition-product-description.sql.
-  // If a deploy lands before that SQL runs, retry without the column instead of
-  // failing the whole shop for every member.
-  if (productsRes.error && /description/i.test(String(productsRes.error.message || ''))) {
-    productsRes = await supabase
-      .from('exhibition_products')
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, vendors:vendor_id(name, code), categories:category_id(name)')
-      .eq('cycle_id', cycleId)
-      .eq('status', 'active')
-      .eq('approval_status', 'approved')
-      .order('name')
-  }
 
   return { vendorsRes, categoriesRes, productsRes }
 }
@@ -196,7 +199,9 @@ export async function GET(req) {
     }
 
     const catalogProducts = products.map((p) => {
-      const price = Number(p.vendor_price || 0)
+      const listPrice = Number(p.vendor_price || 0)
+      const discountPct = Math.min(90, Math.max(0, Math.trunc(Number(p.discount_pct || 0))))
+      const price = discountPct > 0 ? Math.max(0, Math.round((listPrice * (100 - discountPct)) / 100)) : listPrice
       return {
         id: Number(p.id),
         vendor_id: Number(p.vendor_id),
@@ -208,7 +213,8 @@ export async function GET(req) {
         sku: p.sku,
         unit: p.unit,
         price,
-        final_price: price,
+        final_price: listPrice,
+        discount_pct: discountPct,
         negotiated: false,
         negotiated_note: '',
         qty: p.qty === null ? null : Math.max(0, Number(p.qty) - (heldByOthers.get(Number(p.id)) || 0)),

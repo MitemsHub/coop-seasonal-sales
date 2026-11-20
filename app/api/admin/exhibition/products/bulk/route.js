@@ -34,7 +34,7 @@ export async function POST(req) {
 
     const { data: rows, error: selErr } = await supabase
       .from('exhibition_products')
-      .select('id, name, status, vendor_id, cycle_id, vendor_price, pending_vendor_price, approval_status')
+      .select('id, name, status, vendor_id, cycle_id, vendor_price, pending_vendor_price, discount_pct, pending_discount_pct, approval_status')
       .in('id', ids)
     if (selErr) return NextResponse.json({ ok: false, error: selErr.message }, { status: 500 })
 
@@ -46,6 +46,7 @@ export async function POST(req) {
           approval_note: note,
           approval_reviewed_at: now,
           pending_vendor_price: null,
+          pending_discount_pct: null,
           approval_requested_at: null,
         })
         .in('id', ids)
@@ -58,6 +59,10 @@ export async function POST(req) {
       const applied = {}
       const newVendorPrice = row.pending_vendor_price != null ? Math.max(0, Math.trunc(Number(row.pending_vendor_price))) : null
       if (newVendorPrice != null) applied.vendor_price = newVendorPrice
+      const newDiscount = row.pending_discount_pct != null
+        ? Math.min(90, Math.max(0, Math.trunc(Number(row.pending_discount_pct))))
+        : null
+      if (newDiscount != null) applied.discount_pct = newDiscount
 
       const { error } = await supabase
         .from('exhibition_products')
@@ -68,12 +73,13 @@ export async function POST(req) {
           approval_note: '',
           approval_reviewed_at: now,
           pending_vendor_price: null,
+          pending_discount_pct: null,
           approval_requested_at: null,
         })
         .eq('id', row.id)
       if (error) continue
 
-      if (newVendorPrice != null) {
+      if (newVendorPrice != null || newDiscount != null) {
         await supabase.from('exhibition_price_history').insert({
           product_id: Number(row.id),
           cycle_id: row.cycle_id ? Number(row.cycle_id) : null,
@@ -82,7 +88,9 @@ export async function POST(req) {
           new_vendor_price: newVendorPrice != null ? newVendorPrice : Number(row.vendor_price || 0),
           changed_by: 'admin',
           changed_by_label: 'Admin approval',
-          note: 'Pending price applied on approval',
+          note: newDiscount != null
+            ? `Pending discount applied on approval (${newDiscount}% off)`
+            : 'Pending price applied on approval',
         })
       }
       approved.push(Number(row.id))

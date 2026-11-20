@@ -29,29 +29,27 @@ export async function GET(request) {
     const q = String(searchParams.get('q') || '').trim()
 
     const supabase = createClient()
-    let query = supabase
-      .from('exhibition_products')
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, qty, image_url, status, approval_status, pending_vendor_price, approval_requested_at, created_at, vendors:vendor_id(name, code), categories:category_id(name), branches:branch_id(name)')
-      .order('created_at', { ascending: false })
-
-    if (cycleId > 0) query = query.eq('cycle_id', cycleId)
-    if (vendorId > 0) query = query.eq('vendor_id', vendorId)
-    if (status && status !== 'all') query = query.eq('status', status)
-    if (q) query = query.or(`name.ilike.%${q}%,sku.ilike.%${q}%`)
-
-    let { data, error } = await query
-    // Deploy ahead of migrations/add-exhibition-product-description.sql: read
-    // the products without the new column instead of failing the page.
-    if (error && /description/i.test(String(error.message || ''))) {
-      let retry = supabase
+    // description and discount_pct arrive with their own migrations; fall back
+    // column by column instead of failing the whole console.
+    const attempts = [
+      'id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, discount_pct, pending_discount_pct, qty, image_url, status, approval_status, pending_vendor_price, approval_requested_at, created_at, vendors:vendor_id(name, code), categories:category_id(name), branches:branch_id(name)',
+      'id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, pending_vendor_price, qty, image_url, status, approval_status, approval_requested_at, created_at, vendors:vendor_id(name, code), categories:category_id(name), branches:branch_id(name)',
+      'id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, pending_vendor_price, qty, image_url, status, approval_status, approval_requested_at, created_at, vendors:vendor_id(name, code), categories:category_id(name), branches:branch_id(name)',
+    ]
+    let data = null
+    let error = null
+    for (const cols of attempts) {
+      let query = supabase
         .from('exhibition_products')
-        .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, approval_status, pending_vendor_price, approval_requested_at, created_at, vendors:vendor_id(name, code), categories:category_id(name), branches:branch_id(name)')
+        .select(cols)
         .order('created_at', { ascending: false })
-      if (cycleId > 0) retry = retry.eq('cycle_id', cycleId)
-      if (vendorId > 0) retry = retry.eq('vendor_id', vendorId)
-      if (status && status !== 'all') retry = retry.eq('status', status)
-      if (q) retry = retry.or(`name.ilike.%${q}%,sku.ilike.%${q}%`)
-      ;({ data, error } = await retry)
+      if (cycleId > 0) query = query.eq('cycle_id', cycleId)
+      if (vendorId > 0) query = query.eq('vendor_id', vendorId)
+      if (status && status !== 'all') query = query.eq('status', status)
+      if (q) query = query.or(`name.ilike.%${q}%,sku.ilike.%${q}%`)
+      ;({ data, error } = await query)
+      if (!error) break
+      if (!/description|discount_pct|schema cache/i.test(String(error.message || ''))) break
     }
     if (error) {
       if (isMissingTable(error, 'exhibition')) {
@@ -93,6 +91,10 @@ export async function POST(request) {
     const vendorPrice = Math.max(0, Math.trunc(Number(body.vendor_price || 0)))
     if (vendorPrice <= 0) return NextResponse.json({ ok: false, error: 'Price must be greater than zero' }, { status: 400 })
     const description = sanitizeString(body.description || '', { maxLength: 2000, encodeHtml: false })
+    const discountPct = Math.trunc(Number(body.discount_pct || 0))
+    if (!Number.isFinite(discountPct) || discountPct < 0 || discountPct > 90) {
+      return NextResponse.json({ ok: false, error: 'Discount must be between 0 and 90%' }, { status: 400 })
+    }
 
     const supabase = createClient()
     const { data: vendorRow } = await supabase
@@ -126,13 +128,14 @@ export async function POST(request) {
         unit: sanitizeString(body.unit || 'each', { maxLength: 30, encodeHtml: false }),
         description,
         vendor_price: vendorPrice,
+        discount_pct: discountPct,
         qty: body.qty === '' || body.qty === null || body.qty === undefined ? null : Math.max(0, Math.trunc(Number(body.qty))),
         image_url: sanitizeString(body.image_url || '', { maxLength: 500, encodeHtml: false }),
         status: body.status === 'draft' ? 'draft' : 'active',
         approval_status: 'approved',
         approval_reviewed_at: new Date().toISOString(),
       })
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, qty, image_url, status, created_at')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, discount_pct, qty, image_url, status, created_at')
       .single()
     if (error) {
       if (String(error.code || '') === '23505') {
@@ -140,7 +143,14 @@ export async function POST(request) {
       }
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     }
-    return NextResponse.json({ ok: true, product: { ...data, final_price: vendorPrice } })
+    return NextResponse.json({
+      ok: true,
+      product: {
+        ...data,
+        final_price: vendorPrice,
+        member_price: Math.round((vendorPrice * (100 - discountPct)) / 100),
+      },
+    })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Failed to create product' }, { status: 500 })
   }

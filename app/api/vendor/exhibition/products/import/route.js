@@ -45,10 +45,17 @@ export async function POST(req) {
         failed.push({ row: line, error: `"${name}" needs a price greater than zero` })
         return
       }
+      const discountRaw = row?.discount_pct ?? row?.discount ?? row?.['discount %'] ?? row?.['discount percent']
+      const discount = discountRaw === '' || discountRaw === null || discountRaw === undefined ? 0 : Math.trunc(Number(discountRaw))
+      if (!Number.isFinite(discount) || discount < 0 || discount > 90) {
+        failed.push({ row: line, error: `"${name}" discount must be between 0 and 90%` })
+        return
+      }
       clean.push({
         name: name.slice(0, 255),
         description: String(row?.description || '').trim().slice(0, 2000),
         vendor_price: price,
+        discount_pct: discount,
         unit: String(row?.unit || 'each').trim().slice(0, 30) || 'each',
         qty: toQty(row?.qty),
       })
@@ -79,6 +86,7 @@ export async function POST(req) {
       sku: skus[index],
       unit: row.unit,
       vendor_price: row.vendor_price,
+      discount_pct: row.discount_pct,
       qty: row.qty,
       status: 'draft',
       approval_status: 'pending',

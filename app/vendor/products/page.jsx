@@ -16,10 +16,14 @@ import ProductImportModal from '../../components/ProductImportModal'
 
 const fmtNaira = (n) => `NGN ${Number(n || 0).toLocaleString()}`
 
+const memberPrice = (listPrice, discountPct) =>
+  Math.round((Number(listPrice || 0) * (100 - Math.min(90, Math.max(0, Number(discountPct || 0))))) / 100)
+
 const emptyForm = () => ({
   name: '',
   unit: 'each',
   vendor_price: '',
+  discount_pct: '0',
   qty: '',
   description: '',
   image_url: '',
@@ -66,6 +70,7 @@ export default function VendorProductsPage() {
       name: p.name,
       unit: p.unit || 'each',
       vendor_price: String(p.vendor_price ?? ''),
+      discount_pct: String(p.discount_pct ?? 0),
       qty: p.qty === null || p.qty === undefined ? '' : String(p.qty),
       description: p.description || '',
       image_url: p.image_url || '',
@@ -82,6 +87,7 @@ export default function VendorProductsPage() {
         name: form.name.trim(),
         unit: form.unit.trim() || 'each',
         vendor_price: Number(form.vendor_price || 0),
+        discount_pct: Number(form.discount_pct || 0),
         qty: form.qty === '' ? null : Number(form.qty),
         description: form.description,
         image_url: form.image_url,
@@ -133,6 +139,9 @@ export default function VendorProductsPage() {
     setConfirmOpen(false)
     setConfirmAction(null)
   }
+
+  const formDiscount = Math.min(90, Math.max(0, Number(form.discount_pct || 0)))
+  const formMemberPrice = memberPrice(form.vendor_price, formDiscount)
 
   const filtered = useMemo(() => {
     if (!products) return []
@@ -258,6 +267,14 @@ export default function VendorProductsPage() {
                     <p className="text-chips text-muted">
                       {p.approval_status === 'approved' ? 'listed price' : 'your price'}
                     </p>
+                    {Number(p.discount_pct || 0) > 0 && (
+                      <p className="text-chips font-medium text-danger-fg">
+                        −{p.discount_pct}% · members pay {fmtNaira(memberPrice(p.vendor_price, p.discount_pct))}
+                      </p>
+                    )}
+                    {p.pending_discount_pct != null && (
+                      <p className="text-chips font-medium text-warning-fg">Awaiting approval: −{p.pending_discount_pct}%</p>
+                    )}
                   </div>
                   <div className="flex gap-1.5">
                     <a
@@ -365,9 +382,26 @@ export default function VendorProductsPage() {
             <Label htmlFor="p-price">Price (₦)</Label>
             <Input id="p-price" type="number" min="1" value={form.vendor_price} onChange={(e) => setForm({ ...form, vendor_price: e.target.value })} placeholder="0" />
           </div>
+          <div>
+            <Label htmlFor="p-discount">Discount (%)</Label>
+            <Input
+              id="p-discount"
+              type="number"
+              min="0"
+              max="90"
+              value={form.discount_pct}
+              onChange={(e) => setForm({ ...form, discount_pct: e.target.value })}
+              placeholder="0"
+            />
+            <p className="mt-1 text-chips text-muted">
+              {formDiscount > 0 && Number(form.vendor_price) > 0
+                ? `Members pay ${fmtNaira(formMemberPrice)} instead of ${fmtNaira(form.vendor_price)} — that is the price on their invoice.`
+                : 'Optional. Leave 0 for no discount. Maximum 90%.'}
+            </p>
+          </div>
           <div className="sm:col-span-2">
             <p className="rounded-lg border border-warning-border bg-warning-bg/60 px-3 py-2 text-chips text-warning-fg">
-              New products, and any price change on a product already on sale, are reviewed by the co-op before members see them. The price you set is the member price.
+              New products, and any price or discount change on a product already on sale, are reviewed by the co-op before members see them. The discounted price is what members are charged.
             </p>
           </div>
           <div>

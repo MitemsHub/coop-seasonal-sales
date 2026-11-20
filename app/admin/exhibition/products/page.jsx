@@ -27,6 +27,9 @@ const naira = (v) =>
 
 const STATUS_STYLES = { active: 'success', draft: 'neutral', archived: 'neutral' }
 
+const memberPrice = (listPrice, discountPct) =>
+  Math.round((Number(listPrice || 0) * (100 - Math.min(90, Math.max(0, Number(discountPct || 0))))) / 100)
+
 export default function ExhibitionProductsPage() {
   const [products, setProducts] = useState([])
   const [cycles, setCycles] = useState([])
@@ -101,6 +104,7 @@ export default function ExhibitionProductsPage() {
       name: p.name || '',
       unit: p.unit || 'each',
       vendor_price: p.vendor_price,
+      discount_pct: p.discount_pct ?? 0,
       qty: p.qty ?? '',
       status: p.status || 'active',
       description: p.description || '',
@@ -187,6 +191,7 @@ export default function ExhibitionProductsPage() {
           name: form.name,
           unit: form.unit,
           vendor_price: Number(form.vendor_price),
+          discount_pct: Number(form.discount_pct || 0),
           qty: form.qty,
           image_url: form.image_url,
           description: form.description || '',
@@ -215,6 +220,7 @@ export default function ExhibitionProductsPage() {
           name: form.name,
           unit: form.unit,
           vendor_price: Number(form.vendor_price),
+          discount_pct: Number(form.discount_pct || 0),
           qty: form.qty,
           status: form.status,
           description: form.description || '',
@@ -452,8 +458,16 @@ export default function ExhibitionProductsPage() {
                     </TD>
                     <TD className="whitespace-nowrap text-right tabular-nums">
                       {naira(p.vendor_price)}
+                      {Number(p.discount_pct || 0) > 0 && (
+                        <div className="text-chips font-medium text-danger-fg">
+                          −{p.discount_pct}% · {naira(memberPrice(p.vendor_price, p.discount_pct))}
+                        </div>
+                      )}
                       {p.pending_vendor_price != null && (
                         <div className="text-chips text-warning-fg">→ {naira(p.pending_vendor_price)}</div>
+                      )}
+                      {p.pending_discount_pct != null && (
+                        <div className="text-chips text-warning-fg">→ −{p.pending_discount_pct}%</div>
                       )}
                     </TD>
                     <TD className="whitespace-nowrap text-right tabular-nums">{p.qty == null ? '∞' : Number(p.qty).toLocaleString()}</TD>
@@ -514,8 +528,16 @@ export default function ExhibitionProductsPage() {
                       <p className="text-chips text-muted">Price</p>
                       <p className="font-semibold tabular-nums text-fg">
                         {naira(p.vendor_price)}
+                        {Number(p.discount_pct || 0) > 0 && (
+                          <span className="block text-chips font-medium text-danger-fg">
+                            −{p.discount_pct}% · {naira(memberPrice(p.vendor_price, p.discount_pct))}
+                          </span>
+                        )}
                         {p.pending_vendor_price != null && (
                           <span className="block text-chips text-warning-fg">→ {naira(p.pending_vendor_price)}</span>
+                        )}
+                        {p.pending_discount_pct != null && (
+                          <span className="block text-chips text-warning-fg">→ −{p.pending_discount_pct}%</span>
                         )}
                       </p>
                     </div>
@@ -617,6 +639,15 @@ export default function ExhibitionProductsPage() {
               <div>
                 <Label htmlFor="exh-p-vprice">Price (₦)</Label>
                 <Input id="exh-p-vprice" type="number" value={form.vendor_price ?? ''} onChange={(e) => setForm({ ...form, vendor_price: e.target.value })} />
+              </div>
+              <div>
+                <Label htmlFor="exh-p-discount">Discount (%)</Label>
+                <Input id="exh-p-discount" type="number" min="0" max="90" value={form.discount_pct ?? 0} onChange={(e) => setForm({ ...form, discount_pct: e.target.value })} />
+                {Number(form.discount_pct || 0) > 0 && Number(form.vendor_price) > 0 && (
+                  <p className="mt-1 text-chips text-muted">
+                    Members pay {naira(memberPrice(form.vendor_price, form.discount_pct))}
+                  </p>
+                )}
               </div>
               <div>
                 <Label htmlFor="exh-p-qty">Qty (blank = ∞)</Label>

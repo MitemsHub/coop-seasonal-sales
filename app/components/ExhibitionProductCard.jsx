@@ -66,13 +66,20 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
         </div>
 
         <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-          <div className="text-sm font-bold text-brand tabular-nums">{naira(p.price)}</div>
-          {p.negotiated ? (
+          <div className="flex flex-wrap items-baseline gap-x-1.5">
+            <span className="text-sm font-bold text-brand tabular-nums">{naira(p.price)}</span>
+            {!p.negotiated && p.final_price !== p.price && (
+              <span className="text-chips text-muted line-through">{naira(p.final_price)}</span>
+            )}
+          </div>
+          {p.discount_pct > 0 ? (
+            <span className="rounded-full bg-danger-bg px-1.5 py-0.5 text-[10px] font-semibold text-danger-fg">
+              −{p.discount_pct}%
+            </span>
+          ) : p.negotiated ? (
             <Badge tone="accent" variant="subtle">
               Your price
             </Badge>
-          ) : p.final_price !== p.price ? (
-            <span className="text-chips text-muted line-through">{naira(p.final_price)}</span>
           ) : null}
         </div>
 

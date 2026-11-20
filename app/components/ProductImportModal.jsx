@@ -21,6 +21,7 @@ const TEMPLATE_ROWS = [
     name: 'Handwoven Ankara Tote',
     description: 'Handwoven tote in Ankara print, leather handles, fits a laptop.',
     price: 15000,
+    discount_pct: 10,
     unit: 'each',
     qty: 25,
   },
@@ -28,6 +29,7 @@ const TEMPLATE_ROWS = [
     name: 'Fresh tomatoes (basket)',
     description: 'Farm-fresh tomatoes, one basket of about 20 kg.',
     price: 8500,
+    discount_pct: 0,
     unit: 'basket',
     qty: 40,
   },
@@ -38,12 +40,20 @@ const DESCRIPTION_KEYS = ['description', 'product description', 'details', 'abou
 const PRICE_KEYS = ['price', 'price (ngn)', 'amount', 'vendor_price', 'vendor price', 'unit price']
 const UNIT_KEYS = ['unit', 'uom', 'measure']
 const QTY_KEYS = ['qty', 'quantity', 'stock', 'quantity in stock']
+const DISCOUNT_KEYS = ['discount_pct', 'discount %', 'discount', 'discount percent', 'discount (%)']
 
 function downloadTemplate() {
   downloadExcelWorkbook('product-import-template.xlsx', [
     {
       name: 'Products',
-      headers: { name: 'Product name', description: 'Description', price: 'Price', unit: 'Unit', qty: 'Quantity' },
+      headers: {
+        name: 'Product name',
+        description: 'Description',
+        price: 'Price',
+        discount_pct: 'Discount %',
+        unit: 'Unit',
+        qty: 'Quantity',
+      },
       rows: TEMPLATE_ROWS,
     },
   ])
@@ -108,6 +118,7 @@ export default function ProductImportModal({
         name: pick(record, NAME_KEYS),
         description: pick(record, DESCRIPTION_KEYS),
         price: pick(record, PRICE_KEYS),
+        discount_pct: pick(record, DISCOUNT_KEYS),
         unit: pick(record, UNIT_KEYS) || 'each',
         qty: pick(record, QTY_KEYS),
       }))
@@ -264,7 +275,7 @@ export default function ProductImportModal({
           <div className="rounded-xl border border-dashed border-line bg-subtle px-4 py-6 text-center">
             <FileSpreadsheet className="mx-auto mb-2 h-7 w-7 text-muted" strokeWidth={1.6} />
             <p className="text-sm font-medium text-fg">{fileName || 'Choose a CSV or Excel file'}</p>
-            <p className="mt-0.5 text-xs text-muted">Columns: name, description, price, unit, qty (only name and price are required). Add product photos after importing.</p>
+            <p className="mt-0.5 text-xs text-muted">Columns: name, description, price, discount %, unit, qty (only name and price are required). Add product photos after importing.</p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
               <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-on-accent">
                 <Upload className="h-3.5 w-3.5" />
@@ -291,6 +302,7 @@ export default function ProductImportModal({
                     <tr>
                       <th className="px-3 py-2 font-medium">Name</th>
                       <th className="px-3 py-2 font-medium">Price</th>
+                      <th className="px-3 py-2 font-medium">Disc %</th>
                       <th className="px-3 py-2 font-medium">Qty</th>
                       <th className="px-3 py-2 font-medium">Unit</th>
                     </tr>
@@ -300,6 +312,7 @@ export default function ProductImportModal({
                       <tr key={`${row.name}-${index}`}>
                         <td className="px-3 py-2 text-fg">{row.name || '—'}</td>
                         <td className="px-3 py-2 tabular-nums text-muted">{row.price ? `NGN ${Number(row.price).toLocaleString()}` : '—'}</td>
+                        <td className="px-3 py-2 tabular-nums text-muted">{row.discount_pct ? `${row.discount_pct}%` : '—'}</td>
                         <td className="px-3 py-2 tabular-nums text-muted">{row.qty || '∞'}</td>
                         <td className="px-3 py-2 text-muted">{row.unit || 'each'}</td>
                       </tr>

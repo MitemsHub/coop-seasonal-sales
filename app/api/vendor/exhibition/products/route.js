@@ -16,27 +16,27 @@ export async function GET(req) {
     const status = url.searchParams.get('status') || ''
     const q = url.searchParams.get('q') || ''
 
-    let query = supabase
-      .from('exhibition_products')
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, qty, image_url, status, approval_status, approval_note, approval_requested_at, pending_vendor_price, categories:category_id(name)')
-      .eq('vendor_id', ctx.vendor_id)
-      .order('created_at', { ascending: false })
-
-    if (status && status !== 'all') query = query.eq('status', status)
-    if (q) query = query.ilike('name', `%${q}%`)
-
-    let { data, error } = await query
-    // Deploy ahead of migrations/add-exhibition-product-description.sql: read
-    // the products without the new column instead of failing the page.
-    if (error && /description/i.test(String(error.message || ''))) {
-      let retry = supabase
+    // description and discount_pct arrive with their own migrations. Read the
+    // full row first, then drop whichever column is not there yet, so a deploy
+    // ahead of the SQL never blanks the vendor's product page.
+    const attempts = [
+      'id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, discount_pct, pending_discount_pct, qty, image_url, status, approval_status, approval_note, approval_requested_at, pending_vendor_price, categories:category_id(name)',
+      'id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, pending_vendor_price, qty, image_url, status, approval_status, approval_note, approval_requested_at, categories:category_id(name)',
+      'id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, pending_vendor_price, qty, image_url, status, approval_status, approval_note, approval_requested_at, categories:category_id(name)',
+    ]
+    let data = null
+    let error = null
+    for (const cols of attempts) {
+      let query = supabase
         .from('exhibition_products')
-        .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, approval_status, approval_note, approval_requested_at, pending_vendor_price, categories:category_id(name)')
+        .select(cols)
         .eq('vendor_id', ctx.vendor_id)
         .order('created_at', { ascending: false })
-      if (status && status !== 'all') retry = retry.eq('status', status)
-      if (q) retry = retry.ilike('name', `%${q}%`)
-      ;({ data, error } = await retry)
+      if (status && status !== 'all') query = query.eq('status', status)
+      if (q) query = query.ilike('name', `%${q}%`)
+      ;({ data, error } = await query)
+      if (!error) break
+      if (!/description|discount_pct|schema cache/i.test(String(error.message || ''))) break
     }
     if (error) return NextResponse.json({ error: error.message || 'Failed to load products' }, { status: 500 })
 
@@ -68,6 +68,10 @@ export async function POST(req) {
     const categoryId = body?.category_id ? Number(body.category_id) : null
     const imageUrl = String(body?.image_url || '').trim()
     const description = String(body?.description || '').trim().slice(0, 2000)
+    const discountPct = Math.trunc(Number(body?.discount_pct || 0))
+    if (!Number.isFinite(discountPct) || discountPct < 0 || discountPct > 90) {
+      return NextResponse.json({ error: 'Discount must be between 0 and 90%' }, { status: 400 })
+    }
     // A vendor's submission never goes live directly: it lands as a draft and
     // waits in the admin's approval queue.
     const status = 'draft'
@@ -101,13 +105,14 @@ export async function POST(req) {
         unit,
         description,
         vendor_price: vendorPrice,
+        discount_pct: discountPct,
         qty,
         image_url: imageUrl,
         status,
         approval_status: 'pending',
         approval_requested_at: new Date().toISOString(),
       })
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, qty, image_url, status, approval_status, pending_vendor_price, created_at')
+      .select('id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, discount_pct, qty, image_url, status, approval_status, pending_vendor_price, created_at')
       .single()
 
     if (error) {
@@ -120,7 +125,14 @@ export async function POST(req) {
       return NextResponse.json({ error: error.message || 'Failed to create product' }, { status: 500 })
     }
 
-    return NextResponse.json({ ok: true, product: { ...data, final_price: vendorPrice } })
+    return NextResponse.json({
+      ok: true,
+      product: {
+        ...data,
+        final_price: vendorPrice,
+        member_price: Math.round((vendorPrice * (100 - discountPct)) / 100),
+      },
+    })
   } catch (e) {
     return NextResponse.json({ error: e.message || 'Failed to create product' }, { status: 500 })
   }
