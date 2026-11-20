@@ -33,18 +33,15 @@ function isMissingTable(error, table) {
 // Statuses that still consume this cycle's loan allowance. Confirmed orders
 // have already been spent — excluding them would free the cap.
 
-// Fallback for databases that have not run the short-order-number migration
-// yet. New deployments get EXH001-style ids from the sequence RPC below.
-function makeOrderId() {
-  const y = new Date().getFullYear()
-  const rand = Math.random().toString(36).slice(2, 8).toUpperCase()
-  return `EXH-${y}-${rand}`
-}
-
+// migrations/short-exhibition-order-numbers.sql is live, so there is no
+// long-format fallback: if the allocator fails we surface an error instead of
+// silently minting an EXH-2026-XXXXXX invoice id.
 async function allocateOrderId(supabase) {
   const { data, error } = await supabase.rpc('next_exhibition_order_id')
-  if (!error && data) return String(data)
-  return makeOrderId()
+  if (error || !data) {
+    throw new Error(`Order number allocation failed: ${error?.message || 'no value returned'}`)
+  }
+  return String(data)
 }
 
 // GET /api/exhibition/orders?member_id=XXX — the member's exhibition orders
@@ -252,7 +249,16 @@ export async function POST(req) {
     // transaction. If any step fails, PostgreSQL rolls all of it back.
     let lastError = 'Could not create the order.'
     for (let attempt = 0; attempt < 3; attempt++) {
-      const orderId = await allocateOrderId(supabase)
+      let orderId
+      try {
+        orderId = await allocateOrderId(supabase)
+      } catch (allocErr) {
+        console.error('Exhibition order number allocation failed:', allocErr.message)
+        return NextResponse.json(
+          { ok: false, error: 'Could not allocate an order number. Please try again in a moment.' },
+          { status: 503 }
+        )
+      }
       const { data: result, error: rpcErr } = await supabase.rpc('create_exhibition_order_atomic', {
         p_order_id: orderId,
         p_cycle_id: cycleId,

@@ -8,7 +8,7 @@
 // session — never from the request body — so one member cannot confirm another
 // member's order. An admin can also confirm from the approval desk when needed.
 //
-// body: { order_id: 'EXH-2026-XXXXXX' }   (the display id the member sees)
+// body: { order_id: 'EXH001' }   (the display id the member sees)
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession } from '@/lib/validation'

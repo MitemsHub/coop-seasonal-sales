@@ -158,7 +158,7 @@ export async function POST(req) {
     const totalQty = items.reduce((sum, i) => sum + i.qty, 0)
 
     // order_id comes from the sequential display-number default, so invoices
-    // read 1, 2, 3 instead of a random EXH- code.
+    // read EXH001, EXH002, EXH003 instead of a random EXH- code.
     const { data: inserted, error: insErr } = await supabase
       .from('exhibition_orders')
       .insert({
