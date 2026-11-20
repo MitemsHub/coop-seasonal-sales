@@ -590,11 +590,11 @@ export default function ExhibitionVendorsPage() {
     <ProtectedRoute allowedRoles={['admin']}>
       <div className="p-4 sm:p-6 lg:p-8">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+          <div className="min-w-0">
             <h1 className="text-h2 font-bold tracking-tight text-fg">Exhibition Vendors</h1>
             <p className="mt-0.5 text-sm text-muted">Codes and passcodes auto-generate. Vendors sign in with their stand and passcode. Send a reminder to keep their passcode unchanged, or reset it to issue a new one.</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:flex-nowrap">
             <Button variant="ghost" size="sm" leftIcon={RefreshCw} onClick={load} disabled={loading || busy || isEmailing}>
               Refresh
             </Button>
