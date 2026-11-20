@@ -94,7 +94,7 @@ export async function GET(req) {
       .select(
         statusOnly
           ? 'id, order_id, status'
-          : 'id, order_id, status, payment_option, total_qty, total_amount, created_at, approved_at, ready_at, delivered_at, cancelled_at, cancelled_reason, member_confirmed_at, member_name_snapshot, branch:branches(id, name, code), lines:exhibition_order_lines(id, product_id, vendor_id, product_name, sku, unit, final_price, qty, amount, image_url:exhibition_products(image_url), vendor:exhibition_vendors(name))'
+          : 'id, order_id, cycle_id, status, payment_option, total_qty, total_amount, created_at, approved_at, ready_at, delivered_at, cancelled_at, cancelled_reason, member_confirmed_at, member_name_snapshot, branch:branches(id, name, code), lines:exhibition_order_lines(id, product_id, vendor_id, product_name, sku, unit, final_price, qty, amount, image_url:exhibition_products(image_url), vendor:exhibition_vendors(name))'
       )
       .eq('member_id', memberId)
       .order('created_at', { ascending: false })

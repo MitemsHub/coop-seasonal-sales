@@ -75,8 +75,24 @@ export async function GET(request) {
       }
     }
 
+    // The admin needs to call the member about a collection, so each row also
+    // carries the member's phone from the members table.
+    const memberIds = [...new Set((data || []).map((o) => String(o.member_id || '').trim().toUpperCase()).filter(Boolean))]
+    const phoneByMember = new Map()
+    if (memberIds.length) {
+      const { data: members, error: memErr } = await supabase
+        .from('members')
+        .select('member_id, phone')
+        .in('member_id', memberIds)
+      if (memErr) return NextResponse.json({ ok: false, error: memErr.message }, { status: 500 })
+      for (const m of members || []) {
+        phoneByMember.set(String(m.member_id || '').trim().toUpperCase(), String(m.phone || '').trim())
+      }
+    }
+
     const orders = (data || []).map((o) => ({
       ...o,
+      member_phone: phoneByMember.get(String(o.member_id || '').trim().toUpperCase()) || '',
       branch_name: o.branches?.name || '',
       branch_code: o.branches?.code || '',
       cycle_name: o.cycles?.name || '',

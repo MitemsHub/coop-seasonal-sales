@@ -850,6 +850,9 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                       <td className="p-2 align-top xl:p-3">
                         <div className="font-medium text-fg">{o.member_id}</div>
                         <div className="truncate text-muted" title={o.member_name_snapshot || ''}>{o.member_name_snapshot || '-'}</div>
+                        {o.member_phone && (
+                          <div className="truncate text-chips tabular-nums text-subtext" title={o.member_phone}>{o.member_phone}</div>
+                        )}
                       </td>
                       {status === 'Pending' && (
                         <td className="p-2 align-top xl:p-3">
@@ -941,7 +944,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                       <div className="col-span-2 min-w-0 rounded-lg bg-subtle/50 px-2.5 py-2">
                         <p className="text-chips text-muted">Member</p>
                         <p className="mt-0.5 break-words font-medium text-fg">
-                          {o.member_id}{o.member_name_snapshot ? ` · ${o.member_name_snapshot}` : ''}
+                          {o.member_id}{o.member_name_snapshot ? ` · ${o.member_name_snapshot}` : ''}{o.member_phone ? ` · ${o.member_phone}` : ''}
                         </p>
                       </div>
                       <div className="col-span-2 min-w-0 rounded-lg bg-subtle/50 px-2.5 py-2">
@@ -998,7 +1001,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
               <div className="col-span-2 min-w-0">
                 <p className="text-chips text-muted">Member</p>
                 <p className="mt-0.5 break-words font-medium text-fg">
-                  {viewOrder.member_id}{viewOrder.member_name_snapshot ? ` · ${viewOrder.member_name_snapshot}` : ''}
+                  {viewOrder.member_id}{viewOrder.member_name_snapshot ? ` · ${viewOrder.member_name_snapshot}` : ''}{viewOrder.member_phone ? ` · ${viewOrder.member_phone}` : ''}
                 </p>
               </div>
               <div>

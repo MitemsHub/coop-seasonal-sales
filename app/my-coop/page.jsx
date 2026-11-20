@@ -30,7 +30,7 @@ import {
 import { useAuth } from '../contexts/AuthContext'
 import ProtectedRoute from '../components/ProtectedRoute'
 import ContinueShoppingBanner from '../components/ContinueShoppingBanner'
-import { FoodOrderStepper } from '../components/ui/OrderStepper'
+import { ExhibitionOrderStepper, FoodOrderStepper } from '../components/ui/OrderStepper'
 import { supabase } from '@/lib/supabaseClient'
 import StatCard from '../components/ui/StatCard'
 import { BarChart, LineChart, ChartEmpty } from '../components/ui/Charts'
@@ -53,6 +53,7 @@ const STATUS_TONES = {
   Posted: 'info',
   Delivered: 'success',
   Approved: 'success',
+  Confirmed: 'success',
   Cancelled: 'danger',
 }
 
@@ -274,9 +275,28 @@ function MyCoopContent() {
   const anyCycleOpen = isFoodOpen || isRamOpen || exhibitionOpen
 
   const outstanding = elig ? Number(elig.outstandingLoansTotal || 0) : null
-  const recentOrders = orders.filter((o) => o.status !== 'Cancelled').slice(0, 4)
+  // Food and exhibition orders share one recent list, newest first, so a stand
+  // invoice is never hidden behind the food tab.
+  const recentOrders = useMemo(() => {
+    const food = orders
+      .filter((o) => o.status !== 'Cancelled')
+      .map((o) => ({ ...o, module: 'food' }))
+    const exhibition = exhibitionOrders
+      .filter((o) => o.status !== 'Cancelled')
+      .map((o) => ({ ...o, module: 'exhibition' }))
+    return [...food, ...exhibition]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 4)
+  }, [orders, exhibitionOrders])
   // Approved exhibition orders still waiting on the member's confirmation.
   const awaitingConfirmation = exhibitionOrders.filter((o) => o.status === 'Approved')
+  // This season's exhibition orders, for the Cycle status card.
+  const exhibitionCycleOrders = exhibitionOrders.filter(
+    (o) =>
+      o.status !== 'Cancelled' &&
+      (!exhibitionCycle?.id || Number(o.cycle_id) === Number(exhibitionCycle.id))
+  )
+  const exhibitionCycleTotal = exhibitionCycleOrders.reduce((s, o) => s + Number(o.total_amount || 0), 0)
 
   const formatDate = (d) =>
     new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
@@ -639,13 +659,14 @@ function MyCoopContent() {
                 </span>
                 <div>
                   <h2 className="font-display text-h2 font-semibold tracking-tight text-fg">Cycle status</h2>
-                  <p className="text-chips text-muted">Food + Ram seasons</p>
+                  <p className="text-chips text-muted">Food, Ram + Exhibition seasons</p>
                 </div>
               </div>
 
               <div className="mt-4 flex-1 space-y-3">
                 {loading.cycles ? (
                   <>
+                    <Skeleton className="h-[86px] rounded-xl" />
                     <Skeleton className="h-[86px] rounded-xl" />
                     <Skeleton className="h-[86px] rounded-xl" />
                   </>
@@ -694,6 +715,28 @@ function MyCoopContent() {
                       : 'Waiting for the next Ram season to open'}
                   </p>
                 </div>
+
+                <div className="rounded-xl border border-line-subtle bg-subtle/50 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-chips font-medium text-muted">
+                      <Store className="h-3.5 w-3.5" strokeWidth={2.2} />
+                      Exhibition
+                    </span>
+                    <span className={[
+                      'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-chips font-semibold',
+                      exhibitionOpen ? 'bg-success-bg text-success-fg' : 'bg-warning-bg text-warning-fg',
+                    ].join(' ')}>
+                      <span className={['h-1.5 w-1.5 rounded-full', exhibitionOpen ? 'bg-success-fg' : 'bg-warning'].join(' ')} />
+                      {exhibitionOpen ? 'Open' : 'Closed'}
+                    </span>
+                  </div>
+                  <p className="mt-1.5 text-sm font-semibold text-fg">{exhibitionCycle?.name || 'No active exhibition'}</p>
+                  <p className="mt-0.5 text-chips text-muted">
+                    {exhibitionOpen
+                      ? `${exhibitionCycleOrders.length} order${exhibitionCycleOrders.length === 1 ? '' : 's'} · ${naira(exhibitionCycleTotal)} this season`
+                      : 'Your exhibition invoices stay here after the season closes'}
+                  </p>
+                </div>
                   </>
                 )}
               </div>
@@ -704,7 +747,7 @@ function MyCoopContent() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <h2 className="font-display text-h2 font-semibold tracking-tight text-fg">Recent orders</h2>
-                  <p className="mt-0.5 text-chips text-muted">Latest food activity</p>
+                  <p className="mt-0.5 text-chips text-muted">Food and exhibition activity</p>
                 </div>
                 <Button variant="ghost" size="sm" rightIcon={ArrowRight} onClick={() => router.push('/orders')}>
                   View all
@@ -719,7 +762,7 @@ function MyCoopContent() {
                 <EmptyState
                   icon={ClipboardList}
                   title="No orders yet"
-                  description="Orders you place in the shop will show up here with their status."
+                  description="Food orders you place in the shop and exhibition invoices from vendor stands will show up here with their status."
                 >
                   {shoppingOpen && (
                     <Button leftIcon={ShoppingCart} onClick={() => router.push('/shop')}>
@@ -731,9 +774,11 @@ function MyCoopContent() {
                 <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {recentOrders.map((order) => (
                     <button
-                      key={order.order_id}
+                      key={`${order.module}-${order.order_id}`}
                       type="button"
-                      onClick={() => router.push(`/shop/success/${order.order_id}`)}
+                      onClick={() =>
+                        router.push(order.module === 'exhibition' ? '/orders?tab=exhibition' : `/shop/success/${order.order_id}`)
+                      }
                       className="group rounded-xl border border-line-subtle bg-subtle/40 p-3 text-left transition-all duration-200 ease-sakani hover:-translate-y-0.5 hover:border-line-strong hover:bg-surface hover:shadow-md"
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -759,9 +804,12 @@ function MyCoopContent() {
                         </span>
                       </div>
 
-                      {/* Pending → Posted → Delivered progress */}
+                      {/* Food: Pending → Posted → Delivered
+                          Exhibition: Pending → Approved → Confirmed */}
                       <div className="mt-2.5 border-t border-line-subtle pt-2.5">
-                        <FoodOrderStepper status={order.status} />
+                        {order.module === 'exhibition'
+                          ? <ExhibitionOrderStepper status={order.status} />
+                          : <FoodOrderStepper status={order.status} />}
                       </div>
 
                       {(order.payment_option === 'Loan' && Number(order.loan_interest_amount || 0) > 0) && (
