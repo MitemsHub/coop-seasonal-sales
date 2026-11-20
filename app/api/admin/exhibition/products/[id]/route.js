@@ -5,7 +5,6 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
 import { notifyStandFollowers } from '@/lib/notifyStandFollowers'
-import { invalidateCatalogCore } from '@/lib/exhibitionCatalogCache'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -49,7 +48,6 @@ export async function PATCH(request, { params }) {
           })
           .eq('id', id)
         if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
-        invalidateCatalogCore()
 
         if (Object.keys(applied).length) {
           await supabase.from('exhibition_price_history').insert({
@@ -89,7 +87,6 @@ export async function PATCH(request, { params }) {
           })
           .eq('id', id)
         if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
-        invalidateCatalogCore()
         return NextResponse.json({ ok: true, rejected: true })
       }
 
@@ -123,7 +120,6 @@ export async function PATCH(request, { params }) {
       .select('id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, qty, image_url, status, created_at')
       .single()
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
-    invalidateCatalogCore()
 
     return NextResponse.json({
       ok: true,
@@ -156,7 +152,6 @@ export async function DELETE(request, { params }) {
 
     const { error } = await supabase.from('exhibition_products').delete().eq('id', id)
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
-    invalidateCatalogCore()
     return NextResponse.json({ ok: true })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Failed to delete product' }, { status: 500 })

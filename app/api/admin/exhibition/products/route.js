@@ -6,7 +6,6 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
 import { reserveSkus } from '@/lib/skuFormat'
-import { invalidateCatalogCore } from '@/lib/exhibitionCatalogCache'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -126,7 +125,6 @@ export async function POST(request) {
       }
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     }
-    invalidateCatalogCore()
     return NextResponse.json({ ok: true, product: { ...data, final_price: vendorPrice } })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Failed to create product' }, { status: 500 })

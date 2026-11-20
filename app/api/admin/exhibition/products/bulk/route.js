@@ -8,7 +8,6 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession } from '@/lib/validation'
 import { notifyStandFollowers } from '@/lib/notifyStandFollowers'
-import { invalidateCatalogCore } from '@/lib/exhibitionCatalogCache'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -51,7 +50,6 @@ export async function POST(req) {
         })
         .in('id', ids)
       if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
-      invalidateCatalogCore()
       return NextResponse.json({ ok: true, rejected: ids.length })
     }
 
@@ -98,7 +96,6 @@ export async function POST(req) {
       }
     }
 
-    if (approved.length) invalidateCatalogCore()
     return NextResponse.json({ ok: true, approved, failed: ids.filter((id) => !approved.includes(id)) })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Bulk approval failed' }, { status: 500 })

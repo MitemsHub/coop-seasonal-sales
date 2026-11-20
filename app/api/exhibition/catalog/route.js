@@ -13,7 +13,6 @@
 // can show the shared closed-module panel.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
-import { readCatalogCore, writeCatalogCore } from '@/lib/exhibitionCatalogCache'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -25,16 +24,14 @@ function isMissingTable(error, table) {
   return msg.includes(String(table || '').toLowerCase()) && (msg.includes('does not exist') || msg.includes('could not find the table'))
 }
 
-// ── Member-independent catalog cache ─────────────────────────────────
-// The cycle, vendors, categories and products are identical for every member,
-// so rebuilding them per request is wasted work — and on a busy exhibition day
-// this route is what every member hits. The shared cache (app/lib) holds it per
-// cycle for a minute and product mutations clear it. Failures are never cached.
+// ── Cycle catalogue ──────────────────────────────────────────────────
+// Why this is not cached: on Vercel every server instance has its own memory,
+// so an approval handled by one instance cannot clear another's cache and
+// freshly approved products stay hidden for up to the TTL. Correctness wins —
+// three indexed queries per request is the honest price of an always-current
+// shop.
 
 async function loadCatalogCore(supabase, cycleId) {
-  const hit = readCatalogCore(cycleId)
-  if (hit) return hit
-
   const [vendorsRes, categoriesRes, productsRes] = await Promise.all([
     supabase
       .from('exhibition_vendors')
@@ -57,9 +54,7 @@ async function loadCatalogCore(supabase, cycleId) {
       .order('name'),
   ])
 
-  const data = { vendorsRes, categoriesRes, productsRes }
-  if (!productsRes.error) writeCatalogCore(cycleId, data)
-  return data
+  return { vendorsRes, categoriesRes, productsRes }
 }
 
 
