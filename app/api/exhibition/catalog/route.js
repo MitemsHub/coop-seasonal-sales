@@ -13,6 +13,7 @@
 // can show the shared closed-module panel.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
+import { readCatalogCore, writeCatalogCore } from '@/lib/exhibitionCatalogCache'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -27,15 +28,12 @@ function isMissingTable(error, table) {
 // ── Member-independent catalog cache ─────────────────────────────────
 // The cycle, vendors, categories and products are identical for every member,
 // so rebuilding them per request is wasted work — and on a busy exhibition day
-// this route is what every member hits. Cache the result per cycle for a
-// minute. Failures are never cached. Process-local by design: each instance
-// warms once instead of querying on every page view.
-const CORE_TTL_MS = 60_000
-const coreCache = new Map() // cycleId -> { at, data }
+// this route is what every member hits. The shared cache (app/lib) holds it per
+// cycle for a minute and product mutations clear it. Failures are never cached.
 
 async function loadCatalogCore(supabase, cycleId) {
-  const hit = coreCache.get(cycleId)
-  if (hit && Date.now() - hit.at < CORE_TTL_MS) return hit.data
+  const hit = readCatalogCore(cycleId)
+  if (hit) return hit
 
   const [vendorsRes, categoriesRes, productsRes] = await Promise.all([
     supabase
@@ -60,10 +58,7 @@ async function loadCatalogCore(supabase, cycleId) {
   ])
 
   const data = { vendorsRes, categoriesRes, productsRes }
-  if (!productsRes.error) {
-    coreCache.set(cycleId, { at: Date.now(), data })
-    if (coreCache.size > 50) coreCache.delete(coreCache.keys().next().value)
-  }
+  if (!productsRes.error) writeCatalogCore(cycleId, data)
   return data
 }
 
@@ -154,12 +149,16 @@ export async function GET(req) {
       .filter(Boolean)
       .map((b) => ({ code: b.code, name: b.name || b.code, cycleName: cycle.name || '' }))
 
+    // A branch is only offered when it actually has approved goods. A member
+    // whose own branch (or a stale saved pickup location) sells nothing here
+    // must still see the stands that do, instead of an empty catalogue.
     const requestedBranch = branchCodeFilter
       ? (branchRows || []).find((b) => String(b.code || '').toUpperCase() === branchCodeFilter)
       : null
+    const memberBranchId = Number(member.branch_id) || 0
     const selectedBranchId =
       Number(requestedBranch?.id) ||
-      Number(member.branch_id) ||
+      (branchIdsInCycle.includes(memberBranchId) ? memberBranchId : 0) ||
       branchIdsInCycle[0] ||
       0
     const selectedBranch = branchById.get(selectedBranchId) || null

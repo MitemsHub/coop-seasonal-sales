@@ -49,13 +49,15 @@ function ExhibitionShopContent() {
 
   const availableBranches = useMemo(() => catalog?.availableBranches || [], [catalog])
 
-  // One branch open → pick it once so the member is never asked.
+  // One branch open → pick it once so the member is never asked. A saved pickup
+  // location that no longer has stands must not strand the shop on an empty
+  // catalogue, so it is replaced by a branch that does.
   useEffect(() => {
-    if (availableBranches.length === 1 && !selectedBranch) {
-      const code = availableBranches[0].code
-      setSelectedBranch(code)
-      try { localStorage.setItem(`${STORAGE_KEY}_${memberId}`, code) } catch {}
-    }
+    if (!availableBranches.length) return
+    if (availableBranches.some((b) => b.code === selectedBranch)) return
+    const code = availableBranches[0].code
+    setSelectedBranch(code)
+    try { localStorage.setItem(`${STORAGE_KEY}_${memberId}`, code) } catch {}
   }, [availableBranches, selectedBranch, memberId])
 
   const handleBranchChange = (code) => {
