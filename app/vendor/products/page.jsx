@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Package, Pencil, Plus, Search, Trash2, Upload } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Archive, History, MoreVertical, Package, Pencil, Plus, Search, Trash2, Upload } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
@@ -28,6 +28,98 @@ const emptyForm = () => ({
   description: '',
   image_url: '',
 })
+
+// One tidy menu per row instead of three loose buttons.
+function RowActions({ product, onEdit, onArchive, onDelete }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    const onKey = (e) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  // A product the co-op has not approved can simply be deleted. Once it is
+  // approved it may already be on an order, so it is archived instead.
+  const canDelete = product.approval_status !== 'approved' || product.status === 'archived'
+  const itemClass = 'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm transition-colors'
+
+  return (
+    <div className="relative" ref={ref}>
+      <Button
+        variant="ghost"
+        size="sm"
+        leftIcon={MoreVertical}
+        onClick={() => setOpen((o) => !o)}
+        aria-label={`Actions for ${product.name}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      />
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full z-20 mt-1 w-44 rounded-xl border border-line bg-surface p-1 shadow-lg"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className={`${itemClass} text-fg hover:bg-subtle`}
+            onClick={() => {
+              setOpen(false)
+              onEdit()
+            }}
+          >
+            <Pencil className="h-4 w-4 text-muted" /> Edit
+          </button>
+          <a
+            role="menuitem"
+            href={`/vendor/products/${product.id}/history`}
+            className={`${itemClass} text-fg hover:bg-subtle`}
+            onClick={() => setOpen(false)}
+          >
+            <History className="h-4 w-4 text-muted" /> History
+          </a>
+          {canDelete ? (
+            <button
+              type="button"
+              role="menuitem"
+              className={`${itemClass} text-danger-fg hover:bg-danger-bg`}
+              onClick={() => {
+                setOpen(false)
+                onDelete()
+              }}
+            >
+              <Trash2 className="h-4 w-4" /> Delete
+            </button>
+          ) : (
+            <button
+              type="button"
+              role="menuitem"
+              className={`${itemClass} text-fg hover:bg-subtle`}
+              onClick={() => {
+                setOpen(false)
+                onArchive()
+              }}
+            >
+              <Archive className="h-4 w-4 text-muted" /> Archive
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function VendorProductsPage() {
   const [products, setProducts] = useState(null) // null = loading
@@ -224,7 +316,7 @@ export default function VendorProductsPage() {
           )}
         </EmptyState>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+        <div className="rounded-2xl border border-line bg-surface">
           <div className="divide-y divide-line">
             {paged.map((p) => (
               <div key={p.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
@@ -276,22 +368,12 @@ export default function VendorProductsPage() {
                       <p className="text-chips font-medium text-warning-fg">Awaiting approval: −{p.pending_discount_pct}%</p>
                     )}
                   </div>
-                  <div className="flex gap-1.5">
-                    <a
-                      href={`/vendor/products/${p.id}/history`}
-                      className="inline-flex items-center rounded-lg px-2 text-chips font-medium text-muted transition-colors hover:bg-subtle hover:text-fg"
-                    >
-                      History
-                    </a>
-                    <Button variant="ghost" size="sm" leftIcon={Pencil} onClick={() => openEdit(p)} aria-label={`Edit ${p.name}`} />
-                    {p.status === 'archived' ? (
-                      <Button variant="ghost" size="sm" leftIcon={Trash2} onClick={() => { setConfirmAction({ type: 'delete', product: p }); setConfirmOpen(true) }} aria-label={`Delete ${p.name}`} />
-                    ) : (
-                      <Button variant="ghost" size="sm" onClick={() => { setConfirmAction({ type: 'archive', product: p }); setConfirmOpen(true) }} aria-label={`Archive ${p.name}`}>
-                        Archive
-                      </Button>
-                    )}
-                  </div>
+                  <RowActions
+                    product={p}
+                    onEdit={() => openEdit(p)}
+                    onArchive={() => { setConfirmAction({ type: 'archive', product: p }); setConfirmOpen(true) }}
+                    onDelete={() => { setConfirmAction({ type: 'delete', product: p }); setConfirmOpen(true) }}
+                  />
                 </div>
               </div>
             ))}
@@ -425,8 +507,8 @@ export default function VendorProductsPage() {
         onConfirm={handleConfirm}
         title={confirmAction?.type === 'archive' ? 'Archive product?' : 'Delete product?'}
         message={confirmAction?.type === 'archive'
-          ? `Archive "${confirmAction?.product?.name}"? It stays on past orders but stops appearing in the shop.`
-          : `Delete "${confirmAction?.product?.name}"? This cannot be undone.`}
+          ? `Archive "${confirmAction?.product?.name}"? It stops appearing in the shop and cannot be sold again, but it stays in your records and on any past orders. Approved products are archived rather than deleted.`
+          : `Delete "${confirmAction?.product?.name}"? It is removed from your list for good. This cannot be undone.`}
         confirmLabel={confirmAction?.type === 'archive' ? 'Archive' : 'Delete'}
         variant={confirmAction?.type === 'archive' ? 'secondary' : 'danger'}
       />

@@ -140,7 +140,7 @@ export async function DELETE(req, { params }) {
 
     const { data: existing, error: existingError } = await supabase
       .from('exhibition_products')
-      .select('id, name')
+      .select('id, name, status, approval_status')
       .eq('id', id)
       .eq('vendor_id', ctx.vendor_id)
       .maybeSingle()
@@ -149,11 +149,25 @@ export async function DELETE(req, { params }) {
     }
     if (!existing) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
 
+    // Unapproved products are the vendor's own drafts and can go. An approved
+    // product may already be on a member's order, so it is archived instead.
+    if (existing.approval_status === 'approved' && existing.status !== 'archived') {
+      return NextResponse.json(
+        { error: `"${existing.name}" is already approved. Archive it instead of deleting it.` },
+        { status: 409 }
+      )
+    }
+
     const { error } = await supabase.from('exhibition_products').delete().eq('id', id).eq('vendor_id', ctx.vendor_id)
     if (error) {
       if (String(error?.code || '') === '23503') {
         return NextResponse.json(
-          { error: `"${existing.name}" is on an order and can't be deleted. Archive it instead.` },
+          {
+            error:
+              existing.status === 'archived'
+                ? `"${existing.name}" is on past orders, so it can't be deleted. It is already archived and no longer appears in the shop.`
+                : `"${existing.name}" is on an order and can't be deleted. Archive it instead.`,
+          },
           { status: 409 }
         )
       }
