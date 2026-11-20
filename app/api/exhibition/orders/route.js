@@ -18,7 +18,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { csrfGuard } from '@/lib/csrf'
-import { validateMemberId, validateNumber, validatePaymentOption } from '@/lib/validation'
+import { validateMemberId, validateNumber, validatePaymentOption, validateSession } from '@/lib/validation'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -44,15 +44,48 @@ async function allocateOrderId(supabase) {
   return String(data)
 }
 
-// GET /api/exhibition/orders?member_id=XXX — the member's exhibition orders
-// with their lines (used by the confirmation + any member-facing view).
+// GET /api/exhibition/orders — the caller's exhibition orders with their
+// lines (used by the confirmation + any member-facing view).
 // Pass &status_only=1 to fetch just order_id + status (used by the member's
 // status-toast poll so it stays light).
+//
+// Ownership comes from the signed session: a member only ever reads their own
+// orders, whatever member_id the URL carries. An admin may pass member_id to
+// read another member's orders (the /orders?admin=true view).
 export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url)
-    const memberId = String(searchParams.get('member_id') || '').trim().toUpperCase()
-    if (!memberId) return NextResponse.json({ ok: false, error: 'member_id is required' }, { status: 400 })
+    const requestedMemberId = String(searchParams.get('member_id') || '').trim().toUpperCase()
+
+    const session = await validateSession(req)
+    if (!session.valid) {
+      return NextResponse.json({ ok: false, error: 'Please sign in to view your orders.' }, { status: 401 })
+    }
+    const role = String(session.claims?.role || '')
+    const ownMemberId = String(session.claims?.member_id || '').trim().toUpperCase()
+
+    let memberId
+    if (role === 'member') {
+      if (!ownMemberId) {
+        return NextResponse.json(
+          { ok: false, error: 'Your session is missing a member id. Please sign in again.' },
+          { status: 401 }
+        )
+      }
+      if (requestedMemberId && requestedMemberId !== ownMemberId) {
+        return NextResponse.json({ ok: false, error: 'You can only view your own orders.' }, { status: 403 })
+      }
+      memberId = ownMemberId
+    } else if (role === 'admin') {
+      if (!requestedMemberId) {
+        return NextResponse.json({ ok: false, error: 'member_id is required' }, { status: 400 })
+      }
+      memberId = requestedMemberId
+    } else {
+      // Rep and vendor sessions carry no member identity; their member-facing
+      // order list is empty (the rep portal has its own exhibition view).
+      return NextResponse.json({ ok: true, orders: [] })
+    }
 
     const statusOnly = searchParams.get('status_only') === '1'
     const supabase = createClient()
@@ -95,10 +128,22 @@ export async function POST(req) {
   const csrfResponse = csrfGuard(req)
   if (csrfResponse) return csrfResponse
   try {
+    const session = await validateSession(req, 'member')
+    if (!session.valid) {
+      return NextResponse.json({ ok: false, error: 'Please sign in to place an order.' }, { status: 401 })
+    }
+
     const body = await req.json().catch(() => ({}))
 
-    const memberIdRes = validateMemberId(String(body.member_id || ''))
-    if (!memberIdRes.isValid) return NextResponse.json({ ok: false, error: memberIdRes.error }, { status: 400 })
+    // The order belongs to the signed-in member. Any member_id in the body is
+    // ignored, so nobody can order (or spend limits) on another account.
+    const memberIdRes = validateMemberId(String(session.claims?.member_id || ''))
+    if (!memberIdRes.isValid) {
+      return NextResponse.json(
+        { ok: false, error: 'Your session is missing a member id. Please sign in again.' },
+        { status: 401 }
+      )
+    }
 
     const paymentRes = validatePaymentOption(String(body.payment_option || ''))
     if (!paymentRes.isValid) return NextResponse.json({ ok: false, error: paymentRes.error }, { status: 400 })
