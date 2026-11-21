@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { validateSession } from '@/lib/validation'
 import { createClient } from '@/lib/supabaseServer'
 import { resolveFoodCycleId } from '@/lib/cycleResolve'
+import { invoiceFileLink } from '@/lib/invoiceStorage'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -245,8 +246,7 @@ export async function POST(req) {
         return NextResponse.json({ ok: false, error: `Could not save the invoice: ${insErr.message}` }, { status: 500 })
       }
 
-      const { data: urlData } = await supabase.storage.from(BUCKET).createSignedUrl(path, 60 * 60)
-      return NextResponse.json({ ok: true, action: 'complete', invoice: { ...inserted, url: urlData?.signedUrl || null } })
+      return NextResponse.json({ ok: true, action: 'complete', invoice: { ...inserted, url: invoiceFileLink('food', inserted) } })
     }
 
     return NextResponse.json({ ok: false, error: 'Unknown upload action' }, { status: 400 })

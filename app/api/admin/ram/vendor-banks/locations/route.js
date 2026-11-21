@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { validateSession } from '@/lib/validation'
 import { createClient } from '@/lib/supabaseServer'
+import { invoiceFileLink } from '@/lib/invoiceStorage'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -147,25 +148,17 @@ export async function GET(req) {
       invoiceCountByLocId.set(id, (invoiceCountByLocId.get(id) || 0) + 1)
     }
 
-    // Invoices grouped by account, with short-lived links, so the list shows
-    // them beside each bank instead of behind an action.
+    // Invoices grouped by account, each with the stable link the file route
+    // resolves, so the list shows them beside each bank instead of behind an
+    // action.
     const invoicesByBankId = new Map()
-    await Promise.all(
-      (invoicesRes.data || []).map(async (inv) => {
-        const bankId = Number(inv?.bank_account_id)
-        if (!Number.isFinite(bankId) || bankId <= 0) return
-        const bucket = String(inv.storage_bucket || '')
-        const path = String(inv.storage_path || '')
-        let url = null
-        if (bucket && path) {
-          const { data: signed } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60)
-          url = signed?.signedUrl || null
-        }
-        const list = invoicesByBankId.get(bankId) || []
-        list.push({ ...inv, url })
-        invoicesByBankId.set(bankId, list)
-      })
-    )
+    for (const inv of invoicesRes.data || []) {
+      const bankId = Number(inv?.bank_account_id)
+      if (!Number.isFinite(bankId) || bankId <= 0) continue
+      const list = invoicesByBankId.get(bankId) || []
+      list.push({ ...inv, url: invoiceFileLink('ram', inv) })
+      invoicesByBankId.set(bankId, list)
+    }
 
     const paidByLocId = new Map()
     for (const p of paidRes?.data || []) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { validateSession } from '@/lib/validation'
 import { createClient } from '@/lib/supabaseServer'
+import { invoiceFileLink } from '@/lib/invoiceStorage'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -158,8 +159,7 @@ export async function POST(req) {
 
     if (insErr) return NextResponse.json({ ok: false, error: insErr.message }, { status: 500 })
 
-    const { data: urlData } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60)
-    return NextResponse.json({ ok: true, invoice: { ...inserted, url: urlData?.signedUrl || null } })
+    return NextResponse.json({ ok: true, invoice: { ...inserted, url: invoiceFileLink('ram', inserted) } })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Internal server error' }, { status: 500 })
   }
