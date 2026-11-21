@@ -6,6 +6,7 @@
 // Uses Supabase Realtime for instant message delivery.
 // Features: search, read/unread filter, pagination, file sharing, notifications.
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import Link from 'next/link'
 import { MessageCircle, Send, ArrowLeft, Paperclip, AlertCircle, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { createClient } from '../../../lib/supabaseClient'
@@ -383,22 +384,35 @@ export default function AdminChatPage() {
       />
 
       {/* Title bar */}
-      <div className="flex items-center gap-3 border-b border-line-subtle px-5 py-3">
-        <MessageCircle className="h-5 w-5 text-brand" />
+      <div className="flex items-center gap-3 border-b border-line-subtle px-4 py-3 sm:px-5">
+        <MessageCircle className="h-5 w-5 shrink-0 text-brand" />
         <h1 className="text-lg font-semibold text-fg">Live Chat</h1>
-        <span className="relative flex h-2 w-2">
+        <span className="relative hidden h-2 w-2 shrink-0 sm:flex">
           <span className="absolute inline-flex h-full w-full motion-safe:animate-ping rounded-full bg-brand opacity-50" />
           <span className="relative inline-flex h-2 w-2 rounded-full bg-brand" />
         </span>
-        <span className="text-sm text-muted">
+        <span className="hidden text-sm text-muted sm:inline">
           {filteredConvs.length} conversation{filteredConvs.length !== 1 ? 's' : ''}
         </span>
-        {totalUnread > 0 && (
-          <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-danger/10 px-2.5 py-0.5 text-xs font-medium text-danger">
-            <AlertCircle className="h-3 w-3" />
-            {totalUnread} unread
-          </span>
-        )}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {totalUnread > 0 && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-danger/10 px-2.5 py-0.5 text-xs font-medium text-danger">
+              <AlertCircle className="h-3 w-3" />
+              {totalUnread} unread
+            </span>
+          )}
+          {/* Small screens replace the sidebar with this full-width chat, so it
+              needs its own X: the drawer that opens it is already closed by the
+              time the screen is showing. */}
+          <Link
+            href="/admin"
+            aria-label="Close chat"
+            title="Close chat"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted transition-colors hover:bg-subtle hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 md:hidden"
+          >
+            <X className="h-5 w-5" strokeWidth={2} />
+          </Link>
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1">
@@ -542,7 +556,9 @@ export default function AdminChatPage() {
               <div className="flex items-center gap-2 border-b border-line-subtle px-4 py-2.5">
                 <button
                   onClick={() => setSelectedId(null)}
-                  className="md:hidden inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-subtle hover:text-fg"
+                  aria-label="Back to conversations"
+                  title="Back to conversations"
+                  className="md:hidden inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-subtle hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </button>
