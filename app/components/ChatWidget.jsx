@@ -23,6 +23,10 @@ export default function ChatWidget() {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [bottomOffset, setBottomOffset] = useState(24) // default bottom-6
+  // The launcher floats over page content, so members need a way to make it go
+  // away. Dismissing hides it for this visit; a reload (or opening chat) brings
+  // it back, so nobody loses the way to reach us permanently.
+  const [dismissed, setDismissed] = useState(false)
   const scrollRef = useRef(null)
   const pollRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -346,26 +350,40 @@ export default function ChatWidget() {
         onChange={handleFileUpload}
       />
 
-      {/* Floating bubble */}
+      {/* Floating bubble (+ a dismiss X so it can't trap small screens) */}
       <AnimatePresence>
-        {!open && (
-          <motion.button
+        {!open && !dismissed && (
+          <motion.div
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-            onClick={() => { setOpen(true); setMinimized(false) }}
             style={{ bottom: `${bottomOffset}px` }}
-            className="fixed right-6 z-[90] flex h-14 w-14 items-center justify-center rounded-full bg-brand text-on-accent shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
-            aria-label="Open live chat"
+            className="fixed right-6 z-[90]"
           >
-            <MessageCircle className="h-6 w-6" />
-            {unread > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-danger text-[10px] font-bold text-white animate-pulse">
-                {unread > 9 ? '9+' : unread}
-              </span>
-            )}
-          </motion.button>
+            <button
+              type="button"
+              onClick={() => { setOpen(true); setMinimized(false) }}
+              className="relative flex h-14 w-14 items-center justify-center rounded-full bg-brand text-on-accent shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
+              aria-label="Open live chat"
+            >
+              <MessageCircle className="h-6 w-6" />
+              {unread > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-danger text-[10px] font-bold text-white animate-pulse">
+                  {unread > 9 ? '9+' : unread}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDismissed(true)}
+              className="absolute -left-1.5 -top-1.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-line bg-surface text-muted shadow-md transition-colors hover:bg-subtle hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+              aria-label="Hide chat button"
+              title="Hide chat"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -400,7 +418,7 @@ export default function ChatWidget() {
                 </button>
                 <button
                   onClick={() => setOpen(false)}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-on-accent/70 transition-colors hover:bg-on-accent/10 hover:text-on-accent"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-on-accent/70 transition-colors hover:bg-on-accent/10 hover:text-on-accent"
                   aria-label="Close chat"
                 >
                   <X className="h-4 w-4" />

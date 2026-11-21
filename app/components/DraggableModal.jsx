@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import useFocusTrap from '../hooks/useFocusTrap'
 
@@ -10,12 +11,21 @@ export default function DraggableModal({
   children,
   footer,
   overlayClassName = 'bg-transparent',
-  widthClass = 'max-w-md w-full mx-4'
+  widthClass = 'max-w-md w-full mx-4',
+  // 'start' keeps the long-standing top-aligned behaviour on tablet/desktop
+  // (large table modals); 'center' centres the panel at every width, which is
+  // what short, content-style popups want.
+  align = 'start'
 }) {
   const dragging = useRef(false)
   const start = useRef({ x: 0, y: 0 })
   const panelRef = useRef(null)
   const [pos, setPos] = useState({ x: 0, y: 0 })
+  // Render into <body>: a card that lifts on hover (`hover:-translate-y-*`)
+  // becomes the containing block for `position: fixed` descendants, which made
+  // a popup opened from a card size itself to the card instead of the screen.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   useEffect(() => {
     // Reset position whenever the modal opens
@@ -54,11 +64,13 @@ export default function DraggableModal({
 
   const stop = (e) => e.stopPropagation()
 
-  return (
+  if (!mounted) return null
+
+  return createPortal(
     <AnimatePresence>
       {open ? (
         <motion.div
-          className={`fixed inset-0 ${overlayClassName} flex items-center justify-center z-50 p-4 overflow-y-auto overscroll-contain sm:items-start`}
+          className={`fixed inset-0 ${overlayClassName} flex items-center justify-center z-50 p-4 overflow-y-auto overscroll-contain ${align === 'center' ? '' : 'sm:items-start'}`}
           onClick={onClose}
           role="dialog"
           aria-modal="true"
@@ -78,7 +90,7 @@ export default function DraggableModal({
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.985 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
-            className={`bg-surface rounded-xl border border-line shadow-xl outline-none max-h-[90vh] overflow-y-auto overscroll-contain ${widthClass}`}
+            className={`bg-surface rounded-xl border border-line shadow-xl outline-none max-h-[85dvh] overflow-y-auto overscroll-contain sm:max-h-[90vh] ${widthClass}`}
           >
             <div className="p-4 sm:p-6">
               <div
@@ -101,6 +113,7 @@ export default function DraggableModal({
           </motion.div>
         </motion.div>
       ) : null}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   )
 }

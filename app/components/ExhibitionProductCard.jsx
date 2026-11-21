@@ -18,20 +18,25 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
   const router = useRouter()
   const [viewOpen, setViewOpen] = useState(false)
 
+  // The inset lives on a wrapper, not on the image box: `fill` pins the image
+  // to inset-0, so padding on the padded parent was ignored and photos bled to
+  // the card's edges (flush against the top).
   const image = (
-    <Image
-      src={p.image_url || '/images/items/placeholder.svg'}
-      alt={p.name}
-      fill
-      sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 18vw"
-      // Contain, not cover: a photo the vendor framed themselves should show
-      // in full instead of losing its edges to the card.
-      className="object-contain transition-transform duration-500 ease-sakani group-hover:scale-[1.03]"
-      loading="lazy"
-      onError={(e) => {
-        e.currentTarget.src = '/images/items/placeholder.svg'
-      }}
-    />
+    <div className="absolute inset-1.5">
+      <Image
+        src={p.image_url || '/images/items/placeholder.svg'}
+        alt={p.name}
+        fill
+        sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 18vw"
+        // Contain, not cover: a photo the vendor framed themselves should show
+        // in full instead of losing its edges to the card.
+        className="object-contain transition-transform duration-500 ease-sakani group-hover:scale-[1.03]"
+        loading="lazy"
+        onError={(e) => {
+          e.currentTarget.src = '/images/items/placeholder.svg'
+        }}
+      />
+    </div>
   )
 
   return (
@@ -42,12 +47,12 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
           type="button"
           onClick={() => router.push(`/exhibition/vendor/${p.vendor_id}`)}
           aria-label={`View ${p.vendor_name || 'vendor'} hub`}
-          className="relative block aspect-[4/3] w-full overflow-hidden bg-white p-1 dark:bg-subtle"
+          className="relative block aspect-[4/3] w-full overflow-hidden bg-white dark:bg-subtle"
         >
           {image}
         </button>
       ) : (
-        <div className="relative block aspect-[4/3] w-full overflow-hidden bg-white p-1 dark:bg-subtle">{image}</div>
+        <div className="relative block aspect-[4/3] w-full overflow-hidden bg-white dark:bg-subtle">{image}</div>
       )}
 
       <div className="flex flex-1 flex-col p-2">
@@ -146,6 +151,7 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
         open={viewOpen}
         onClose={() => setViewOpen(false)}
         title="Product details"
+        align="center"
         footer={
           <Button variant="secondary" onClick={() => setViewOpen(false)}>
             Close
@@ -153,7 +159,7 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
         }
       >
         <div className="space-y-3">
-          <div className="relative flex h-52 w-full items-center justify-center overflow-hidden rounded-xl border border-line-subtle bg-white p-2 dark:bg-subtle">
+          <div className="relative flex h-36 w-full items-center justify-center overflow-hidden rounded-xl border border-line-subtle bg-white p-2 sm:h-52 dark:bg-subtle">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={p.image_url || '/images/items/placeholder.svg'}
@@ -191,7 +197,9 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
           </p>
           <div className="border-t border-line-subtle pt-3">
             <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Description</h4>
-            <p className="mt-1 whitespace-pre-line break-words text-sm leading-relaxed text-fg">
+            {/* Long descriptions scroll inside the popup instead of stretching
+                it past the viewport, which on phones pushed Close off-screen. */}
+            <p className="mt-1 max-h-40 overflow-y-auto overscroll-contain whitespace-pre-line break-words pr-1 text-sm leading-relaxed text-fg">
               {p.description}
             </p>
           </div>
