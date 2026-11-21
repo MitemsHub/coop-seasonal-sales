@@ -7,6 +7,7 @@ import Button from '../../../components/ui/Button'
 import FilePicker from '../../../components/ui/FilePicker'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import AdminBankAccountsModal from '../../../components/AdminBankAccountsModal'
+import ConfirmDialog from '../../../components/ui/ConfirmDialog'
 
 function safeJsonFactory() {
   return async (res, label) => {
@@ -60,6 +61,7 @@ function AdminFoodBanksContent() {
   const [invoiceUploading, setInvoiceUploading] = useState(false)
   const [accountBusy, setAccountBusy] = useState(0)
   const [accountDeleting, setAccountDeleting] = useState(0)
+  const [accountDeleteTarget, setAccountDeleteTarget] = useState(null)
 
   const [topBranchId, setTopBranchId] = useState('')
   const [addBankOpen, setAddBankOpen] = useState(false)
@@ -176,7 +178,9 @@ function AdminFoodBanksContent() {
     }
   }
 
-  const deleteAccount = async (row, bank) => {
+  // Removal is confirmed in the app's own dialog, not the browser's native
+  // confirm — the native popup cannot be styled and can be blocked outright.
+  const confirmDeleteAccount = (row, bank) => {
     const accountId = Number(bank?.id)
     const ownerId = Number(row?.id)
     if (!Number.isFinite(accountId) || accountId <= 0 || !Number.isFinite(ownerId) || ownerId <= 0) return
@@ -184,10 +188,16 @@ function AdminFoodBanksContent() {
       setMsg({ type: 'error', text: 'Mark this account unpaid before removing it.' })
       return
     }
-    if (typeof window !== 'undefined') {
-      const label = `${bank?.bank_name || 'this account'}${bank?.account_number ? ` · ${bank.account_number}` : ''}`
-      if (!window.confirm(`Remove ${label}? Its invoices stay on the branch and can be filed to another account.`)) return
-    }
+    setAccountDeleteTarget({ row, bank })
+  }
+
+  const deleteAccount = async () => {
+    const row = accountDeleteTarget?.row
+    const bank = accountDeleteTarget?.bank
+    const accountId = Number(bank?.id)
+    const ownerId = Number(row?.id)
+    if (!Number.isFinite(accountId) || accountId <= 0 || !Number.isFinite(ownerId) || ownerId <= 0) return
+    if (accountDeleting) return
     setAccountDeleting(accountId)
     setMsg(null)
     try {
@@ -204,6 +214,7 @@ function AdminFoodBanksContent() {
       setMsg({ type: 'error', text: e?.message || 'Failed to remove account' })
     } finally {
       setAccountDeleting(0)
+      setAccountDeleteTarget(null)
     }
   }
 
@@ -704,7 +715,7 @@ function AdminFoodBanksContent() {
                                 if (v === 'manage') setBanksFor(r)
                                 if (v === 'paid') setAccountPaid(r, b, true)
                                 if (v === 'unpaid') setAccountPaid(r, b, false)
-                                if (v === 'delete') deleteAccount(r, b)
+                                if (v === 'delete') confirmDeleteAccount(r, b)
                               }}
                             >
                               <option value="" disabled>
@@ -1072,6 +1083,22 @@ function AdminFoodBanksContent() {
         ownerId={banksFor?.id}
         ownerName={banksFor?.name}
         onChanged={fetchRows}
+      />
+
+      <ConfirmDialog
+        open={!!accountDeleteTarget}
+        onClose={() => {
+          if (accountDeleting) return
+          setAccountDeleteTarget(null)
+        }}
+        onConfirm={deleteAccount}
+        title="Remove account?"
+        message={`Remove ${
+          accountDeleteTarget?.bank?.bank_name || 'this account'
+        }${accountDeleteTarget?.bank?.account_number ? ` · ${accountDeleteTarget.bank.account_number}` : ''}? Its invoices stay on the branch and can be filed to another account.`}
+        confirmLabel={accountDeleting ? 'Removing…' : 'Remove account'}
+        variant="danger"
+        loading={!!accountDeleting}
       />
     </div>
   )
