@@ -6,13 +6,17 @@
 // stock and the qty stepper all live here so the three surfaces can't drift.
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import { Minus, Plus } from 'lucide-react'
 import Badge from './ui/Badge'
+import Button from './ui/Button'
+import DraggableModal from './DraggableModal'
 
 const naira = (v) => `₦${Number(v || 0).toLocaleString()}`
 
 export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true }) {
   const router = useRouter()
+  const [viewOpen, setViewOpen] = useState(false)
 
   const image = (
     <Image
@@ -41,9 +45,6 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
           className="relative block aspect-[4/3] w-full overflow-hidden bg-white p-1 dark:bg-subtle"
         >
           {image}
-          <span className="absolute left-2 top-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
-            {p.vendor_name}
-          </span>
         </button>
       ) : (
         <div className="relative block aspect-[4/3] w-full overflow-hidden bg-white p-1 dark:bg-subtle">{image}</div>
@@ -54,9 +55,19 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
             (or the grid row) and squash the price and stepper. */}
         <div className="line-clamp-2 break-words text-xs font-semibold leading-snug text-fg" title={p.name}>{p.name}</div>
         {!!p.description && (
-          <p className="mt-0.5 line-clamp-2 break-words text-[11px] leading-snug text-muted" title={p.description}>
-            {p.description}
-          </p>
+          <div className="mt-0.5 flex items-start gap-1">
+            <p className="line-clamp-2 min-w-0 flex-1 break-words text-[11px] leading-snug text-muted" title={p.description}>
+              {p.description}
+            </p>
+            <button
+              type="button"
+              onClick={() => setViewOpen(true)}
+              aria-label={`View details for ${p.name}`}
+              className="shrink-0 text-[11px] font-semibold leading-snug text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+            >
+              View
+            </button>
+          </div>
         )}
         <div className="mb-1.5 mt-0.5 flex flex-wrap items-center gap-x-1 text-chips text-muted">
           <span>{p.unit}</span>
@@ -130,6 +141,62 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
           </div>
         )}
       </div>
+
+      <DraggableModal
+        open={viewOpen}
+        onClose={() => setViewOpen(false)}
+        title="Product details"
+        footer={
+          <Button variant="secondary" onClick={() => setViewOpen(false)}>
+            Close
+          </Button>
+        }
+      >
+        <div className="space-y-3">
+          <div className="relative flex h-52 w-full items-center justify-center overflow-hidden rounded-xl border border-line-subtle bg-white p-2 dark:bg-subtle">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={p.image_url || '/images/items/placeholder.svg'}
+              alt={p.name}
+              className="h-full w-full object-contain"
+              onError={(e) => {
+                e.currentTarget.src = '/images/items/placeholder.svg'
+              }}
+            />
+          </div>
+          <div>
+            <h3 className="break-words text-base font-semibold text-fg">{p.name}</h3>
+            {showVendor && p.vendor_name && (
+              <p className="mt-0.5 text-chips text-muted">{p.vendor_name}</p>
+            )}
+          </div>
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="text-lg font-bold text-brand tabular-nums">{naira(p.price)}</span>
+            {!p.negotiated && p.final_price !== p.price && (
+              <span className="text-sm text-muted line-through">{naira(p.final_price)}</span>
+            )}
+            {p.discount_pct > 0 && (
+              <span className="rounded-full bg-danger-bg px-1.5 py-0.5 text-[10px] font-semibold text-danger-fg">
+                −{p.discount_pct}%
+              </span>
+            )}
+          </div>
+          <p className="flex flex-wrap items-center gap-x-1.5 text-chips text-muted">
+            <span>{p.unit}</span>
+            {p.qty !== null && p.qty !== undefined && (
+              <span className={p.qty > 0 ? 'font-medium text-success-fg' : 'font-medium text-danger-fg'}>
+                · {p.qty > 0 ? `${p.qty} left` : 'Sold out'}
+              </span>
+            )}
+          </p>
+          <div className="border-t border-line-subtle pt-3">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Description</h4>
+            <p className="mt-1 whitespace-pre-line break-words text-sm leading-relaxed text-fg">
+              {p.description}
+            </p>
+          </div>
+        </div>
+      </DraggableModal>
     </div>
   )
 }
