@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { validateSession } from '@/lib/validation'
 import { createClient } from '@/lib/supabaseServer'
+import { invoiceFileLink } from '@/lib/invoiceStorage'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -73,15 +74,7 @@ export async function GET(req) {
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
-    const signed = await Promise.all(
-      (rows || []).map(async (r) => {
-        const bucket = String(r.storage_bucket || '')
-        const path = String(r.storage_path || '')
-        if (!bucket || !path) return { ...r, url: null }
-        const { data: urlData } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60)
-        return { ...r, url: urlData?.signedUrl || null }
-      })
-    )
+    const signed = (rows || []).map((r) => ({ ...r, url: invoiceFileLink('ram', r) }))
 
     return NextResponse.json({ ok: true, invoices: signed })
   } catch (e) {

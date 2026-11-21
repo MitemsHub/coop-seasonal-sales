@@ -7,6 +7,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession } from '@/lib/validation'
+import { invoiceFileLink } from '@/lib/invoiceStorage'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -85,13 +86,7 @@ export async function GET(request) {
           invoiceCounts.set(String(r.vendor_id), (invoiceCounts.get(String(r.vendor_id)) || 0) + 1)
           const bankId = Number(r.bank_account_id)
           if (!Number.isFinite(bankId) || bankId <= 0) return
-          const bucket = String(r.storage_bucket || '')
-          const path = String(r.storage_path || '')
-          let url = null
-          if (bucket && path) {
-            const { data: signed } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60)
-            url = signed?.signedUrl || null
-          }
+          const url = invoiceFileLink('exhibition', r)
           const list = invoicesByBankId.get(bankId) || []
           list.push({ ...r, url })
           invoicesByBankId.set(bankId, list)

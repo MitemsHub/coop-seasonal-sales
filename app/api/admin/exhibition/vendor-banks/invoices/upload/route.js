@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { validateSession } from '@/lib/validation'
 import { createClient } from '@/lib/supabaseServer'
-import { uploadInvoiceFile } from '@/lib/invoiceStorage'
+import { uploadInvoiceFile, invoiceFileLink } from '@/lib/invoiceStorage'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -138,7 +138,7 @@ export async function POST(req) {
 
     if (insErr) return NextResponse.json({ ok: false, error: insErr.message }, { status: 500 })
 
-    return NextResponse.json({ ok: true, invoice: { ...inserted, url: stored.url } })
+    return NextResponse.json({ ok: true, invoice: { ...inserted, url: invoiceFileLink('exhibition', inserted) } })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Internal server error' }, { status: 500 })
   }

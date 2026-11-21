@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { validateSession } from '@/lib/validation'
 import { createClient } from '@/lib/supabaseServer'
-import { invoiceFileUrl } from '@/lib/invoiceStorage'
+import { invoiceFileLink } from '@/lib/invoiceStorage'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -66,9 +66,7 @@ export async function GET(req) {
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
-    const withUrl = await Promise.all(
-      (rows || []).map(async (r) => ({ ...r, url: await invoiceFileUrl(supabase, r) }))
-    )
+    const withUrl = (rows || []).map((r) => ({ ...r, url: invoiceFileLink('exhibition', r) }))
 
     return NextResponse.json({ ok: true, invoices: withUrl })
   } catch (e) {

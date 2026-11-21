@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { validateSession } from '@/lib/validation'
 import { createClient } from '@/lib/supabaseServer'
 import { resolveFoodCycleId } from '@/lib/cycleResolve'
+import { invoiceFileLink } from '@/lib/invoiceStorage'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -87,15 +88,8 @@ export async function GET(req) {
 
     const out = await Promise.all(
       (invoices || []).map(async (inv) => {
-        const bucket = String(inv.storage_bucket || '')
-        const path = String(inv.storage_path || '')
-        let url = null
-        if (bucket && path) {
-          const { data: urlData } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60)
-          url = urlData?.signedUrl || null
-        }
         const paid = paidByBankId.get(Number(inv.bank_account_id)) || { is_paid: false, paid_at: null }
-        return { ...inv, ...paid, url }
+        return { ...inv, ...paid, url: invoiceFileLink('food', inv) }
       })
     )
 

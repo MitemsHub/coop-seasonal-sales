@@ -8,6 +8,7 @@
 // it, and a paid status. There is no primary account.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
+import { invoiceFileLink } from '@/lib/invoiceStorage'
 import { validateSession } from '@/lib/validation'
 import { resolveFoodCycle } from '@/lib/cycleResolve'
 
@@ -161,7 +162,7 @@ async function loadContext(supabase, module, ownerId) {
     ? true
     : await hasColumn(supabase, meta.table, meta.cycleCol).catch(() => false)
 
-  return { meta, owner, cycleId, branchId, bankHasCycle, paidLock }
+  return { module, meta, owner, cycleId, branchId, bankHasCycle, paidLock }
 }
 
 function scoped(query, ctx, ownerId) {
@@ -185,15 +186,10 @@ async function listAccounts(supabase, ctx, ownerId) {
 const INVOICE_SELECT =
   'id,bank_account_id,invoice_ref,invoice_date,amount,notes,storage_bucket,storage_path,file_name,mime_type,file_size,created_by_role,created_by_code,created_at'
 
-async function withUrl(supabase, inv) {
-  const bucket = String(inv.storage_bucket || '')
-  const path = String(inv.storage_path || '')
-  let url = null
-  if (bucket && path) {
-    const { data: signed } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60)
-    url = signed?.signedUrl || null
-  }
-  return { ...inv, url }
+// A stable, session-guarded link instead of a long signed URL — see
+// /api/vendor-invoices/[kind]/[id]/file.
+function withUrl(supabase, inv, kind) {
+  return { ...inv, url: invoiceFileLink(kind, inv) }
 }
 
 // The invoices filed against each account, with short-lived links so the admin
@@ -222,7 +218,7 @@ async function withInvoices(supabase, ctx, accounts) {
   return Promise.all(
     accounts.map(async (account) => {
       const rows = byAccount.get(Number(account.id)) || []
-      const invoices = await Promise.all(rows.map((inv) => withUrl(supabase, inv)))
+      const invoices = rows.map((inv) => withUrl(supabase, inv, ctx.module))
       const total = rows.reduce((sum, inv) => sum + Number(inv.amount || 0), 0)
       return { ...account, invoices, invoice_total: total }
     })
@@ -244,7 +240,7 @@ async function listUnassignedInvoices(supabase, ctx, ownerId) {
   if (hasCycle && ctx.cycleId) q = q.eq(meta.invoiceCycleCol, ctx.cycleId)
   const { data, error } = await q.order('created_at', { ascending: false })
   if (error) return []
-  return Promise.all((data || []).map((inv) => withUrl(supabase, inv)))
+  return (data || []).map((inv) => withUrl(supabase, inv, ctx.module))
 }
 
 async function respondWithAccounts(supabase, ctx, ownerId, extra = {}) {

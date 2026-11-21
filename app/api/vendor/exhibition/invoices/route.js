@@ -7,7 +7,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { getVendorContext } from '../../_session'
-import { uploadInvoiceFile, invoiceFileUrl, removeInvoiceFile } from '@/lib/invoiceStorage'
+import { uploadInvoiceFile, invoiceFileLink, removeInvoiceFile } from '@/lib/invoiceStorage'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -54,9 +54,7 @@ export async function GET(req) {
     const { data: rows, error } = await q
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
-    const withUrl = await Promise.all(
-      (rows || []).map(async (r) => ({ ...r, url: await invoiceFileUrl(supabase, r) }))
-    )
+    const withUrl = (rows || []).map((r) => ({ ...r, url: invoiceFileLink('exhibition', r) }))
 
     return NextResponse.json({ ok: true, invoices: withUrl, cycle_id: cycleId })
   } catch (e) {
@@ -125,7 +123,7 @@ export async function POST(req) {
       .single()
     if (insErr) return NextResponse.json({ ok: false, error: insErr.message }, { status: 500 })
 
-    return NextResponse.json({ ok: true, invoice: { ...inserted, url: stored.url } })
+    return NextResponse.json({ ok: true, invoice: { ...inserted, url: invoiceFileLink('exhibition', inserted) } })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Failed to upload invoice' }, { status: 500 })
   }
