@@ -47,9 +47,16 @@ export default function ExhibitionProductsPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
 
-  const load = useCallback(async () => {
+  // keepMessage: a caller that is about to show its own confirmation (approve,
+  // reject) must not have it wiped by the refresh it triggers. Without this the
+  // success banner was set and then cleared in the same tick, so a completed
+  // approval looked like nothing had happened.
+  const load = useCallback(async ({ keepMessage = false } = {}) => {
     setLoading(true)
-    setMsg(null)
+    if (!keepMessage) setMsg(null)
+    // Returns the rows it just fetched, so a caller can report on the queue it
+    // acted on without a second round trip.
+    let fetched = []
     try {
       const params = new URLSearchParams()
       if (cycleFilter) params.set('cycle_id', cycleFilter)
@@ -62,7 +69,8 @@ export default function ExhibitionProductsPage() {
         fetch('/api/admin/exhibition/vendors', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
       ])
       if (p?.ok) {
-        setProducts(p.products || [])
+        fetched = p.products || []
+        setProducts(fetched)
         setPage(1)
       } else setMsg({ type: 'error', text: p?.error || 'Failed to load products' })
       if (c?.ok) setCycles(c.cycles || [])
@@ -72,6 +80,7 @@ export default function ExhibitionProductsPage() {
     } finally {
       setLoading(false)
     }
+    return fetched
   }, [cycleFilter, vendorFilter, statusFilter, term])
 
   useEffect(() => {
@@ -141,11 +150,11 @@ export default function ExhibitionProductsPage() {
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to update approval')
+      await load({ keepMessage: true })
       setMsg({
         type: 'success',
         text: action === 'approve' ? `"${p.name}" approved and published.` : `"${p.name}" rejected.`,
       })
-      await load()
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
     } finally {
@@ -163,23 +172,54 @@ export default function ExhibitionProductsPage() {
     setBusy(true)
     setMsg(null)
     const BATCH = 200
-    let approved = 0
+    const approvedIds = new Set()
+    let failure = null
     try {
       for (let i = 0; i < ids.length; i += BATCH) {
-        const res = await fetch('/api/admin/exhibition/products/bulk', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'approve', ids: ids.slice(i, i + BATCH) }),
-        })
-        const json = await res.json().catch(() => ({}))
-        if (!res.ok || !json.ok) throw new Error(json.error || 'Bulk approval failed')
-        approved += (json.approved || []).length
+        try {
+          const res = await fetch('/api/admin/exhibition/products/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'approve', ids: ids.slice(i, i + BATCH) }),
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok || !json.ok) {
+            failure = json.error || 'Bulk approval failed'
+            break
+          }
+          // The route reports rows it could not write separately; those stay
+          // pending, so keep going with the next batch instead of losing it.
+          for (const id of json.approved || []) approvedIds.add(Number(id))
+        } catch (e) {
+          failure = e.message || 'Bulk approval failed'
+          break
+        }
       }
-      setMsg({ type: 'success', text: `${approved} product(s) approved and published.` })
-      await load()
-    } catch (e) {
-      setMsg({ type: 'error', text: e.message })
     } finally {
+      // A batch can die after some of its rows were written, so count what is
+      // actually still pending from the refreshed list rather than trusting our
+      // own tally. (approval_status, not status — a pending product is usually
+      // still a draft.)
+      const fresh = await load({ keepMessage: true })
+      const wanted = new Set(ids.map(Number))
+      const stillPending = Array.isArray(fresh) && fresh.length
+        ? fresh.filter((p) => wanted.has(Number(p.id)) && p.approval_status === 'pending').length
+        : Math.max(0, ids.length - approvedIds.size)
+
+      const done = approvedIds.size
+      if (!failure && stillPending === 0) {
+        setMsg({ type: 'success', text: `${done} product(s) approved and published.` })
+      } else if (done > 0) {
+        setMsg({
+          type: 'error',
+          text: `${done} of ${ids.length} approved and published — ${stillPending} still pending${failure ? ` (${failure})` : ''}. Approve again to finish the queue.`,
+        })
+      } else {
+        setMsg({
+          type: 'error',
+          text: `Nothing was approved — ${stillPending || ids.length} still pending${failure ? `: ${failure}` : ''}.`,
+        })
+      }
       setBusy(false)
     }
   }
