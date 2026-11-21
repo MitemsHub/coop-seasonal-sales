@@ -450,6 +450,11 @@ export default function ExhibitionReportsPage() {
         ws.addRow(['TOTAL', '', '', '', '', '', '', '', '', '', totalQty, '', totalAmt])
       }
 
+      // Money and counts read as 15,000 in every vendor sheet while staying numeric.
+      for (const sheet of wb.worksheets) {
+        for (const col of [11, 12, 13]) sheet.getColumn(col).numFmt = '#,##0'
+      }
+
       const buffer = await wb.xlsx.writeBuffer()
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
       const url = URL.createObjectURL(blob)
@@ -619,7 +624,9 @@ export default function ExhibitionReportsPage() {
         'Order Value': Number(v.value || 0),
         Share: s?.amount ? `${((v.value / s.amount) * 100).toFixed(1)}%` : '0%',
       }))
-      await downloadExcelWorkbook(`exhibition-vendors-${fileStamp()}.xlsx`, [{ name: 'Vendors', rows }])
+      await downloadExcelWorkbook(`exhibition-vendors-${fileStamp()}.xlsx`, [
+        { name: 'Vendors', rows, formats: { 'Order Value': '#,##0' } },
+      ])
     } catch (e) {
       alert(e.message || 'Excel export failed')
     } finally {
@@ -685,7 +692,9 @@ export default function ExhibitionReportsPage() {
       if (isPdf) {
         await buildPdf('Exhibition · Applications by Branch', rows, headers)()
       } else {
-        await downloadExcelWorkbook(`exhibition-apps-branch-${fileStamp()}.xlsx`, [{ name: 'Applications', rows }])
+        await downloadExcelWorkbook(`exhibition-apps-branch-${fileStamp()}.xlsx`, [
+          { name: 'Applications', rows, formats: { Qty: '#,##0', Amount: '#,##0' } },
+        ])
       }
     } catch (e) { alert(e.message || 'Export failed') }
     finally {

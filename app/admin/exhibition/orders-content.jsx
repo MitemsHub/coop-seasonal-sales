@@ -292,6 +292,9 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
       ws.addRow([`Cycle: ${cycleFilter ? cycles.find((c) => String(c.id) === String(cycleFilter))?.name || cycleFilter : 'All'} | Payment: ${payment || 'All'} | Search: ${term || 'All'}`])
       ws.addRow(headers)
       for (const r of body) ws.addRow(r)
+      // Qty and Total + Int as thousands-separated numbers.
+      ws.getColumn(8).numFmt = '#,##0'
+      ws.getColumn(9).numFmt = '#,##0'
       const buffer = await wb.xlsx.writeBuffer()
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
       const url = URL.createObjectURL(blob)
