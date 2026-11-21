@@ -4,7 +4,7 @@
 // method (Savings / Loan / Cash), eligibility-aware summary and submit.
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import {
@@ -58,6 +58,7 @@ function ExhibitionCartContent() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(true)
   const [holdExpiresAt, setHoldExpiresAt] = useState(null)
+  const [holdRemaining, setHoldRemaining] = useState(0)
   const [holdError, setHoldError] = useState('')
 
   const emitToast = (type, text) => {
@@ -150,6 +151,37 @@ function ExhibitionCartContent() {
   // Reserve these units while the member finishes checkout, so nobody else
   // takes them. It is a courtesy hold: the order's atomic decrement at
   // checkout is still the real reservation.
+  const placeHold = useCallback(async () => {
+    if (!memberId || !cart.length) return false
+    try {
+      let branch = deliveryBranch
+      if (!branch) {
+        try { branch = localStorage.getItem(`exhibitionDeliveryBranch_${memberId}`) || '' } catch {}
+      }
+      const res = await fetch('/api/exhibition/holds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          member_id: memberId,
+          branch_code: branch || '',
+          lines: cart.map((l) => ({ product_id: l.product_id, qty: l.qty })),
+        }),
+      })
+      const json = await res.json().catch(() => null)
+      if (json?.ok) {
+        setHoldExpiresAt(json.expires_at || null)
+        setHoldError('')
+        return true
+      }
+      setHoldExpiresAt(null)
+      setHoldError(json?.error || 'Could not hold these items right now.')
+      return false
+    } catch {
+      // Offline — checkout will still reject if stock has gone.
+      return false
+    }
+  }, [memberId, deliveryBranch, cart])
+
   useEffect(() => {
     if (!memberId) return
     if (!cart.length) {
@@ -162,35 +194,39 @@ function ExhibitionCartContent() {
       }).catch(() => {})
       return
     }
-    const timer = setTimeout(async () => {
-      try {
-        let branch = deliveryBranch
-        if (!branch) {
-          try { branch = localStorage.getItem(`exhibitionDeliveryBranch_${memberId}`) || '' } catch {}
-        }
-        const res = await fetch('/api/exhibition/holds', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            member_id: memberId,
-            branch_code: branch || '',
-            lines: cart.map((l) => ({ product_id: l.product_id, qty: l.qty })),
-          }),
-        })
-        const json = await res.json().catch(() => null)
-        if (json?.ok) {
-          setHoldExpiresAt(json.expires_at || null)
-          setHoldError('')
-        } else {
-          setHoldExpiresAt(null)
-          setHoldError(json?.error || 'Could not hold these items right now.')
-        }
-      } catch {
-        // Offline — checkout will still reject if stock has gone.
-      }
-    }, 700)
+    const timer = setTimeout(placeHold, 700)
     return () => clearTimeout(timer)
-  }, [memberId, deliveryBranch, cart])
+  }, [memberId, cart.length, placeHold])
+
+  // Live countdown to the hold's expiry. It ticks down to 00:00 on the cart
+  // summary instead of leaving a fixed clock time that silently goes stale.
+  useEffect(() => {
+    if (!holdExpiresAt) {
+      setHoldRemaining(0)
+      return
+    }
+    const tick = () =>
+      setHoldRemaining(Math.max(0, Math.ceil((new Date(holdExpiresAt).getTime() - Date.now()) / 1000)))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [holdExpiresAt])
+
+  // 00:00 — the hold is over. It ends rather than renewing: an idle tab must
+  // not keep stock off the market indefinitely. The server already stops
+  // honouring the hold once expires_at passes, so this only clears local state
+  // (no release call, which could delete a fresh hold placed in the same
+  // moment). A new hold is placed when the cart changes again.
+  useEffect(() => {
+    if (!holdExpiresAt) return
+    if (new Date(holdExpiresAt).getTime() > Date.now()) return
+    setHoldExpiresAt(null)
+    setHoldRemaining(0)
+    setHoldError(
+      'Your 10-minute hold has ended, so these items are available to other members again. Nothing is reserved until you place the order — check the quantities before you check out.'
+    )
+    toast.error('Your 10-minute hold ran out. The items are back on the market — review your cart before checking out.')
+  }, [holdExpiresAt, holdRemaining, toast])
 
   // Cross-tab freshness — the hook delivers the stored cart on mount and on
   // every external change (the shop, a vendor hub, another tab), skipping our
@@ -609,14 +645,21 @@ function ExhibitionCartContent() {
                     <p className="text-chips text-warning-fg">{holdError}</p>
                   </div>
                 ) : holdExpiresAt ? (
-                  <div className="mt-3 flex items-center gap-1.5 rounded-lg bg-success-bg/50 px-2.5 py-2 text-chips text-success-fg">
+                  <div
+                    className={[
+                      'mt-3 flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-chips',
+                      holdRemaining <= 60 ? 'bg-warning-bg/60 text-warning-fg' : 'bg-success-bg/50 text-success-fg',
+                    ].join(' ')}
+                  >
                     <Clock className="h-3.5 w-3.5 shrink-0" strokeWidth={2.2} />
                     <span>
-                      Held for you until{' '}
+                      Held for you —{' '}
                       <strong className="font-semibold tabular-nums">
-                        {new Date(holdExpiresAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                        {Math.floor(holdRemaining / 60)}:{String(holdRemaining % 60).padStart(2, '0')}
                       </strong>{' '}
-                      — finish checkout to keep the stock.
+                      left (until{' '}
+                      {new Date(holdExpiresAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                      ). Finish checkout to keep the stock.
                     </span>
                   </div>
                 ) : null}
