@@ -272,7 +272,7 @@ export default function VendorProductsPage() {
             {paged.map((p) => (
               <div key={p.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
                 {p.image_url ? (
-                  <img src={p.image_url} alt={p.name} className="h-14 w-14 shrink-0 rounded-xl border border-line-subtle object-cover" />
+                  <img src={p.image_url} alt={p.name} className="h-14 w-14 shrink-0 rounded-xl border border-line-subtle bg-subtle object-contain" />
                 ) : (
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-subtle text-muted">
                     <Package className="h-6 w-6" strokeWidth={1.5} />
