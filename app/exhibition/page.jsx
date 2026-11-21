@@ -6,13 +6,14 @@
 //   3. Featured stands — an auto-sliding rail through every stand
 //   4. category chips
 //   5. a short "Popular at this location" product preview (8 items), with
-//      "See all" going to the full catalogue
+//      "View all" going to the full catalogue
 //
 // The stands remain the point of the page: products are a preview, not an
-// endless feed. "All products" / "See all" open /exhibition/all.
+// endless feed. The Featured stands "View all" opens /exhibition/stands (the
+// stands directory); "View all" under the products opens /exhibition/all.
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MapPin, Search, Store, Tag, X } from 'lucide-react'
 import ProtectedRoute from '../components/ProtectedRoute'
@@ -21,76 +22,36 @@ import ContinueShoppingBanner from '../components/ContinueShoppingBanner'
 import ExhibitionHubs from '../components/ExhibitionHubs'
 import ExhibitionProductCard from '../components/ExhibitionProductCard'
 import CartStickyBar from '../components/CartStickyBar'
-import useExhibitionCatalog from '../hooks/useExhibitionCatalog'
+import useExhibitionBranch from '../hooks/useExhibitionBranch'
 import useExhibitionCart from '../hooks/useExhibitionCart'
 import ModuleClosedPanel from '../components/ModuleClosedPanel'
 import AmbientBackdrop from '../components/AmbientBackdrop'
 import Skeleton from '../components/ui/Skeleton'
-import { useAuth } from '../contexts/AuthContext'
+import { countVendorProducts, searchStands, standsWithProducts } from '../../lib/exhibitionStands'
 
-const STORAGE_KEY = 'exhibitionDeliveryBranch'
 const PREVIEW_COUNT = 8
 
 function ExhibitionShopContent() {
   const router = useRouter()
-  const { user } = useAuth()
-  const memberId = String(user?.id || '').trim().toUpperCase()
-
   // Delivery location — persisted so the cart, stand pages and re-visits agree.
-  const [selectedBranch, setSelectedBranch] = useState(() => {
-    try { return localStorage.getItem(`${STORAGE_KEY}_${memberId}`) || '' } catch { return '' }
-  })
-  const { catalog, error, loading } = useExhibitionCatalog(selectedBranch)
+  const { catalog, error, loading, availableBranches, branchCode, branchName, changeBranch } = useExhibitionBranch()
   const { addToCart, qtyOf, cartCount, cartTotal } = useExhibitionCart()
 
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState('all') // all | stands | products
   const [categoryId, setCategoryId] = useState(null)
 
-  const availableBranches = useMemo(() => catalog?.availableBranches || [], [catalog])
-
-  // One branch open → pick it once so the member is never asked. A saved pickup
-  // location that no longer has stands must not strand the shop on an empty
-  // catalogue, so it is replaced by a branch that does.
-  useEffect(() => {
-    if (!availableBranches.length) return
-    if (availableBranches.some((b) => b.code === selectedBranch)) return
-    const code = availableBranches[0].code
-    setSelectedBranch(code)
-    try { localStorage.setItem(`${STORAGE_KEY}_${memberId}`, code) } catch {}
-  }, [availableBranches, selectedBranch, memberId])
-
-  const handleBranchChange = (code) => {
-    setSelectedBranch(code)
-    try { localStorage.setItem(`${STORAGE_KEY}_${memberId}`, code) } catch {}
-  }
-
   const products = useMemo(() => catalog?.products || [], [catalog])
   const vendors = useMemo(() => catalog?.vendors || [], [catalog])
   const categories = useMemo(() => catalog?.categories || [], [catalog])
 
-  const vendorCounts = useMemo(() => {
-    const map = {}
-    for (const p of products) map[p.vendor_id] = (map[p.vendor_id] || 0) + 1
-    return map
-  }, [products])
+  const vendorCounts = useMemo(() => countVendorProducts(products), [products])
 
   // Only stands that actually have something to sell belong in the rail.
-  const standsWithProducts = useMemo(() => {
-    const ids = new Set(products.map((p) => p.vendor_id))
-    return vendors.filter((v) => ids.has(v.id))
-  }, [vendors, products])
+  const sellableStands = useMemo(() => standsWithProducts(vendors, products), [vendors, products])
 
   const q = query.trim().toLowerCase()
-
-  const stands = useMemo(() => {
-    if (!q) return standsWithProducts
-    return standsWithProducts.filter(
-      (v) =>
-        String(v.name || '').toLowerCase().includes(q) ||
-        String(v.address || '').toLowerCase().includes(q)
-    )
-  }, [standsWithProducts, q])
+  const stands = useMemo(() => searchStands(sellableStands, q), [sellableStands, q])
 
   const matchedProducts = useMemo(() => {
     return products.filter((p) => {
@@ -112,14 +73,6 @@ function ExhibitionShopContent() {
   const preview = matchedProducts.slice(0, PREVIEW_COUNT)
   const showStands = scope !== 'products'
   const showProducts = scope !== 'stands'
-  // Show the branch the catalogue actually served, even before the member has
-  // picked one, so the chip never reads empty while the rail is already loaded.
-  const servedBranchCode =
-    availableBranches.find((b) => b.code === selectedBranch)?.code ||
-    availableBranches.find((b) => b && b.name === catalog?.branch)?.code ||
-    ''
-  const branchName =
-    availableBranches.find((b) => b.code === servedBranchCode)?.name || catalog?.branch || ''
   const searching = !!q || !!categoryId
 
   // ── Closed state ─────────────────────────────────────────────────
@@ -167,7 +120,7 @@ function ExhibitionShopContent() {
               <p className="mt-1 text-sm text-muted">
                 {loading
                   ? 'Loading this season…'
-                  : `${standsWithProducts.length} stand${standsWithProducts.length === 1 ? '' : 's'} · ${products.length} product${products.length === 1 ? '' : 's'}${catalog?.cycle?.ends_at ? ` · ends ${new Date(catalog.cycle.ends_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}`}
+                  : `${sellableStands.length} stand${sellableStands.length === 1 ? '' : 's'} · ${products.length} product${products.length === 1 ? '' : 's'}${catalog?.cycle?.ends_at ? ` · ends ${new Date(catalog.cycle.ends_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}`}
               </p>
             </div>
 
@@ -206,8 +159,8 @@ function ExhibitionShopContent() {
                 </div>
                 <select
                   id="delivery-location"
-                  value={servedBranchCode}
-                  onChange={(e) => handleBranchChange(e.target.value)}
+                  value={branchCode}
+                  onChange={(e) => changeBranch(e.target.value)}
                   aria-label="Select your Delivery Location"
                   className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm font-medium text-fg focus:border-brand focus:outline-none sm:w-64"
                 >
@@ -273,7 +226,7 @@ function ExhibitionShopContent() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => router.push('/exhibition/all')}
+                    onClick={() => router.push('/exhibition/stands')}
                     className="inline-flex h-8 items-center rounded-lg border border-line bg-surface px-3 text-chips font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
                   >
                     View all
@@ -336,9 +289,9 @@ function ExhibitionShopContent() {
                   <button
                     type="button"
                     onClick={() => router.push('/exhibition/all')}
-                    className="text-chips font-semibold text-brand hover:underline"
+                    className="inline-flex h-8 items-center rounded-lg border border-line bg-surface px-3 text-chips font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
                   >
-                    See all {products.length} →
+                    View all
                   </button>
                 )}
               </div>
@@ -366,7 +319,6 @@ function ExhibitionShopContent() {
         <CartStickyBar
           count={cartCount}
           total={cartTotal}
-          subtitle="Negotiated prices applied where they exist"
           onGoToCart={() => router.push('/exhibition/cart')}
         />
       </div>

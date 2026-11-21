@@ -16,18 +16,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
+import { initials } from '../../lib/exhibitionStands'
 
 const GAP = 12 // gap-3 between slides
 const CLONE_LIMIT = 5 // first N cards cloned onto the end for a seamless loop
-
-function initials(name) {
-  const parts = String(name || '')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-  if (!parts.length) return 'ST'
-  return (parts[0][0] + (parts[1]?.[0] || '')).toUpperCase()
-}
 
 function StandCard({ v, count }) {
   const router = useRouter()
