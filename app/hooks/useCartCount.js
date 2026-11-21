@@ -39,6 +39,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 const MODULES = {
   food: { event: 'cart-updated', storageKey: (mid) => `cart_${mid}` },
   ram: { event: 'ram-cart-updated', storageKey: (mid) => `ramCart_${mid}` },
+  exhibition: { event: 'exhibition-cart-updated', storageKey: (mid) => `exhibitionCart_${mid}` },
   orders: { event: 'orders-count-updated', storageKey: (mid) => `ordersCount_${mid}` },
   exhibitionPending: {
     event: 'exhibition-pending-updated',

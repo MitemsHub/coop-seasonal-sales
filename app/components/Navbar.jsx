@@ -29,6 +29,7 @@ export default function Navbar() {
   // Shopping availability state (controls the Shop dropdown dots + cart link)
   const [shoppingOpen, setShoppingOpen] = useState(false)
   const [ramOpen, setRamOpen] = useState(false)
+  const [exhibitionOpen, setExhibitionOpen] = useState(false)
   const [shoppingStatusLoading, setShoppingStatusLoading] = useState(false)
 
   const userType = user?.type
@@ -88,6 +89,7 @@ export default function Navbar() {
   // so the Navbar and every shop surface stay in sync without repeating wiring.
   const foodCart = useCartCount('food', { memberId: memberIdKey })
   const ramCart = useCartCount('ram', { memberId: memberIdKey })
+  const exhibitionCart = useCartCount('exhibition', { memberId: memberIdKey })
   const cartCount = isRamRoute ? ramCart.count : foodCart.count
 
   // Orders badges — the order pages announce after writing their count keys,
@@ -149,9 +151,10 @@ export default function Navbar() {
     const loadShoppingStatus = async () => {
       try {
         setShoppingStatusLoading(true)
-        const [f, r] = await Promise.allSettled([
+        const [f, r, e] = await Promise.allSettled([
           fetch('/api/system/shopping', { cache: 'no-store' }),
           fetch('/api/system/ram-shopping', { cache: 'no-store' }),
+          fetch('/api/system/exhibition-shopping', { cache: 'no-store' }),
         ])
         if (f.status === 'fulfilled') {
           const j = await f.value.json().catch(() => null)
@@ -161,10 +164,15 @@ export default function Navbar() {
           const j = await r.value.json().catch(() => null)
           if (!cancelled) setRamOpen(!!j?.open)
         }
+        if (e.status === 'fulfilled') {
+          const j = await e.value.json().catch(() => null)
+          if (!cancelled) setExhibitionOpen(!!j?.open)
+        }
       } catch {
         if (!cancelled) {
           setShoppingOpen(false)
           setRamOpen(false)
+          setExhibitionOpen(false)
         }
       } finally {
         if (!cancelled) setShoppingStatusLoading(false)
@@ -270,6 +278,7 @@ export default function Navbar() {
                     <ShopDropdown
                       shoppingOpen={shoppingOpen}
                       ramOpen={ramOpen}
+                      exhibitionOpen={exhibitionOpen}
                     />
                   )}
                   <div className="inline-flex items-center">
@@ -667,6 +676,7 @@ export default function Navbar() {
                         {[
                           { href: '/shop', label: 'Food Distribution', open: shoppingOpen },
                           { href: '/ram/shop', label: 'Ram Sales', open: ramOpen },
+                          { href: '/exhibition', label: 'Coop Exhibition', open: exhibitionOpen },
                         ].map((m) => (
                           <Link
                             key={m.href}
@@ -732,6 +742,7 @@ export default function Navbar() {
                         {[
                           { href: '/cart', label: 'Food Cart', count: Number.isFinite(Number(foodCart.count)) ? Number(foodCart.count) : 0 },
                           { href: '/ram/shop', label: 'Ram Cart', count: Number.isFinite(Number(ramCart.count)) ? Number(ramCart.count) : 0 },
+                          { href: '/exhibition/cart', label: 'Exhibition Cart', count: Number.isFinite(Number(exhibitionCart.count)) ? Number(exhibitionCart.count) : 0 },
                         ].map((c) => (
                           <Link
                             key={c.href}

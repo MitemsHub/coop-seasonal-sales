@@ -1,15 +1,15 @@
 // app/components/ShopDropdown.jsx
 'use client'
 
-// The navbar "Shop" control for members. A single tap opens the two active
-// modules (Food and Ram) with their live open/closed dot. The exhibition
-// shopfront is retired; its invitation and invoice history live outside Shop.
+// The navbar "Shop" control for members. A single tap opens every shopping
+// module (Food, Ram and the seasonal Coop Exhibition) with its live
+// open/closed dot.
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Beef, ChevronDown, ShoppingBasket } from 'lucide-react'
+import { Beef, ChevronDown, ShoppingBasket, Store } from 'lucide-react'
 
-export default function ShopDropdown({ shoppingOpen, ramOpen }) {
+export default function ShopDropdown({ shoppingOpen, ramOpen, exhibitionOpen }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
 
@@ -33,6 +33,7 @@ export default function ShopDropdown({ shoppingOpen, ramOpen }) {
   const items = [
     { href: '/shop', label: 'Food Distribution', Icon: ShoppingBasket, open: shoppingOpen },
     { href: '/ram/shop', label: 'Ram Sales', Icon: Beef, open: ramOpen },
+    { href: '/exhibition', label: 'Coop Exhibition', Icon: Store, open: exhibitionOpen },
   ]
 
   return (
