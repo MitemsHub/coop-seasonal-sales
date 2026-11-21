@@ -254,7 +254,6 @@ function VendorHubContent() {
         <CartStickyBar
           count={cartCount}
           total={cartTotal}
-          subtitle="Negotiated prices applied where they exist"
           onGoToCart={() => router.push('/exhibition/cart')}
         />
       </div>

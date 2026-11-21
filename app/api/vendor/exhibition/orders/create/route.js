@@ -152,7 +152,20 @@ export async function POST(req) {
     })
     if (expErr) return NextResponse.json({ ok: false, error: expErr.message }, { status: 500 })
     if (!exposure?.ok) {
-      return NextResponse.json({ ok: false, error: exposure?.error || 'This member cannot use that payment option.' }, { status: 400 })
+      // The checker's message quotes the member's balances, loans and remaining
+      // room. That is the co-op's information, not the stand's, so a vendor only
+      // gets a plain "this won't go through" answer. Admins keep the figures on
+      // their own route.
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            paymentOption === 'Cash'
+              ? 'This invoice could not be submitted. Check the items and try again.'
+              : `This member cannot take this invoice on ${paymentOption} right now. Try a smaller total, or ask them to choose Cash.`,
+        },
+        { status: 400 },
+      )
     }
 
     const totalQty = items.reduce((sum, i) => sum + i.qty, 0)

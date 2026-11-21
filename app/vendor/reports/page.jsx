@@ -33,6 +33,7 @@ export default function VendorReportsPage() {
   const [err, setErr] = useState(null)
   const [excelBusy, setExcelBusy] = useState(false)
   const [pdfBusy, setPdfBusy] = useState(false)
+  const [itemPage, setItemPage] = useState(1)
 
   const load = async () => {
     setLoading(true)
@@ -91,6 +92,13 @@ export default function VendorReportsPage() {
     }
     return Array.from(map.values()).sort((a, b) => b.amount - a.amount)
   }, [lines])
+
+  // A stand can carry a long catalogue, so the By Item table pages rather than
+  // growing without end. The Excel/PDF exports still cover every item.
+  const ITEMS_PER_PAGE = 10
+  const itemPageCount = Math.max(1, Math.ceil(byProduct.length / ITEMS_PER_PAGE))
+  const safeItemPage = Math.min(Math.max(1, itemPage), itemPageCount)
+  const pagedProducts = byProduct.slice((safeItemPage - 1) * ITEMS_PER_PAGE, safeItemPage * ITEMS_PER_PAGE)
 
   const byPayment = useMemo(() => {
     const map = new Map()
@@ -348,7 +356,7 @@ export default function VendorReportsPage() {
                 <tbody>
                   {byProduct.length === 0 ? (
                     <tr><td colSpan={3} className="px-4 py-6 text-center text-sm text-muted">No data</td></tr>
-                  ) : byProduct.map((r) => (
+                  ) : pagedProducts.map((r) => (
                     <tr key={r.key} className="border-b border-line/50 last:border-0 hover:bg-subtle/30">
                       <td className="px-4 py-2.5 font-medium text-fg">{r.key}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums">{r.qty}</td>
@@ -358,6 +366,37 @@ export default function VendorReportsPage() {
                 </tbody>
               </table>
             </div>
+            {byProduct.length > ITEMS_PER_PAGE && (
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-4 py-2.5 text-chips text-muted">
+                <span>
+                  Showing{' '}
+                  <span className="font-medium text-fg">{(safeItemPage - 1) * ITEMS_PER_PAGE + 1}</span>–
+                  <span className="font-medium text-fg">{Math.min(safeItemPage * ITEMS_PER_PAGE, byProduct.length)}</span> of{' '}
+                  <span className="font-medium text-fg">{byProduct.length}</span> items
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setItemPage((p) => Math.max(1, p - 1))}
+                    disabled={safeItemPage <= 1}
+                    className="rounded-lg border border-line bg-surface px-2.5 py-1 font-medium text-fg transition-colors hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <span className="tabular-nums">
+                    {safeItemPage} / {itemPageCount}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setItemPage((p) => Math.min(itemPageCount, p + 1))}
+                    disabled={safeItemPage >= itemPageCount}
+                    className="rounded-lg border border-line bg-surface px-2.5 py-1 font-medium text-fg transition-colors hover:border-line-strong disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* By Payment */}

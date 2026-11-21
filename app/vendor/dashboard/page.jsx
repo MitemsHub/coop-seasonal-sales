@@ -92,7 +92,7 @@ export default function VendorDashboardPage() {
 
   const cards = [
     {
-      label: 'Orders (mine)',
+      label: 'Orders',
       value: stats ? String((stats.orders?.Pending || 0) + (stats.orders?.Approved || 0) + (stats.orders?.Confirmed || 0)) : null,
       icon: ShoppingBag,
       href: '/vendor/orders',
@@ -204,7 +204,7 @@ export default function VendorDashboardPage() {
           ))}
         </div>
         <div className="border-t border-line px-5 py-3 text-chips text-muted">
-          Orders are approved by the branch rep, then the member confirms receipt at handover.
+          Orders are approved by the Admin, then the member confirms receipt at handover.
         </div>
       </div>
     </div>

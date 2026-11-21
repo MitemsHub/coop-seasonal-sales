@@ -492,10 +492,6 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
               <div className="mt-2 space-y-2">
                 <div className="rounded-xl bg-subtle/60 px-3 py-2">
                   <p className="text-sm font-semibold text-fg">{member.full_name || 'Member'} · {member.member_id}</p>
-                  <p className="text-chips text-muted">
-                    <span className="font-medium text-fg">Delivery Branch:</span>{' '}
-                    {memberBranch(member) || 'Not set'}
-                  </p>
                   {isAdmin && memberRole(member) && <p className="text-chips text-muted">{memberRole(member)}</p>}
                 </div>
                 {/* Admins see the full position here. Vendors never receive the

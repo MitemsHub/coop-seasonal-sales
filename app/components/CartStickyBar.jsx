@@ -28,7 +28,7 @@ export default function CartStickyBar({
   goingToCart = false,
 
   // compact only
-  subtitle, // e.g. "Negotiated prices applied where they exist"
+  subtitle, // optional small line under the item count
 
   // summary only (food shop)
   lines = [], // { sku, name, qty, price, amount }

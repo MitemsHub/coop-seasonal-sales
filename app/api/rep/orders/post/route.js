@@ -19,6 +19,11 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: 'forbidden' }, { status: 403 })
     }
 
+    // Reps are view-only: posting (approving) a food order is the admin's call,
+    // exactly as in the exhibition flow. The endpoint stays mounted so a stale
+    // client gets a clear answer instead of a 404.
+    return NextResponse.json({ ok: false, error: 'Reps cannot approve orders. An admin approves them.' }, { status: 403 })
+
     const { orderId, note } = await req.json()
     // ensure the order belongs to this delivery branch
     const { data: o } = await supabase.from('orders').select('order_id, delivery_branch_id, status').eq('order_id', orderId).single()
