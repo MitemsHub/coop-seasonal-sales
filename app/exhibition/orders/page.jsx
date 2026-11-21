@@ -274,7 +274,7 @@ function ExhibitionOrdersContent() {
                               alt={l.product_name}
                               fill
                               sizes="48px"
-                              className="object-cover"
+                              className="object-contain"
                               onError={(e) => {
                                 e.currentTarget.src = '/images/items/placeholder.svg'
                               }}

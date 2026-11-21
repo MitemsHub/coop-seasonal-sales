@@ -515,7 +515,7 @@ function ExhibitionCartContent() {
                             alt={item.name}
                             fill
                             sizes="64px"
-                            className="object-cover"
+                            className="object-contain"
                             onError={(e) => {
                               e.currentTarget.src = '/images/items/placeholder.svg'
                             }}

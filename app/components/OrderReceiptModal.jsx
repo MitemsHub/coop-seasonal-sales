@@ -459,7 +459,7 @@ export default function OrderReceiptModal({
                                           alt=""
                                           fill
                                           sizes="32px"
-                                          className="object-cover"
+                                          className="object-contain"
                                           onError={(e) => {
                                             e.currentTarget.src = '/images/items/placeholder.svg'
                                           }}
