@@ -84,9 +84,8 @@ export default function VendorReportsPage() {
     const map = new Map()
     for (const l of lines) {
       const key = l.product || 'Unknown'
-      if (!map.has(key)) map.set(key, { key, orders: 0, qty: 0, amount: 0 })
+      if (!map.has(key)) map.set(key, { key, qty: 0, amount: 0 })
       const agg = map.get(key)
-      agg.orders += 1
       agg.qty += l.qty
       agg.amount += l.amount
     }
@@ -97,16 +96,14 @@ export default function VendorReportsPage() {
     const map = new Map()
     for (const l of lines) {
       const key = l.payment || 'Unknown'
-      if (!map.has(key)) map.set(key, { key, orders: 0, amount: 0 })
+      if (!map.has(key)) map.set(key, { key, amount: 0 })
       const agg = map.get(key)
-      agg.orders += 1
       agg.amount += l.amount
     }
     return Array.from(map.values()).sort((a, b) => b.amount - a.amount)
   }, [lines])
 
   const totalRevenue = s.revenue || 0
-  const totalLines = lines.length
   const totalOrders = new Set(lines.map((l) => l.order_id)).size
   const vendorName = profile?.vendor?.name || 'Vendor'
   const branchName = profile?.vendor?.branch || ''
@@ -124,13 +121,12 @@ export default function VendorReportsPage() {
         { Metric: 'Confirmed orders', Value: orders.Confirmed || 0 },
         { Metric: 'Pending orders', Value: orders.Pending || 0 },
         { Metric: 'Approved orders', Value: orders.Approved || 0 },
-        { Metric: 'Total lines', Value: totalLines },
         { Metric: 'Total revenue', Value: totalRevenue },
       ]
       await downloadExcelWorkbook(`vendor-report-${fileStamp()}.xlsx`, [
         { name: 'Summary', rows: summaryRows },
-        { name: 'By Item', rows: byProduct.map((r) => ({ Item: r.key, Lines: r.orders, Qty: r.qty, Amount: r.amount })) },
-        { name: 'By Payment', rows: byPayment.map((r) => ({ Method: r.key, Lines: r.orders, Amount: r.amount })) },
+        { name: 'By Item', rows: byProduct.map((r) => ({ Item: r.key, Qty: r.qty, Amount: r.amount })) },
+        { name: 'By Payment', rows: byPayment.map((r) => ({ Method: r.key, Amount: r.amount })) },
         {
           name: 'Order Lines',
           rows: lines.map((l) => ({
@@ -199,7 +195,6 @@ export default function VendorReportsPage() {
         ['Confirmed orders', String(orders.Confirmed || 0)],
         ['Pending orders', String(orders.Pending || 0)],
         ['Approved orders', String(orders.Approved || 0)],
-        ['Total lines', String(totalLines)],
         ['Total revenue', pdfMoney(totalRevenue)],
       ],
       theme: 'grid',
@@ -211,27 +206,27 @@ export default function VendorReportsPage() {
 
     autoTable(doc, {
       startY: (doc.lastAutoTable?.finalY || 50) + 8,
-      head: [['By item', 'Lines', 'Qty', 'Amount']],
+      head: [['By item', 'Qty', 'Amount']],
       body: byProduct.length
-        ? byProduct.map((r) => [r.key, r.orders, r.qty, pdfMoney(r.amount)])
-        : [['No item data', '', '', '']],
+        ? byProduct.map((r) => [r.key, r.qty, pdfMoney(r.amount)])
+        : [['No item data', '', '']],
       theme: 'striped',
       headStyles: { fillColor: brand, textColor: 255, fontSize: 9 },
       styles: { fontSize: 8, cellPadding: 2 },
-      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
+      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' } },
       margin: { left: 14, right: 14 },
     })
 
     autoTable(doc, {
       startY: (doc.lastAutoTable?.finalY || 50) + 8,
-      head: [['By payment method', 'Lines', 'Amount']],
+      head: [['By payment method', 'Amount']],
       body: byPayment.length
-        ? byPayment.map((r) => [r.key, r.orders, pdfMoney(r.amount)])
-        : [['No payment data', '', '']],
+        ? byPayment.map((r) => [r.key, pdfMoney(r.amount)])
+        : [['No payment data', '']],
       theme: 'striped',
       headStyles: { fillColor: brand, textColor: 255, fontSize: 9 },
       styles: { fontSize: 8, cellPadding: 2 },
-      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' } },
+      columnStyles: { 1: { halign: 'right' } },
       margin: { left: 14, right: 14 },
     })
 
@@ -324,12 +319,11 @@ export default function VendorReportsPage() {
       ) : (
         <>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 mb-6 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { label: 'Confirmed', value: orders.Confirmed || 0 },
-              { label: 'Total Lines', value: totalLines },
               { label: 'Pending', value: orders.Pending || 0 },
               { label: 'Approved', value: orders.Approved || 0 },
+              { label: 'Confirmed', value: orders.Confirmed || 0 },
               { label: 'Revenue', value: money(totalRevenue) },
             ].map((c) => (
               <div key={c.label} className="min-w-0 rounded-xl border border-line bg-surface p-4">
@@ -347,18 +341,16 @@ export default function VendorReportsPage() {
                 <thead>
                   <tr className="border-b border-line bg-subtle/30 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                     <th className="px-4 py-2">Item</th>
-                    <th className="px-4 py-2 text-right">Lines</th>
                     <th className="px-4 py-2 text-right">Qty</th>
                     <th className="px-4 py-2 text-right">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {byProduct.length === 0 ? (
-                    <tr><td colSpan={4} className="px-4 py-6 text-center text-sm text-muted">No data</td></tr>
+                    <tr><td colSpan={3} className="px-4 py-6 text-center text-sm text-muted">No data</td></tr>
                   ) : byProduct.map((r) => (
                     <tr key={r.key} className="border-b border-line/50 last:border-0 hover:bg-subtle/30">
                       <td className="px-4 py-2.5 font-medium text-fg">{r.key}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums">{r.orders}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums">{r.qty}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums font-medium">{money(r.amount)}</td>
                     </tr>
@@ -376,56 +368,16 @@ export default function VendorReportsPage() {
                 <thead>
                   <tr className="border-b border-line bg-subtle/30 text-left text-xs font-semibold uppercase tracking-wide text-muted">
                     <th className="px-4 py-2">Method</th>
-                    <th className="px-4 py-2 text-right">Lines</th>
                     <th className="px-4 py-2 text-right">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {byPayment.length === 0 ? (
-                    <tr><td colSpan={3} className="px-4 py-6 text-center text-sm text-muted">No data</td></tr>
+                    <tr><td colSpan={2} className="px-4 py-6 text-center text-sm text-muted">No data</td></tr>
                   ) : byPayment.map((r) => (
                     <tr key={r.key} className="border-b border-line/50 last:border-0 hover:bg-subtle/30">
                       <td className="px-4 py-2.5 font-medium text-fg">{r.key}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums">{r.orders}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums font-medium">{money(r.amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Recent Lines */}
-          <div className="rounded-xl border border-line bg-surface overflow-hidden">
-            <div className="border-b border-line bg-subtle/60 px-4 py-3 text-sm font-semibold text-fg">Order Lines (Recent)</div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] text-sm">
-                <thead>
-                  <tr className="border-b border-line bg-subtle/30 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                    <th className="px-4 py-2">Order</th>
-                    <th className="px-4 py-2">Item</th>
-                    <th className="px-4 py-2">Status</th>
-                    <th className="px-4 py-2 text-right">Qty</th>
-                    <th className="px-4 py-2 text-right">Amount</th>
-                    <th className="px-4 py-2 text-right">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.slice(0, 50).map((l, i) => (
-                    <tr key={i} className="border-b border-line/50 last:border-0 hover:bg-subtle/30">
-                      <td className="px-4 py-2.5 font-medium text-fg">#{l.order_id}</td>
-                      <td className="px-4 py-2.5 text-muted">{l.product}</td>
-                      <td className="px-4 py-2.5">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          l.status === 'Confirmed' ? 'bg-success-bg text-success-fg'
-                            : l.status === 'Cancelled' ? 'bg-danger-bg text-danger-fg'
-                            : l.status === 'Approved' ? 'bg-info-bg text-info-fg'
-                            : 'bg-warning-bg text-warning-fg'
-                        }`}>{l.status}</span>
-                      </td>
-                      <td className="px-4 py-2.5 text-right tabular-nums">{l.qty}</td>
-                      <td className="px-4 py-2.5 text-right tabular-nums font-medium">{money(l.amount)}</td>
-                      <td className="px-4 py-2.5 text-right text-muted">{new Date(l.created_at).toLocaleDateString()}</td>
                     </tr>
                   ))}
                 </tbody>

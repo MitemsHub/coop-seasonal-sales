@@ -54,6 +54,8 @@ function downloadTemplate() {
         unit: 'Unit',
         qty: 'Quantity',
       },
+      // Money and counts read as 15,000 rather than 15000 while staying numeric.
+      formats: { price: '#,##0', discount_pct: '0', qty: '#,##0' },
       rows: TEMPLATE_ROWS,
     },
   ])
