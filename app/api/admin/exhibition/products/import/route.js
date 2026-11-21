@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession } from '@/lib/validation'
 import { reserveSkus } from '@/lib/skuFormat'
+import { parseNumber } from '@/lib/csvParse'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -14,7 +15,7 @@ const MAX_ROWS = 500
 
 function toQty(value) {
   if (value === '' || value === null || value === undefined) return null
-  const n = Math.trunc(Number(value))
+  const n = Math.trunc(parseNumber(value) ?? NaN)
   return Number.isFinite(n) && n >= 0 ? n : null
 }
 
@@ -54,13 +55,16 @@ export async function POST(request) {
         failed.push({ row: line, error: 'Product name is missing' })
         return
       }
-      const price = Math.trunc(Number(row?.price ?? row?.vendor_price ?? 0))
+      const price = Math.trunc(parseNumber(row?.price ?? row?.vendor_price) ?? 0)
       if (!Number.isFinite(price) || price <= 0) {
         failed.push({ row: line, error: `"${name}" needs a price greater than zero` })
         return
       }
       const discountRaw = row?.discount_pct ?? row?.discount ?? row?.['discount %'] ?? row?.['discount percent']
-      const discount = discountRaw === '' || discountRaw === null || discountRaw === undefined ? 0 : Math.trunc(Number(discountRaw))
+      const discount =
+        discountRaw === '' || discountRaw === null || discountRaw === undefined
+          ? 0
+          : Math.trunc(parseNumber(discountRaw) ?? NaN)
       if (!Number.isFinite(discount) || discount < 0 || discount > 90) {
         failed.push({ row: line, error: `"${name}" discount must be between 0 and 90%` })
         return

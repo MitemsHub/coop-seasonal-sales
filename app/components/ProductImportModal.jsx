@@ -12,7 +12,7 @@ import Modal from './ui/Modal'
 import Button from './ui/Button'
 import Label from './ui/Label'
 import Select from './ui/Select'
-import { pick } from '../../lib/csvParse'
+import { parseNumber, pick } from '../../lib/csvParse'
 import { IMPORT_ACCEPT, readImportFile } from '../../lib/importSheet'
 import { downloadExcelWorkbook } from '../../lib/excelExport'
 
@@ -115,14 +115,20 @@ export default function ProductImportModal({
       setError('No "name" column found. Download the template to see the expected columns.')
       return
     }
+    // Excel hands prices back as formatted text ("15,000"), so parse the
+    // numeric columns once here instead of letting "NGN NaN" reach the preview.
+    const numberOrBlank = (value) => {
+      const n = parseNumber(value)
+      return n === null ? '' : n
+    }
     setRows(
       records.map((record) => ({
         name: pick(record, NAME_KEYS),
         description: pick(record, DESCRIPTION_KEYS),
-        price: pick(record, PRICE_KEYS),
-        discount_pct: pick(record, DISCOUNT_KEYS),
+        price: numberOrBlank(pick(record, PRICE_KEYS)),
+        discount_pct: numberOrBlank(pick(record, DISCOUNT_KEYS)),
         unit: pick(record, UNIT_KEYS) || 'each',
-        qty: pick(record, QTY_KEYS),
+        qty: numberOrBlank(pick(record, QTY_KEYS)),
       }))
     )
   }
@@ -313,7 +319,9 @@ export default function ProductImportModal({
                     {rows.slice(0, 6).map((row, index) => (
                       <tr key={`${row.name}-${index}`}>
                         <td className="px-3 py-2 text-fg">{row.name || '—'}</td>
-                        <td className="px-3 py-2 tabular-nums text-muted">{row.price ? `NGN ${Number(row.price).toLocaleString()}` : '—'}</td>
+                        <td className="px-3 py-2 tabular-nums text-muted">
+                          {Number.isFinite(row.price) && row.price > 0 ? `NGN ${row.price.toLocaleString()}` : '—'}
+                        </td>
                         <td className="px-3 py-2 tabular-nums text-muted">{row.discount_pct ? `${row.discount_pct}%` : '—'}</td>
                         <td className="px-3 py-2 tabular-nums text-muted">{row.qty || '∞'}</td>
                         <td className="px-3 py-2 text-muted">{row.unit || 'each'}</td>
