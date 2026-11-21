@@ -129,7 +129,7 @@ export default function ProductImportModal({
 
   const importRows = async () => {
     setError('')
-    if (!rows.length) return setError('Choose a CSV or Excel file first.')
+    if (!rows.length) return setError('Choose an Excel file first.')
     if (requireTarget && (!cycleId || !vendorId)) {
       return setError('Pick the season and the vendor stand these products belong to.')
     }
@@ -276,7 +276,7 @@ export default function ProductImportModal({
 
           <div className="rounded-xl border border-dashed border-line bg-subtle px-4 py-6 text-center">
             <FileSpreadsheet className="mx-auto mb-2 h-7 w-7 text-muted" strokeWidth={1.6} />
-            <p className="text-sm font-medium text-fg">{fileName || 'Choose a CSV or Excel file'}</p>
+            <p className="text-sm font-medium text-fg">{fileName || 'Choose an Excel file'}</p>
             <p className="mt-0.5 text-xs text-muted">Columns: name, description, price, discount %, unit, qty (only name and price are required). Add product photos after importing.</p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
               <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-on-accent">
