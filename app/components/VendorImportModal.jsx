@@ -221,7 +221,7 @@ export default function VendorImportModal({ open, onClose, cycles = [], branches
       open={open}
       onClose={close}
       title="Import vendors"
-      description={`Upload an Excel list (or a CSV) of up to ${IMPORT_LIMIT} stands — the system creates a code and passcode for each one.`}
+      description={`Upload an Excel list of up to ${IMPORT_LIMIT} stands — the system creates a code and passcode for each one.`}
       size="lg"
       footer={
         result ? (

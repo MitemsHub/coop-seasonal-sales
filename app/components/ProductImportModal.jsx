@@ -166,7 +166,7 @@ export default function ProductImportModal({
       open={open}
       onClose={close}
       title="Import products"
-      description="Upload an Excel list (or a CSV). Every product gets a SKU automatically — edit details and add photos afterwards."
+      description="Upload an Excel list. Every product gets a SKU automatically — edit details and add photos afterwards."
       size="lg"
       footer={
         result ? (
