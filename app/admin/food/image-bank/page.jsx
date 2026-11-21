@@ -303,7 +303,7 @@ function ItemImagesPageContent() {
                   </div>
                 </div>
                 <div>
-                  <Label>Photo (JPG, PNG, WebP · max 5MB)</Label>
+                  <Label>Photo (JPG, PNG, WebP or AVIF · any size, optimized before upload)</Label>
                   <ImageUpload
                     itemSku={createForm.sku.trim() || skuFromName(createForm.name)}
                     currentImageUrl={createUrl || null}
@@ -421,7 +421,7 @@ function ItemImagesPageContent() {
                 </div>
               </div>
               <div>
-                <Label>Upload photo (JPG, PNG, WebP · max 5MB)</Label>
+                <Label>Upload photo (JPG, PNG, WebP or AVIF · any size, optimized before upload)</Label>
                 <ImageUpload
                   itemSku={addTarget.sku}
                   currentImageUrl={addTarget.image_url || null}
