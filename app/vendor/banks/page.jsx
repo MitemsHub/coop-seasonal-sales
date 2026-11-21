@@ -345,7 +345,7 @@ export default function VendorBanksPage() {
         open={uploadOpen}
         onClose={() => setUploadOpen(false)}
         title="Upload season invoice"
-        description="Attach the invoice for this exhibition season. PDF, JPG, PNG or WEBP."
+        description="Attach the invoice for this exhibition season. PDF, JPG, PNG, WEBP or HEIC."
         footer={
           <>
             <Button variant="ghost" onClick={() => setUploadOpen(false)}>
@@ -364,7 +364,7 @@ export default function VendorBanksPage() {
             <input
               id="v-invoice-file"
               type="file"
-              accept=".pdf,.jpg,.jpeg,.png,.webp"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.heif,application/pdf,image/*"
               onChange={(e) => setUpFile(e.target.files?.[0] || null)}
               className="w-full rounded-lg border border-line bg-surface p-2 text-sm text-fg file:mr-3 file:rounded-lg file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-on-accent"
             />

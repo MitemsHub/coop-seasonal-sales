@@ -1,7 +1,7 @@
 // app/api/vendor/exhibition/invoices/route.js
 // The vendor's OWN payout invoices, tied to their exhibition season (cycle).
 //   GET    — list this vendor's invoices (signed/local download URLs)
-//   POST   — upload a new invoice (PDF/JPG/PNG/WEBP) for their cycle
+//   POST   — upload a new invoice (PDF/JPG/PNG/WEBP/HEIC) for their cycle
 //   DELETE — remove one of their invoices (query: invoice_id)
 // The co-op's admin/rep sides read the same exhibition_vendor_invoices table.
 import { NextResponse } from 'next/server'
@@ -29,6 +29,29 @@ function safeName(name) {
     .trim()
     .replace(/[/\\?%*:|"<>]/g, '_')
     .slice(0, 120)
+}
+
+// Phones are inconsistent about the MIME type they attach: iPhone photos are
+// HEIC, some Android file pickers send application/octet-stream or an empty
+// string. Trust the extension first and only fall back to what the browser
+// declared — same rule the rep invoice route uses.
+const EXT_TO_MIME = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  heic: 'image/heic',
+  heif: 'image/heif',
+}
+
+function resolveInvoiceMime(file) {
+  const name = String(file?.name || '')
+  const ext = (name.match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase()
+  if (EXT_TO_MIME[ext]) return EXT_TO_MIME[ext]
+  const declared = String(file?.type || '').toLowerCase()
+  if (!declared || declared === 'application/octet-stream') return ''
+  return declared
 }
 
 export async function GET(req) {
@@ -75,10 +98,18 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: 'file required' }, { status: 400 })
     }
 
-    const mime = String(file.type || '').toLowerCase()
-    const allowed = new Set(['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp'])
+    const mime = resolveInvoiceMime(file)
+    const allowed = new Set([
+      'application/pdf',
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+      'image/heic',
+      'image/heif',
+    ])
     if (!allowed.has(mime)) {
-      return NextResponse.json({ ok: false, error: 'Only PDF/JPG/PNG/WEBP allowed' }, { status: 400 })
+      return NextResponse.json({ ok: false, error: 'Only PDF/JPG/PNG/WEBP/HEIC allowed' }, { status: 400 })
     }
 
     const invoiceRef = cleanText(fd.get('invoice_ref'), 120)
