@@ -77,17 +77,31 @@ export async function POST(request) {
 
     if (!clean.length) return NextResponse.json({ ok: true, created: [], failed })
 
-    const { data: existing, error: skuError } = await supabase
-      .from('exhibition_products')
-      .select('sku')
-      .eq('cycle_id', cycleId)
-      .eq('vendor_id', vendorId)
+    // Every existing SKU, paged past the 1,000-row cap, so the generated
+    // sequences continue correctly on a large catalogue.
+    const existing = []
+    let skuError = null
+    for (let from = 0; ; from += 1000) {
+      const res = await supabase
+        .from('exhibition_products')
+        .select('sku')
+        .eq('cycle_id', cycleId)
+        .eq('vendor_id', vendorId)
+        .order('id')
+        .range(from, from + 999)
+      if (res.error) {
+        skuError = res.error
+        break
+      }
+      existing.push(...(res.data || []))
+      if ((res.data || []).length < 1000) break
+    }
     if (skuError) return NextResponse.json({ ok: false, error: skuError.message }, { status: 500 })
 
     const skus = reserveSkus({
       vendorCode: vendor.code,
       names: clean.map((r) => r.name),
-      existingSkus: (existing || []).map((r) => r.sku),
+      existingSkus: existing.map((r) => r.sku),
     })
 
     const payload = clean.map((row, index) => ({

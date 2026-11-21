@@ -36,19 +36,41 @@ export async function GET(request) {
       'id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, pending_vendor_price, qty, image_url, status, approval_status, approval_requested_at, created_at, vendors:vendor_id(name, code), categories:category_id(name), branches:branch_id(name)',
       'id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, pending_vendor_price, qty, image_url, status, approval_status, approval_requested_at, created_at, vendors:vendor_id(name, code), categories:category_id(name), branches:branch_id(name)',
     ]
+    // PostgREST stops at its max-rows setting (1,000 on a default project),
+    // so a catalogue past that size used to arrive cut off — and the admin
+    // queue then reported exactly "1000 waiting for approval". Page through
+    // in 1,000-row windows so the list grows with the catalogue.
+    const PAGE = 1000
     let data = null
     let error = null
     for (const cols of attempts) {
-      let query = supabase
-        .from('exhibition_products')
-        .select(cols)
-        .order('created_at', { ascending: false })
-      if (cycleId > 0) query = query.eq('cycle_id', cycleId)
-      if (vendorId > 0) query = query.eq('vendor_id', vendorId)
-      if (status && status !== 'all') query = query.eq('status', status)
-      if (q) query = query.or(`name.ilike.%${q}%,sku.ilike.%${q}%`)
-      ;({ data, error } = await query)
-      if (!error) break
+      const rows = []
+      let failed = null
+      for (let from = 0; ; from += PAGE) {
+        let query = supabase
+          .from('exhibition_products')
+          .select(cols)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, from + PAGE - 1)
+        if (cycleId > 0) query = query.eq('cycle_id', cycleId)
+        if (vendorId > 0) query = query.eq('vendor_id', vendorId)
+        if (status && status !== 'all') query = query.eq('status', status)
+        if (q) query = query.or(`name.ilike.%${q}%,sku.ilike.%${q}%`)
+        const res = await query
+        if (res.error) {
+          failed = res.error
+          break
+        }
+        rows.push(...(res.data || []))
+        if ((res.data || []).length < PAGE) break
+      }
+      if (!failed) {
+        data = rows
+        error = null
+        break
+      }
+      error = failed
       if (!/description|discount_pct|schema cache/i.test(String(error.message || ''))) break
     }
     if (error) {
@@ -104,16 +126,26 @@ export async function POST(request) {
       .maybeSingle()
     if (!vendorRow) return NextResponse.json({ ok: false, error: 'Vendor not found' }, { status: 404 })
 
-    // Generated SKU, never typed: <vendor><name><sequence>.
-    const { data: existingSkus } = await supabase
-      .from('exhibition_products')
-      .select('sku')
-      .eq('cycle_id', cycleId)
-      .eq('vendor_id', vendorId)
+    // Generated SKU, never typed: <vendor><name><sequence>. Read every
+    // existing SKU (paged past the 1,000-row cap) so the sequence cannot
+    // collide once a stand has a large catalogue.
+    const existingSkus = []
+    for (let from = 0; ; from += 1000) {
+      const res = await supabase
+        .from('exhibition_products')
+        .select('sku')
+        .eq('cycle_id', cycleId)
+        .eq('vendor_id', vendorId)
+        .order('id')
+        .range(from, from + 999)
+      if (res.error) break
+      existingSkus.push(...(res.data || []))
+      if ((res.data || []).length < 1000) break
+    }
     const [sku] = reserveSkus({
       vendorCode: vendorRow.code,
       names: [name],
-      existingSkus: (existingSkus || []).map((row) => row.sku),
+      existingSkus: existingSkus.map((row) => row.sku),
     })
 
     const { data, error } = await supabase

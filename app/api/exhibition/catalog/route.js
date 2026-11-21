@@ -40,19 +40,37 @@ const PRODUCT_COLS =
 // description and discount_pct arrive with their own migrations. Try the full
 // read first, then drop whichever column the database has not got yet, so a
 // deploy ahead of the SQL cannot empty the shop for every member.
+//
+// PostgREST caps a response at its max-rows setting (1,000 by default), so the
+// read pages through 1,000-row windows: a market with more than 1,000 approved
+// products must show all of them, not stop at the cap.
+const PAGE = 1000
+
 async function loadProducts(supabase, cycleId) {
   let lastError = null
   for (const extra of [', description, discount_pct', ', description', '']) {
-    const { data, error } = await supabase
-      .from('exhibition_products')
-      .select(PRODUCT_COLS + extra)
-      .eq('cycle_id', cycleId)
-      .eq('status', 'active')
-      .eq('approval_status', 'approved')
-      .order('name')
-    if (!error) return { data, error: null }
-    lastError = error
-    if (!/description|discount_pct|schema cache/i.test(String(error.message || ''))) break
+    const rows = []
+    let failed = null
+    for (let from = 0; ; from += PAGE) {
+      const res = await supabase
+        .from('exhibition_products')
+        .select(PRODUCT_COLS + extra)
+        .eq('cycle_id', cycleId)
+        .eq('status', 'active')
+        .eq('approval_status', 'approved')
+        .order('name')
+        .order('id')
+        .range(from, from + PAGE - 1)
+      if (res.error) {
+        failed = res.error
+        break
+      }
+      rows.push(...(res.data || []))
+      if ((res.data || []).length < PAGE) break
+    }
+    if (!failed) return { data: rows, error: null }
+    lastError = failed
+    if (!/description|discount_pct|schema cache/i.test(String(failed.message || ''))) break
   }
   return { data: null, error: lastError }
 }

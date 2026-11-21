@@ -24,18 +24,38 @@ export async function GET(req) {
       'id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, pending_vendor_price, qty, image_url, status, approval_status, approval_note, approval_requested_at, categories:category_id(name)',
       'id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, pending_vendor_price, qty, image_url, status, approval_status, approval_note, approval_requested_at, categories:category_id(name)',
     ]
+    // Page past the 1,000-row response cap so a stand with a large catalogue
+    // still sees every product in its portal.
+    const PAGE = 1000
     let data = null
     let error = null
     for (const cols of attempts) {
-      let query = supabase
-        .from('exhibition_products')
-        .select(cols)
-        .eq('vendor_id', ctx.vendor_id)
-        .order('created_at', { ascending: false })
-      if (status && status !== 'all') query = query.eq('status', status)
-      if (q) query = query.ilike('name', `%${q}%`)
-      ;({ data, error } = await query)
-      if (!error) break
+      const rows = []
+      let failed = null
+      for (let from = 0; ; from += PAGE) {
+        let query = supabase
+          .from('exhibition_products')
+          .select(cols)
+          .eq('vendor_id', ctx.vendor_id)
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(from, from + PAGE - 1)
+        if (status && status !== 'all') query = query.eq('status', status)
+        if (q) query = query.ilike('name', `%${q}%`)
+        const res = await query
+        if (res.error) {
+          failed = res.error
+          break
+        }
+        rows.push(...(res.data || []))
+        if ((res.data || []).length < PAGE) break
+      }
+      if (!failed) {
+        data = rows
+        error = null
+        break
+      }
+      error = failed
       if (!/description|discount_pct|schema cache/i.test(String(error.message || ''))) break
     }
     if (error) return NextResponse.json({ error: error.message || 'Failed to load products' }, { status: 500 })
@@ -80,17 +100,31 @@ export async function POST(req) {
     if (vendorPrice <= 0) return NextResponse.json({ error: 'Price must be greater than zero' }, { status: 400 })
     if (!ctx.cycle_id) return NextResponse.json({ error: 'No active exhibition cycle for this vendor' }, { status: 400 })
 
-    // The SKU is generated, never typed: <vendor><name><sequence>.
-    const { data: existingSkus, error: skuError } = await supabase
-      .from('exhibition_products')
-      .select('sku')
-      .eq('cycle_id', ctx.cycle_id)
-      .eq('vendor_id', ctx.vendor_id)
+    // The SKU is generated, never typed: <vendor><name><sequence>. Read every
+    // existing SKU (paged past the 1,000-row cap) so a large catalogue cannot
+    // produce a duplicate sequence.
+    const existingSkus = []
+    let skuError = null
+    for (let from = 0; ; from += 1000) {
+      const res = await supabase
+        .from('exhibition_products')
+        .select('sku')
+        .eq('cycle_id', ctx.cycle_id)
+        .eq('vendor_id', ctx.vendor_id)
+        .order('id')
+        .range(from, from + 999)
+      if (res.error) {
+        skuError = res.error
+        break
+      }
+      existingSkus.push(...(res.data || []))
+      if ((res.data || []).length < 1000) break
+    }
     if (skuError) return NextResponse.json({ error: skuError.message || 'Failed to read existing SKUs' }, { status: 500 })
     const [sku] = reserveSkus({
       vendorCode: ctx.vendor_code,
       names: [name],
-      existingSkus: (existingSkus || []).map((row) => row.sku),
+      existingSkus: existingSkus.map((row) => row.sku),
     })
 
     const { data, error } = await supabase

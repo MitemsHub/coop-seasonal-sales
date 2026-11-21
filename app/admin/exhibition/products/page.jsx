@@ -154,21 +154,28 @@ export default function ExhibitionProductsPage() {
   }
 
   // One decision for the whole queue, so fifty products don't cost fifty
-  // round trips.
+  // round trips. The bulk endpoint takes at most 200 ids per call, so a queue
+  // past that (the catalogue can now run into the thousands) is approved in
+  // consecutive batches instead of silently leaving the overflow pending.
   const approveAllPending = async () => {
     const ids = products.filter((p) => p.approval_status === 'pending').map((p) => p.id)
     if (!ids.length) return
     setBusy(true)
     setMsg(null)
+    const BATCH = 200
+    let approved = 0
     try {
-      const res = await fetch('/api/admin/exhibition/products/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'approve', ids }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok || !json.ok) throw new Error(json.error || 'Bulk approval failed')
-      setMsg({ type: 'success', text: `${(json.approved || []).length} product(s) approved and published.` })
+      for (let i = 0; i < ids.length; i += BATCH) {
+        const res = await fetch('/api/admin/exhibition/products/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'approve', ids: ids.slice(i, i + BATCH) }),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok || !json.ok) throw new Error(json.error || 'Bulk approval failed')
+        approved += (json.approved || []).length
+      }
+      setMsg({ type: 'success', text: `${approved} product(s) approved and published.` })
       await load()
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
