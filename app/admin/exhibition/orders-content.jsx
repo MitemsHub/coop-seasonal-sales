@@ -207,7 +207,13 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
       const res = await fetch(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify(type === 'cancel' ? { ids, reason: reason || 'Cancelled by admin' } : { ids }),
+        body: JSON.stringify(
+          type === 'cancel'
+            ? { ids, reason: reason || 'Cancelled by admin' }
+            : type === 'rollback'
+              ? { ids, reason: reason || '' }
+              : { ids }
+        ),
       })
       const json = await safeJson(res, path)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Action failed')
@@ -387,7 +393,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
     if (value === 'approve') setModal({ type: 'approve', ids: [o.id] })
     if (value === 'confirm') setModal({ type: 'confirm', ids: [o.id] })
     if (value === 'cancel') setModal({ type: 'cancel', ids: [o.id] })
-    if (value === 'rollback') setModal({ type: 'rollback', ids: [o.id] })
+    if (value === 'rollback') { setCancelReason(''); setModal({ type: 'rollback', ids: [o.id] }) }
     if (value === 'restore') setModal({ type: 'restore', ids: [o.id] })
   }
 
@@ -704,7 +710,11 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
             {canRollback && (
               <button
                 type="button"
-                onClick={() => selectedCount && setModal({ type: 'rollback', ids: Array.from(selected) })}
+                onClick={() => {
+                  if (!selectedCount) return
+                  setCancelReason('')
+                  setModal({ type: 'rollback', ids: Array.from(selected) })
+                }}
                 disabled={!selectedCount || bulkBusy}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-warning-border bg-warning-bg px-3 py-1.5 text-sm font-medium text-warning-fg transition-colors duration-200 ease-sakani hover:brightness-105 disabled:opacity-50"
               >
@@ -1144,10 +1154,26 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
           </div>
         }
       >
-        {modal?.type === 'cancel' ? (
+        {modal?.type === 'cancel' || modal?.type === 'rollback' ? (
           <div className="space-y-3">
             <div className="text-sm text-muted">
-              Cancel <b className="text-fg">{modal?.ids?.length || 0}</b> order(s)? Cancelled orders are excluded from payouts.
+              {modal?.type === 'rollback' ? (
+                status === 'Approved' ? (
+                  <>
+                    Roll back <b className="text-fg">{modal?.ids?.length || 0}</b> order(s) to Pending? They leave the approved
+                    queue, the member is no longer cleared to collect, and their ready-for-pickup notification is withdrawn.
+                  </>
+                ) : (
+                  <>
+                    Roll back <b className="text-fg">{modal?.ids?.length || 0}</b> order(s) from Confirmed to Approved? They will
+                    drop out of vendor payouts until confirmed again, and the member can confirm receipt a second time.
+                  </>
+                )
+              ) : (
+                <>
+                  Cancel <b className="text-fg">{modal?.ids?.length || 0}</b> order(s)? Cancelled orders are excluded from payouts.
+                </>
+              )}
             </div>
             <div>
               <div className="mb-1 text-xs font-medium text-subtext">Reason (optional)</div>
@@ -1156,7 +1182,9 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                 rows={3}
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
-                placeholder="Reason for cancellation…"
+                placeholder={
+                  modal?.type === 'rollback' ? 'Why is this order being rolled back? (optional)' : 'Reason for cancellation…'
+                }
                 disabled={bulkBusy}
               />
             </div>
@@ -1165,21 +1193,15 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
           <div className="text-sm text-muted">
             {modal?.type === 'restore'
               ? 'Restore '
-              : modal?.type === 'rollback'
-                ? 'Roll back '
-                : modal?.type === 'confirm'
-                  ? 'Confirm receipt for '
-                  : 'Approve '}
+              : modal?.type === 'confirm'
+                ? 'Confirm receipt for '
+                : 'Approve '}
             <b className="text-fg">{modal?.ids?.length || 0}</b> order(s)
             {modal?.type === 'restore'
               ? ' back to Pending?'
-              : modal?.type === 'rollback'
-                ? status === 'Approved'
-                  ? ' back to Pending? They leave the approved queue, the member is no longer cleared to collect, and their ready-for-pickup notification is withdrawn.'
-                  : ' from Confirmed back to Approved? They will drop out of vendor payouts until confirmed again, and the member can confirm receipt a second time.'
-                : modal?.type === 'confirm'
-                  ? '? This closes the order on the member\'s behalf.'
-                  : ', and the member can then confirm receipt?'}
+              : modal?.type === 'confirm'
+                ? '? This closes the order on the member\'s behalf.'
+                : ', and the member can then confirm receipt?'}
           </div>
         )}
       </DraggableModal>
