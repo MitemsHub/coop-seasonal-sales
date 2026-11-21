@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { isSupportedProductImage, optimizeProductImage } from '@/lib/optimizeImage'
+import { isSupportedProductImage, optimizeProductImage, PRODUCT_IMAGE_MAX_SIZE } from '@/lib/optimizeImage'
 
 export default function ImageUpload({ onImageUploaded, currentImageUrl = null, itemSku = '' }) {
   const [uploading, setUploading] = useState(false)
@@ -82,7 +82,7 @@ export default function ImageUpload({ onImageUploaded, currentImageUrl = null, i
             />
             {processedKb != null && (
               <p className="mt-1.5 text-center text-[11px] text-muted">
-                Optimized: 900×900 WebP · <span className="font-medium text-success-fg">{processedKb} KB</span>
+                Optimized: WebP, up to {PRODUCT_IMAGE_MAX_SIZE}px · <span className="font-medium text-success-fg">{processedKb} KB</span>
               </p>
             )}
             <button
