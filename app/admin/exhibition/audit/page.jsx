@@ -24,6 +24,7 @@ const ACTION_META = {
   Approved: { tone: 'success', Icon: CheckCircle2 },
   Confirmed: { tone: 'success', Icon: CheckCircle2 },
   Restored: { tone: 'warning', Icon: RotateCcw },
+  'Rolled back': { tone: 'warning', Icon: RotateCcw },
   Cancelled: { tone: 'danger', Icon: XCircle },
 }
 
@@ -172,6 +173,7 @@ export default function AdminExhibitionAuditPage() {
                   <option value="Cancelled">Cancelled</option>
                   <option value="Restored">Restored</option>
                   <option value="Confirmed">Confirmed</option>
+                  <option value="Rolled back">Rolled back</option>
                 </Select>
               </div>
               <div>

@@ -201,7 +201,9 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
             ? '/api/admin/exhibition/orders/confirm'
             : type === 'cancel'
               ? '/api/admin/exhibition/orders/cancel'
-              : '/api/admin/exhibition/orders/restore'
+              : type === 'rollback'
+                ? '/api/admin/exhibition/orders/rollback'
+                : '/api/admin/exhibition/orders/restore'
       const res = await fetch(path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -209,7 +211,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
       })
       const json = await safeJson(res, path)
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Action failed')
-      const done = (json.approved || json.confirmed || json.cancelled || json.restored || [])
+      const done = (json.approved || json.confirmed || json.cancelled || json.restored || json.rolledBack || [])
       const skipped = (json.failed || []).length
       setOrders((prev) => (prev || []).filter((o) => !done.includes(o.id)))
       setSelected(new Set())
@@ -217,7 +219,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
       setCancelReason('')
       setMsg({
         type: 'success',
-        text: `${done.length} order(s) ${type === 'approve' ? 'approved' : type === 'confirm' ? 'confirmed' : type === 'cancel' ? 'cancelled' : 'restored'}${
+        text: `${done.length} order(s) ${type === 'approve' ? 'approved' : type === 'confirm' ? 'confirmed' : type === 'cancel' ? 'cancelled' : type === 'rollback' ? 'rolled back' : 'restored'}${
           skipped ? ` · ${skipped} skipped` : ''
         }`,
       })
@@ -368,6 +370,9 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
   const canCancel = status === 'Pending' || status === 'Approved'
   const canApprove = status === 'Pending'
   const canRestore = status === 'Cancelled'
+  // Confirmed is terminal for the member, not for the desk: a wrong order closed
+  // at the counter (or returned goods) has to go back to Approved.
+  const canRollback = status === 'Confirmed'
   // Counter invoices (vendor- or admin-captured) can be corrected while they
   // are still pending. Storefront orders are excluded: their lines point at
   // catalogue products and stock reservations.
@@ -380,6 +385,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
     if (value === 'approve') setModal({ type: 'approve', ids: [o.id] })
     if (value === 'confirm') setModal({ type: 'confirm', ids: [o.id] })
     if (value === 'cancel') setModal({ type: 'cancel', ids: [o.id] })
+    if (value === 'rollback') setModal({ type: 'rollback', ids: [o.id] })
     if (value === 'restore') setModal({ type: 'restore', ids: [o.id] })
   }
 
@@ -408,6 +414,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
       {canApprove && <option value="approve">Approve</option>}
       {status === 'Approved' && <option value="confirm">Confirm receipt</option>}
       {canCancel && <option value="cancel">Cancel</option>}
+      {canRollback && <option value="rollback">Roll back to approved</option>}
       {canRestore && <option value="restore">Restore</option>}
     </select>
   )
@@ -427,7 +434,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
     },
     Confirmed: {
       label: 'Closed orders',
-      copy: 'The member has received the goods. These orders are final and feed vendor payouts.',
+      copy: 'The member has received the goods. These feed vendor payouts — roll one back to Approved if it was closed by mistake.',
       tone: 'border-success-border bg-success-bg/40 text-success-fg',
       icon: PackageCheck,
     },
@@ -690,6 +697,17 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 Restore ({selectedCount})
+              </button>
+            )}
+            {canRollback && (
+              <button
+                type="button"
+                onClick={() => selectedCount && setModal({ type: 'rollback', ids: Array.from(selected) })}
+                disabled={!selectedCount || bulkBusy}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-warning-border bg-warning-bg px-3 py-1.5 text-sm font-medium text-warning-fg transition-colors duration-200 ease-sakani hover:brightness-105 disabled:opacity-50"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Roll back ({selectedCount})
               </button>
             )}
           </div>
@@ -1087,7 +1105,9 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
               ? 'Confirm receipt'
               : modal?.type === 'cancel'
                 ? 'Cancel orders'
-                : 'Restore orders'
+                : modal?.type === 'rollback'
+                  ? 'Roll back orders'
+                  : 'Restore orders'
         }
         footer={
           <div className="flex justify-end gap-2">
@@ -1113,7 +1133,9 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                   ? 'Cancel orders'
                   : modal?.type === 'restore'
                     ? 'Restore orders'
-                    : modal?.type === 'confirm'
+                    : modal?.type === 'rollback'
+                      ? 'Roll back orders'
+                      : modal?.type === 'confirm'
                       ? 'Confirm receipt'
                       : 'Approve orders'}
             </button>
@@ -1141,15 +1163,19 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
           <div className="text-sm text-muted">
             {modal?.type === 'restore'
               ? 'Restore '
-              : modal?.type === 'confirm'
-                ? 'Confirm receipt for '
-                : 'Approve '}
+              : modal?.type === 'rollback'
+                ? 'Roll back '
+                : modal?.type === 'confirm'
+                  ? 'Confirm receipt for '
+                  : 'Approve '}
             <b className="text-fg">{modal?.ids?.length || 0}</b> order(s)
             {modal?.type === 'restore'
               ? ' back to Pending?'
-              : modal?.type === 'confirm'
-                ? '? This closes the order on the member\'s behalf.'
-                : ', and the member can then confirm receipt?'}
+              : modal?.type === 'rollback'
+                ? ' from Confirmed back to Approved? They will drop out of vendor payouts until confirmed again, and the member can confirm receipt a second time.'
+                : modal?.type === 'confirm'
+                  ? '? This closes the order on the member\'s behalf.'
+                  : ', and the member can then confirm receipt?'}
           </div>
         )}
       </DraggableModal>
