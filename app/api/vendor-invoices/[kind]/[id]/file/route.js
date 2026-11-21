@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic'
 const KINDS = {
   exhibition: {
     table: 'exhibition_vendor_invoices',
-    select: 'id,storage_bucket,storage_path,file_name,mime_type',
+    select: 'id,vendor_id,storage_bucket,storage_path,file_name,mime_type',
   },
   food: {
     table: 'food_vendor_invoices',
@@ -70,8 +70,11 @@ export async function GET(req, context) {
     if (!inv) return NextResponse.json({ ok: false, error: 'Invoice not found' }, { status: 404 })
 
     // A rep may open only invoices inside their own scope: their branch's food
-    // invoices, or a RAM invoice for one of their own delivery locations. Reps
-    // on the other module get nothing, so a colliding numeric id cannot leak.
+    // invoices, a RAM invoice for one of their own delivery locations, or an
+    // exhibition invoice belonging to a stand in their branch — the same rule
+    // the rep exhibition bank pages use (`getRepBranch` + vendors.branch_id).
+    // Reps on the other module get nothing, so a colliding numeric id cannot
+    // leak.
     if (role === 'rep') {
       const module = String(claims.module || '')
       let allowed = false
@@ -86,21 +89,32 @@ export async function GET(req, context) {
         allowed =
           module === 'ram' &&
           getRepLocationIds(claims).has(Number(inv.ram_delivery_location_id))
+      } else if (kind === 'exhibition') {
+        const branchId = Math.trunc(Number(claims.branch_id))
+        if (Number.isFinite(branchId) && branchId > 0) {
+          const { data: vendor } = await supabase
+            .from('exhibition_vendors')
+            .select('id, branch_id')
+            .eq('id', Number(inv.vendor_id))
+            .maybeSingle()
+          allowed = !!vendor && Number(vendor.branch_id) === branchId
+        }
       }
       if (!allowed) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
     }
 
-    // A vendor may open only their own payout invoices.
+    // A vendor may open only their own exhibition payout invoices — never a
+    // food/RAM invoice whose numeric id happens to collide with one of theirs.
+    // The ownership check uses the row already fetched for this kind, so there
+    // is no second lookup against a table that might not hold the invoice.
     if (role === 'vendor') {
       const ownVendor = Number(claims.vendor_id)
-      const { data: row } = await supabase
-        .from('exhibition_vendor_invoices')
-        .select('vendor_id')
-        .eq('id', invoiceId)
-        .maybeSingle()
-      if (!row || !Number.isFinite(ownVendor) || Number(row.vendor_id) !== ownVendor) {
-        return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
-      }
+      const allowed =
+        kind === 'exhibition' &&
+        Number.isFinite(ownVendor) &&
+        ownVendor > 0 &&
+        Number(inv.vendor_id) === ownVendor
+      if (!allowed) return NextResponse.json({ ok: false, error: 'Forbidden' }, { status: 403 })
     }
 
     const bucket = String(inv.storage_bucket || '')
