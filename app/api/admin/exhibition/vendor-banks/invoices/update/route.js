@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { validateSession } from '@/lib/validation'
 import { createClient } from '@/lib/supabaseServer'
-import { invoiceFileUrl } from '@/lib/invoiceStorage'
+import { invoiceFileLink } from '@/lib/invoiceStorage'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -54,8 +54,7 @@ export async function POST(req) {
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
-    const url = await invoiceFileUrl(supabase, updated)
-    return NextResponse.json({ ok: true, invoice: { ...updated, url } })
+    return NextResponse.json({ ok: true, invoice: { ...updated, url: invoiceFileLink('exhibition', updated) } })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Internal server error' }, { status: 500 })
   }
