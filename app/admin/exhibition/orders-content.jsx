@@ -370,9 +370,11 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
   const canCancel = status === 'Pending' || status === 'Approved'
   const canApprove = status === 'Pending'
   const canRestore = status === 'Cancelled'
-  // Confirmed is terminal for the member, not for the desk: a wrong order closed
-  // at the counter (or returned goods) has to go back to Approved.
-  const canRollback = status === 'Confirmed'
+  // One step back per stage: a wrong approval returns to Pending, a wrong
+  // confirmation returns to Approved. Confirmed is terminal for the member, not
+  // for the desk.
+  const canRollback = status === 'Confirmed' || status === 'Approved'
+  const rollbackLabel = status === 'Confirmed' ? 'Roll back to approved' : 'Roll back to pending'
   // Counter invoices (vendor- or admin-captured) can be corrected while they
   // are still pending. Storefront orders are excluded: their lines point at
   // catalogue products and stock reservations.
@@ -414,7 +416,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
       {canApprove && <option value="approve">Approve</option>}
       {status === 'Approved' && <option value="confirm">Confirm receipt</option>}
       {canCancel && <option value="cancel">Cancel</option>}
-      {canRollback && <option value="rollback">Roll back to approved</option>}
+      {canRollback && <option value="rollback">{rollbackLabel}</option>}
       {canRestore && <option value="restore">Restore</option>}
     </select>
   )
@@ -428,7 +430,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
     },
     Approved: {
       label: 'Ready for collection',
-      copy: 'The member has been cleared to collect. Confirm receipt here only when they cannot use the portal.',
+      copy: 'The member has been cleared to collect. Confirm receipt here only when they cannot use the portal — or roll an approval back to Pending if it was made by mistake.',
       tone: 'border-info-border bg-info-bg/40 text-info-fg',
       icon: CheckCircle2,
     },
@@ -1172,7 +1174,9 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
             {modal?.type === 'restore'
               ? ' back to Pending?'
               : modal?.type === 'rollback'
-                ? ' from Confirmed back to Approved? They will drop out of vendor payouts until confirmed again, and the member can confirm receipt a second time.'
+                ? status === 'Approved'
+                  ? ' back to Pending? They leave the approved queue, the member is no longer cleared to collect, and their ready-for-pickup notification is withdrawn.'
+                  : ' from Confirmed back to Approved? They will drop out of vendor payouts until confirmed again, and the member can confirm receipt a second time.'
                 : modal?.type === 'confirm'
                   ? '? This closes the order on the member\'s behalf.'
                   : ', and the member can then confirm receipt?'}
