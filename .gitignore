@@ -41,3 +41,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local agent tooling (not application code)
+.agents/
+.claude/
+.continue/
+.trae/
+/skills/
+/skills-lock.json
+
+# local build/debug artifacts
+.tmp-*
+dev-*.log
+tmp-build.log
