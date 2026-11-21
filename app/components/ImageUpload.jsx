@@ -78,7 +78,7 @@ export default function ImageUpload({ onImageUploaded, currentImageUrl = null, i
             <img
               src={previewUrl}
               alt="Item preview"
-              className="w-32 h-32 object-cover rounded-lg border-2 border-line-subtle"
+              className="w-32 h-32 object-contain rounded-lg border-2 border-line-subtle bg-subtle"
             />
             {processedKb != null && (
               <p className="mt-1.5 text-center text-[11px] text-muted">
