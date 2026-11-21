@@ -146,7 +146,7 @@ export default function ImageUpload({ onImageUploaded, currentImageUrl = null, i
               />
             </div>
             <p className="text-xs text-subtext mt-1">
-              JPG, PNG, WebP or AVIF — any size. Auto-optimized to 900×900 WebP.
+              JPG, PNG, WebP or AVIF — auto-optimized to WebP, longest edge capped at {PRODUCT_IMAGE_MAX_SIZE}px with the full photo kept.
             </p>
           </div>
         )}

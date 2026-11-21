@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { ImagePlus, Loader2, Sparkles, X } from 'lucide-react'
-import { isSupportedProductImage, optimizeProductImage } from '@/lib/optimizeImage'
+import { isSupportedProductImage, optimizeProductImage, PRODUCT_IMAGE_MAX_SIZE } from '@/lib/optimizeImage'
 
 export default function ImageResizeUpload({ onImageUploaded, currentImageUrl = null, itemSku = '' }) {
   const [uploading, setUploading] = useState(false)
@@ -77,7 +77,7 @@ export default function ImageResizeUpload({ onImageUploaded, currentImageUrl = n
           </div>
           {processed && (
             <p className="pt-1 text-chips text-muted">
-              Optimized: 900×900 WebP · <span className="font-medium text-success-fg">{processed.kb} KB</span>
+              Optimized: WebP, up to {PRODUCT_IMAGE_MAX_SIZE}px · <span className="font-medium text-success-fg">{processed.kb} KB</span>
             </p>
           )}
         </div>
