@@ -13,7 +13,7 @@ export default function ImageUpload({ onImageUploaded, currentImageUrl = null, i
     if (!file) return
 
     if (!isSupportedProductImage(file)) {
-      alert('Please select a JPG, PNG, WebP or AVIF image')
+      alert('Please select a JPG, PNG, WebP, AVIF or HEIC image')
       return
     }
 
@@ -140,13 +140,13 @@ export default function ImageUpload({ onImageUploaded, currentImageUrl = null, i
                 id="image-upload"
                 type="file"
                 className="hidden"
-                accept="image/jpeg,image/jpg,image/png,image/webp,image/avif"
+                accept="image/jpeg,image/jpg,image/png,image/webp,image/avif,image/heic,image/heif,.heic,.heif"
                 onChange={handleFileChange}
                 disabled={uploading}
               />
             </div>
             <p className="text-xs text-subtext mt-1">
-              JPG, PNG, WebP or AVIF — auto-optimized to WebP, longest edge capped at {PRODUCT_IMAGE_MAX_SIZE}px with the full photo kept.
+              JPG, PNG, WebP, AVIF or HEIC — auto-optimized to WebP, longest edge capped at {PRODUCT_IMAGE_MAX_SIZE}px with the full photo kept.
             </p>
           </div>
         )}

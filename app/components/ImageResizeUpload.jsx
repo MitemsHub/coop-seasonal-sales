@@ -13,7 +13,7 @@ export default function ImageResizeUpload({ onImageUploaded, currentImageUrl = n
   const handleFile = async (file) => {
     if (!file) return
     if (!isSupportedProductImage(file)) {
-      alert('Please select a JPG, PNG, WebP or AVIF image')
+      alert('Please select a JPG, PNG, WebP, AVIF or HEIC image')
       return
     }
 
@@ -103,10 +103,16 @@ export default function ImageResizeUpload({ onImageUploaded, currentImageUrl = n
               <span className="font-medium text-brand">Click to upload</span>
               <span className="text-muted"> or drag &amp; drop</span>
             </label>
-            <input id="exh-image-upload" type="file" accept="image/jpeg,image/jpg,image/png,image/webp,image/avif" className="hidden" onChange={onChange} />
+            <input
+              id="exh-image-upload"
+              type="file"
+              accept="image/jpeg,image/jpg,image/png,image/webp,image/avif,image/heic,image/heif,.heic,.heif"
+              className="hidden"
+              onChange={onChange}
+            />
             <p className="mt-2 flex items-center gap-1 text-chips text-muted">
               <Sparkles className="h-3 w-3 text-accent" />
-              Any size — resized &amp; compressed to WebP, the whole photo is kept
+              JPG, PNG, WebP, AVIF or HEIC · any size — resized &amp; compressed to WebP, the whole photo is kept
             </p>
           </>
         )}
