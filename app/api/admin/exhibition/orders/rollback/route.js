@@ -16,6 +16,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { logExhibitionAudit } from '@/lib/exhibitionAudit'
+import { closedCycleIds } from '@/lib/exhibitionCycleGuard'
 import { validateSession, validateNumber, sanitizeString } from '@/lib/validation'
 
 export const runtime = 'nodejs'
@@ -47,19 +48,45 @@ export async function POST(req) {
 
     const { data: rows, error: selErr } = await supabase
       .from('exhibition_orders')
-      .select('id, order_id, status')
+      .select('id, order_id, status, cycle_id')
       .in('id', ids)
     if (selErr) return NextResponse.json({ ok: false, error: selErr.message }, { status: 500 })
 
     const byId = new Map((rows || []).map((r) => [Number(r.id), r]))
-    const rollbackIds = ids.filter((id) => ROLLBACK_FROM_TO[String(byId.get(id)?.status || '')])
+    let rollbackIds = ids.filter((id) => ROLLBACK_FROM_TO[String(byId.get(id)?.status || '')])
 
     // Only Approved or Confirmed orders can be rolled back. Everything else is
     // reported back so the desk knows which rows were left alone.
     const failed = ids
       .filter((id) => !rollbackIds.includes(id))
       .map((id) => ({ id, status: String(byId.get(id)?.status || ''), reason: 'Only approved or confirmed orders can be rolled back' }))
-    if (!rollbackIds.length) return NextResponse.json({ ok: true, rolledBack: [], failed })
+
+    // Approved → Pending only while the season is open. Approval itself is
+    // gated on the cycle being active, so a Pending order in a closed cycle
+    // could never be approved again — it would be stranded. Confirmed →
+    // Approved stays usable after the close: that is the payout-correction
+    // path, and a member can still confirm the re-approved order.
+    const closed = await closedCycleIds(supabase, (rows || []).map((r) => r.cycle_id))
+    const closedCycleApproved = rollbackIds.filter(
+      (id) => String(byId.get(id)?.status || '') === 'Approved' && closed.has(Number(byId.get(id)?.cycle_id))
+    )
+    if (closedCycleApproved.length) {
+      for (const id of closedCycleApproved) {
+        failed.push({ id, status: 'Approved', reason: 'Closed exhibition cycle' })
+      }
+      rollbackIds = rollbackIds.filter((id) => !closedCycleApproved.includes(id))
+    }
+
+    if (!rollbackIds.length) {
+      const allClosed = failed.length > 0 && failed.every((f) => f.reason === 'Closed exhibition cycle')
+      if (allClosed) {
+        return NextResponse.json(
+          { ok: false, error: 'Cannot roll back to pending: this order belongs to a closed exhibition cycle.' },
+          { status: 409 }
+        )
+      }
+      return NextResponse.json({ ok: true, rolledBack: [], failed })
+    }
 
     // A paid vendor payout must be unmarked before the order stops counting
     // towards it. If the table is missing (older deployment) the check is skipped.
