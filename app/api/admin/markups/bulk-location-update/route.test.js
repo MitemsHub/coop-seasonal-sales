@@ -27,8 +27,11 @@ function makeSupabase({ orders = [], lines = [], items = [], cycleColErr = null,
     return Promise.resolve({ error: null })
   } }))
 
+  const audit = []
+
   const supa = {
     deleted: del,
+    audit,
     updatedOrders,
     updatedLines: upd,
     // Captured PostgREST query strings per table for assertions
@@ -44,6 +47,14 @@ function makeSupabase({ orders = [], lines = [], items = [], cycleColErr = null,
         },
       })
       const baseUpdate = { update }
+      if (table === 'audit_log') {
+        return {
+          insert: (row) => {
+            audit.push(row)
+            return Promise.resolve({ error: null })
+          },
+        }
+      }
       if (table === 'branches') {
         return {
           ...baseUpdate,
@@ -201,10 +212,29 @@ describe('POST bulk-location-update — happy paths', () => {
     // Order 10: total 200 loan-based → remaining 100 base; loan 10% → 110
     const o10 = data.updatedOrders.find((o) => o.order_id === 10)
     expect(o10.total_amount).toBe(110)
-    // Order 11: nothing left → auto-cancelled
+    // total_qty follows the lines that remain (order 10 keeps PALM-OIL qty 1)
+    expect(o10.total_qty).toBe(1)
+    // Order 11: nothing left → auto-cancelled and zeroed
     const o11 = data.updatedOrders.find((o) => o.order_id === 11)
     expect(o11.status).toBe('Cancelled')
     expect(o11.total_amount).toBe(0)
+    expect(o11.total_qty).toBe(0)
+
+    // One audit row per affected order, with the SKU, totals and actor
+    expect(data.audit).toHaveLength(2)
+    const audit10 = data.audit.find((a) => a.order_id === '10')
+    expect(audit10.module).toBe('food')
+    expect(audit10.action).toBe('remove_items')
+    expect(audit10.actor).toBe('admin')
+    expect(audit10.detail.skus).toEqual(['RICE50KG'])
+    expect(audit10.detail.previous_total).toBe(300)
+    expect(audit10.detail.new_total).toBe(110)
+    expect(audit10.detail.new_total_qty).toBe(1)
+    expect(audit10.detail.order_cancelled).toBe(false)
+    expect(audit10.detail.note).toContain('RICE50KG')
+    const audit11 = data.audit.find((a) => a.order_id === '11')
+    expect(audit11.detail.order_cancelled).toBe(true)
+    expect(audit11.detail.new_total).toBe(0)
   })
 
   it('does NOT touch other cycles or other branches (cycle mandatory + scoping)', async () => {
@@ -252,6 +282,7 @@ describe('POST bulk-location-update — happy paths', () => {
     expect(b.orders_cancelled).toBe(1)
     expect(data.deleted).not.toHaveBeenCalled()
     expect(data.updatedOrders).toHaveLength(0)
+    expect(data.audit).toHaveLength(0)
   })
 
   it('respects status filter (never touches Cancelled orders)', async () => {

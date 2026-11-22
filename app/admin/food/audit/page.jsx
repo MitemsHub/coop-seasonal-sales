@@ -10,6 +10,7 @@ const ACTIONS = [
   { value: 'post', label: 'Post' },
   { value: 'deliver', label: 'Deliver' },
   { value: 'rollback', label: 'Rollback' },
+  { value: 'remove_items', label: 'Removed items' },
 ]
 
 export default function AdminFoodAuditPage() {

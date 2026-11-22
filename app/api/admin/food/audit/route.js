@@ -12,7 +12,7 @@ import { validateSession } from '@/lib/validation'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const ACTIONS = ['post', 'deliver', 'rollback']
+const ACTIONS = ['post', 'deliver', 'rollback', 'remove_items']
 // orders has FKs to branches but NOT to cycles — fetch cycle names separately.
 const ORDER_SELECT = 'order_id, member_id, member_name_snapshot, status, total_amount, cycle_id, branches:branch_id(id, name, code)'
 
@@ -94,7 +94,9 @@ export async function GET(req) {
           ? `${detail.from || ''} → ${detail.to || ''}${detail.note ? ` · ${detail.note}` : ''}`
           : e.action === 'deliver'
             ? `Delivered by ${detail.deliveredBy || e.actor}`
-            : detail.adminNote || ''
+            : e.action === 'remove_items'
+              ? detail.note || ''
+              : detail.adminNote || ''
       return {
         id: e.id,
         actor: e.actor,

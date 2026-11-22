@@ -17,6 +17,9 @@ export async function POST(request) {
   try {
     const session = await validateSession(request, 'admin')
     if (!session.valid) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
+    // Admin sessions are signed with the role only (shared passcode), so this
+    // falls back to "admin" — the same actor the post/deliver routes record.
+    const actor = String(session.claims?.email || session.claims?.sub || session.claims?.role || 'admin')
 
     const body = await request.json().catch(() => ({}))
     const branchCode = String(body.branch_code || '').trim()
@@ -191,24 +194,41 @@ export async function POST(request) {
       }
     }
 
+    const changes = []
+
     for (const orderId of affectedOrderIds) {
       const orderRow = orders.find((o) => o.order_id === orderId)
 
-      // Get remaining lines for this order
+      // Get remaining lines for this order. qty rides along because total_qty is
+      // what the order list shows as "Items", so it has to follow the lines.
       const { data: remainingLines } = await supabase
         .from('order_lines')
-        .select('amount')
+        .select('qty, amount')
         .eq('order_id', orderId)
 
       const baseTotal = (remainingLines || []).reduce((sum, l) => sum + Number(l.amount || 0), 0)
+      const remainingQty = (remainingLines || []).reduce((sum, l) => sum + Number(l.qty || 0), 0)
+      const removed = linesToRemove.filter((l) => l.order_id === orderId)
+      const change = {
+        orderId,
+        orderRow,
+        removed,
+        removedQty: removed.reduce((sum, l) => sum + Number(l.qty || 0), 0),
+        removedAmount: removed.reduce((sum, l) => sum + Number(l.amount || 0), 0),
+        previousTotal: Number(orderRow?.total_amount || 0),
+        newTotal: 0,
+        remainingQty,
+        cancelled: false,
+      }
 
       if (!remainingLines || remainingLines.length === 0) {
-        // Order has no more items — cancel it
+        // Order has no more items — cancel it and zero its item count
         const { error: cancelErr } = await supabase
           .from('orders')
-          .update({ status: 'Cancelled', total_amount: 0, updated_at: new Date().toISOString() })
+          .update({ status: 'Cancelled', total_amount: 0, total_qty: 0, updated_at: new Date().toISOString() })
           .eq('order_id', orderId)
         if (cancelErr) errors.push({ order_id: orderId, error: cancelErr.message })
+        change.cancelled = true
       } else {
         const isLoan = orderRow?.payment_option === 'Loan'
         let newTotal = baseTotal
@@ -218,13 +238,62 @@ export async function POST(request) {
           ratePct = Math.max(0, Number(pct || 0))
           newTotal = baseTotal + Math.round(baseTotal * (ratePct / 100))
         }
-        // Update the order total
+        // Update the order total and the item count left on it
+        const roundedTotal = Math.round(newTotal * 100) / 100
+        change.newTotal = roundedTotal
         const { error: updateErr } = await supabase
           .from('orders')
-          .update({ total_amount: Math.round(newTotal * 100) / 100, updated_at: new Date().toISOString() })
+          .update({ total_amount: roundedTotal, total_qty: remainingQty, updated_at: new Date().toISOString() })
           .eq('order_id', orderId)
         if (updateErr) errors.push({ order_id: orderId, error: updateErr.message })
       }
+
+      changes.push(change)
+    }
+
+    // Audit trail: one row per affected order so the food audit log answers
+    // "who removed which SKUs, and when" for every order touched. Best-effort —
+    // the lines are already deleted, so a failing insert lands in `errors`
+    // rather than failing the whole run.
+    const skuByItemId = new Map((items || []).map((i) => [i.item_id, i.sku]))
+    const money = (v) => `₦${Math.round(Number(v || 0)).toLocaleString('en-NG')}`
+    for (const c of changes) {
+      const skusForOrder = [...new Set(c.removed.map((l) => skuByItemId.get(l.item_id)).filter(Boolean))]
+      const skuText = skusForOrder.length ? skusForOrder.join(', ') : 'items'
+      const removalText = `Removed ${skuText} (${c.removedQty} unit${c.removedQty === 1 ? '' : 's'}, ${money(c.removedAmount)})`
+      const note = c.cancelled
+        ? `${removalText} — order cancelled, no items left (was ${money(c.previousTotal)})`
+        : `${removalText} — total ${money(c.previousTotal)} → ${money(c.newTotal)}`
+
+      let auditErr = null
+      try {
+        const { error: insertErr } = await supabase.from('audit_log').insert({
+          module: 'food',
+          actor,
+          action: 'remove_items',
+          order_id: String(c.orderId),
+          cycle_id: c.orderRow?.cycle_id ?? cycleId,
+          delivery_branch_id: c.orderRow?.delivery_branch_id ?? branchId,
+          detail: {
+            note,
+            skus: skusForOrder,
+            removed_lines: c.removed.length,
+            removed_qty: c.removedQty,
+            removed_amount: c.removedAmount,
+            previous_total: c.previousTotal,
+            new_total: c.cancelled ? 0 : c.newTotal,
+            new_total_qty: c.cancelled ? 0 : c.remainingQty,
+            order_cancelled: c.cancelled,
+            branch_code: branchCode,
+            cycle_id: cycleId,
+            requested_skus: skus,
+          },
+        })
+        auditErr = insertErr || null
+      } catch (e) {
+        auditErr = e
+      }
+      if (auditErr) errors.push({ order_id: c.orderId, error: `Audit log: ${auditErr.message || 'insert failed'}` })
     }
 
     return NextResponse.json({

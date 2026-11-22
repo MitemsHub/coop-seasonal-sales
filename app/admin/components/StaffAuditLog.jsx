@@ -28,6 +28,7 @@ const ACTION_META = {
   post: { tone: 'info', Icon: History },
   deliver: { tone: 'success', Icon: Truck },
   rollback: { tone: 'warning', Icon: RotateCcw },
+  remove_items: { tone: 'danger', Icon: XCircle, label: 'Removed items' },
   approve: { tone: 'success', Icon: CheckCircle2 },
   restore: { tone: 'warning', Icon: RotateCcw },
   cancel: { tone: 'danger', Icon: XCircle },
@@ -259,7 +260,7 @@ export default function StaffAuditLog({ module, apiPath, title = 'Audit Log', su
                         <Badge tone={meta.tone} variant="subtle">
                           <span className="inline-flex items-center gap-1">
                             <meta.Icon className="h-3 w-3" strokeWidth={2.4} />
-                            {ev.action}
+                            {meta.label || ev.action}
                           </span>
                         </Badge>
                       </TD>
