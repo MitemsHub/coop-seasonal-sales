@@ -228,6 +228,32 @@ describe('POST bulk-location-update — happy paths', () => {
     expect(b.affected_orders).toBe(1)
   })
 
+  it('preview reports what would be removed and writes nothing', async () => {
+    data = makeSupabase({
+      items: [{ item_id: 1, sku: 'RICE50KG' }],
+      orders: [
+        { order_id: 40, status: 'Pending', total_amount: 500, payment_option: 'Cash', delivery_branch_id: 7, cycle_id: 99 },
+        { order_id: 41, status: 'Posted', total_amount: 700, payment_option: 'Cash', delivery_branch_id: 7, cycle_id: 99 },
+      ],
+      lines: [
+        { id: 1, order_id: 40, item_id: 1, qty: 1, unit_price: 500, amount: 500 },
+        { id: 2, order_id: 41, item_id: 1, qty: 1, unit_price: 500, amount: 500 },
+        { id: 3, order_id: 41, item_id: 2, qty: 1, unit_price: 200, amount: 200 },
+      ],
+    })
+    createClient.mockReturnValue(data)
+    const res = await POST(req({ branch_code: 'ABE', skus: ['RICE50KG'], cycle_id: 99, preview: true }))
+    const b = await res.json()
+    expect(res.status).toBe(200)
+    expect(b.preview).toBe(true)
+    expect(b.removed_lines).toBe(2)
+    expect(b.affected_orders).toBe(2)
+    // Order 40 loses its only line, order 41 keeps PALM-OIL.
+    expect(b.orders_cancelled).toBe(1)
+    expect(data.deleted).not.toHaveBeenCalled()
+    expect(data.updatedOrders).toHaveLength(0)
+  })
+
   it('respects status filter (never touches Cancelled orders)', async () => {
     data = makeSupabase({
       items: [{ item_id: 1, sku: 'RICE50KG' }],

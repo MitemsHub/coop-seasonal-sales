@@ -7,6 +7,7 @@ import Select from '../../../components/ui/Select'
 import Label from '../../../components/ui/Label'
 import Button from '../../../components/ui/Button'
 import ExportButton from '../../../components/ui/ExportButton'
+import Modal from '../../../components/ui/Modal'
 import { FileSpreadsheet } from 'lucide-react'
 
 export default function AdminMarkupsPage() {
@@ -51,6 +52,13 @@ export default function AdminMarkupsPage() {
   const [bulkCycleId, setBulkCycleId] = useState('')
   const [bulkProcessing, setBulkProcessing] = useState(false)
   const [bulkResult, setBulkResult] = useState(null)
+  // Confirmation step: the destructive call only runs after the admin has seen
+  // the branch, the cycle and the exact preview of what will be removed.
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
+  const [bulkConfirmPayload, setBulkConfirmPayload] = useState(null)
+  const [bulkPreview, setBulkPreview] = useState(null)
+  const [bulkPreviewLoading, setBulkPreviewLoading] = useState(false)
+  const [bulkPreviewError, setBulkPreviewError] = useState('')
 
   const Spinner = ({ className = 'h-4 w-4 text-on-accent' }) => (
     <svg className={`animate-spin ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -377,24 +385,27 @@ export default function AdminMarkupsPage() {
     }
   }
 
-  const bulkUpdateDelivery = async () => {
+  const bulkUpdateDelivery = async (payloadOverride = null) => {
     try {
       setBulkProcessing(true)
       setBulkResult(null)
       setMessage('')
-      const skusArray = bulkSkus.split(',').map((s) => s.trim()).filter(Boolean)
-      if (!bulkBranchCode || skusArray.length === 0) {
-        setBulkResult({ ok: false, error: 'Please select a branch and enter at least one SKU' })
-        return
-      }
-      if (!bulkCycleId) {
-        setBulkResult({ ok: false, error: 'Please select a cycle — removal is scoped to one cycle, so it cannot run across all cycles' })
-        return
-      }
-      const payload = {
-        branch_code: bulkBranchCode,
-        skus: skusArray,
-        cycle_id: Number(bulkCycleId),
+      let payload = payloadOverride
+      if (!payload) {
+        const skusArray = bulkSkus.split(',').map((s) => s.trim()).filter(Boolean)
+        if (!bulkBranchCode || skusArray.length === 0) {
+          setBulkResult({ ok: false, error: 'Please select a branch and enter at least one SKU' })
+          return
+        }
+        if (!bulkCycleId) {
+          setBulkResult({ ok: false, error: 'Please select a cycle — removal is scoped to one cycle, so it cannot run across all cycles' })
+          return
+        }
+        payload = {
+          branch_code: bulkBranchCode,
+          skus: skusArray,
+          cycle_id: Number(bulkCycleId),
+        }
       }
 
       const res = await fetch('/api/admin/markups/bulk-location-update', {
@@ -406,11 +417,50 @@ export default function AdminMarkupsPage() {
       if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to process bulk update')
       setBulkResult(json)
       setMessage(json.message || 'Bulk update completed')
+      setBulkConfirmOpen(false)
+      setBulkConfirmPayload(null)
+      setBulkPreview(null)
     } catch (err) {
       setBulkResult({ ok: false, error: err.message })
       setMessage(`Bulk update failed: ${err.message}`)
     } finally {
       setBulkProcessing(false)
+    }
+  }
+
+  // Validate the inputs, then open the confirmation dialog and ask the API
+  // what would actually be removed (preview only — nothing is deleted here).
+  const openBulkConfirm = async () => {
+    setBulkResult(null)
+    setMessage('')
+    const skusArray = bulkSkus.split(',').map((s) => s.trim()).filter(Boolean)
+    if (!bulkBranchCode || skusArray.length === 0) {
+      setBulkResult({ ok: false, error: 'Please select a branch and enter at least one SKU' })
+      return
+    }
+    if (!bulkCycleId) {
+      setBulkResult({ ok: false, error: 'Please select a cycle — removal is scoped to one cycle, so it cannot run across all cycles' })
+      return
+    }
+    const payload = { branch_code: bulkBranchCode, skus: skusArray, cycle_id: Number(bulkCycleId) }
+    setBulkConfirmPayload(payload)
+    setBulkPreview(null)
+    setBulkPreviewError('')
+    setBulkConfirmOpen(true)
+    setBulkPreviewLoading(true)
+    try {
+      const res = await fetch('/api/admin/markups/bulk-location-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, preview: true }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to preview bulk removal')
+      setBulkPreview(json)
+    } catch (err) {
+      setBulkPreviewError(err.message)
+    } finally {
+      setBulkPreviewLoading(false)
     }
   }
 
@@ -478,6 +528,15 @@ export default function AdminMarkupsPage() {
       setUploading(false)
     }
   }
+
+  // Confirmation-dialog context: the branch/cycle names the admin picked and
+  // whether the cycle is a finished season (is_active is the app-wide open flag).
+  const bulkBranch = branches.find((b) => b.code === bulkBranchCode) || null
+  const bulkCycle = cycles.find((c) => String(c.id) === String(bulkCycleId)) || null
+  const bulkCycleClosed = !!bulkCycle && !bulkCycle.is_active
+  const bulkConfirmSkus = bulkConfirmPayload?.skus || []
+  const bulkConfirmBlocked =
+    bulkPreviewLoading || Boolean(bulkPreviewError) || !bulkPreview || bulkPreview.removed_lines === 0
 
   return (
     <ProtectedRoute allowedRoles={['admin']}>
@@ -886,7 +945,7 @@ export default function AdminMarkupsPage() {
           </div>
           <Button
             variant="danger"
-            onClick={bulkUpdateDelivery}
+            onClick={openBulkConfirm}
             loading={bulkProcessing}
             disabled={!bulkBranchCode || !bulkCycleId || !bulkSkus.trim()}
           >
@@ -920,6 +979,100 @@ export default function AdminMarkupsPage() {
           </div>
         )}
       </div>
+
+      <Modal
+        open={bulkConfirmOpen}
+        onClose={() => {
+          if (!bulkProcessing) setBulkConfirmOpen(false)
+        }}
+        title="Remove items from orders?"
+        description="This deletes the matching order lines and recalculates order totals. It cannot be undone."
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setBulkConfirmOpen(false)} disabled={bulkProcessing}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => bulkUpdateDelivery(bulkConfirmPayload)}
+              loading={bulkProcessing}
+              disabled={bulkConfirmBlocked}
+            >
+              {bulkCycleClosed ? 'Remove items anyway' : 'Remove items'}
+            </Button>
+          </>
+        }
+      >
+        <dl className="space-y-3 text-sm">
+          <div className="flex gap-3">
+            <dt className="w-16 shrink-0 text-muted">Branch</dt>
+            <dd className="font-medium text-fg">
+              {bulkBranch ? `${bulkBranch.name} (${bulkBranch.code})` : bulkBranchCode}
+            </dd>
+          </div>
+          <div className="flex gap-3">
+            <dt className="w-16 shrink-0 text-muted">Cycle</dt>
+            <dd className="text-fg">
+              {bulkCycle ? `${bulkCycle.name}${bulkCycle.code ? ` (${bulkCycle.code})` : ''}` : String(bulkCycleId || '')}
+              {bulkCycle && (
+                <span
+                  className={`ml-2 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                    bulkCycleClosed ? 'bg-subtle text-warning-fg' : 'bg-subtle text-muted'
+                  }`}
+                >
+                  {bulkCycleClosed ? 'Closed' : 'Active'}
+                </span>
+              )}
+            </dd>
+          </div>
+          <div className="flex gap-3">
+            <dt className="w-16 shrink-0 text-muted">Items</dt>
+            <dd className="break-words text-fg">{bulkConfirmSkus.join(', ') || '—'}</dd>
+          </div>
+        </dl>
+
+        {bulkCycleClosed && (
+          <div className="mt-3 rounded-lg border border-line bg-subtle p-3 text-xs text-warning-fg">
+            <p className="font-medium">This cycle is closed.</p>
+            <p className="mt-1">
+              Removing items here rewrites totals on orders from a finished season, including Delivered orders that were
+              already reported.
+            </p>
+          </div>
+        )}
+
+        <div className="mt-3 rounded-lg border border-line-subtle bg-subtle/60 p-3 text-sm">
+          {bulkPreviewLoading ? (
+            <p className="flex items-center gap-2 text-muted">
+              <Spinner className="h-4 w-4 text-muted" /> Checking what will be removed…
+            </p>
+          ) : bulkPreviewError ? (
+            <p className="text-danger-fg">Could not preview: {bulkPreviewError}</p>
+          ) : bulkPreview ? (
+            bulkPreview.removed_lines === 0 ? (
+              <p className="text-muted">
+                No order lines match those SKUs for this branch and cycle — nothing will be removed.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                <p className="font-medium text-fg">
+                  Will remove {bulkPreview.removed_lines} item line(s) from {bulkPreview.affected_orders} order(s).
+                </p>
+                {bulkPreview.orders_cancelled > 0 && (
+                  <p className="text-muted">
+                    {bulkPreview.orders_cancelled} order(s) will have no items left and will be automatically cancelled.
+                  </p>
+                )}
+                {bulkPreview.missing_skus?.length > 0 && (
+                  <p className="text-warning-fg">
+                    Not found (nothing removed for these): {bulkPreview.missing_skus.join(', ')}
+                  </p>
+                )}
+              </div>
+            )
+          ) : null}
+        </div>
+      </Modal>
     </div>
     </ProtectedRoute>
   )

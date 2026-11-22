@@ -113,6 +113,45 @@ export async function POST(request) {
       })
     }
 
+    // Preview mode: report exactly what a real run would remove, without
+    // deleting anything. The confirmation dialog calls this first so the admin
+    // sees the branch/cycle scope and the order count before anything is lost.
+    if (body.preview) {
+      const previewOrderIds = [...new Set(linesToRemove.map((l) => l.order_id))]
+      const { data: allLines, error: allErr } = await supabase
+        .from('order_lines')
+        .select('id, order_id')
+        .in('order_id', previewOrderIds)
+      if (allErr) return NextResponse.json({ ok: false, error: allErr.message }, { status: 500 })
+
+      const totalByOrder = new Map()
+      for (const l of allLines || []) {
+        totalByOrder.set(l.order_id, (totalByOrder.get(l.order_id) || 0) + 1)
+      }
+      const removingByOrder = new Map()
+      for (const l of linesToRemove) {
+        removingByOrder.set(l.order_id, (removingByOrder.get(l.order_id) || 0) + 1)
+      }
+      const ordersCancelled = previewOrderIds.filter(
+        (id) => (removingByOrder.get(id) || 0) >= (totalByOrder.get(id) || 0)
+      ).length
+
+      return NextResponse.json({
+        ok: true,
+        preview: true,
+        affected_orders: previewOrderIds.length,
+        removed_lines: linesToRemove.length,
+        orders_cancelled: ordersCancelled,
+        removed_details: linesToRemove.map((l) => ({
+          order_id: l.order_id,
+          item_id: l.item_id,
+          quantity: l.qty,
+          line_total: l.amount,
+        })),
+        missing_skus: missingSkus,
+      })
+    }
+
     // 5. Delete the matching order_lines
     const lineIds = linesToRemove.map((l) => l.id)
     const { error: delErr } = await supabase
