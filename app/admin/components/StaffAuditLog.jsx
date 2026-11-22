@@ -232,7 +232,7 @@ export default function StaffAuditLog({ module, apiPath, title = 'Audit Log', su
               <p className="max-w-sm text-xs text-muted">
                 {module === 'ram'
                   ? 'Approvals, cancellations, restores and deliveries on ram orders will appear here.'
-                  : 'Posts, deliveries and rollbacks on food orders will appear here.'}
+                  : 'Posts, deliveries, rollbacks and item removals on food orders will appear here.'}
               </p>
             </div>
           ) : (

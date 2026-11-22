@@ -18,7 +18,7 @@ export default function AdminFoodAuditPage() {
     <StaffAuditLog
       module="food"
       apiPath="/api/admin/food/audit"
-      subtitle="Who posted, delivered or rolled back each food order — across every branch."
+      subtitle="Who posted, delivered, rolled back or removed items from each food order — across every branch."
       actions={ACTIONS}
       locationLabel="Branch"
     />
