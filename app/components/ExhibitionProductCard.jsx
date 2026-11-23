@@ -4,19 +4,30 @@
 // One exhibition product card — the shared buying unit across the shop, the
 // all-products page and the vendor hub. Image, price (+ negotiated chip),
 // stock and the qty stepper all live here so the three surfaces can't drift.
+// Products with more than one photo get a swipeable carousel here and a
+// gallery inside the View popup.
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Minus, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react'
 import Badge from './ui/Badge'
 import Button from './ui/Button'
 import DraggableModal from './DraggableModal'
 
 const naira = (v) => `₦${Number(v || 0).toLocaleString()}`
+const PLACEHOLDER = '/images/items/placeholder.svg'
 
 export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true }) {
   const router = useRouter()
   const [viewOpen, setViewOpen] = useState(false)
+  const [index, setIndex] = useState(0)
+
+  const images =
+    Array.isArray(p.images) && p.images.length ? p.images : [p.image_url || PLACEHOLDER]
+  const safeIndex = Math.min(index, images.length - 1)
+  const many = images.length > 1
+
+  const step = (delta) => setIndex((i) => (i + delta + images.length) % images.length)
 
   // The inset lives on a wrapper, not on the image box: `fill` pins the image
   // to inset-0, so padding on the padded parent was ignored and photos bled to
@@ -24,8 +35,8 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
   const image = (
     <div className="absolute inset-1.5">
       <Image
-        src={p.image_url || '/images/items/placeholder.svg'}
-        alt={p.name}
+        src={images[safeIndex]}
+        alt={many ? `${p.name} — photo ${safeIndex + 1} of ${images.length}` : p.name}
         fill
         sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 18vw"
         // Contain, not cover: a photo the vendor framed themselves should show
@@ -33,33 +44,76 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
         className="object-contain transition-transform duration-500 ease-sakani group-hover:scale-[1.03]"
         loading="lazy"
         onError={(e) => {
-          e.currentTarget.src = '/images/items/placeholder.svg'
+          e.currentTarget.src = PLACEHOLDER
         }}
       />
     </div>
   )
 
-  return (
-    <div className="group flex flex-col overflow-hidden rounded-xl border border-line bg-surface transition-all duration-200 ease-sakani hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md">
-      {/* Uniform 4:3 image — keeps the card compact so more fit per row */}
+  // A live carousel as siblings of the card image. The card-wide "open the
+  // vendor" button sits underneath, so the arrows take a tap before it does.
+  const carousel = many ? (
+    <>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          step(-1)
+        }}
+        aria-label="Previous photo"
+        className="absolute left-1 top-1/2 z-20 -translate-y-1/2 rounded-full bg-surface/85 p-1 text-fg shadow-sm backdrop-blur transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2.4} />
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          step(1)
+        }}
+        aria-label="Next photo"
+        className="absolute right-1 top-1/2 z-20 -translate-y-1/2 rounded-full bg-surface/85 p-1 text-fg shadow-sm backdrop-blur transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+      >
+        <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.4} />
+      </button>
+      <div className="pointer-events-none absolute inset-x-0 bottom-1.5 z-20 flex items-center justify-center gap-1">
+        {images.map((src, i) => (
+          <span
+            key={`${src}-${i}`}
+            className={`h-1.5 w-1.5 rounded-full transition-colors ${i === safeIndex ? 'bg-brand' : 'bg-line-strong'}`}
+          />
+        ))}
+      </div>
+    </>
+  ) : null
+
+  const imageArea = (
+    <div className="relative block aspect-[4/3] w-full overflow-hidden bg-white dark:bg-subtle">
+      {image}
       {showVendor ? (
         <button
           type="button"
           onClick={() => router.push(`/exhibition/vendor/${p.vendor_id}`)}
           aria-label={`View ${p.vendor_name || 'vendor'} hub`}
-          className="relative block aspect-[4/3] w-full overflow-hidden bg-white dark:bg-subtle"
-        >
-          {image}
-        </button>
-      ) : (
-        <div className="relative block aspect-[4/3] w-full overflow-hidden bg-white dark:bg-subtle">{image}</div>
-      )}
+          className="absolute inset-0 z-10"
+        />
+      ) : null}
+      {carousel}
+    </div>
+  )
+
+  const showView = !!p.description || many
+
+  return (
+    <div className="group flex flex-col overflow-hidden rounded-xl border border-line bg-surface transition-all duration-200 ease-sakani hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md">
+      {/* Uniform 4:3 image — keeps the card compact so more fit per row */}
+      {imageArea}
 
       <div className="flex flex-1 flex-col p-2">
         {/* Two lines max so a very long product name can't stretch the card
             (or the grid row) and squash the price and stepper. */}
         <div className="line-clamp-2 break-words text-xs font-semibold leading-snug text-fg" title={p.name}>{p.name}</div>
-        {!!p.description && (
+        {(!!p.description || many) && (
           <div className="mt-0.5 flex items-start gap-1">
             <p className="line-clamp-2 min-w-0 flex-1 break-words text-[11px] leading-snug text-muted" title={p.description}>
               {p.description}
@@ -79,6 +133,7 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
           {p.qty !== null && p.qty !== undefined && p.qty > 0 && (
             <span className="font-medium text-success-fg">· {p.qty} left</span>
           )}
+          {many && <span className="ml-auto font-medium text-brand">{images.length} photos</span>}
         </div>
 
         <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
@@ -152,6 +207,7 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
         onClose={() => setViewOpen(false)}
         title="Product details"
         align="center"
+        widthClass="max-w-lg w-full mx-4"
         footer={
           <Button variant="secondary" onClick={() => setViewOpen(false)}>
             Close
@@ -159,17 +215,64 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
         }
       >
         <div className="space-y-3">
-          <div className="relative flex h-36 w-full items-center justify-center overflow-hidden rounded-xl border border-line-subtle bg-white p-2 sm:h-52 dark:bg-subtle">
+          {/* Gallery — same index as the card, so stepping here starts where
+              the member left off. */}
+          <div className="relative flex h-56 w-full items-center justify-center overflow-hidden rounded-xl border border-line-subtle bg-white p-2 sm:h-72 dark:bg-subtle">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={p.image_url || '/images/items/placeholder.svg'}
-              alt={p.name}
+              src={images[safeIndex]}
+              alt={many ? `${p.name} — photo ${safeIndex + 1} of ${images.length}` : p.name}
               className="h-full w-full object-contain"
               onError={(e) => {
-                e.currentTarget.src = '/images/items/placeholder.svg'
+                e.currentTarget.src = PLACEHOLDER
               }}
             />
+            {many && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => step(-1)}
+                  aria-label="Previous photo"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-surface/90 p-1.5 text-fg shadow-sm backdrop-blur hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                >
+                  <ChevronLeft className="h-4 w-4" strokeWidth={2.4} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => step(1)}
+                  aria-label="Next photo"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-surface/90 p-1.5 text-fg shadow-sm backdrop-blur hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                >
+                  <ChevronRight className="h-4 w-4" strokeWidth={2.4} />
+                </button>
+                <span className="absolute right-2 top-2 rounded-full bg-fg/70 px-2 py-0.5 text-[10px] font-semibold text-on-accent tabular-nums">
+                  {safeIndex + 1}/{images.length}
+                </span>
+              </>
+            )}
           </div>
+
+          {many && (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {images.map((src, i) => (
+                <button
+                  key={`${src}-${i}`}
+                  type="button"
+                  onClick={() => setIndex(i)}
+                  aria-label={`Show photo ${i + 1}`}
+                  aria-current={i === safeIndex}
+                  className={[
+                    'shrink-0 overflow-hidden rounded-lg border-2 transition-colors',
+                    i === safeIndex ? 'border-brand' : 'border-line-subtle hover:border-line-strong',
+                  ].join(' ')}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={src} alt="" className="h-14 w-14 object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
+
           <div>
             <h3 className="break-words text-base font-semibold text-fg">{p.name}</h3>
             {showVendor && p.vendor_name && (
@@ -195,14 +298,16 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
               </span>
             )}
           </p>
-          <div className="border-t border-line-subtle pt-3">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Description</h4>
-            {/* Long descriptions scroll inside the popup instead of stretching
-                it past the viewport, which on phones pushed Close off-screen. */}
-            <p className="mt-1 max-h-40 overflow-y-auto overscroll-contain whitespace-pre-line break-words pr-1 text-sm leading-relaxed text-fg">
-              {p.description}
-            </p>
-          </div>
+          {!!p.description && (
+            <div className="border-t border-line-subtle pt-3">
+              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted">Description</h4>
+              {/* Long descriptions scroll inside the popup instead of stretching
+                  it past the viewport, which on phones pushed Close off-screen. */}
+              <p className="mt-1 max-h-40 overflow-y-auto overscroll-contain whitespace-pre-line break-words pr-1 text-sm leading-relaxed text-fg">
+                {p.description}
+              </p>
+            </div>
+          )}
         </div>
       </DraggableModal>
     </div>

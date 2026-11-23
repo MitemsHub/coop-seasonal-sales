@@ -16,6 +16,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { resolveMemberScope } from '@/lib/memberScope'
+import { cleanProductImages } from '@/lib/exhibitionProductImages'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -48,7 +49,13 @@ const PAGE = 1000
 
 async function loadProducts(supabase, cycleId) {
   let lastError = null
-  for (const extra of [', description, discount_pct', ', description', '']) {
+  for (const extra of [
+    ', description, discount_pct, image_urls',
+    ', description, image_urls',
+    ', description, discount_pct',
+    ', description',
+    '',
+  ]) {
     const rows = []
     let failed = null
     for (let from = 0; ; from += PAGE) {
@@ -70,7 +77,7 @@ async function loadProducts(supabase, cycleId) {
     }
     if (!failed) return { data: rows, error: null }
     lastError = failed
-    if (!/description|discount_pct|schema cache/i.test(String(failed.message || ''))) break
+    if (!/description|discount_pct|image_urls|schema cache/i.test(String(failed.message || ''))) break
   }
   return { data: null, error: lastError }
 }
@@ -237,6 +244,8 @@ export async function GET(req) {
         negotiated_note: '',
         qty: p.qty === null ? null : Math.max(0, Number(p.qty) - (heldByOthers.get(Number(p.id)) || 0)),
         image_url: p.image_url || '',
+        // Ordered photos for the carousel; the first entry is the cover.
+        images: cleanProductImages([...(Array.isArray(p.image_urls) ? p.image_urls : []), p.image_url]),
       }
     })
 

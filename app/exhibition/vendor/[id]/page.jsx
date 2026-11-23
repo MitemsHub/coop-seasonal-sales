@@ -12,6 +12,7 @@ import ProtectedRoute from '../../../components/ProtectedRoute'
 import CartStickyBar from '../../../components/CartStickyBar'
 import ExhibitionCycleHint from '../../../components/ExhibitionCycleHint'
 import ContinueShoppingBanner from '../../../components/ContinueShoppingBanner'
+import BackLink from '../../../components/BackLink'
 import useExhibitionCatalog from '../../../hooks/useExhibitionCatalog'
 import useExhibitionCart from '../../../hooks/useExhibitionCart'
 import ModuleClosedPanel from '../../../components/ModuleClosedPanel'
@@ -116,6 +117,10 @@ function VendorHubContent() {
         </div>
 
         <div className="relative p-fluid pb-28 sm:pb-32 md:pb-36 max-w-7xl mx-auto">
+          {/* Without this, opening a stand left the member with no way back to
+              the shop except the browser's own back button. */}
+          <BackLink href="/exhibition" label="Back to shop" className="mb-3" />
+
           {/* Continue-shopping banner — surfaces food/ram carts here; the
               exhibition cart is already covered by the sticky cart bar. */}
           <ContinueShoppingBanner excludeModules={['exhibition']} className="mb-fluid-lg" />

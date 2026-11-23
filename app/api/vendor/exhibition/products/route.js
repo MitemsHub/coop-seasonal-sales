@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { getVendorContext } from '../../_session'
 import { reserveSkus } from '@/lib/skuFormat'
+import { cleanProductImages } from '@/lib/exhibitionProductImages'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -19,11 +20,15 @@ export async function GET(req) {
     // description and discount_pct arrive with their own migrations. Read the
     // full row first, then drop whichever column is not there yet, so a deploy
     // ahead of the SQL never blanks the vendor's product page.
-    const attempts = [
+    // Photos (image_urls) also arrive with their own migration: try each column
+    // set with image_urls first, then without, so a deploy ahead of the SQL
+    // never blanks the vendor's product page.
+    const colsWithoutImages = [
       'id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, discount_pct, pending_discount_pct, qty, image_url, status, approval_status, approval_note, approval_requested_at, pending_vendor_price, categories:category_id(name)',
       'id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, pending_vendor_price, qty, image_url, status, approval_status, approval_note, approval_requested_at, categories:category_id(name)',
       'id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, pending_vendor_price, qty, image_url, status, approval_status, approval_note, approval_requested_at, categories:category_id(name)',
     ]
+    const attempts = colsWithoutImages.flatMap((cols) => [`${cols}, image_urls`, cols])
     // Page past the 1,000-row response cap so a stand with a large catalogue
     // still sees every product in its portal.
     const PAGE = 1000
@@ -56,7 +61,7 @@ export async function GET(req) {
         break
       }
       error = failed
-      if (!/description|discount_pct|schema cache/i.test(String(error.message || ''))) break
+      if (!/description|discount_pct|image_urls|schema cache/i.test(String(error.message || ''))) break
     }
     if (error) return NextResponse.json({ error: error.message || 'Failed to load products' }, { status: 500 })
 
@@ -86,7 +91,11 @@ export async function POST(req) {
     // The vendor price is the member price; there is no co-op markup.
     const qty = body?.qty === '' || body?.qty === null || body?.qty === undefined ? null : Math.max(0, Number(body?.qty))
     const categoryId = body?.category_id ? Number(body.category_id) : null
-    const imageUrl = String(body?.image_url || '').trim()
+    // A product can carry several photos. The first is the cover and is
+    // mirrored into image_url for the cart, orders and invoices.
+    const images = cleanProductImages(
+      Array.isArray(body?.image_urls) ? body.image_urls : [String(body?.image_url || '')]
+    )
     const description = String(body?.description || '').trim().slice(0, 2000)
     const discountPct = Math.trunc(Number(body?.discount_pct || 0))
     if (!Number.isFinite(discountPct) || discountPct < 0 || discountPct > 90) {
@@ -127,27 +136,32 @@ export async function POST(req) {
       existingSkus: existingSkus.map((row) => row.sku),
     })
 
-    const { data, error } = await supabase
-      .from('exhibition_products')
-      .insert({
-        cycle_id: ctx.cycle_id,
-        vendor_id: ctx.vendor_id,
-        branch_id: ctx.branch_id,
-        category_id: categoryId,
-        name,
-        sku,
-        unit,
-        description,
-        vendor_price: vendorPrice,
-        discount_pct: discountPct,
-        qty,
-        image_url: imageUrl,
-        status,
-        approval_status: 'pending',
-        approval_requested_at: new Date().toISOString(),
-      })
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, discount_pct, qty, image_url, status, approval_status, pending_vendor_price, created_at')
-      .single()
+    const insertRow = {
+      cycle_id: ctx.cycle_id,
+      vendor_id: ctx.vendor_id,
+      branch_id: ctx.branch_id,
+      category_id: categoryId,
+      name,
+      sku,
+      unit,
+      description,
+      vendor_price: vendorPrice,
+      discount_pct: discountPct,
+      qty,
+      image_url: images[0] || '',
+      image_urls: images,
+      status,
+      approval_status: 'pending',
+      approval_requested_at: new Date().toISOString(),
+    }
+    const RETURN_COLS =
+      'id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, discount_pct, qty, image_url, status, approval_status, pending_vendor_price, created_at'
+    let saved = await supabase.from('exhibition_products').insert(insertRow).select(RETURN_COLS).single()
+    if (saved.error && /image_urls/i.test(String(saved.error.message || ''))) {
+      const { image_urls, ...legacyRow } = insertRow
+      saved = await supabase.from('exhibition_products').insert(legacyRow).select(RETURN_COLS).single()
+    }
+    const { data, error } = saved
 
     if (error) {
       if (String(error?.code || '') === '23505') {

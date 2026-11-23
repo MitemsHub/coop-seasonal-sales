@@ -11,6 +11,7 @@ import { PackageSearch, Store } from 'lucide-react'
 import ProtectedRoute from '../../components/ProtectedRoute'
 import ExhibitionCycleHint from '../../components/ExhibitionCycleHint'
 import ContinueShoppingBanner from '../../components/ContinueShoppingBanner'
+import BackLink from '../../components/BackLink'
 import ExhibitionCatalog from '../../components/ExhibitionCatalog'
 import useExhibitionCatalog from '../../hooks/useExhibitionCatalog'
 import ModuleClosedPanel from '../../components/ModuleClosedPanel'
@@ -59,6 +60,8 @@ function AllProductsContent() {
         </div>
 
         <div className="relative p-fluid pb-28 sm:pb-32 md:pb-36 max-w-7xl mx-auto">
+          <BackLink href="/exhibition" label="Back to shop" className="mb-3" />
+
           {/* Continue-shopping banner — surfaces food/ram carts here; the
               exhibition cart is already covered by the sticky cart bar. */}
           <ContinueShoppingBanner excludeModules={['exhibition']} className="mb-fluid-lg" />

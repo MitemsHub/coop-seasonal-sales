@@ -24,6 +24,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import ProtectedRoute from '../../components/ProtectedRoute'
+import BackLink from '../../components/BackLink'
 import { touchCart } from '@/lib/cartTouch'
 import { useAuth } from '../../contexts/AuthContext'
 import useCartCount from '../../hooks/useCartCount'
@@ -377,6 +378,8 @@ function ExhibitionCartContent() {
         </div>
 
         <div className="relative mx-auto max-w-6xl p-fluid pb-28 sm:pb-32 md:pb-36">
+          <BackLink href="/exhibition" label="Back to shop" className="mb-3" />
+
           {/* Hero */}
           <div className="mb-fluid-lg flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0">

@@ -10,7 +10,8 @@ import Label from '../../components/ui/Label'
 import Badge from '../../components/ui/Badge'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
-import ImageResizeUpload from '../../components/ImageResizeUpload'
+import ProductImagesUpload from '../../components/ProductImagesUpload'
+import { productImages } from '../../../lib/exhibitionProductImages'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import ProductImportModal from '../../components/ProductImportModal'
 
@@ -26,7 +27,7 @@ const emptyForm = () => ({
   discount_pct: '0',
   qty: '',
   description: '',
-  image_url: '',
+  images: [],
 })
 
 // Same compact "Actions" control as the admin product desk: a native select,
@@ -104,7 +105,7 @@ export default function VendorProductsPage() {
       discount_pct: String(p.discount_pct ?? 0),
       qty: p.qty === null || p.qty === undefined ? '' : String(p.qty),
       description: p.description || '',
-      image_url: p.image_url || '',
+      images: productImages(p),
     })
     setMsg('')
     setModalOpen(true)
@@ -121,7 +122,8 @@ export default function VendorProductsPage() {
         discount_pct: Number(form.discount_pct || 0),
         qty: form.qty === '' ? null : Number(form.qty),
         description: form.description,
-        image_url: form.image_url,
+        image_url: form.images[0] || '',
+        image_urls: form.images,
       }
       const res = await fetch(
         editing ? `/api/vendor/exhibition/products/${editing.id}` : '/api/vendor/exhibition/products',
@@ -271,8 +273,8 @@ export default function VendorProductsPage() {
           <div className="divide-y divide-line">
             {paged.map((p) => (
               <div key={p.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-                {p.image_url ? (
-                  <img src={p.image_url} alt={p.name} className="h-14 w-14 shrink-0 rounded-xl border border-line-subtle bg-subtle object-contain" />
+                {productImages(p)[0] ? (
+                  <img src={productImages(p)[0]} alt={p.name} className="h-14 w-14 shrink-0 rounded-xl border border-line-subtle bg-subtle object-contain" />
                 ) : (
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-subtle text-muted">
                     <Package className="h-6 w-6" strokeWidth={1.5} />
@@ -443,12 +445,15 @@ export default function VendorProductsPage() {
             <Input id="p-qty" type="number" min="0" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} placeholder="Leave empty for unlimited" />
           </div>
           <div className="sm:col-span-2">
-            <Label>Product photo</Label>
-            <ImageResizeUpload
+            <Label>Product photos</Label>
+            <ProductImagesUpload
               itemSku={editing?.sku || imageKey || 'product'}
-              currentImageUrl={form.image_url}
-              onImageUploaded={(url) => setForm((f) => ({ ...f, image_url: url }))}
+              images={form.images}
+              onChange={(images) => setForm((f) => ({ ...f, images }))}
             />
+            <p className="mt-1 text-chips text-muted">
+              The first photo is the cover. Products with more than one photo show a carousel in the shop.
+            </p>
           </div>
         </div>
       </Modal>

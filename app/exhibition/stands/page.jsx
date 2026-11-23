@@ -11,6 +11,7 @@ import { ChevronRight, MapPin, Search, Store, X } from 'lucide-react'
 import ProtectedRoute from '../../components/ProtectedRoute'
 import ExhibitionCycleHint from '../../components/ExhibitionCycleHint'
 import ContinueShoppingBanner from '../../components/ContinueShoppingBanner'
+import BackLink from '../../components/BackLink'
 import AmbientBackdrop from '../../components/AmbientBackdrop'
 import useExhibitionBranch from '../../hooks/useExhibitionBranch'
 import ModuleClosedPanel from '../../components/ModuleClosedPanel'
@@ -86,6 +87,8 @@ function AllStandsContent() {
         <AmbientBackdrop />
 
         <div className="relative z-10 p-fluid pb-28 sm:pb-32 md:pb-36 max-w-7xl mx-auto">
+          <BackLink href="/exhibition" label="Back to shop" className="mb-3" />
+
           <ContinueShoppingBanner excludeModules={['exhibition']} className="mb-fluid-lg" />
 
           {/* Header */}

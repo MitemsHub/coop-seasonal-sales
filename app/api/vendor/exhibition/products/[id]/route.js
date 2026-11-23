@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { getVendorContext } from '../../../_session'
+import { cleanProductImages } from '@/lib/exhibitionProductImages'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -43,7 +44,16 @@ export async function PATCH(req, { params }) {
       patch.qty = body.qty === '' || body.qty === null ? null : Math.max(0, Number(body.qty))
     }
     if (body.category_id !== undefined) patch.category_id = body.category_id ? Number(body.category_id) : null
-    if (body.image_url !== undefined) patch.image_url = String(body.image_url || '').trim()
+    if (body.image_urls !== undefined) {
+      const images = cleanProductImages(body.image_urls)
+      patch.image_urls = images
+      // The cover stays in step with the first photo so older screens keep
+      // showing the right picture.
+      patch.image_url = images[0] || ''
+    } else if (body.image_url !== undefined) {
+      patch.image_url = String(body.image_url || '').trim()
+      patch.image_urls = patch.image_url ? [patch.image_url] : []
+    }
     if (body.description !== undefined) patch.description = String(body.description || '').trim().slice(0, 2000)
 
     const { data: existing, error: existingError } = await supabase
@@ -87,13 +97,26 @@ export async function PATCH(req, { params }) {
 
     if (Object.keys(patch).length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
 
-    const { data, error } = await supabase
+    // image_urls arrives with its own migration: if the column is not there
+    // yet, save everything else rather than refusing the edit.
+    let saved = await supabase
       .from('exhibition_products')
       .update(patch)
       .eq('id', id)
       .eq('vendor_id', ctx.vendor_id)
       .select(SELECT_COLS)
       .single()
+    if (saved.error && /image_urls/i.test(String(saved.error.message || ''))) {
+      const { image_urls, ...legacyPatch } = patch
+      saved = await supabase
+        .from('exhibition_products')
+        .update(legacyPatch)
+        .eq('id', id)
+        .eq('vendor_id', ctx.vendor_id)
+        .select(SELECT_COLS)
+        .single()
+    }
+    const { data, error } = saved
     if (error) return NextResponse.json({ error: error.message || 'Failed to update product' }, { status: 500 })
 
     // Every price edit is written down, so a dispute has a record of what was

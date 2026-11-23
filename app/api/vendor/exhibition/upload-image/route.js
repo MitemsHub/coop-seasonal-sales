@@ -21,6 +21,9 @@ export async function POST(request) {
     const formData = await request.formData()
     const file = formData.get('image')
     const sku = String(formData.get('sku') || '').trim()
+    // Slot 1 is the cover (deterministic path, so replacing it replaces the
+    // file); later photos get their own unique path.
+    const slot = Math.trunc(Number(formData.get('slot') || 0))
 
     if (!file || typeof file.arrayBuffer !== 'function') {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
@@ -39,11 +42,14 @@ export async function POST(request) {
 
     const bytes = Buffer.from(await file.arrayBuffer())
     const safeSku = sku.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'image'
+    const slotSuffix =
+      slot > 1 ? `-${String(slot).padStart(2, '0')}-${Math.random().toString(36).slice(2, 8)}` : ''
+    const fileName = `${safeSku}${slotSuffix}`
 
     try {
       const supabase = createClient()
       const bucket = process.env.EXHIBITION_IMAGES_BUCKET || 'exhibition-images'
-      const path = `vendors/${claim.vendor_id}/${safeSku}.webp`
+      const path = `vendors/${claim.vendor_id}/${fileName}.webp`
 
       const { data: bucketInfo, error: bucketInfoErr } = await supabase.storage.getBucket(bucket)
       if (bucketInfoErr || !bucketInfo) {
@@ -75,9 +81,9 @@ export async function POST(request) {
     // Local filesystem fallback (development only)
     const uploadDir = join(process.cwd(), 'public', 'images', 'exhibition', String(claim.vendor_id))
     if (!existsSync(uploadDir)) await mkdir(uploadDir, { recursive: true })
-    const filepath = join(uploadDir, `${safeSku}.webp`)
+    const filepath = join(uploadDir, `${fileName}.webp`)
     await writeFile(filepath, bytes)
-    return NextResponse.json({ success: true, imageUrl: `/images/exhibition/${claim.vendor_id}/${safeSku}.webp?v=${Date.now()}` })
+    return NextResponse.json({ success: true, imageUrl: `/images/exhibition/${claim.vendor_id}/${fileName}.webp?v=${Date.now()}` })
   } catch (error) {
     console.error('Exhibition image upload error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
