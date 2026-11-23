@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
 import { reserveSkus } from '@/lib/skuFormat'
+import { cleanProductImages } from '@/lib/exhibitionProductImages'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -148,27 +149,35 @@ export async function POST(request) {
       existingSkus: existingSkus.map((row) => row.sku),
     })
 
-    const { data, error } = await supabase
-      .from('exhibition_products')
-      .insert({
-        cycle_id: cycleId,
-        vendor_id: vendorId,
-        branch_id: branchId,
-        category_id: body.category_id ? Math.trunc(Number(body.category_id)) : null,
-        name,
-        sku,
-        unit: sanitizeString(body.unit || 'each', { maxLength: 30, encodeHtml: false }),
-        description,
-        vendor_price: vendorPrice,
-        discount_pct: discountPct,
-        qty: body.qty === '' || body.qty === null || body.qty === undefined ? null : Math.max(0, Math.trunc(Number(body.qty))),
-        image_url: sanitizeString(body.image_url || '', { maxLength: 500, encodeHtml: false }),
-        status: body.status === 'draft' ? 'draft' : 'active',
-        approval_status: 'approved',
-        approval_reviewed_at: new Date().toISOString(),
-      })
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, discount_pct, qty, image_url, status, created_at')
-      .single()
+    // A photo added here is the product's cover, so it is also the first entry
+    // of the carousel's photo list.
+    const coverUrl = sanitizeString(body.image_url || '', { maxLength: 500, encodeHtml: false })
+    const insertRow = {
+      cycle_id: cycleId,
+      vendor_id: vendorId,
+      branch_id: branchId,
+      category_id: body.category_id ? Math.trunc(Number(body.category_id)) : null,
+      name,
+      sku,
+      unit: sanitizeString(body.unit || 'each', { maxLength: 30, encodeHtml: false }),
+      description,
+      vendor_price: vendorPrice,
+      discount_pct: discountPct,
+      qty: body.qty === '' || body.qty === null || body.qty === undefined ? null : Math.max(0, Math.trunc(Number(body.qty))),
+      image_url: coverUrl,
+      image_urls: cleanProductImages([coverUrl]),
+      status: body.status === 'draft' ? 'draft' : 'active',
+      approval_status: 'approved',
+      approval_reviewed_at: new Date().toISOString(),
+    }
+    const RETURN_COLS =
+      'id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, discount_pct, qty, image_url, status, created_at'
+    let saved = await supabase.from('exhibition_products').insert(insertRow).select(RETURN_COLS).single()
+    if (saved.error && /image_urls/i.test(String(saved.error.message || ''))) {
+      const { image_urls, ...legacyRow } = insertRow
+      saved = await supabase.from('exhibition_products').insert(legacyRow).select(RETURN_COLS).single()
+    }
+    const { data, error } = saved
     if (error) {
       if (String(error.code || '') === '23505') {
         return NextResponse.json({ ok: false, error: `SKU "${sku}" already exists. Use a unique SKU.` }, { status: 409 })

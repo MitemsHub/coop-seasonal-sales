@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
 import { notifyStandFollowers } from '@/lib/notifyStandFollowers'
+import { cleanProductImages } from '@/lib/exhibitionProductImages'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -122,18 +123,54 @@ export async function PATCH(request, { params }) {
     }
     if (body.qty !== undefined) updates.qty = body.qty === '' || body.qty === null ? null : Math.max(0, Math.trunc(Number(body.qty)))
     if (body.category_id !== undefined) updates.category_id = body.category_id ? Math.trunc(Number(body.category_id)) : null
-    if (body.image_url !== undefined) updates.image_url = sanitizeString(body.image_url || '', { maxLength: 500, encodeHtml: false })
+    if (body.image_url !== undefined) {
+      // The admin desk edits the cover photo only. The carousel reads
+      // image_urls first, so the cover there has to move with it — otherwise the
+      // shop keeps showing the old first photo after the picture is replaced.
+      const cover = sanitizeString(body.image_url || '', { maxLength: 500, encodeHtml: false })
+      updates.image_url = cover
+
+      const { data: current, error: currentError } = await supabase
+        .from('exhibition_products')
+        .select('image_url, image_urls')
+        .eq('id', id)
+        .maybeSingle()
+      // A database without image_urls yet still gets the cover saved.
+      if (currentError && !/image_urls/i.test(String(currentError.message || ''))) {
+        return NextResponse.json({ ok: false, error: currentError.message }, { status: 500 })
+      }
+      if (!currentError) {
+        const existingImages = cleanProductImages(current?.image_urls)
+        const oldCover = String(current?.image_url || '').trim()
+        const rest = existingImages.filter((url) => url !== cover && url !== oldCover)
+        const next = cover ? [cover, ...rest] : rest
+        updates.image_url = next[0] || ''
+        updates.image_urls = next
+      }
+    }
     if (body.description !== undefined) updates.description = sanitizeString(body.description || '', { maxLength: 2000, encodeHtml: false })
     if (body.status !== undefined && ['draft', 'active', 'archived'].includes(body.status)) updates.status = body.status
 
     if (!Object.keys(updates).length) return NextResponse.json({ ok: false, error: 'Nothing to update' }, { status: 400 })
 
-    const { data, error } = await supabase
+    const RETURN_COLS =
+      'id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, discount_pct, qty, image_url, status, created_at'
+    let saved = await supabase
       .from('exhibition_products')
       .update(updates)
       .eq('id', id)
-      .select('id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, discount_pct, qty, image_url, status, created_at')
+      .select(RETURN_COLS)
       .single()
+    if (saved.error && /image_urls/i.test(String(saved.error.message || ''))) {
+      const { image_urls, ...legacyUpdates } = updates
+      saved = await supabase
+        .from('exhibition_products')
+        .update(legacyUpdates)
+        .eq('id', id)
+        .select(RETURN_COLS)
+        .single()
+    }
+    const { data, error } = saved
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
     return NextResponse.json({

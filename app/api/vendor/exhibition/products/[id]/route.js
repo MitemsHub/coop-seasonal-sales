@@ -44,6 +44,34 @@ export async function PATCH(req, { params }) {
       patch.qty = body.qty === '' || body.qty === null ? null : Math.max(0, Number(body.qty))
     }
     if (body.category_id !== undefined) patch.category_id = body.category_id ? Number(body.category_id) : null
+    if (body.description !== undefined) patch.description = String(body.description || '').trim().slice(0, 2000)
+
+    // image_urls may not exist yet; when it does, load it so a cover-only edit
+    // can keep the vendor's other photos.
+    let existing = null
+    let existingError = null
+    for (const cols of [
+      'id, status, approval_status, vendor_price, image_url, image_urls',
+      'id, status, approval_status, vendor_price, image_url',
+    ]) {
+      const res = await supabase
+        .from('exhibition_products')
+        .select(cols)
+        .eq('id', id)
+        .eq('vendor_id', ctx.vendor_id)
+        .maybeSingle()
+      existing = res.data
+      existingError = res.error
+      if (!existingError) break
+      if (!/image_urls/i.test(String(existingError.message || ''))) break
+    }
+    if (existingError) {
+      return NextResponse.json({ error: existingError.message || 'Failed to load product' }, { status: 500 })
+    }
+    if (!existing) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+
+    // Photos are written after the current row is known, so a cover-only edit
+    // can keep the vendor's other pictures.
     if (body.image_urls !== undefined) {
       const images = cleanProductImages(body.image_urls)
       patch.image_urls = images
@@ -51,21 +79,13 @@ export async function PATCH(req, { params }) {
       // showing the right picture.
       patch.image_url = images[0] || ''
     } else if (body.image_url !== undefined) {
-      patch.image_url = String(body.image_url || '').trim()
-      patch.image_urls = patch.image_url ? [patch.image_url] : []
+      const cover = String(body.image_url || '').trim()
+      const existingPhotos = cleanProductImages(existing.image_urls)
+      const rest = existingPhotos.filter((url) => url !== cover)
+      const next = cover ? [cover, ...rest] : rest
+      patch.image_url = next[0] || ''
+      patch.image_urls = next
     }
-    if (body.description !== undefined) patch.description = String(body.description || '').trim().slice(0, 2000)
-
-    const { data: existing, error: existingError } = await supabase
-      .from('exhibition_products')
-      .select('id, status, approval_status, vendor_price')
-      .eq('id', id)
-      .eq('vendor_id', ctx.vendor_id)
-      .maybeSingle()
-    if (existingError) {
-      return NextResponse.json({ error: existingError.message || 'Failed to load product' }, { status: 500 })
-    }
-    if (!existing) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
 
     if (body.status !== undefined) {
       if (!['draft', 'active', 'archived'].includes(body.status)) {
