@@ -51,6 +51,8 @@ export async function PATCH(req, { params }) {
     let existing = null
     let existingError = null
     for (const cols of [
+      'id, status, approval_status, vendor_price, discount_pct, pending_vendor_price, pending_discount_pct, image_url, image_urls',
+      'id, status, approval_status, vendor_price, discount_pct, pending_vendor_price, pending_discount_pct, image_url',
       'id, status, approval_status, vendor_price, image_url, image_urls',
       'id, status, approval_status, vendor_price, image_url',
     ]) {
@@ -63,12 +65,29 @@ export async function PATCH(req, { params }) {
       existing = res.data
       existingError = res.error
       if (!existingError) break
-      if (!/image_urls/i.test(String(existingError.message || ''))) break
+      if (!/image_urls|discount_pct/i.test(String(existingError.message || ''))) break
     }
     if (existingError) {
       return NextResponse.json({ error: existingError.message || 'Failed to load product' }, { status: 500 })
     }
     if (!existing) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+
+    // The edit form submits the whole product every time, including the price
+    // and discount it loaded. Those are not changes: compare with the terms
+    // already approved before treating them as a request, or saving a photo
+    // sends the product back for approval.
+    if (
+      priceChanges.vendor_price !== undefined &&
+      Number(priceChanges.vendor_price) === Number(existing.vendor_price || 0)
+    ) {
+      delete priceChanges.vendor_price
+    }
+    if (
+      discountChanges.discount_pct !== undefined &&
+      Math.trunc(Number(discountChanges.discount_pct)) === Math.trunc(Number(existing.discount_pct || 0))
+    ) {
+      delete discountChanges.discount_pct
+    }
 
     // Photos are written after the current row is known, so a cover-only edit
     // can keep the vendor's other pictures.
@@ -113,6 +132,25 @@ export async function PATCH(req, { params }) {
       patch.approval_requested_at = new Date().toISOString()
     } else {
       Object.assign(patch, priceChanges, discountChanges)
+    }
+
+    // A pending request whose price and discount are exactly the terms already
+    // approved is not waiting on anything — a photo save used to create one.
+    // Clear it so an active product does not sit in the approval queue for a
+    // change that does not exist.
+    if (!hasTermsChange && existing.status === 'active' && existing.approval_status === 'pending') {
+      const pendingPrice = existing.pending_vendor_price
+      const pendingDiscount = existing.pending_discount_pct
+      const priceSame =
+        pendingPrice === null || pendingPrice === undefined || Number(pendingPrice) === Number(existing.vendor_price || 0)
+      const discountSame =
+        pendingDiscount === null || pendingDiscount === undefined || Math.trunc(Number(pendingDiscount)) === Math.trunc(Number(existing.discount_pct || 0))
+      if (priceSame && discountSame) {
+        patch.approval_status = 'approved'
+        patch.pending_vendor_price = null
+        patch.pending_discount_pct = null
+        patch.approval_requested_at = null
+      }
     }
 
     if (Object.keys(patch).length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
