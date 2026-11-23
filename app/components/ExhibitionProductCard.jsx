@@ -4,8 +4,8 @@
 // One exhibition product card — the shared buying unit across the shop, the
 // all-products page and the vendor hub. Image, price (+ negotiated chip),
 // stock and the qty stepper all live here so the three surfaces can't drift.
-// Products with more than one photo get a swipeable carousel here and a
-// gallery inside the View popup.
+// The card shows only the cover photo; the remaining photos are in the View
+// popup's gallery, so a card never competes with a carousel for a tap.
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
@@ -35,8 +35,8 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
   const image = (
     <div className="absolute inset-1.5">
       <Image
-        src={images[safeIndex]}
-        alt={many ? `${p.name} — photo ${safeIndex + 1} of ${images.length}` : p.name}
+        src={images[0]}
+        alt={p.name}
         fill
         sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 18vw"
         // Contain, not cover: a photo the vendor framed themselves should show
@@ -50,43 +50,6 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
     </div>
   )
 
-  // A live carousel as siblings of the card image. The card-wide "open the
-  // vendor" button sits underneath, so the arrows take a tap before it does.
-  const carousel = many ? (
-    <>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          step(-1)
-        }}
-        aria-label="Previous photo"
-        className="absolute left-1 top-1/2 z-20 -translate-y-1/2 rounded-full bg-surface/85 p-1 text-fg shadow-sm backdrop-blur transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
-      >
-        <ChevronLeft className="h-3.5 w-3.5" strokeWidth={2.4} />
-      </button>
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          step(1)
-        }}
-        aria-label="Next photo"
-        className="absolute right-1 top-1/2 z-20 -translate-y-1/2 rounded-full bg-surface/85 p-1 text-fg shadow-sm backdrop-blur transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
-      >
-        <ChevronRight className="h-3.5 w-3.5" strokeWidth={2.4} />
-      </button>
-      <div className="pointer-events-none absolute inset-x-0 bottom-1.5 z-20 flex items-center justify-center gap-1">
-        {images.map((src, i) => (
-          <span
-            key={`${src}-${i}`}
-            className={`h-1.5 w-1.5 rounded-full transition-colors ${i === safeIndex ? 'bg-brand' : 'bg-line-strong'}`}
-          />
-        ))}
-      </div>
-    </>
-  ) : null
-
   const imageArea = (
     <div className="relative block aspect-[4/3] w-full overflow-hidden bg-white dark:bg-subtle">
       {image}
@@ -98,11 +61,8 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
           className="absolute inset-0 z-10"
         />
       ) : null}
-      {carousel}
     </div>
   )
-
-  const showView = !!p.description || many
 
   return (
     <div className="group flex flex-col overflow-hidden rounded-xl border border-line bg-surface transition-all duration-200 ease-sakani hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md">

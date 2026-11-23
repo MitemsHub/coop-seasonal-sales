@@ -19,6 +19,8 @@ import DraggableModal from '../../../components/DraggableModal'
 import Skeleton from '../../../components/ui/Skeleton'
 import ConfirmDialog from '../../../components/ui/ConfirmDialog'
 import ProductImportModal from '../../../components/ProductImportModal'
+import ProductImagesUpload from '../../../components/ProductImagesUpload'
+import { productImages } from '../../../../lib/exhibitionProductImages'
 
 const naira = (v) =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(
@@ -43,6 +45,7 @@ export default function ExhibitionProductsPage() {
   const [msg, setMsg] = useState(null)
   const [modal, setModal] = useState(null) // 'create' | product object (edit)
   const [importOpen, setImportOpen] = useState(false)
+  const [imageKey, setImageKey] = useState('') // unique storage key for a new product's photos
   const [form, setForm] = useState({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
@@ -95,7 +98,8 @@ export default function ExhibitionProductsPage() {
 
   const openCreate = () => {
     const active = cycles.find((c) => c.status === 'active')
-    setForm({ status: 'active', unit: 'each', cycle_id: active?.id || '' })
+    setImageKey(`draft-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`)
+    setForm({ status: 'active', unit: 'each', cycle_id: active?.id || '', images: [] })
     setModal('create')
   }
 
@@ -117,7 +121,7 @@ export default function ExhibitionProductsPage() {
       qty: p.qty ?? '',
       status: p.status || 'active',
       description: p.description || '',
-      image_url: p.image_url || '',
+      images: productImages(p),
     })
     setModal(p)
   }
@@ -240,7 +244,8 @@ export default function ExhibitionProductsPage() {
           vendor_price: Number(form.vendor_price),
           discount_pct: Number(form.discount_pct || 0),
           qty: form.qty,
-          image_url: form.image_url,
+          image_url: (form.images || [])[0] || '',
+          image_urls: form.images || [],
           description: form.description || '',
           status: form.status,
         }),
@@ -271,7 +276,8 @@ export default function ExhibitionProductsPage() {
           qty: form.qty,
           status: form.status,
           description: form.description || '',
-          ...(form.image_url !== undefined ? { image_url: form.image_url } : {}),
+          image_url: (form.images || [])[0] || '',
+          image_urls: form.images || [],
         }),
       })
       const json = await res.json()
@@ -716,6 +722,18 @@ export default function ExhibitionProductsPage() {
             <div>
               <Label htmlFor="exh-p-unit">Unit</Label>
               <Input id="exh-p-unit" value={form.unit || 'each'} onChange={(e) => setForm({ ...form, unit: e.target.value })} placeholder="each / kg / bag" />
+            </div>
+            <div>
+              <Label>Product photos</Label>
+              <ProductImagesUpload
+                itemSku={modal === 'create' ? imageKey || 'product' : modal.sku || 'product'}
+                vendorId={modal === 'create' ? form.vendor_id || null : modal.vendor_id || null}
+                images={form.images || []}
+                onChange={(images) => setForm((f) => ({ ...f, images }))}
+              />
+              {modal === 'create' && !form.vendor_id && (
+                <p className="mt-1 text-chips text-muted">Choose a vendor first, so the photos are stored on that stand.</p>
+              )}
             </div>
             {modal === 'create' && form.branch_id && (
               <div className="rounded-lg bg-subtle px-3 py-2 text-xs text-muted">

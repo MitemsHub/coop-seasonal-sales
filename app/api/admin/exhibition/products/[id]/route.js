@@ -123,30 +123,22 @@ export async function PATCH(request, { params }) {
     }
     if (body.qty !== undefined) updates.qty = body.qty === '' || body.qty === null ? null : Math.max(0, Math.trunc(Number(body.qty)))
     if (body.category_id !== undefined) updates.category_id = body.category_id ? Math.trunc(Number(body.category_id)) : null
-    if (body.image_url !== undefined) {
-      // The admin desk edits the cover photo only. The carousel reads
-      // image_urls first, so the cover there has to move with it — otherwise the
-      // shop keeps showing the old first photo after the picture is replaced.
-      const cover = sanitizeString(body.image_url || '', { maxLength: 500, encodeHtml: false })
-      updates.image_url = cover
-
-      const { data: current, error: currentError } = await supabase
-        .from('exhibition_products')
-        .select('image_url, image_urls')
-        .eq('id', id)
-        .maybeSingle()
-      // A database without image_urls yet still gets the cover saved.
-      if (currentError && !/image_urls/i.test(String(currentError.message || ''))) {
-        return NextResponse.json({ ok: false, error: currentError.message }, { status: 500 })
-      }
-      if (!currentError) {
-        const existingImages = cleanProductImages(current?.image_urls)
-        const oldCover = String(current?.image_url || '').trim()
-        const rest = existingImages.filter((url) => url !== cover && url !== oldCover)
-        const next = cover ? [cover, ...rest] : rest
-        updates.image_url = next[0] || ''
-        updates.image_urls = next
-      }
+    // The database trigger owns the cover/list relationship. These writes only
+    // record what the desk chose: the list, and the first entry as image_url so
+    // a database without image_urls still keeps a cover.
+    if (body.image_urls !== undefined) {
+      const images = cleanProductImages(
+        (Array.isArray(body.image_urls) ? body.image_urls : []).map((url) =>
+          sanitizeString(url || '', { maxLength: 500, encodeHtml: false })
+        )
+      )
+      updates.image_urls = images
+      updates.image_url = images[0] || ''
+    } else if (body.image_url !== undefined) {
+      // A cover-only edit (an older client). The trigger promotes it to the
+      // front of the photo list; on a database without that column it is
+      // simply the product's only photo.
+      updates.image_url = sanitizeString(body.image_url || '', { maxLength: 500, encodeHtml: false })
     }
     if (body.description !== undefined) updates.description = sanitizeString(body.description || '', { maxLength: 2000, encodeHtml: false })
     if (body.status !== undefined && ['draft', 'active', 'archived'].includes(body.status)) updates.status = body.status

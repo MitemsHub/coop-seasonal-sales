@@ -32,11 +32,12 @@ export async function GET(request) {
     const supabase = createClient()
     // description and discount_pct arrive with their own migrations; fall back
     // column by column instead of failing the whole console.
-    const attempts = [
+    const colsWithoutImages = [
       'id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, discount_pct, pending_discount_pct, qty, image_url, status, approval_status, pending_vendor_price, approval_requested_at, created_at, vendors:vendor_id(name, code), categories:category_id(name), branches:branch_id(name)',
       'id, cycle_id, vendor_id, branch_id, category_id, name, description, sku, unit, vendor_price, pending_vendor_price, qty, image_url, status, approval_status, approval_requested_at, created_at, vendors:vendor_id(name, code), categories:category_id(name), branches:branch_id(name)',
       'id, cycle_id, vendor_id, branch_id, category_id, name, sku, unit, vendor_price, pending_vendor_price, qty, image_url, status, approval_status, approval_requested_at, created_at, vendors:vendor_id(name, code), categories:category_id(name), branches:branch_id(name)',
     ]
+    const attempts = colsWithoutImages.flatMap((cols) => [`${cols}, image_urls`, cols])
     // PostgREST stops at its max-rows setting (1,000 on a default project),
     // so a catalogue past that size used to arrive cut off — and the admin
     // queue then reported exactly "1000 waiting for approval". Page through
@@ -72,7 +73,7 @@ export async function GET(request) {
         break
       }
       error = failed
-      if (!/description|discount_pct|schema cache/i.test(String(error.message || ''))) break
+      if (!/description|discount_pct|image_urls|schema cache/i.test(String(error.message || ''))) break
     }
     if (error) {
       if (isMissingTable(error, 'exhibition')) {
@@ -149,9 +150,13 @@ export async function POST(request) {
       existingSkus: existingSkus.map((row) => row.sku),
     })
 
-    // A photo added here is the product's cover, so it is also the first entry
-    // of the carousel's photo list.
-    const coverUrl = sanitizeString(body.image_url || '', { maxLength: 500, encodeHtml: false })
+    // The admin desk manages the whole photo list; the first entry is the cover
+    // and is mirrored into image_url.
+    const images = cleanProductImages(
+      (Array.isArray(body.image_urls) ? body.image_urls : [body.image_url || '']).map((url) =>
+        sanitizeString(url || '', { maxLength: 500, encodeHtml: false })
+      )
+    )
     const insertRow = {
       cycle_id: cycleId,
       vendor_id: vendorId,
@@ -164,8 +169,8 @@ export async function POST(request) {
       vendor_price: vendorPrice,
       discount_pct: discountPct,
       qty: body.qty === '' || body.qty === null || body.qty === undefined ? null : Math.max(0, Math.trunc(Number(body.qty))),
-      image_url: coverUrl,
-      image_urls: cleanProductImages([coverUrl]),
+      image_url: images[0] || '',
+      image_urls: images,
       status: body.status === 'draft' ? 'draft' : 'active',
       approval_status: 'approved',
       approval_reviewed_at: new Date().toISOString(),

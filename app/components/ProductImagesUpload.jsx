@@ -1,19 +1,22 @@
 'use client'
 
-// Vendor product photos. A product may carry several photos; the first is the
-// cover the shop card shows, the rest appear in the card carousel and the view
-// popup. Each photo is resized/compressed in the browser before it is uploaded.
+// Product photos, shared by the vendor product form and the admin exhibition
+// product desk. A product may carry several photos; the first is the cover the
+// shop card shows, the rest fill the card carousel and the view popup. Photos
+// can be added, removed, reordered, and any photo can be made the cover.
+// Each photo is resized/compressed in the browser before it is uploaded.
 import { useState } from 'react'
-import { ImagePlus, Loader2, Sparkles, Star, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ImagePlus, Loader2, Sparkles, Star, X } from 'lucide-react'
 import { isSupportedProductImage, optimizeProductImage } from '@/lib/optimizeImage'
 import { MAX_PRODUCT_IMAGES } from '@/lib/exhibitionProductImages'
 
-export default function ProductImagesUpload({ images = [], onChange, itemSku = '' }) {
+export default function ProductImagesUpload({ images = [], onChange, itemSku = '', vendorId = null }) {
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [error, setError] = useState('')
 
   const full = images.length >= MAX_PRODUCT_IMAGES
+  const multiple = images.length > 1
 
   const handleFiles = async (fileList) => {
     const picked = Array.from(fileList || [])
@@ -41,6 +44,9 @@ export default function ProductImagesUpload({ images = [], onChange, itemSku = '
         // Slot 1 keeps the long-standing deterministic path (replacing the
         // cover replaces that file); later slots get a unique path.
         formData.append('slot', String(next.length + 1))
+        // Admins manage a stand's products, so they name the vendor; a vendor
+        // is identified by its own session cookie.
+        if (vendorId) formData.append('vendor_id', String(vendorId))
 
         const res = await fetch('/api/vendor/exhibition/upload-image', { method: 'POST', body: formData })
         const json = await res.json().catch(() => null)
@@ -75,12 +81,29 @@ export default function ProductImagesUpload({ images = [], onChange, itemSku = '
     onChange(images.filter((_, i) => i !== index))
   }
 
+  const move = (from, delta) => {
+    const to = from + delta
+    if (to < 0 || to >= images.length) return
+    const next = [...images]
+    const [photo] = next.splice(from, 1)
+    next.splice(to, 0, photo)
+    onChange(next)
+  }
+
+  const makeCover = (index) => {
+    if (index === 0) return
+    const next = [...images]
+    const [photo] = next.splice(index, 1)
+    next.unshift(photo)
+    onChange(next)
+  }
+
   return (
     <div className="space-y-3">
       {images.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-3">
           {images.map((src, i) => (
-            <div key={`${src}-${i}`} className="relative">
+            <div key={`${src}-${i}`} className="relative w-24">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={src}
@@ -101,9 +124,45 @@ export default function ProductImagesUpload({ images = [], onChange, itemSku = '
               >
                 <X className="h-3.5 w-3.5" />
               </button>
+              <div className="mt-1 flex items-center justify-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => move(i, -1)}
+                  disabled={i === 0}
+                  aria-label={`Move photo ${i + 1} earlier`}
+                  className="rounded-md border border-line bg-surface p-0.5 text-muted transition-colors hover:text-fg disabled:opacity-40"
+                >
+                  <ChevronLeft className="h-3 w-3" strokeWidth={2.4} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => makeCover(i)}
+                  disabled={i === 0}
+                  aria-label={i === 0 ? 'This photo is the cover' : `Make photo ${i + 1} the cover`}
+                  title={i === 0 ? 'Cover photo' : 'Make cover'}
+                  className="rounded-md border border-line bg-surface p-0.5 text-muted transition-colors hover:text-brand disabled:opacity-40"
+                >
+                  <Star className="h-3 w-3" strokeWidth={2.2} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => move(i, 1)}
+                  disabled={i === images.length - 1}
+                  aria-label={`Move photo ${i + 1} later`}
+                  className="rounded-md border border-line bg-surface p-0.5 text-muted transition-colors hover:text-fg disabled:opacity-40"
+                >
+                  <ChevronRight className="h-3 w-3" strokeWidth={2.4} />
+                </button>
+              </div>
             </div>
           ))}
         </div>
+      )}
+
+      {multiple && (
+        <p className="text-chips text-muted">
+          The first photo is the cover shown in the shop. Use the arrows to reorder, or the star to make a photo the cover.
+        </p>
       )}
 
       {!!error && (
