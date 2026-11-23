@@ -46,15 +46,15 @@ export async function PATCH(req, { params }) {
     if (body.category_id !== undefined) patch.category_id = body.category_id ? Number(body.category_id) : null
     if (body.description !== undefined) patch.description = String(body.description || '').trim().slice(0, 2000)
 
-    // image_urls may not exist yet; when it does, load it so a cover-only edit
-    // can keep the vendor's other photos.
+    // Only the terms are read here: the photo list is not needed any more,
+    // because the database trigger owns how image_url and image_urls relate.
+    // discount_pct arrives with its own migration, so fall back to the columns
+    // every database has.
     let existing = null
     let existingError = null
     for (const cols of [
-      'id, status, approval_status, vendor_price, discount_pct, pending_vendor_price, pending_discount_pct, image_url, image_urls',
-      'id, status, approval_status, vendor_price, discount_pct, pending_vendor_price, pending_discount_pct, image_url',
-      'id, status, approval_status, vendor_price, image_url, image_urls',
-      'id, status, approval_status, vendor_price, image_url',
+      'id, status, approval_status, vendor_price, discount_pct, pending_vendor_price, pending_discount_pct',
+      'id, status, approval_status, vendor_price, pending_vendor_price',
     ]) {
       const res = await supabase
         .from('exhibition_products')
@@ -65,7 +65,7 @@ export async function PATCH(req, { params }) {
       existing = res.data
       existingError = res.error
       if (!existingError) break
-      if (!/image_urls|discount_pct/i.test(String(existingError.message || ''))) break
+      if (!/discount_pct/i.test(String(existingError.message || ''))) break
     }
     if (existingError) {
       return NextResponse.json({ error: existingError.message || 'Failed to load product' }, { status: 500 })
@@ -89,21 +89,16 @@ export async function PATCH(req, { params }) {
       delete discountChanges.discount_pct
     }
 
-    // Photos are written after the current row is known, so a cover-only edit
-    // can keep the vendor's other pictures.
+    // The database trigger owns the cover/list relationship. The list is sent
+    // as-is, with its first entry mirrored into image_url so a database without
+    // the image_urls column still keeps a cover; a cover-only edit (an older
+    // client) lets the trigger promote that photo to the front.
     if (body.image_urls !== undefined) {
       const images = cleanProductImages(body.image_urls)
       patch.image_urls = images
-      // The cover stays in step with the first photo so older screens keep
-      // showing the right picture.
       patch.image_url = images[0] || ''
     } else if (body.image_url !== undefined) {
-      const cover = String(body.image_url || '').trim()
-      const existingPhotos = cleanProductImages(existing.image_urls)
-      const rest = existingPhotos.filter((url) => url !== cover)
-      const next = cover ? [cover, ...rest] : rest
-      patch.image_url = next[0] || ''
-      patch.image_urls = next
+      patch.image_url = String(body.image_url || '').trim()
     }
 
     if (body.status !== undefined) {

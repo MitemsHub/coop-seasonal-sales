@@ -111,19 +111,62 @@ export default function VendorProductsPage() {
     setModalOpen(true)
   }
 
+  // Only what actually changed goes to the server. The form loads the whole
+  // product, so resubmitting it made every save look like a price and discount
+  // edit (and re-opened approval for photos); the request now carries just the
+  // fields the vendor touched.
+  const buildPayload = () => {
+    const name = form.name.trim()
+    const unit = form.unit.trim() || 'each'
+    const price = Number(form.vendor_price || 0)
+    const discount = Number(form.discount_pct || 0)
+    const qty = form.qty === '' ? null : Number(form.qty)
+    const description = form.description
+    const images = form.images || []
+
+    if (!editing) {
+      return {
+        name,
+        unit,
+        vendor_price: price,
+        discount_pct: discount,
+        qty,
+        description,
+        image_url: images[0] || '',
+        image_urls: images,
+      }
+    }
+
+    const previousQty =
+      editing.qty === null || editing.qty === undefined ? null : Number(editing.qty)
+    const previousImages = productImages(editing)
+    const imagesChanged =
+      images.length !== previousImages.length || images.some((url, i) => url !== previousImages[i])
+
+    const payload = {}
+    if (name !== editing.name) payload.name = name
+    if (unit !== (editing.unit || 'each')) payload.unit = unit
+    if (price !== Number(editing.vendor_price || 0)) payload.vendor_price = price
+    if (discount !== Number(editing.discount_pct || 0)) payload.discount_pct = discount
+    if (qty !== previousQty) payload.qty = qty
+    if (description !== (editing.description || '')) payload.description = description
+    if (imagesChanged) {
+      payload.image_url = images[0] || ''
+      payload.image_urls = images
+    }
+    return payload
+  }
+
   const save = async () => {
     setSaving(true)
     setMsg('')
     try {
-      const payload = {
-        name: form.name.trim(),
-        unit: form.unit.trim() || 'each',
-        vendor_price: Number(form.vendor_price || 0),
-        discount_pct: Number(form.discount_pct || 0),
-        qty: form.qty === '' ? null : Number(form.qty),
-        description: form.description,
-        image_url: form.images[0] || '',
-        image_urls: form.images,
+      const payload = buildPayload()
+      // Nothing was touched — close instead of asking the server to save an
+      // empty edit.
+      if (editing && Object.keys(payload).length === 0) {
+        setModalOpen(false)
+        return
       }
       const res = await fetch(
         editing ? `/api/vendor/exhibition/products/${editing.id}` : '/api/vendor/exhibition/products',
