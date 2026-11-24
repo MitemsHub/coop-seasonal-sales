@@ -1,7 +1,7 @@
 // app/admin/orders/page.jsx
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
 import ProtectedRoute from '../../../components/ProtectedRoute'
@@ -14,6 +14,9 @@ function AdminOrdersPageContent() {
   const [statusFilter, setStatusFilter] = useState('')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState(null)
+  // Identifies the newest filter's request, so a slower earlier one cannot
+  // leave its rows on screen under the filters now shown.
+  const ordersRequestRef = useRef(0)
 
   useEffect(() => {
     loadMembers()
@@ -32,6 +35,7 @@ function AdminOrdersPageContent() {
   }
 
   const loadAllOrders = async () => {
+    const request = (ordersRequestRef.current += 1)
     setLoading(true)
     try {
       const params = new URLSearchParams()
@@ -40,13 +44,16 @@ function AdminOrdersPageContent() {
       const qs = params.toString()
       const res = await fetch(`/api/admin/food/orders/all${qs ? `?${qs}` : ''}`, { cache: 'no-store' })
       const json = await res.json().catch(() => null)
+      // The filters changed while this was loading: drop this answer.
+      if (request !== ordersRequestRef.current) return
       if (!json?.ok) throw new Error(json?.error || 'Failed to load orders')
       setOrders(json.orders || [])
     } catch (error) {
+      if (request !== ordersRequestRef.current) return
       console.error('Error loading orders:', error)
       setMessage({ type: 'error', text: 'Failed to load orders' })
     } finally {
-      setLoading(false)
+      if (request === ordersRequestRef.current) setLoading(false)
     }
   }
 
