@@ -16,6 +16,11 @@
 //   node scripts/recover-vendor-passcodes.mjs                 # report only
 //   node scripts/recover-vendor-passcodes.mjs --out=passcodes.csv
 //   node scripts/recover-vendor-passcodes.mjs --apply         # backfill copies
+//   node scripts/recover-vendor-passcodes.mjs --apply --csv=passcodes.csv
+//
+// --csv reuses passcodes already recovered into a CSV (vendor_code,passcode,name)
+// instead of searching the whole space again. Every value is still checked
+// against its vendor's scrypt hash before it is trusted or written.
 //
 // Options: --workers=N  --from=N --to=N (bounded sweep, for a smoke run)
 //          --self-test   (in-memory check of the sweep, no database)
@@ -154,6 +159,21 @@ const from = Number(value('from') || 0)
 const to = Math.min(SPACE, Number(value('to') || SPACE))
 const apply = flag('apply')
 const outPath = value('out')
+const csvPath = value('csv')
+
+// The --out format, read back in: "vendor_code","passcode","name". Names may
+// contain commas, so cells are split on the quoted separator rather than ",".
+function readPasscodeCsv(file) {
+  const text = fs.readFileSync(path.resolve(file), 'utf8')
+  const saved = []
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.trim() || /^"?vendor_code"?/i.test(line)) continue
+    const cells = line.split(/",?"|,(?=")/).map((cell) => cell.replace(/^"|"$/g, '').replace(/""/g, '"').trim())
+    const [code, passcode] = cells
+    if (code && passcode) saved.push({ code, passcode })
+  }
+  return saved
+}
 
 const { rows } = await queryDirect(
   `select id, code, name, passcode, passcode_lookup, passcode_encrypted
@@ -177,7 +197,33 @@ for (const row of hopeless) console.log(`  ! ${row.code} ${row.name} — no pass
 const recovered = new Map()
 for (const row of plaintext) recovered.set(row.code, row.passcode)
 
-if (searchable.length) {
+if (csvPath) {
+  const saved = readPasscodeCsv(csvPath)
+  const byCode = new Map(rows.map((r) => [r.code, r]))
+  let verified = 0
+  let rejected = 0
+  let unknown = 0
+  for (const { code, passcode } of saved) {
+    const row = byCode.get(code)
+    if (!row) {
+      unknown += 1
+      continue
+    }
+    const check = await verifyPasscode(passcode, String(row.passcode || ''))
+    if (!check.ok) {
+      rejected += 1
+      console.warn(`  ? ${code}: saved passcode does not match this vendor's hash — skipped`)
+      continue
+    }
+    recovered.set(code, passcode)
+    verified += 1
+  }
+  console.log(
+    `Loaded ${saved.length} passcode(s) from ${csvPath}: ${verified} verified against vendor hashes, ${rejected} rejected, ${unknown} unknown code(s).`
+  )
+}
+
+if (!csvPath && searchable.length) {
   const targets = searchable.map((row) => [row.passcode_lookup, row.code])
   const slices = planWorkers(from, to, value('workers'))
   console.log(`Sweeping ${(to - from).toLocaleString()} candidates across ${slices.length} worker(s)…`)
@@ -264,16 +310,23 @@ if (outPath) {
 }
 
 if (apply) {
+  // Only rows still missing a copy: an existing, readable passcode must never be
+  // replaced by a stale value from the file.
+  const missing = ordered.filter((r) => !r.passcode_encrypted)
   let written = 0
-  for (const row of ordered) {
+  for (const row of missing) {
     const sealed = encryptPasscode(recovered.get(row.code), secret)
-    await queryDirect(
+    const result = await queryDirect(
       'update exhibition_vendors set passcode_encrypted = $1 where id = $2 and passcode_encrypted is null',
       [sealed, row.id]
     )
-    written += 1
+    if (result.rowCount) written += 1
   }
-  console.log(`\nBackfilled the encrypted copy for ${written} vendor(s) — the View login sheet can show these now.`)
+  const skipped = ordered.length - missing.length
+  console.log(
+    `\nBackfilled the encrypted copy for ${written} vendor(s) — the View login sheet can show these now.` +
+      (skipped ? ` ${skipped} already had one and were left untouched.` : '')
+  )
 } else if (ordered.length) {
   console.log('\nNothing was written. Re-run with --apply to backfill the encrypted copies.')
 }
