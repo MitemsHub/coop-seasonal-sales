@@ -56,6 +56,9 @@ function RamBanksContent() {
   const [invoiceLoc, setInvoiceLoc] = useState(null)
   const [invoices, setInvoices] = useState([])
   const [invoiceLoading, setInvoiceLoading] = useState(false)
+  // Identifies the newest vendor's invoice request, so an earlier one that
+  // answers late cannot open its invoices over the vendor picked after it.
+  const invoiceRequestRef = useRef(0)
   const [invoiceRef, setInvoiceRef] = useState('')
   const [invoiceNotes, setInvoiceNotes] = useState('')
   const [invoiceFile, setInvoiceFile] = useState(null)
@@ -302,21 +305,25 @@ function RamBanksContent() {
   const loadInvoices = async (loc) => {
     const id = Number(loc?.id)
     if (!Number.isFinite(id) || id <= 0) return
+    const request = (invoiceRequestRef.current += 1)
     setInvoiceLoading(true)
     setMsg(null)
     try {
       const qs = new URLSearchParams({ delivery_location_id: String(id) })
       const res = await fetch(`/api/admin/ram/vendor-banks/invoices/list?${qs.toString()}`, { cache: 'no-store' })
       const json = await safeJson(res, '/api/admin/ram/vendor-banks/invoices/list')
+      // Another location was picked while this was loading: drop this answer.
+      if (request !== invoiceRequestRef.current) return
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to load invoices')
       setInvoices(json.invoices || [])
       setInvoiceLoc(loc || null)
       setInvoiceListOpen(true)
     } catch (e) {
+      if (request !== invoiceRequestRef.current) return
       setMsg({ type: 'error', text: e?.message || 'Failed to load invoices' })
       setInvoices([])
     } finally {
-      setInvoiceLoading(false)
+      if (request === invoiceRequestRef.current) setInvoiceLoading(false)
     }
   }
 

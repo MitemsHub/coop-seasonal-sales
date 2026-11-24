@@ -21,7 +21,7 @@
 // Typography follows the design system: text-h2 page title, text-h3 section
 // headings, text-body copy, text-caption helper text, text-chips pills, and
 // the shared Input/Select/Label field components.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import ProtectedRoute from '../../../components/ProtectedRoute'
@@ -189,6 +189,9 @@ function ItemsImportContent() {
 
   /* ── Shop preview (one branch, as members see it) ─────────────── */
   const [preview, setPreview] = useState(null) // { branchId, branchName, loading, error, data }
+  // Identifies the newest preview request, so an earlier branch's shop that
+  // answers late cannot replace the branch opened after it.
+  const previewRequestRef = useRef(0)
   const [previewLimit, setPreviewLimit] = useState(24)
 
   /* ── Category / unit pick lists (admin-managed) ───────────────── */
@@ -882,6 +885,7 @@ function ItemsImportContent() {
   )
 
   const openShopPreview = async (branchId, branchName) => {
+    const request = (previewRequestRef.current += 1)
     setPreviewLimit(24)
     setPreview({ branchId, branchName, loading: true, error: null, data: null })
     try {
@@ -890,9 +894,12 @@ function ItemsImportContent() {
         { cache: 'no-store', credentials: 'same-origin' }
       )
       const json = await res.json().catch(() => ({}))
+      // Closed, or opened for another branch, while this was loading.
+      if (request !== previewRequestRef.current) return
       if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to load the shop preview')
       setPreview({ branchId, branchName, loading: false, error: null, data: json })
     } catch (e) {
+      if (request !== previewRequestRef.current) return
       setPreview({
         branchId,
         branchName,
@@ -901,6 +908,13 @@ function ItemsImportContent() {
         data: null,
       })
     }
+  }
+
+  // Closing abandons any preview still loading, so a late answer cannot reopen
+  // the shop of a branch already left behind.
+  const closePreview = () => {
+    previewRequestRef.current += 1
+    setPreview(null)
   }
 
   /* ── Row editor (shared by both sections) ────────────────────────── */
@@ -2074,7 +2088,7 @@ function ItemsImportContent() {
       {preview && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setPreview(null)}
+          onClick={closePreview}
           role="dialog"
           aria-modal="true"
           aria-label={`Shop preview — ${preview.branchName}`}
@@ -2095,7 +2109,7 @@ function ItemsImportContent() {
                     : ''}
                 </p>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => setPreview(null)}>
+              <Button variant="ghost" size="sm" onClick={closePreview}>
                 Close
               </Button>
             </div>

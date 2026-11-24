@@ -388,6 +388,8 @@ function GradeLimitsSection() {
 function MemberLookupSection() {
   const [q, setQ] = useState('')
   const [results, setResults] = useState(null) // null = not searched
+  // Identifies the newest lookup so a slower, older one cannot overwrite it.
+  const searchRequestRef = useRef(0)
   const [searching, setSearching] = useState(false)
   const [msg, setMsg] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -427,21 +429,28 @@ function MemberLookupSection() {
 
   const search = useCallback(async (term) => {
     if (String(term || '').trim().length < 2) {
+      // Clearing the box abandons any lookup still running.
+      searchRequestRef.current += 1
       setResults([])
       return
     }
+    // Two terms can be in flight at once; only the newest may write results,
+    // or a slow answer for an earlier term lands under what is in the box now.
+    const request = (searchRequestRef.current += 1)
     setSearching(true)
     setMsg('')
     try {
       const res = await fetch(`/api/admin/members/search?q=${encodeURIComponent(String(term).trim())}`, { cache: 'no-store' })
       const json = await res.json()
+      if (request !== searchRequestRef.current) return
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Search failed')
       setResults(json.members || [])
     } catch (e) {
+      if (request !== searchRequestRef.current) return
       setMsg(e.message || 'Search failed')
       setResults([])
     } finally {
-      setSearching(false)
+      if (request === searchRequestRef.current) setSearching(false)
     }
   }, [])
 

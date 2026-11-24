@@ -55,6 +55,9 @@ function AdminExhibitionBanksContent() {
   const [invoiceLoc, setInvoiceLoc] = useState(null)
   const [invoices, setInvoices] = useState([])
   const [invoiceLoading, setInvoiceLoading] = useState(false)
+  // Identifies the newest vendor's invoice request, so an earlier one that
+  // answers late cannot open its invoices over the vendor picked after it.
+  const invoiceRequestRef = useRef(0)
   const [invoiceRef, setInvoiceRef] = useState('')
   const [invoiceNotes, setInvoiceNotes] = useState('')
   const [invoiceFile, setInvoiceFile] = useState(null)
@@ -288,6 +291,7 @@ function AdminExhibitionBanksContent() {
   const loadInvoices = async (v) => {
     const id = Number(v?.id)
     if (!Number.isFinite(id) || id <= 0) return
+    const request = (invoiceRequestRef.current += 1)
     setInvoiceLoading(true)
     setMsg(null)
     try {
@@ -295,15 +299,18 @@ function AdminExhibitionBanksContent() {
       if (cycleId) qs.set('cycle_id', cycleId)
       const res = await fetch(`/api/admin/exhibition/vendor-banks/invoices/list?${qs.toString()}`, { cache: 'no-store' })
       const json = await safeJson(res, '/api/admin/exhibition/vendor-banks/invoices/list')
+      // Another vendor was picked while this was loading: drop this answer.
+      if (request !== invoiceRequestRef.current) return
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to load invoices')
       setInvoices(json.invoices || [])
       setInvoiceLoc(v || null)
       setInvoiceListOpen(true)
     } catch (e) {
+      if (request !== invoiceRequestRef.current) return
       setMsg({ type: 'error', text: e?.message || 'Failed to load invoices' })
       setInvoices([])
     } finally {
-      setInvoiceLoading(false)
+      if (request === invoiceRequestRef.current) setInvoiceLoading(false)
     }
   }
 

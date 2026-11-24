@@ -51,6 +51,9 @@ function AdminFoodBanksContent() {
   const [invoiceBank, setInvoiceBank] = useState(null)
   const [invoices, setInvoices] = useState([])
   const [invoiceLoading, setInvoiceLoading] = useState(false)
+  // Identifies the newest branch/bank invoice request, so an earlier one that
+  // answers late cannot open its invoices over the one picked after it.
+  const invoiceRequestRef = useRef(0)
 
   const [invoiceUploadOpen, setInvoiceUploadOpen] = useState(false)
   const [invoiceUploadLoc, setInvoiceUploadLoc] = useState(null)
@@ -221,6 +224,7 @@ function AdminFoodBanksContent() {
   const loadInvoices = async (loc, bank = null) => {
     const id = Number(loc?.id)
     if (!Number.isFinite(id) || id <= 0) return
+    const request = (invoiceRequestRef.current += 1)
     setInvoiceLoading(true)
     setMsg(null)
     setInvoiceBank(bank || null)
@@ -229,16 +233,27 @@ function AdminFoodBanksContent() {
       if (bank?.id) qs.set('bank_account_id', String(bank.id))
       const res = await fetch(`/api/admin/food/vendor-banks/invoices/list?${qs.toString()}`, { cache: 'no-store' })
       const json = await safeJson(res, '/api/admin/food/vendor-banks/invoices/list')
+      // Another branch or account was picked while this was loading: drop it.
+      if (request !== invoiceRequestRef.current) return
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to load invoices')
       setInvoices(json.invoices || [])
       setInvoiceLoc(loc || null)
       setInvoiceListOpen(true)
     } catch (e) {
+      if (request !== invoiceRequestRef.current) return
       setMsg({ type: 'error', text: e?.message || 'Failed to load invoices' })
       setInvoices([])
     } finally {
-      setInvoiceLoading(false)
+      if (request === invoiceRequestRef.current) setInvoiceLoading(false)
     }
+  }
+
+  // Closing abandons any invoice fetch still running, so a late answer cannot
+  // reopen the list for a branch already left behind.
+  const closeInvoiceList = () => {
+    invoiceRequestRef.current += 1
+    setInvoiceListOpen(false)
+    setInvoiceLoading(false)
   }
 
   const openBankModal = (loc) => {
@@ -828,7 +843,7 @@ function AdminFoodBanksContent() {
 
       <DraggableModal
         open={invoiceListOpen}
-        onClose={() => setInvoiceListOpen(false)}
+        onClose={closeInvoiceList}
         title={['Invoices', invoiceLoc?.name, invoiceBank?.bank_name].filter(Boolean).join(' · ')}
       >
         <div className="space-y-3">
