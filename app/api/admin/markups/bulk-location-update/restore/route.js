@@ -117,9 +117,11 @@ export async function POST(request) {
       if (line.branch_item_price_id != null) row.branch_item_price_id = line.branch_item_price_id
 
       let inserted = await supabase.from('order_lines').insert(row)
-      // The branch price row may have been replaced since; the line still
-      // belongs on the order, so retry without that reference.
-      if (inserted.error && String(inserted.error.code || '') === '23503' && row.branch_item_price_id !== undefined) {
+      // The branch price row may have been replaced since, or the column may
+      // not exist on this database; the line still belongs on the order, so
+      // retry without that reference rather than losing it.
+      const priceRefRejected = ['23503', '42703', 'PGRST204'].includes(String(inserted.error?.code || ''))
+      if (inserted.error && priceRefRejected && row.branch_item_price_id !== undefined) {
         delete row.branch_item_price_id
         inserted = await supabase.from('order_lines').insert(row)
       }

@@ -105,12 +105,21 @@ export async function POST(request) {
     const orderIds = orders.map((o) => o.order_id)
 
     // 4. Find order_lines that match the SKUs in those orders
-    // (qty/amount are the table's real column names)
-    const { data: linesToRemove, error: lErr } = await supabase
-      .from('order_lines')
-      .select('id, order_id, item_id, branch_item_price_id, qty, unit_price, amount')
-      .in('order_id', orderIds)
-      .in('item_id', itemIds)
+    // (qty/amount are the table's real column names). branch_item_price_id
+    // rides along for the restore snapshot; a database without that column
+    // still removes and restores the lines.
+    let linesToRemove = null
+    let lErr = null
+    for (const cols of [
+      'id, order_id, item_id, branch_item_price_id, qty, unit_price, amount',
+      'id, order_id, item_id, qty, unit_price, amount',
+    ]) {
+      const res = await supabase.from('order_lines').select(cols).in('order_id', orderIds).in('item_id', itemIds)
+      linesToRemove = res.data
+      lErr = res.error
+      if (!lErr) break
+      if (!/branch_item_price_id/i.test(String(lErr.message || ''))) break
+    }
 
     if (lErr) return NextResponse.json({ ok: false, error: lErr.message }, { status: 500 })
 
