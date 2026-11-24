@@ -4,9 +4,12 @@
 // GET  — the last ten removals, newest first, with whether each was restored.
 // POST { snapshot_id } — put that run's order lines back, recalculate each
 //      order's total/item count, and reopen an order the removal cancelled
-//      (only while it is still Cancelled).
+//      (only while it is still Cancelled). The snapshot is stamped restored only
+//      when every line and every order succeeded; a partial run stays open so
+//      the same restore can be retried, and the response names what is left.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
+import { insertWithOptionalField } from '@/lib/optionalColumn'
 import { validateSession } from '@/lib/validation'
 
 export const runtime = 'nodejs'
@@ -100,8 +103,11 @@ export async function POST(request) {
     }
 
     const errors = []
+    const failedLines = []
+    const failedOrders = []
     const restoredOrders = []
     const restoredLineIds = []
+    let alreadyPresent = 0
 
     // Put the exact line rows back. The ids are kept so anything that points at
     // a line finds it again; a line that is somehow already back is skipped.
@@ -116,18 +122,26 @@ export async function POST(request) {
       }
       if (line.branch_item_price_id != null) row.branch_item_price_id = line.branch_item_price_id
 
-      let inserted = await supabase.from('order_lines').insert(row)
       // The branch price row may have been replaced since, or the column may
-      // not exist on this database; the line still belongs on the order, so
-      // retry without that reference rather than losing it.
-      const priceRefRejected = ['23503', '42703', 'PGRST204'].includes(String(inserted.error?.code || ''))
-      if (inserted.error && priceRefRejected && row.branch_item_price_id !== undefined) {
-        delete row.branch_item_price_id
-        inserted = await supabase.from('order_lines').insert(row)
-      }
+      // not exist on this database; the line still belongs on the order, so the
+      // shared helper retries without that reference rather than losing it.
+      const inserted = await insertWithOptionalField(row, 'branch_item_price_id', (r) =>
+        supabase.from('order_lines').insert(r)
+      )
       if (inserted.error) {
-        if (String(inserted.error.code || '') === '23505') continue
-        errors.push({ order_id: line.order_id, error: inserted.error.message })
+        if (String(inserted.error.code || '') === '23505') {
+          alreadyPresent += 1
+          continue
+        }
+        const failure = {
+          order_id: line.order_id,
+          line_id: line.id,
+          item_id: line.item_id,
+          qty: line.qty,
+          error: inserted.error.message,
+        }
+        failedLines.push(failure)
+        errors.push(failure)
         continue
       }
       restoredLineIds.push(line.id)
@@ -145,7 +159,9 @@ export async function POST(request) {
         .eq('order_id', orderId)
         .maybeSingle()
       if (orderErr) {
-        errors.push({ order_id: orderId, error: orderErr.message })
+        const failure = { order_id: orderId, error: orderErr.message }
+        failedOrders.push(failure)
+        errors.push(failure)
         continue
       }
 
@@ -154,7 +170,9 @@ export async function POST(request) {
         .select('qty, amount')
         .eq('order_id', orderId)
       if (linesErr) {
-        errors.push({ order_id: orderId, error: linesErr.message })
+        const failure = { order_id: orderId, error: linesErr.message }
+        failedOrders.push(failure)
+        errors.push(failure)
         continue
       }
 
@@ -186,7 +204,9 @@ export async function POST(request) {
 
       const { error: updErr } = await supabase.from('orders').update(patch).eq('order_id', orderId)
       if (updErr) {
-        errors.push({ order_id: orderId, error: updErr.message })
+        const failure = { order_id: orderId, error: updErr.message }
+        failedOrders.push(failure)
+        errors.push(failure)
         continue
       }
       restoredOrders.push({
@@ -198,12 +218,45 @@ export async function POST(request) {
       })
     }
 
-    const now = new Date().toISOString()
-    const { error: markErr } = await supabase
-      .from('order_removal_snapshots')
-      .update({ restored_at: now, restored_by: actor })
-      .eq('id', snapshotId)
-    if (markErr) errors.push({ order_id: null, error: `Snapshot: ${markErr.message}` })
+    // The removal is only closed once every line is back and every order was
+    // recalculated. A half-restored run keeps restored_at empty so the same
+    // snapshot can be retried instead of answering 409 forever.
+    const pendingOrderIds = [
+      ...new Set([...failedLines.map((f) => f.order_id), ...failedOrders.map((f) => f.order_id)]),
+    ].filter((id) => id != null)
+    let complete = failedLines.length === 0 && failedOrders.length === 0
+    let restoredAt = null
+    let markFailure = null
+
+    if (complete) {
+      restoredAt = new Date().toISOString()
+      const { error: markErr } = await supabase
+        .from('order_removal_snapshots')
+        .update({ restored_at: restoredAt, restored_by: actor })
+        .eq('id', snapshotId)
+      if (markErr) {
+        complete = false
+        restoredAt = null
+        markFailure = { order_id: null, error: `Snapshot: ${markErr.message}` }
+        errors.push(markFailure)
+      }
+    }
+
+    const remaining = {
+      lines: failedLines.length,
+      orders: failedOrders.length,
+      order_ids: pendingOrderIds,
+      failed_lines: failedLines,
+      failed_orders: failedOrders,
+      snapshot_mark_failed: Boolean(markFailure),
+    }
+    const message = complete
+      ? `Restored ${restoredLineIds.length} line(s) across ${restoredOrders.length} order(s).`
+      : markFailure
+        ? 'Every line and order is back, but the removal could not be marked restored. Run Restore again to close it.'
+        : `Only part of this removal is back — ${failedLines.length} line(s) and ${failedOrders.length} order(s) still need restoring` +
+          (pendingOrderIds.length ? ` (order #${pendingOrderIds.join(', #')})` : '') +
+          '. The removal stays open, so running Restore again retries just what is missing.'
 
     // Audit trail: the food audit log already records removals, so the restore
     // that undoes one belongs there too.
@@ -231,8 +284,13 @@ export async function POST(request) {
     return NextResponse.json({
       ok: true,
       snapshot_id: snapshotId,
+      complete,
+      restored_at: restoredAt,
       restored_lines: restoredLineIds.length,
       restored_orders: restoredOrders,
+      already_present: alreadyPresent,
+      remaining,
+      message,
       errors,
     })
   } catch (e) {

@@ -56,6 +56,8 @@ function makeSupabase({
   ],
   loanRates = { 99: 10 },
   insertError = null,
+  insertErrorFor = null,
+  orderUpdateError = null,
 } = {}) {
   const state = {
     inserted: [],
@@ -89,6 +91,8 @@ function makeSupabase({
           select: () => chain([]),
           insert: (row) => {
             state.inserted.push(row)
+            const failed = insertErrorFor ? insertErrorFor(row) : null
+            if (failed) return Promise.resolve({ error: failed })
             if (insertError) return Promise.resolve({ error: insertError })
             if (state.lines.some((l) => l.id === row.id)) {
               return Promise.resolve({ error: { code: '23505', message: 'duplicate key value' } })
@@ -106,7 +110,7 @@ function makeSupabase({
           update: (patch) => ({
             eq: (_col, val) => {
               state.orderPatches.push({ order_id: val, ...patch })
-              return Promise.resolve({ error: null })
+              return Promise.resolve({ error: orderUpdateError || null })
             },
           }),
         }
@@ -188,8 +192,11 @@ describe('POST bulk-location-update/restore — putting the removal back', () =>
 
     expect(res.status).toBe(200)
     expect(b.ok).toBe(true)
+    expect(b.complete).toBe(true)
+    expect(b.restored_at).toBeTruthy()
     expect(b.restored_lines).toBe(2)
     expect(b.errors).toEqual([])
+    expect(b.remaining).toMatchObject({ lines: 0, orders: 0, failed_lines: [], failed_orders: [] })
 
     // Lines come back with their ids, original price and branch price pointer.
     expect(data.state.inserted).toEqual([
@@ -244,6 +251,8 @@ describe('POST bulk-location-update/restore — putting the removal back', () =>
     expect(b.ok).toBe(true)
     expect(b.errors).toEqual([])
     expect(b.restored_lines).toBe(1) // line 1 already existed, only line 2 was inserted
+    expect(b.already_present).toBe(1) // a line that is already back is not a failure
+    expect(b.complete).toBe(true)
     expect(data.state.orderPatches.find((p) => p.order_id === 10).total_amount).toBe(1500)
   })
 })
@@ -293,5 +302,66 @@ describe('POST bulk-location-update/restore — order status', () => {
     createClient.mockReturnValue(data)
     await POST(req({ snapshot_id: 5 }))
     expect(data.state.orderPatches.find((p) => p.order_id === 10).status).toBeUndefined()
+  })
+})
+
+describe('POST bulk-location-update/restore — partial restores stay retryable', () => {
+  it('does not stamp restored_at when a line fails to re-insert, and names what is left', async () => {
+    const data = makeSupabase({
+      insertErrorFor: (row) =>
+        row.id === 2 ? { code: '23514', message: 'value too long for type character varying(8)' } : null,
+    })
+    createClient.mockReturnValue(data)
+    const res = await POST(req({ snapshot_id: 5 }))
+    const b = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(b.ok).toBe(true)
+    expect(b.complete).toBe(false)
+    expect(b.restored_at).toBeNull()
+    expect(b.restored_lines).toBe(1)
+    // The snapshot is left open so the same restore can be run again.
+    expect(data.state.snapshotPatch).toBeNull()
+
+    // The admin is told exactly which line is still missing and from which order.
+    expect(b.remaining.lines).toBe(1)
+    expect(b.remaining.order_ids).toEqual([11])
+    expect(b.remaining.failed_lines[0]).toMatchObject({ order_id: 11, line_id: 2, item_id: 1, qty: 2 })
+    expect(b.message).toMatch(/still need restoring/i)
+    expect(b.message).toMatch(/stays open/i)
+  })
+
+  it('does not stamp restored_at when an order total cannot be recalculated', async () => {
+    const data = makeSupabase({ orderUpdateError: { code: '57014', message: 'canceling statement' } })
+    createClient.mockReturnValue(data)
+    const res = await POST(req({ snapshot_id: 5 }))
+    const b = await res.json()
+
+    expect(b.complete).toBe(false)
+    expect(b.restored_at).toBeNull()
+    expect(data.state.snapshotPatch).toBeNull()
+    expect(b.remaining.order_ids).toEqual([10, 11])
+    expect(b.remaining.failed_orders).toHaveLength(2)
+    expect(b.message).toMatch(/still need restoring/i)
+  })
+
+  it('closes the snapshot on the retry that finally puts every line back', async () => {
+    const first = makeSupabase({ insertError: { code: '57014', message: 'connection reset' } })
+    createClient.mockReturnValue(first)
+    const r1 = await POST(req({ snapshot_id: 5 }))
+    const b1 = await r1.json()
+    expect(b1.complete).toBe(false)
+    expect(first.state.snapshotPatch).toBeNull()
+
+    // The retry is accepted (no 409) and, with the database healthy again,
+    // stamps the snapshot so a third click would be refused.
+    const second = makeSupabase()
+    createClient.mockReturnValue(second)
+    const r2 = await POST(req({ snapshot_id: 5 }))
+    const b2 = await r2.json()
+    expect(r2.status).toBe(200)
+    expect(b2.complete).toBe(true)
+    expect(b2.restored_lines).toBe(2)
+    expect(second.state.snapshotPatch.restored_at).toBeTruthy()
   })
 })

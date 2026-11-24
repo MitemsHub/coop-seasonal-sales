@@ -64,6 +64,9 @@ export default function AdminMarkupsPage() {
   const [bulkSnapshots, setBulkSnapshots] = useState([])
   const [bulkRestoring, setBulkRestoring] = useState(null)
   const [bulkRestoreNotice, setBulkRestoreNotice] = useState('')
+  // A restore that only partially succeeded leaves the snapshot open; these
+  // lines spell out exactly what a second Restore click will retry.
+  const [bulkRestoreLeft, setBulkRestoreLeft] = useState([])
 
   const Spinner = ({ className = 'h-4 w-4 text-on-accent' }) => (
     <svg className={`animate-spin ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -485,6 +488,7 @@ export default function AdminMarkupsPage() {
     try {
       setBulkRestoring(snapshotId)
       setBulkRestoreNotice('')
+      setBulkRestoreLeft([])
       const res = await fetch('/api/admin/markups/bulk-location-update/restore', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -493,9 +497,20 @@ export default function AdminMarkupsPage() {
       const json = await res.json()
       if (!res.ok || !json.ok) throw new Error(json.error || 'Restore failed')
       setBulkRestoreNotice(
-        `Restored ${json.restored_lines || 0} line(s) across ${json.restored_orders?.length || 0} order(s).` +
-          (json.errors?.length ? ` ${json.errors.length} problem(s) — check the order list.` : '')
+        json.message ||
+          `Restored ${json.restored_lines || 0} line(s) across ${json.restored_orders?.length || 0} order(s).`
       )
+      const left = []
+      for (const f of json.remaining?.failed_lines || []) {
+        left.push(`Order #${f.order_id} · item ${f.item_id} · ${f.qty} unit(s) still missing — ${f.error}`)
+      }
+      for (const f of json.remaining?.failed_orders || []) {
+        left.push(`Order #${f.order_id} · totals were not recalculated — ${f.error}`)
+      }
+      if (json.remaining?.snapshot_mark_failed) {
+        left.push('The removal could not be marked as restored — run Restore again to close it.')
+      }
+      setBulkRestoreLeft(left)
       await loadBulkSnapshots()
     } catch (err) {
       setBulkRestoreNotice(`Restore failed: ${err.message}`)
@@ -1020,6 +1035,7 @@ export default function AdminMarkupsPage() {
                   </div>
                 )}
                 {bulkRestoreNotice && <p className="mt-2 text-xs text-fg">{bulkRestoreNotice}</p>}
+                <RestoreLeftover items={bulkRestoreLeft} />
                 {bulkResult.missing_skus?.length > 0 && (
                   <p className="mt-1 text-xs text-warning-fg">
                     ⚠️ SKUs not found: {bulkResult.missing_skus.join(', ')}
@@ -1075,6 +1091,7 @@ export default function AdminMarkupsPage() {
             ))}
           </ul>
           {bulkRestoreNotice && <p className="mt-2 text-xs text-fg">{bulkRestoreNotice}</p>}
+          <RestoreLeftover items={bulkRestoreLeft} />
         </div>
       )}
 
@@ -1200,6 +1217,17 @@ export default function AdminMarkupsPage() {
       </Modal>
     </div>
     </ProtectedRoute>
+  )
+}
+
+function RestoreLeftover({ items }) {
+  if (!items?.length) return null
+  return (
+    <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-danger-fg">
+      {items.map((text, i) => (
+        <li key={i}>{text}</li>
+      ))}
+    </ul>
   )
 }
 

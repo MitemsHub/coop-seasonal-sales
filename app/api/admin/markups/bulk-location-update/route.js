@@ -8,6 +8,7 @@
 // Returns { ok, affected_orders, removed_lines, errors }
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
+import { selectWithOptionalColumn } from '@/lib/optionalColumn'
 import { validateSession } from '@/lib/validation'
 
 export const runtime = 'nodejs'
@@ -57,15 +58,11 @@ export async function POST(request) {
     // preview can name retired products (no longer sold) instead of quietly
     // taking their lines off past orders; a database without the column still
     // resolves the items.
-    let items = null
-    let iErr = null
-    for (const cols of ['item_id, sku, is_active', 'item_id, sku']) {
-      const res = await supabase.from('items').select(cols).in('sku', skus)
-      items = res.data
-      iErr = res.error
-      if (!iErr) break
-      if (!/is_active/i.test(String(iErr.message || ''))) break
-    }
+    const { data: items, error: iErr } = await selectWithOptionalColumn(
+      'item_id, sku, is_active',
+      'is_active',
+      (cols) => supabase.from('items').select(cols).in('sku', skus)
+    )
     if (iErr) return NextResponse.json({ ok: false, error: iErr.message }, { status: 500 })
     const foundSkus = (items || []).map((i) => i.sku)
     const missingSkus = skus.filter((s) => !foundSkus.includes(s))
@@ -108,18 +105,11 @@ export async function POST(request) {
     // (qty/amount are the table's real column names). branch_item_price_id
     // rides along for the restore snapshot; a database without that column
     // still removes and restores the lines.
-    let linesToRemove = null
-    let lErr = null
-    for (const cols of [
+    const { data: linesToRemove, error: lErr } = await selectWithOptionalColumn(
       'id, order_id, item_id, branch_item_price_id, qty, unit_price, amount',
-      'id, order_id, item_id, qty, unit_price, amount',
-    ]) {
-      const res = await supabase.from('order_lines').select(cols).in('order_id', orderIds).in('item_id', itemIds)
-      linesToRemove = res.data
-      lErr = res.error
-      if (!lErr) break
-      if (!/branch_item_price_id/i.test(String(lErr.message || ''))) break
-    }
+      'branch_item_price_id',
+      (cols) => supabase.from('order_lines').select(cols).in('order_id', orderIds).in('item_id', itemIds)
+    )
 
     if (lErr) return NextResponse.json({ ok: false, error: lErr.message }, { status: 500 })
 
