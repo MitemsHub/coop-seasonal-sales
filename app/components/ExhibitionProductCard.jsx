@@ -9,7 +9,7 @@
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react'
+import { Minus, Plus } from 'lucide-react'
 import Badge from './ui/Badge'
 import Button from './ui/Button'
 import DraggableModal from './DraggableModal'
@@ -29,10 +29,11 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
 
   const step = (delta) => setIndex((i) => (i + delta + images.length) % images.length)
 
-  // The popup gallery is driven by swiping the photo. Pointer events cover
-  // touch and pen as well as a mouse drag; `touch-action: pan-y` leaves vertical
-  // page scrolling alone. The arrow buttons stay for desktops without a touch
-  // surface, and the thumbnails jump straight to a photo.
+  // The popup gallery is swipe-only: pointer events cover touch and pen as well
+  // as a mouse drag, `touch-action: pan-y` leaves vertical page scrolling alone,
+  // and the thumbnails jump straight to a photo. Without arrow buttons a mouse
+  // user still needs a way in, so the gallery is focusable and responds to the
+  // left/right arrow keys.
   const swipe = useRef({ x: 0, active: false })
   const onSwipeStart = (e) => {
     if (!many) return
@@ -47,6 +48,16 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
   }
   const onSwipeCancel = () => {
     swipe.current.active = false
+  }
+  const onGalleryKeyDown = (e) => {
+    if (!many) return
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault()
+      step(-1)
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault()
+      step(1)
+    }
   }
 
   // The inset lives on a wrapper, not on the image box: `fill` pins the image
@@ -197,13 +208,19 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
         <div className="space-y-3">
           {/* Gallery — same index as the card, so stepping here starts where
               the member left off. */}
+          {/* Focusable with no arrow buttons: the keyboard is the fallback for
+              a mouse-only desktop, and the pointer handlers still take swipes. */}
           <div
-            className="relative flex h-56 w-full select-none items-center justify-center overflow-hidden rounded-xl border border-line-subtle bg-white p-2 sm:h-72 dark:bg-subtle"
+            className="relative flex h-56 w-full select-none items-center justify-center overflow-hidden rounded-xl border border-line-subtle bg-white p-2 sm:h-72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 dark:bg-subtle"
             style={{ touchAction: 'pan-y' }}
             onPointerDown={onSwipeStart}
             onPointerUp={onSwipeEnd}
             onPointerCancel={onSwipeCancel}
             onPointerLeave={onSwipeCancel}
+            tabIndex={many ? 0 : -1}
+            role={many ? 'group' : undefined}
+            aria-label={many ? `Photo ${safeIndex + 1} of ${images.length} — swipe or use the left and right arrow keys` : undefined}
+            onKeyDown={onGalleryKeyDown}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -217,27 +234,11 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
             />
             {many && (
               <>
-                <button
-                  type="button"
-                  onClick={() => step(-1)}
-                  aria-label="Previous photo"
-                  className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-surface/90 p-1.5 text-fg shadow-sm backdrop-blur hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
-                >
-                  <ChevronLeft className="h-4 w-4" strokeWidth={2.4} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => step(1)}
-                  aria-label="Next photo"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-surface/90 p-1.5 text-fg shadow-sm backdrop-blur hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
-                >
-                  <ChevronRight className="h-4 w-4" strokeWidth={2.4} />
-                </button>
                 <span className="absolute right-2 top-2 rounded-full bg-fg/70 px-2 py-0.5 text-[10px] font-semibold text-on-accent tabular-nums">
                   {safeIndex + 1}/{images.length}
                 </span>
                 <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-fg/60 px-2 py-0.5 text-[10px] font-medium text-on-accent">
-                  Swipe for more photos
+                  Swipe for more photos · ← → keys
                 </span>
               </>
             )}
