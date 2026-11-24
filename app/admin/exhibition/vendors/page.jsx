@@ -5,7 +5,7 @@
 // generated when left blank), vendors sign into /vendor with those credentials.
 // Admins can edit the login details and email them to the vendor. Suspend,
 // edit and delete live here too.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Copy, KeyRound, Mail, Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload, UserCheck, Users } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
@@ -138,6 +138,9 @@ export default function ExhibitionVendorsPage() {
   const [loginIssued, setLoginIssued] = useState(false)
   const [loginLoading, setLoginLoading] = useState(false)
   const [loginBusy, setLoginBusy] = useState(false)
+  // Bumped on every open and close so an in-flight passcode request can tell
+  // whether the sheet still wants its answer.
+  const loginRequestRef = useRef(0)
   const [copied, setCopied] = useState('')
   const [siteOrigin, setSiteOrigin] = useState('')
 
@@ -205,6 +208,7 @@ export default function ExhibitionVendorsPage() {
   // read back from the separately encrypted copy. Passcodes issued before that
   // copy existed have none; the sheet then offers to issue a new one.
   const openLoginView = async (v) => {
+    const request = (loginRequestRef.current += 1)
     setLoginView(v)
     setLoginPasscode('')
     setLoginIssued(false)
@@ -213,18 +217,26 @@ export default function ExhibitionVendorsPage() {
     try {
       const res = await fetch(`/api/admin/exhibition/vendors/${v.id}/passcode`, { cache: 'no-store' })
       const json = await res.json().catch(() => null)
+      // The sheet may have been closed, or reopened for a different vendor,
+      // while this was in flight. Applying the answer then would show one
+      // vendor's passcode under another vendor's name.
+      if (request !== loginRequestRef.current) return
       if (res.ok && json?.ok && json.passcode) setLoginPasscode(json.passcode)
     } catch {
       // No stored copy is an ordinary outcome, not something to report.
     } finally {
-      setLoginLoading(false)
+      if (request === loginRequestRef.current) setLoginLoading(false)
     }
   }
 
   const closeLoginView = () => {
+    // Abandon any passcode request still in flight and clear its spinner, so a
+    // later open starts from a clean loading state.
+    loginRequestRef.current += 1
     setLoginView(null)
     setLoginPasscode('')
     setLoginIssued(false)
+    setLoginLoading(false)
   }
 
   const copyValue = async (label, value) => {
