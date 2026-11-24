@@ -53,11 +53,19 @@ export async function POST(request) {
     if (!branch) return NextResponse.json({ ok: false, error: `Branch "${branchCode}" not found` }, { status: 404 })
     const branchId = branch.id
 
-    // 2. Resolve item_ids from SKUs
-    const { data: items, error: iErr } = await supabase
-      .from('items')
-      .select('item_id, sku')
-      .in('sku', skus)
+    // 2. Resolve item_ids from SKUs. is_active rides along so the confirmation
+    // preview can name retired products (no longer sold) instead of quietly
+    // taking their lines off past orders; a database without the column still
+    // resolves the items.
+    let items = null
+    let iErr = null
+    for (const cols of ['item_id, sku, is_active', 'item_id, sku']) {
+      const res = await supabase.from('items').select(cols).in('sku', skus)
+      items = res.data
+      iErr = res.error
+      if (!iErr) break
+      if (!/is_active/i.test(String(iErr.message || ''))) break
+    }
     if (iErr) return NextResponse.json({ ok: false, error: iErr.message }, { status: 500 })
     const foundSkus = (items || []).map((i) => i.sku)
     const missingSkus = skus.filter((s) => !foundSkus.includes(s))
@@ -100,11 +108,40 @@ export async function POST(request) {
     // (qty/amount are the table's real column names)
     const { data: linesToRemove, error: lErr } = await supabase
       .from('order_lines')
-      .select('id, order_id, item_id, qty, unit_price, amount')
+      .select('id, order_id, item_id, branch_item_price_id, qty, unit_price, amount')
       .in('order_id', orderIds)
       .in('item_id', itemIds)
 
     if (lErr) return NextResponse.json({ ok: false, error: lErr.message }, { status: 500 })
+
+    // Per-SKU tally of what this run takes out, so the dialog can say how many
+    // lines each pasted SKU costs and flag the ones that are retired.
+    const skuMetaByItemId = new Map(
+      (items || []).map((i) => [i.item_id, { sku: i.sku, retired: i.is_active === false }])
+    )
+    const summaryBySku = new Map()
+    for (const line of linesToRemove || []) {
+      const meta = skuMetaByItemId.get(line.item_id)
+      if (!meta) continue
+      let entry = summaryBySku.get(meta.sku)
+      if (!entry) {
+        entry = { sku: meta.sku, retired: meta.retired, lines: 0, orders: new Set(), qty: 0, amount: 0 }
+        summaryBySku.set(meta.sku, entry)
+      }
+      entry.lines += 1
+      entry.orders.add(line.order_id)
+      entry.qty += Number(line.qty || 0)
+      entry.amount += Number(line.amount || 0)
+    }
+    const itemSummary = [...summaryBySku.values()].map((e) => ({
+      sku: e.sku,
+      retired: e.retired,
+      lines: e.lines,
+      orders: e.orders.size,
+      qty: e.qty,
+      amount: e.amount,
+    }))
+    const retiredItems = itemSummary.filter((i) => i.retired)
 
     if (!linesToRemove || linesToRemove.length === 0) {
       return NextResponse.json({
@@ -112,9 +149,13 @@ export async function POST(request) {
         message: 'No matching order lines found for the selected items',
         affected_orders: 0,
         removed_lines: 0,
+        item_summary: [],
+        retired_items: [],
         missing_skus: missingSkus,
       })
     }
+
+    const affectedOrderIds = [...new Set(linesToRemove.map((l) => l.order_id))]
 
     // Preview mode: report exactly what a real run would remove, without
     // deleting anything. The confirmation dialog calls this first so the admin
@@ -151,8 +192,53 @@ export async function POST(request) {
           quantity: l.qty,
           line_total: l.amount,
         })),
+        item_summary: itemSummary,
+        retired_items: retiredItems,
         missing_skus: missingSkus,
       })
+    }
+
+    // 5a. Snapshot first: the delete below has no undo of its own, so keep the
+    // exact rows and the order state they came from. Restoring is a later POST
+    // to .../restore with the returned snapshot_id. A database that has not run
+    // migrations/add-order-removal-snapshots.sql still gets the removal, with
+    // a warning in `errors`.
+    const errors = []
+    let snapshotId = null
+    try {
+      const insertSnapshot = supabase.from('order_removal_snapshots')?.insert
+      if (typeof insertSnapshot === 'function') {
+        const orderState = orders
+          .filter((o) => affectedOrderIds.includes(o.order_id))
+          .map((o) => ({
+            order_id: o.order_id,
+            status: o.status,
+            total_amount: Number(o.total_amount || 0),
+            payment_option: o.payment_option,
+            cycle_id: o.cycle_id ?? cycleId,
+          }))
+        const { data: snapRow, error: snapErr } = await supabase
+          .from('order_removal_snapshots')
+          .insert({
+            module: 'food',
+            actor,
+            branch_code: branchCode,
+            branch_id: branchId,
+            cycle_id: cycleId,
+            requested_skus: skus,
+            item_summary: itemSummary,
+            retired_skus: retiredItems,
+            removed_lines: linesToRemove.length,
+            affected_orders: affectedOrderIds.length,
+            payload: { orders: orderState, lines: linesToRemove },
+          })
+          .select('id')
+          .single()
+        if (snapErr) errors.push({ order_id: null, error: `Snapshot: ${snapErr.message}` })
+        else snapshotId = snapRow?.id ?? null
+      }
+    } catch (e) {
+      errors.push({ order_id: null, error: `Snapshot: ${e.message || 'insert failed'}` })
     }
 
     // 5. Delete the matching order_lines
@@ -169,9 +255,6 @@ export async function POST(request) {
     // as the repricer), so the base total is the SUM of the remaining lines.
     // Loan orders keep their interest: base + ROUND(base × rate%), with the
     // rate from the cycle (default 13% — same fallback the repricer uses).
-    const affectedOrderIds = [...new Set(linesToRemove.map((l) => l.order_id))]
-    const errors = []
-
     let ratePct = 13
     const anyLoan = orders.some((o) => o.payment_option === 'Loan')
     const loanRatePctByCycle = new Map()
@@ -301,12 +384,15 @@ export async function POST(request) {
       message: `Removed ${linesToRemove.length} item(s) from ${affectedOrderIds.length} order(s)`,
       affected_orders: affectedOrderIds.length,
       removed_lines: linesToRemove.length,
+      snapshot_id: snapshotId,
       removed_details: linesToRemove.map((l) => ({
         order_id: l.order_id,
         item_id: l.item_id,
         quantity: l.qty,
         line_total: l.amount,
       })),
+      item_summary: itemSummary,
+      retired_items: retiredItems,
       missing_skus: missingSkus,
       errors,
     })

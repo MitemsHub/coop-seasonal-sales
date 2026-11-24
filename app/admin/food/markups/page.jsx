@@ -59,6 +59,11 @@ export default function AdminMarkupsPage() {
   const [bulkPreview, setBulkPreview] = useState(null)
   const [bulkPreviewLoading, setBulkPreviewLoading] = useState(false)
   const [bulkPreviewError, setBulkPreviewError] = useState('')
+  // Undo: every removal saves a snapshot of the lines it deleted, so a mistaken
+  // SKU/branch/cycle can be restored without re-adding lines by hand.
+  const [bulkSnapshots, setBulkSnapshots] = useState([])
+  const [bulkRestoring, setBulkRestoring] = useState(null)
+  const [bulkRestoreNotice, setBulkRestoreNotice] = useState('')
 
   const Spinner = ({ className = 'h-4 w-4 text-on-accent' }) => (
     <svg className={`animate-spin ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -420,6 +425,8 @@ export default function AdminMarkupsPage() {
       setBulkConfirmOpen(false)
       setBulkConfirmPayload(null)
       setBulkPreview(null)
+      setBulkRestoreNotice('')
+      loadBulkSnapshots()
     } catch (err) {
       setBulkResult({ ok: false, error: err.message })
       setMessage(`Bulk update failed: ${err.message}`)
@@ -463,6 +470,43 @@ export default function AdminMarkupsPage() {
       setBulkPreviewLoading(false)
     }
   }
+
+  const loadBulkSnapshots = async () => {
+    try {
+      const res = await fetch('/api/admin/markups/bulk-location-update/restore', { cache: 'no-store', credentials: 'same-origin' })
+      const json = await res.json()
+      if (res.ok && json.ok) setBulkSnapshots(json.snapshots || [])
+    } catch {}
+  }
+
+  // Puts a saved removal back: the deleted lines, the recalculated totals, and
+  // the previous status of any order the removal had cancelled.
+  const restoreBulkRemoval = async (snapshotId) => {
+    try {
+      setBulkRestoring(snapshotId)
+      setBulkRestoreNotice('')
+      const res = await fetch('/api/admin/markups/bulk-location-update/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ snapshot_id: snapshotId }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Restore failed')
+      setBulkRestoreNotice(
+        `Restored ${json.restored_lines || 0} line(s) across ${json.restored_orders?.length || 0} order(s).` +
+          (json.errors?.length ? ` ${json.errors.length} problem(s) — check the order list.` : '')
+      )
+      await loadBulkSnapshots()
+    } catch (err) {
+      setBulkRestoreNotice(`Restore failed: ${err.message}`)
+    } finally {
+      setBulkRestoring(null)
+    }
+  }
+
+  useEffect(() => {
+    loadBulkSnapshots()
+  }, [])
 
   const dlExcel = async (fileName, rows, sheetName) => {
     if (!rows?.length) return
@@ -962,6 +1006,20 @@ export default function AdminMarkupsPage() {
                     Affected orders: {bulkResult.affected_orders} | Removed lines: {bulkResult.removed_lines}
                   </p>
                 )}
+                {bulkResult.snapshot_id && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-muted">A snapshot of the removed lines is saved.</span>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => restoreBulkRemoval(bulkResult.snapshot_id)}
+                      loading={bulkRestoring === bulkResult.snapshot_id}
+                    >
+                      Restore this removal
+                    </Button>
+                  </div>
+                )}
+                {bulkRestoreNotice && <p className="mt-2 text-xs text-fg">{bulkRestoreNotice}</p>}
                 {bulkResult.missing_skus?.length > 0 && (
                   <p className="mt-1 text-xs text-warning-fg">
                     ⚠️ SKUs not found: {bulkResult.missing_skus.join(', ')}
@@ -980,13 +1038,53 @@ export default function AdminMarkupsPage() {
         )}
       </div>
 
+      {bulkSnapshots.length > 0 && (
+        <div className="mb-4 bg-surface rounded-xl shadow-lg border border-line-subtle p-4">
+          <h2 className="text-[15px] font-semibold mb-1">Recent bulk removals</h2>
+          <p className="text-sm text-muted mb-3">
+            Restoring puts the deleted lines back at their original prices, recalculates the order totals, and reopens an
+            order the removal had cancelled.
+          </p>
+          <ul className="divide-y divide-line-subtle">
+            {bulkSnapshots.map((s) => (
+              <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+                <div className="min-w-0">
+                  <p className="font-medium text-fg">
+                    {s.branch_code || '—'} · {formatBulkDate(s.created_at)} · {s.removed_lines} line(s) from{' '}
+                    {s.affected_orders} order(s)
+                  </p>
+                  <p className="text-xs text-muted break-words">
+                    {(s.requested_skus || []).join(', ')}
+                    {s.retired_skus?.length ? ` · retired: ${s.retired_skus.map((i) => i.sku).join(', ')}` : ''}
+                    {s.actor ? ` · by ${s.actor}` : ''}
+                  </p>
+                </div>
+                {s.restored_at ? (
+                  <span className="text-xs text-success-fg">Restored</span>
+                ) : (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => restoreBulkRemoval(s.id)}
+                    loading={bulkRestoring === s.id}
+                  >
+                    Restore
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+          {bulkRestoreNotice && <p className="mt-2 text-xs text-fg">{bulkRestoreNotice}</p>}
+        </div>
+      )}
+
       <Modal
         open={bulkConfirmOpen}
         onClose={() => {
           if (!bulkProcessing) setBulkConfirmOpen(false)
         }}
         title="Remove items from orders?"
-        description="This deletes the matching order lines and recalculates order totals. It cannot be undone."
+        description="This deletes the matching order lines and recalculates order totals. A snapshot is saved first, so a mistaken removal can be restored from “Recent bulk removals”."
         footer={
           <>
             <Button variant="ghost" onClick={() => setBulkConfirmOpen(false)} disabled={bulkProcessing}>
@@ -1058,6 +1156,33 @@ export default function AdminMarkupsPage() {
                 <p className="font-medium text-fg">
                   Will remove {bulkPreview.removed_lines} item line(s) from {bulkPreview.affected_orders} order(s).
                 </p>
+                {bulkPreview.retired_items?.length > 0 && (
+                  <div className="mt-2 rounded-md border border-warning-border bg-warning-bg/60 p-2 text-warning-fg">
+                    <p className="font-medium">
+                      ⚠️ {bulkPreview.retired_items.length} of these SKU(s) are retired items — no longer sold.
+                    </p>
+                    <p className="mt-1 text-xs">
+                      {bulkPreview.retired_items
+                        .map((i) => `${i.sku} (${i.lines} line${i.lines === 1 ? '' : 's'})`)
+                        .join(', ')}
+                    </p>
+                    <p className="mt-1 text-xs">
+                      They are only removed from past orders. Untick or delete a retired SKU from the list if you meant to
+                      remove something still on sale.
+                    </p>
+                  </div>
+                )}
+                {bulkPreview.item_summary?.length > 0 && (
+                  <ul className="mt-2 space-y-0.5 text-xs text-muted">
+                    {bulkPreview.item_summary.map((i) => (
+                      <li key={i.sku} className={i.retired ? 'text-warning-fg' : ''}>
+                        {i.sku}: {i.lines} line{i.lines === 1 ? '' : 's'} across {i.orders} order
+                        {i.orders === 1 ? '' : 's'} · {i.qty} unit{i.qty === 1 ? '' : 's'}
+                        {i.retired ? ' · RETIRED' : ''}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {bulkPreview.orders_cancelled > 0 && (
                   <p className="text-muted">
                     {bulkPreview.orders_cancelled} order(s) will have no items left and will be automatically cancelled.
@@ -1076,4 +1201,11 @@ export default function AdminMarkupsPage() {
     </div>
     </ProtectedRoute>
   )
+}
+
+function formatBulkDate(value) {
+  if (!value) return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return String(value)
+  return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
