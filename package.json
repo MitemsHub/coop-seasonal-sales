@@ -8,7 +8,8 @@
     "postbuild": "node -e \"const fs=require('fs');const path=require('path');const copy=(src,dst)=>{if(!fs.existsSync(src))return;fs.rmSync(dst,{recursive:true,force:true});fs.mkdirSync(dst,{recursive:true});fs.cpSync(src,dst,{recursive:true});};copy(path.join('.next','static'),path.join('.next','standalone','.next','static'));copy('public',path.join('.next','standalone','public'));\"",
     "start": "set DOTENV_CONFIG_PATH=.env.local&& node -r dotenv/config .next/standalone/server.js",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "recover:vendor-passcodes": "node scripts/recover-vendor-passcodes.mjs"
   },
   "dependencies": {
     "@react-three/fiber": "^9.8.1",
