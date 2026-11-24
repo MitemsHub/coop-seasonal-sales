@@ -173,15 +173,17 @@ export function PhotoHero() {
             photo. Desktop drops the surface and uses the gradient wash above. */}
         <div className="relative isolate max-w-xl rounded-3xl bg-canvas/95 px-5 py-6 shadow-xl shadow-black/10 ring-1 ring-line/70 backdrop-blur-sm sm:px-7 sm:py-8 xl:rounded-none xl:bg-transparent xl:p-0 xl:shadow-none xl:ring-0 xl:backdrop-blur-none">
           {/* Soft brand glow drifting behind the copy (desktop only — at tablet
-              width it flared past the card and read as a stray green circle) */}
+              width it flared past the card and read as a stray green circle).
+              soft-wash carries the falloff in the gradient itself, so a tablet
+              that drops the blur still sees a glow, not a hard green disc. */}
           <div
             aria-hidden
-            className="pointer-events-none absolute -inset-24 -z-10 hidden rounded-full bg-brand/15 blur-[110px] will-change-transform motion-safe:animate-[glow-drift_16s_ease-in-out_infinite] dark:bg-brand/25 xl:block"
+            className="soft-wash pointer-events-none absolute -inset-24 -z-10 hidden text-brand opacity-20 blur-[110px] will-change-transform motion-safe:animate-[glow-drift_16s_ease-in-out_infinite] dark:opacity-30 xl:block"
           />
           {/* Localised canvas haze — only needed where the copy sits on the photo */}
           <div
             aria-hidden
-            className="pointer-events-none absolute -inset-8 -z-10 hidden rounded-3xl bg-canvas/35 blur-2xl dark:bg-canvas/55 xl:block"
+            className="soft-wash pointer-events-none absolute -inset-8 -z-10 hidden text-canvas opacity-55 blur-2xl dark:opacity-75 xl:block"
           />
           <span className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-line bg-surface px-3 py-1.5 text-chips font-semibold text-brand shadow-xs sm:text-xs">
             <span className="relative flex h-2 w-2">

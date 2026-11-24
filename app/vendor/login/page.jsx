@@ -78,11 +78,13 @@ export default function VendorLoginPage() {
       <EntryHeader subtitle="Vendor Portal" backLabel="Back to Portal" backHref="/portal" />
 
       <div className="relative isolate overflow-hidden px-4 pb-16 pt-10 sm:pt-14">
-        {/* Ambient glows */}
+        {/* Ambient glows. The soft edge comes from the soft-wash gradient,
+            not from blur-3xl: tablets that drop the blur would otherwise
+            paint three hard-edged green circles behind the card. */}
         <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute -top-24 left-1/2 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-brand/15 blur-3xl" />
-          <div className="absolute bottom-0 right-0 h-64 w-80 rounded-full bg-brand/10 blur-3xl" />
-          <div className="absolute bottom-10 left-0 h-56 w-64 rounded-full bg-brand/10 blur-3xl" />
+          <div className="soft-wash absolute -top-24 left-1/2 h-72 w-[36rem] -translate-x-1/2 text-brand opacity-20 blur-3xl" />
+          <div className="soft-wash absolute bottom-0 right-0 h-64 w-80 text-brand opacity-15 blur-3xl" />
+          <div className="soft-wash absolute bottom-10 left-0 h-56 w-64 text-brand opacity-15 blur-3xl" />
         </div>
 
         <div className="mx-auto w-full max-w-md">

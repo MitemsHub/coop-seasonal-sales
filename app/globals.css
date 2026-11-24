@@ -720,3 +720,16 @@ button:disabled,
 .pop {
   animation: pop-in 260ms var(--ease-out-sakani) both;
 }
+
+/* ─── Soft decorative washes that do not depend on filter: blur() ──
+   The landing hero glow and the vendor sign-in ambient glows used to be
+   flat discs with a big blur on top. On tablets and other low-end GPUs
+   large blurs are often silently dropped, which left a hard-edged green
+   circle (or a hard box, for the haze). The falloff therefore comes from
+   the gradient itself — currentColor fades out well before the edge — so
+   the shape reads soft everywhere, blur or no blur. Colour comes from a
+   text-* utility, strength from opacity-*, and any blur-* left on the
+   node is a bonus where it is actually painted. */
+.soft-wash {
+  background-image: radial-gradient(closest-side, currentColor, transparent 72%);
+}
