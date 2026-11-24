@@ -6,7 +6,7 @@
 // Admins can edit the login details and email them to the vendor. Suspend,
 // edit and delete live here too.
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ChevronLeft, ChevronRight, Mail, Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload, UserCheck, Users } from 'lucide-react'
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Copy, KeyRound, Mail, Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload, UserCheck, Users } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
@@ -130,6 +130,14 @@ export default function ExhibitionVendorsPage() {
   const [cohortOpen, setCohortOpen] = useState(false)
   const [cohortTab, setCohortTab] = useState('delivery')
   const [exportBusy, setExportBusy] = useState('') // '' | 'excel' | 'pdf'
+  // "View login" sheet: the vendor whose credentials are being shown, the
+  // passcode just issued in it (shown once, never re-readable), and which
+  // field was copied last for the button tick.
+  const [loginView, setLoginView] = useState(null)
+  const [loginPasscode, setLoginPasscode] = useState('')
+  const [loginBusy, setLoginBusy] = useState(false)
+  const [copied, setCopied] = useState('')
+  const [siteOrigin, setSiteOrigin] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -185,6 +193,83 @@ export default function ExhibitionVendorsPage() {
       branch_id: v.branch_id,
     })
     setModal(v)
+  }
+
+  useEffect(() => {
+    setSiteOrigin(window.location.origin)
+  }, [])
+
+  const openLoginView = (v) => {
+    setLoginView(v)
+    setLoginPasscode('')
+    setCopied('')
+  }
+
+  const closeLoginView = () => {
+    setLoginView(null)
+    setLoginPasscode('')
+  }
+
+  const copyValue = async (label, value) => {
+    try {
+      await navigator.clipboard.writeText(String(value || ''))
+      setCopied(label)
+      setTimeout(() => setCopied(''), 2000)
+    } catch {
+      setMsg({ type: 'error', text: 'Could not copy — select the text and copy it by hand.' })
+    }
+  }
+
+  // Passcodes are stored as scrypt hashes, so a passcode that was already
+  // issued cannot be read back. Issuing a new one is the only way to show it:
+  // the server hashes it as usual, and the plaintext lives here until the
+  // sheet closes.
+  const issuePasscode = async () => {
+    if (!loginView) return
+    setLoginBusy(true)
+    setMsg(null)
+    try {
+      let issued = ''
+      for (let attempt = 0; attempt < 5 && !issued; attempt += 1) {
+        const bytes = new Uint8Array(6)
+        window.crypto.getRandomValues(bytes)
+        const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+        const candidate = Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('')
+        const res = await fetch(`/api/admin/exhibition/vendors/${loginView.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ passcode: candidate }),
+        })
+        const json = await res.json().catch(() => null)
+        if (res.ok && json?.ok) {
+          issued = candidate
+          break
+        }
+        // 409 means another vendor already holds that passcode — roll again.
+        if (res.status !== 409) throw new Error(json?.error || 'Could not set a new passcode')
+      }
+      if (!issued) throw new Error('Could not find an unused passcode. Try again.')
+      setLoginPasscode(issued)
+      await load()
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    } finally {
+      setLoginBusy(false)
+    }
+  }
+
+  const emailIssuedPasscode = async () => {
+    if (!loginView || !loginPasscode) return
+    setBusy(true)
+    setMsg(null)
+    try {
+      await sendLoginFor(loginView.id, { passcode: loginPasscode })
+      closeLoginView()
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    } finally {
+      setBusy(false)
+    }
   }
 
   // 'reminder' repeats the sign-in steps without rotating the passcode;
@@ -887,6 +972,7 @@ export default function ExhibitionVendorsPage() {
                               onChange={(e) => {
                                 const action = e.target.value
                                 e.target.value = ''
+                                if (action === 'login') openLoginView(v)
                                 if (action === 'remind') emailVendors([v], 'reminder')
                                 if (action === 'reset') emailVendors([v], 'reset')
                                 if (action === 'edit') openEdit(v)
@@ -896,6 +982,7 @@ export default function ExhibitionVendorsPage() {
                               disabled={busy || isEmailing}
                             >
                               <option value="" disabled>Actions</option>
+                              <option value="login">View login</option>
                               <option value="remind" disabled={!String(v.email || '').trim() || !v.login_sent_at}>
                                 Send reminder (keeps passcode)
                               </option>
@@ -965,6 +1052,16 @@ export default function ExhibitionVendorsPage() {
                       ) : null}
                     </div>
                     <div className="mt-3 grid grid-cols-2 gap-2">
+                      <Button
+                        className="col-span-2"
+                        size="sm"
+                        variant="secondary"
+                        leftIcon={KeyRound}
+                        onClick={() => openLoginView(v)}
+                        disabled={busy || isEmailing}
+                      >
+                        View login
+                      </Button>
                       <Button
                         className="col-span-2"
                         size="sm"
@@ -1274,6 +1371,103 @@ export default function ExhibitionVendorsPage() {
               </Button>
             </div>
           </div>
+        </DraggableModal>
+
+        <DraggableModal open={!!loginView} onClose={closeLoginView} title="Vendor login details">
+          {loginView && (
+            <div className="space-y-4">
+              <div>
+                <p className="break-words text-sm font-semibold text-fg">{loginView.name}</p>
+                <p className="mt-0.5 text-xs text-muted">
+                  {loginView.status === 'active' ? 'Active' : 'Suspended'}
+                  {loginView.branch_name ? ` · ${loginView.branch_name}` : ''}
+                  {loginView.cycle_name ? ` · ${loginView.cycle_name}` : ''}
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="exh-v-login-code">Vendor code — what they type as their stand</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="exh-v-login-code"
+                    value={loginView.code || ''}
+                    readOnly
+                    className="font-mono tracking-wider"
+                  />
+                  <Button
+                    variant="secondary"
+                    leftIcon={copied === 'code' ? Check : Copy}
+                    onClick={() => copyValue('code', loginView.code)}
+                    disabled={!loginView.code}
+                  >
+                    {copied === 'code' ? 'Copied' : 'Copy'}
+                  </Button>
+                </div>
+              </div>
+
+              <div>
+                <Label>Passcode</Label>
+                {loginPasscode ? (
+                  <div className="rounded-xl border border-line-subtle bg-subtle px-3 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-lg font-bold tracking-[0.25em] text-fg">{loginPasscode}</span>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        leftIcon={copied === 'passcode' ? Check : Copy}
+                        onClick={() => copyValue('passcode', loginPasscode)}
+                      >
+                        {copied === 'passcode' ? 'Copied' : 'Copy'}
+                      </Button>
+                    </div>
+                    <p className="mt-1 text-xs font-medium text-success-fg">
+                      Shown only here, only now — copy or email it before closing. The vendor&apos;s previous
+                      passcode has already stopped working.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="rounded-xl bg-subtle px-3 py-2 text-xs text-muted">
+                    Passcodes are stored as a one-way hash, so a passcode that was already issued cannot be
+                    displayed — not even here. Issue a new one to read it out to the vendor; their old one stops
+                    working at that moment.
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-1 rounded-xl border border-line-subtle p-3 text-xs text-muted">
+                <div className="break-all">
+                  Sign-in page:{' '}
+                  <a
+                    href={`${siteOrigin}/vendor/login`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-brand hover:underline"
+                  >
+                    {siteOrigin || ''}/vendor/login
+                  </a>
+                </div>
+                <div>
+                  Details sent{' '}
+                  {loginView.login_sent_at ? fmtDateTime(loginView.login_sent_at) : 'never'} · Last sign-in{' '}
+                  {loginView.last_login_at ? fmtDateTime(loginView.last_login_at) : 'never'}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap justify-end gap-2 pt-1">
+                <Button variant="secondary" onClick={closeLoginView}>
+                  Close
+                </Button>
+                {loginPasscode && String(loginView.email || '').trim() ? (
+                  <Button variant="secondary" leftIcon={Mail} loading={busy} onClick={emailIssuedPasscode}>
+                    Email to {loginView.email}
+                  </Button>
+                ) : null}
+                <Button loading={loginBusy} onClick={issuePasscode}>
+                  {loginPasscode ? 'Issue another passcode' : 'Issue a new passcode'}
+                </Button>
+              </div>
+            </div>
+          )}
         </DraggableModal>
 
         <ConfirmDialog
