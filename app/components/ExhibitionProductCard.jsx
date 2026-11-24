@@ -34,20 +34,39 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
   // and the thumbnails jump straight to a photo. Without arrow buttons a mouse
   // user still needs a way in, so the gallery is focusable and responds to the
   // left/right arrow keys.
+  //
+  // The photos sit side by side on one track: while a finger/mouse is down the
+  // track follows it (no transition), and on release it glides to the chosen
+  // photo. That reads as one continuous swipe instead of a hard cut.
   const swipe = useRef({ x: 0, active: false })
+  const [drag, setDrag] = useState(0)
+  const [dragging, setDragging] = useState(false)
+
   const onSwipeStart = (e) => {
     if (!many) return
     swipe.current = { x: e.clientX, active: true }
+    // Capture so the swipe keeps tracking even if the pointer leaves the box.
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+    setDragging(true)
+  }
+  const onSwipeMove = (e) => {
+    if (!swipe.current.active) return
+    setDrag(e.clientX - swipe.current.x)
   }
   const onSwipeEnd = (e) => {
     if (!swipe.current.active) return
     const delta = e.clientX - swipe.current.x
     swipe.current.active = false
+    setDragging(false)
+    setDrag(0)
     if (Math.abs(delta) < 40) return
     step(delta < 0 ? 1 : -1)
   }
   const onSwipeCancel = () => {
+    if (!swipe.current.active) return
     swipe.current.active = false
+    setDragging(false)
+    setDrag(0)
   }
   const onGalleryKeyDown = (e) => {
     if (!many) return
@@ -58,6 +77,10 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
       e.preventDefault()
       step(1)
     }
+  }
+  const goTo = (i) => {
+    setDrag(0)
+    setIndex(i)
   }
 
   // The inset lives on a wrapper, not on the image box: `fill` pins the image
@@ -214,33 +237,39 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
             className="relative flex h-56 w-full select-none items-center justify-center overflow-hidden rounded-xl border border-line-subtle bg-white p-2 sm:h-72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 dark:bg-subtle"
             style={{ touchAction: 'pan-y' }}
             onPointerDown={onSwipeStart}
+            onPointerMove={onSwipeMove}
             onPointerUp={onSwipeEnd}
             onPointerCancel={onSwipeCancel}
-            onPointerLeave={onSwipeCancel}
             tabIndex={many ? 0 : -1}
             role={many ? 'group' : undefined}
             aria-label={many ? `Photo ${safeIndex + 1} of ${images.length} — swipe or use the left and right arrow keys` : undefined}
             onKeyDown={onGalleryKeyDown}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={images[safeIndex]}
-              alt={many ? `${p.name} — photo ${safeIndex + 1} of ${images.length}` : p.name}
-              draggable={false}
-              className="pointer-events-none h-full w-full object-contain"
-              onError={(e) => {
-                e.currentTarget.src = PLACEHOLDER
-              }}
-            />
+            <div
+              className={[
+                'flex h-full w-full',
+                dragging ? '' : 'transition-transform duration-300 ease-out',
+              ].join(' ')}
+              style={{ transform: `translateX(calc(${-safeIndex * 100}% + ${drag}px))` }}
+            >
+              {(many ? images : [images[0]]).map((src, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={`${src}-${i}`}
+                  src={src}
+                  alt={many ? `${p.name} — photo ${i + 1} of ${images.length}` : p.name}
+                  draggable={false}
+                  className="pointer-events-none h-full w-full shrink-0 object-contain"
+                  onError={(e) => {
+                    e.currentTarget.src = PLACEHOLDER
+                  }}
+                />
+              ))}
+            </div>
             {many && (
-              <>
-                <span className="absolute right-2 top-2 rounded-full bg-fg/70 px-2 py-0.5 text-[10px] font-semibold text-on-accent tabular-nums">
-                  {safeIndex + 1}/{images.length}
-                </span>
-                <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-fg/60 px-2 py-0.5 text-[10px] font-medium text-on-accent">
-                  Swipe for more photos · ← → keys
-                </span>
-              </>
+              <span className="absolute right-2 top-2 rounded-full bg-fg/70 px-2 py-0.5 text-[10px] font-semibold text-on-accent tabular-nums">
+                {safeIndex + 1}/{images.length}
+              </span>
             )}
           </div>
 
@@ -250,7 +279,7 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
                 <button
                   key={`${src}-${i}`}
                   type="button"
-                  onClick={() => setIndex(i)}
+                  onClick={() => goTo(i)}
                   aria-label={`Show photo ${i + 1}`}
                   aria-current={i === safeIndex}
                   className={[
