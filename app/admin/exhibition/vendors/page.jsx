@@ -135,6 +135,8 @@ export default function ExhibitionVendorsPage() {
   // field was copied last for the button tick.
   const [loginView, setLoginView] = useState(null)
   const [loginPasscode, setLoginPasscode] = useState('')
+  const [loginIssued, setLoginIssued] = useState(false)
+  const [loginLoading, setLoginLoading] = useState(false)
   const [loginBusy, setLoginBusy] = useState(false)
   const [copied, setCopied] = useState('')
   const [siteOrigin, setSiteOrigin] = useState('')
@@ -199,15 +201,30 @@ export default function ExhibitionVendorsPage() {
     setSiteOrigin(window.location.origin)
   }, [])
 
-  const openLoginView = (v) => {
+  // Sign-in checks a scrypt hash, which cannot be reversed, so the passcode is
+  // read back from the separately encrypted copy. Passcodes issued before that
+  // copy existed have none; the sheet then offers to issue a new one.
+  const openLoginView = async (v) => {
     setLoginView(v)
     setLoginPasscode('')
+    setLoginIssued(false)
     setCopied('')
+    setLoginLoading(true)
+    try {
+      const res = await fetch(`/api/admin/exhibition/vendors/${v.id}/passcode`, { cache: 'no-store' })
+      const json = await res.json().catch(() => null)
+      if (res.ok && json?.ok && json.passcode) setLoginPasscode(json.passcode)
+    } catch {
+      // No stored copy is an ordinary outcome, not something to report.
+    } finally {
+      setLoginLoading(false)
+    }
   }
 
   const closeLoginView = () => {
     setLoginView(null)
     setLoginPasscode('')
+    setLoginIssued(false)
   }
 
   const copyValue = async (label, value) => {
@@ -220,10 +237,8 @@ export default function ExhibitionVendorsPage() {
     }
   }
 
-  // Passcodes are stored as scrypt hashes, so a passcode that was already
-  // issued cannot be read back. Issuing a new one is the only way to show it:
-  // the server hashes it as usual, and the plaintext lives here until the
-  // sheet closes.
+  // Issue and replace the vendor's passcode. The server hashes it and seals a
+  // copy, so it stays readable here on later visits too.
   const issuePasscode = async () => {
     if (!loginView) return
     setLoginBusy(true)
@@ -250,6 +265,7 @@ export default function ExhibitionVendorsPage() {
       }
       if (!issued) throw new Error('Could not find an unused passcode. Try again.')
       setLoginPasscode(issued)
+      setLoginIssued(true)
       await load()
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
@@ -1407,7 +1423,9 @@ export default function ExhibitionVendorsPage() {
 
               <div>
                 <Label>Passcode</Label>
-                {loginPasscode ? (
+                {loginLoading ? (
+                  <p className="rounded-xl bg-subtle px-3 py-2 text-xs text-muted">Loading the stored passcode…</p>
+                ) : loginPasscode ? (
                   <div className="rounded-xl border border-line-subtle bg-subtle px-3 py-3">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-mono text-lg font-bold tracking-[0.25em] text-fg">{loginPasscode}</span>
@@ -1420,16 +1438,16 @@ export default function ExhibitionVendorsPage() {
                         {copied === 'passcode' ? 'Copied' : 'Copy'}
                       </Button>
                     </div>
-                    <p className="mt-1 text-xs font-medium text-success-fg">
-                      Shown only here, only now — copy or email it before closing. The vendor&apos;s previous
-                      passcode has already stopped working.
+                    <p className={`mt-1 text-xs font-medium ${loginIssued ? 'text-success-fg' : 'text-muted'}`}>
+                      {loginIssued
+                        ? 'This replaces the passcode the vendor had — their previous one has already stopped working. Copy or email it.'
+                        : 'This is the passcode the vendor signs in with now. Copy it to read out, or email it.'}
                     </p>
                   </div>
                 ) : (
                   <p className="rounded-xl bg-subtle px-3 py-2 text-xs text-muted">
-                    Passcodes are stored as a one-way hash, so a passcode that was already issued cannot be
-                    displayed — not even here. Issue a new one to read it out to the vendor; their old one stops
-                    working at that moment.
+                    No readable copy for this vendor — their passcode was issued before passcodes were kept for
+                    viewing. Issue a new one to read it out; their old one stops working at that moment.
                   </p>
                 )}
               </div>
@@ -1463,7 +1481,7 @@ export default function ExhibitionVendorsPage() {
                   </Button>
                 ) : null}
                 <Button loading={loginBusy} onClick={issuePasscode}>
-                  {loginPasscode ? 'Issue another passcode' : 'Issue a new passcode'}
+                  {loginIssued ? 'Issue another passcode' : 'Issue a new passcode'}
                 </Button>
               </div>
             </div>

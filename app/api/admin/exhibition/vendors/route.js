@@ -7,6 +7,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
 import { hashPasscode, passcodeLookup } from '@/lib/passcodeHash'
+import { encryptPasscode, isMissingEncryptedColumn } from '@/lib/passcodeVault'
 import { generateVendorCode, generatePasscodeRecord } from '@/lib/vendorCredentials'
 import { isValidEmail, normalizeEmail } from '@/lib/emailAddress'
 
@@ -146,22 +147,36 @@ export async function POST(request) {
       }
     }
 
-    const { data, error } = await supabase
-      .from('exhibition_vendors')
-      .insert({
-        cycle_id: cycleId,
-        branch_id: branchId,
-        name,
-        code,
-        passcode: await hashPasscode(passcode),
-        passcode_lookup: lookup,
-        email,
-        phone,
-        address,
-        status: body.status === 'suspended' ? 'suspended' : 'active',
-      })
-      .select('id, cycle_id, branch_id, name, code, email, phone, address, status, login_sent_at, created_at')
-      .single()
+    const record = {
+      cycle_id: cycleId,
+      branch_id: branchId,
+      name,
+      code,
+      passcode: await hashPasscode(passcode),
+      passcode_lookup: lookup,
+      // Sealed copy for the admin's "View login" sheet. The hash above remains
+      // what the vendor signs in with.
+      passcode_encrypted: encryptPasscode(passcode),
+      email,
+      phone,
+      address,
+      status: body.status === 'suspended' ? 'suspended' : 'active',
+    }
+    const insertVendor = (row) =>
+      supabase
+        .from('exhibition_vendors')
+        .insert(row)
+        .select('id, cycle_id, branch_id, name, code, email, phone, address, status, login_sent_at, created_at')
+        .single()
+
+    let { data, error } = await insertVendor(record)
+    // Deployments that have not run add-exhibition-vendor-passcode-encrypted.sql
+    // yet still create vendors fine, just without the recoverable copy.
+    if (isMissingEncryptedColumn(error)) {
+      const legacy = { ...record }
+      delete legacy.passcode_encrypted
+      ;({ data, error } = await insertVendor(legacy))
+    }
 
     if (error) {
       if (String(error.code || '') === '23505') {

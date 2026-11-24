@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { sign, verify } from '@/lib/signingEdge'
 import { hashPasscode, passcodeLookup, verifyPasscode } from '@/lib/passcodeHash'
+import { isMissingEncryptedColumn, tryEncryptPasscode } from '@/lib/passcodeVault'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -260,7 +261,19 @@ export async function POST(req) {
     if (passcodeCheck.needsRehash || !vendor.passcode_lookup) {
       const updates = { passcode_lookup: passcodeLookup(passcode) }
       if (passcodeCheck.needsRehash) updates.passcode = await hashPasscode(passcode)
-      await supabase.from('exhibition_vendors').update(updates).eq('id', vendor.id)
+      // This is also the one moment an older passcode's plaintext is visible, so
+      // keep the recoverable copy for admins while we are here.
+      const encrypted = tryEncryptPasscode(passcode)
+      if (encrypted) updates.passcode_encrypted = encrypted
+
+      let { error: upgradeError } = await supabase.from('exhibition_vendors').update(updates).eq('id', vendor.id)
+      // Never leave plaintext (or a stale lookup) behind just because the
+      // encryption migration has not run: retry without the copy.
+      if (isMissingEncryptedColumn(upgradeError)) {
+        delete updates.passcode_encrypted
+        ;({ error: upgradeError } = await supabase.from('exhibition_vendors').update(updates).eq('id', vendor.id))
+      }
+      if (upgradeError) console.error('Vendor passcode upgrade failed:', upgradeError)
     }
     if (vendor.status !== 'active') {
       return NextResponse.json({ ok: false, error: 'This vendor account is not active. Please contact your administrator.' }, { status: 403 })

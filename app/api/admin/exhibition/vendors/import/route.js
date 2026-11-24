@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
 import { hashPasscode } from '@/lib/passcodeHash'
+import { encryptPasscode, isMissingEncryptedColumn } from '@/lib/passcodeVault'
 import { generateVendorCode, generatePasscodeRecord } from '@/lib/vendorCredentials'
 import { addPasscodesToLookupSet } from '@/lib/vendorPasscodeLookup'
 import { isValidEmail, normalizeEmail } from '@/lib/emailAddress'
@@ -83,22 +84,30 @@ export async function POST(request) {
       const { passcode, lookup } = generatePasscodeRecord({ takenLookups })
       takenLookups.add(lookup)
 
-      const { data, error } = await supabase
-        .from('exhibition_vendors')
-        .insert({
-          cycle_id: cycleId,
-          branch_id: branchId,
-          name,
-          code,
-          passcode: await hashPasscode(passcode),
-          passcode_lookup: lookup,
-          email,
-          phone: sanitizeString(rawRows[i]?.phone || '', { maxLength: 30, encodeHtml: false }),
-          address: sanitizeString(rawRows[i]?.address || '', { maxLength: 300, encodeHtml: false }),
-          status: 'active',
-        })
-        .select('id, name, code, email, phone')
-        .single()
+      const record = {
+        cycle_id: cycleId,
+        branch_id: branchId,
+        name,
+        code,
+        passcode: await hashPasscode(passcode),
+        passcode_lookup: lookup,
+        // Sealed copy so the admin can re-read this passcode later; import used
+        // to be a one-shot reveal.
+        passcode_encrypted: encryptPasscode(passcode),
+        email,
+        phone: sanitizeString(rawRows[i]?.phone || '', { maxLength: 30, encodeHtml: false }),
+        address: sanitizeString(rawRows[i]?.address || '', { maxLength: 300, encodeHtml: false }),
+        status: 'active',
+      }
+      const insertVendor = (row) =>
+        supabase.from('exhibition_vendors').insert(row).select('id, name, code, email, phone').single()
+
+      let { data, error } = await insertVendor(record)
+      if (isMissingEncryptedColumn(error)) {
+        const legacy = { ...record }
+        delete legacy.passcode_encrypted
+        ;({ data, error } = await insertVendor(legacy))
+      }
 
       if (error) failed.push({ row: i + 1, error: error.message })
       else created.push({ ...data, passcode, branch: branch.name || branch.code })
