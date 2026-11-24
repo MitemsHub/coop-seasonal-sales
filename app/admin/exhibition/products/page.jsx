@@ -726,8 +726,8 @@ export default function ExhibitionProductsPage() {
             <div>
               <Label>Product photos</Label>
               <ProductImagesUpload
-                itemSku={modal === 'create' ? imageKey || 'product' : modal.sku || 'product'}
-                vendorId={modal === 'create' ? form.vendor_id || null : modal.vendor_id || null}
+                itemSku={modal === 'create' ? imageKey || 'product' : modal?.sku || 'product'}
+                vendorId={modal === 'create' ? form.vendor_id || null : modal?.vendor_id || null}
                 images={form.images || []}
                 onChange={(images) => setForm((f) => ({ ...f, images }))}
               />
