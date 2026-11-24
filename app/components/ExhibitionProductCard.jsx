@@ -8,7 +8,7 @@
 // popup's gallery, so a card never competes with a carousel for a tap.
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react'
 import Badge from './ui/Badge'
 import Button from './ui/Button'
@@ -28,6 +28,26 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
   const many = images.length > 1
 
   const step = (delta) => setIndex((i) => (i + delta + images.length) % images.length)
+
+  // The popup gallery is driven by swiping the photo. Pointer events cover
+  // touch and pen as well as a mouse drag; `touch-action: pan-y` leaves vertical
+  // page scrolling alone. The arrow buttons stay for desktops without a touch
+  // surface, and the thumbnails jump straight to a photo.
+  const swipe = useRef({ x: 0, active: false })
+  const onSwipeStart = (e) => {
+    if (!many) return
+    swipe.current = { x: e.clientX, active: true }
+  }
+  const onSwipeEnd = (e) => {
+    if (!swipe.current.active) return
+    const delta = e.clientX - swipe.current.x
+    swipe.current.active = false
+    if (Math.abs(delta) < 40) return
+    step(delta < 0 ? 1 : -1)
+  }
+  const onSwipeCancel = () => {
+    swipe.current.active = false
+  }
 
   // The inset lives on a wrapper, not on the image box: `fill` pins the image
   // to inset-0, so padding on the padded parent was ignored and photos bled to
@@ -177,12 +197,20 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
         <div className="space-y-3">
           {/* Gallery — same index as the card, so stepping here starts where
               the member left off. */}
-          <div className="relative flex h-56 w-full items-center justify-center overflow-hidden rounded-xl border border-line-subtle bg-white p-2 sm:h-72 dark:bg-subtle">
+          <div
+            className="relative flex h-56 w-full select-none items-center justify-center overflow-hidden rounded-xl border border-line-subtle bg-white p-2 sm:h-72 dark:bg-subtle"
+            style={{ touchAction: 'pan-y' }}
+            onPointerDown={onSwipeStart}
+            onPointerUp={onSwipeEnd}
+            onPointerCancel={onSwipeCancel}
+            onPointerLeave={onSwipeCancel}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={images[safeIndex]}
               alt={many ? `${p.name} — photo ${safeIndex + 1} of ${images.length}` : p.name}
-              className="h-full w-full object-contain"
+              draggable={false}
+              className="pointer-events-none h-full w-full object-contain"
               onError={(e) => {
                 e.currentTarget.src = PLACEHOLDER
               }}
@@ -207,6 +235,9 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
                 </button>
                 <span className="absolute right-2 top-2 rounded-full bg-fg/70 px-2 py-0.5 text-[10px] font-semibold text-on-accent tabular-nums">
                   {safeIndex + 1}/{images.length}
+                </span>
+                <span className="absolute bottom-2 left-1/2 -translate-x-1/2 rounded-full bg-fg/60 px-2 py-0.5 text-[10px] font-medium text-on-accent">
+                  Swipe for more photos
                 </span>
               </>
             )}
