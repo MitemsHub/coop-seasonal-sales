@@ -213,6 +213,7 @@ export default function ExhibitionVendorsPage() {
     setLoginPasscode('')
     setLoginIssued(false)
     setCopied('')
+    setLoginBusy(false)
     setLoginLoading(true)
     try {
       const res = await fetch(`/api/admin/exhibition/vendors/${v.id}/passcode`, { cache: 'no-store' })
@@ -237,6 +238,7 @@ export default function ExhibitionVendorsPage() {
     setLoginPasscode('')
     setLoginIssued(false)
     setLoginLoading(false)
+    setLoginBusy(false)
   }
 
   const copyValue = async (label, value) => {
@@ -253,6 +255,11 @@ export default function ExhibitionVendorsPage() {
   // copy, so it stays readable here on later visits too.
   const issuePasscode = async () => {
     if (!loginView) return
+    // Claim the sheet's request slot: the passcode being minted belongs to this
+    // vendor only for as long as the sheet still shows them.
+    const request = (loginRequestRef.current += 1)
+    const vendorId = loginView.id
+    setLoginLoading(false)
     setLoginBusy(true)
     setMsg(null)
     try {
@@ -262,12 +269,15 @@ export default function ExhibitionVendorsPage() {
         window.crypto.getRandomValues(bytes)
         const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
         const candidate = Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('')
-        const res = await fetch(`/api/admin/exhibition/vendors/${loginView.id}`, {
+        const res = await fetch(`/api/admin/exhibition/vendors/${vendorId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ passcode: candidate }),
         })
         const json = await res.json().catch(() => null)
+        // Closed, or reopened for another vendor, while this was running: drop
+        // the result rather than show it under the wrong name.
+        if (request !== loginRequestRef.current) return
         if (res.ok && json?.ok) {
           issued = candidate
           break
@@ -276,26 +286,34 @@ export default function ExhibitionVendorsPage() {
         if (res.status !== 409) throw new Error(json?.error || 'Could not set a new passcode')
       }
       if (!issued) throw new Error('Could not find an unused passcode. Try again.')
+      if (request !== loginRequestRef.current) return
       setLoginPasscode(issued)
       setLoginIssued(true)
       await load()
     } catch (e) {
-      setMsg({ type: 'error', text: e.message })
+      if (request === loginRequestRef.current) setMsg({ type: 'error', text: e.message })
     } finally {
-      setLoginBusy(false)
+      if (request === loginRequestRef.current) setLoginBusy(false)
     }
   }
 
+  // Emails the passcode on screen. It is addressed to the vendor it was issued
+  // for, and only closes the sheet if that vendor is still the one on screen.
   const emailIssuedPasscode = async () => {
     if (!loginView || !loginPasscode) return
+    const request = loginRequestRef.current
+    const vendorId = loginView.id
+    const passcode = loginPasscode
     setBusy(true)
     setMsg(null)
     try {
-      await sendLoginFor(loginView.id, { passcode: loginPasscode })
+      await sendLoginFor(vendorId, { passcode })
+      if (request !== loginRequestRef.current) return
       closeLoginView()
     } catch (e) {
-      setMsg({ type: 'error', text: e.message })
+      if (request === loginRequestRef.current) setMsg({ type: 'error', text: e.message })
     } finally {
+      // The page-wide spinner must clear even if the sheet moved on.
       setBusy(false)
     }
   }
