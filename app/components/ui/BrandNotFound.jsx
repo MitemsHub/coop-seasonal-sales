@@ -42,8 +42,8 @@ export default function BrandNotFound({ context = 'root' }) {
     <div className="relative min-h-[60vh] overflow-hidden px-4 py-12">
       {/* Ambient brand glows */}
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute -top-20 left-1/2 h-64 w-[32rem] -translate-x-1/2 rounded-full bg-brand/10 blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-48 w-64 rounded-full bg-brand/8 blur-3xl" />
+        <div className="absolute -top-20 left-1/2 h-64 w-[32rem] -translate-x-1/2 soft-wash rounded-full text-brand opacity-10 blur-3xl" />
+        <div className="absolute bottom-0 right-0 h-48 w-64 soft-wash rounded-full text-brand opacity-[0.08] blur-3xl" />
       </div>
 
       <div className="mx-auto flex max-w-lg flex-col items-center text-center">

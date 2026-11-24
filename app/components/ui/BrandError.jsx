@@ -112,9 +112,9 @@ export default function BrandError({
     <div className={`relative overflow-hidden ${fullScreen ? 'min-h-screen' : 'min-h-[60vh]'} flex items-center justify-center px-4 py-12`}>
       {/* Ambient brand glows */}
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-        <div className="absolute -top-20 left-1/2 h-64 w-[32rem] -translate-x-1/2 rounded-full bg-brand/10 blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-48 w-64 rounded-full bg-brand/8 blur-3xl" />
-        <div className="absolute bottom-10 left-0 h-40 w-56 rounded-full bg-brand/6 blur-3xl" />
+        <div className="absolute -top-20 left-1/2 h-64 w-[32rem] -translate-x-1/2 soft-wash rounded-full text-brand opacity-10 blur-3xl" />
+        <div className="absolute bottom-0 right-0 h-48 w-64 soft-wash rounded-full text-brand opacity-[0.08] blur-3xl" />
+        <div className="absolute bottom-10 left-0 h-40 w-56 soft-wash rounded-full text-brand opacity-[0.06] blur-3xl" />
       </div>
 
       <div className="w-full max-w-lg text-center">
