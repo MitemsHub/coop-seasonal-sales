@@ -213,8 +213,8 @@ export default function RepLoginPage() {
       />
       <main className="relative flex flex-1 items-center justify-center overflow-hidden p-4">
         {/* Ambient glows */}
-        <div className="pointer-events-none absolute -left-24 -top-24 h-80 w-80 rounded-full bg-brand-500/10 blur-3xl" aria-hidden="true" />
-        <div className="pointer-events-none absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-brand/10 blur-3xl" aria-hidden="true" />
+        <div className="pointer-events-none absolute -left-24 -top-24 h-80 w-80 soft-wash rounded-full text-brand-500 opacity-10 blur-3xl" aria-hidden="true" />
+        <div className="pointer-events-none absolute -bottom-24 -right-24 h-72 w-72 soft-wash rounded-full text-brand opacity-10 blur-3xl" aria-hidden="true" />
 
         <motion.div
           initial={{ opacity: 0, y: 12 }}

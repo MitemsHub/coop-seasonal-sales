@@ -89,8 +89,8 @@ function VendorHubContent() {
       <ProtectedRoute allowedRoles={['member']}>
         <div className="min-h-screen bg-canvas">
           <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
-            <div className="absolute -top-32 -left-24 h-80 w-80 rounded-full bg-brand/10 blur-3xl" />
-            <div className="absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-accent/10 blur-3xl" />
+            <div className="absolute -top-32 -left-24 h-80 w-80 soft-wash rounded-full text-brand opacity-10 blur-3xl" />
+            <div className="absolute top-1/3 -right-24 h-96 w-96 soft-wash rounded-full text-accent opacity-10 blur-3xl" />
           </div>
           <ModuleClosedPanel
             module="exhibition"
@@ -112,8 +112,8 @@ function VendorHubContent() {
     <ProtectedRoute allowedRoles={['member']}>
       <div className="min-h-screen bg-canvas">
         <div aria-hidden="true" className="pointer-events-none fixed inset-0 overflow-hidden">
-          <div className="absolute -top-32 -left-24 h-80 w-80 rounded-full bg-brand/10 blur-3xl" />
-          <div className="absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-accent/10 blur-3xl" />
+          <div className="absolute -top-32 -left-24 h-80 w-80 soft-wash rounded-full text-brand opacity-10 blur-3xl" />
+          <div className="absolute top-1/3 -right-24 h-96 w-96 soft-wash rounded-full text-accent opacity-10 blur-3xl" />
         </div>
 
         <div className="relative p-fluid pb-28 sm:pb-32 md:pb-36 max-w-7xl mx-auto">
