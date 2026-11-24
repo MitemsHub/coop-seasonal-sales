@@ -157,25 +157,31 @@ export function PhotoHero() {
           </motion.div>
         </AnimatePresence>
 
-        {/* Left-to-right fade — keeps the copy readable, photo shows on the right.
-            Mobile lightens to ~80% photo visibility so the image actually reads on phones. */}
-        <div className="absolute inset-0 bg-gradient-to-r from-canvas via-canvas/40 to-canvas/15 sm:via-canvas/60 sm:to-transparent" />
-        {/* Bottom fade into the page */}
-        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-canvas to-transparent" />
+        {/* Desktop only: the copy sits directly over the photo, so it needs a
+            wash. Phone and tablet put the copy on its own surface (below) and
+            leave the photo at full contrast — at those widths a 60%-opaque
+            gradient read as a smudged half-photo, not a deliberate fade.
+            The switch is at 1280 so landscape tablets keep the surface. */}
+        <div className="absolute inset-0 hidden bg-gradient-to-r from-canvas via-canvas/40 to-canvas/15 xl:block xl:via-canvas/60 xl:to-transparent" />
+        {/* Bottom fade into the page (desktop keeps it under the copy wash) */}
+        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-canvas to-transparent lg:h-24" />
       </div>
 
       {/* Copy — centered vertically so the photo has premium presence on desktop */}
       <div className="relative mx-auto flex min-h-[30rem] max-w-7xl items-center px-4 pb-24 pt-16 sm:min-h-[34rem] sm:pt-20 lg:min-h-[40rem] lg:px-6 lg:pb-28 lg:pt-24">
-        <div className="relative isolate max-w-xl">
-          {/* Soft brand glow drifting behind the copy (CSS drift — respects reduced motion) */}
+        {/* Phone/tablet: an opaque surface so the copy never sits on a washed
+            photo. Desktop drops the surface and uses the gradient wash above. */}
+        <div className="relative isolate max-w-xl rounded-3xl bg-canvas/95 px-5 py-6 shadow-xl shadow-black/10 ring-1 ring-line/70 backdrop-blur-sm sm:px-7 sm:py-8 xl:rounded-none xl:bg-transparent xl:p-0 xl:shadow-none xl:ring-0 xl:backdrop-blur-none">
+          {/* Soft brand glow drifting behind the copy (desktop only — at tablet
+              width it flared past the card and read as a stray green circle) */}
           <div
             aria-hidden
-            className="pointer-events-none absolute -inset-24 -z-10 rounded-full bg-brand/15 blur-[110px] will-change-transform motion-safe:animate-[glow-drift_16s_ease-in-out_infinite] dark:bg-brand/25"
+            className="pointer-events-none absolute -inset-24 -z-10 hidden rounded-full bg-brand/15 blur-[110px] will-change-transform motion-safe:animate-[glow-drift_16s_ease-in-out_infinite] dark:bg-brand/25 xl:block"
           />
-          {/* Localised canvas haze — lifts text contrast over the photo, no visible edge */}
+          {/* Localised canvas haze — only needed where the copy sits on the photo */}
           <div
             aria-hidden
-            className="pointer-events-none absolute -inset-8 -z-10 rounded-3xl bg-canvas/35 blur-2xl dark:bg-canvas/55"
+            className="pointer-events-none absolute -inset-8 -z-10 hidden rounded-3xl bg-canvas/35 blur-2xl dark:bg-canvas/55 xl:block"
           />
           <span className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-line bg-surface px-3 py-1.5 text-chips font-semibold text-brand shadow-xs sm:text-xs">
             <span className="relative flex h-2 w-2">
@@ -547,7 +553,7 @@ export default function LandingPage() {
       <section id="stats" className="relative scroll-mt-20 border-t border-line bg-canvas">
         <div className="mx-auto max-w-7xl px-4 py-10 lg:px-6 lg:py-14">
           <Reveal delay={0.1}>
-            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+            <dl className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
               {stats.map((s) => (
                 <div
                   key={s.label}
