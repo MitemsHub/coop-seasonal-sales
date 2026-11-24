@@ -38,9 +38,19 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
   // The photos sit side by side on one track: while a finger/mouse is down the
   // track follows it (no transition), and on release it glides to the chosen
   // photo. That reads as one continuous swipe instead of a hard cut.
+  //
+  // There is nothing beyond the first or last photo, so dragging past either
+  // edge only stretches the track a little (rubber-band) instead of sliding
+  // empty space into view.
   const swipe = useRef({ x: 0, active: false })
   const [drag, setDrag] = useState(0)
   const [dragging, setDragging] = useState(false)
+  const EDGE_RESISTANCE = 0.3
+  const resistEdge = (raw) => {
+    const pastFirst = safeIndex === 0 && raw > 0
+    const pastLast = safeIndex === images.length - 1 && raw < 0
+    return pastFirst || pastLast ? raw * EDGE_RESISTANCE : raw
+  }
 
   const onSwipeStart = (e) => {
     if (!many) return
@@ -51,7 +61,7 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
   }
   const onSwipeMove = (e) => {
     if (!swipe.current.active) return
-    setDrag(e.clientX - swipe.current.x)
+    setDrag(resistEdge(e.clientX - swipe.current.x))
   }
   const onSwipeEnd = (e) => {
     if (!swipe.current.active) return
@@ -234,7 +244,11 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
           {/* Focusable with no arrow buttons: the keyboard is the fallback for
               a mouse-only desktop, and the pointer handlers still take swipes. */}
           <div
-            className="relative flex h-56 w-full select-none items-center justify-center overflow-hidden rounded-xl border border-line-subtle bg-white p-2 sm:h-72 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 dark:bg-subtle"
+            className={[
+              'relative flex h-56 w-full select-none items-center justify-center overflow-hidden rounded-xl border border-line-subtle bg-white p-2 sm:h-72',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 dark:bg-subtle',
+              many ? (dragging ? 'cursor-grabbing' : 'cursor-grab') : '',
+            ].join(' ')}
             style={{ touchAction: 'pan-y' }}
             onPointerDown={onSwipeStart}
             onPointerMove={onSwipeMove}
