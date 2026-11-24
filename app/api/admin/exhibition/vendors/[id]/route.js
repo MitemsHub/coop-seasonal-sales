@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
 import { hashPasscode, passcodeLookup } from '@/lib/passcodeHash'
-import { encryptPasscode, isMissingEncryptedColumn } from '@/lib/passcodeVault'
+import { encryptPasscode, withPasscodeFallback } from '@/lib/passcodeVault'
 import { loadPasscodeLookups } from '@/lib/vendorPasscodeLookup'
 import { isValidEmail, normalizeEmail } from '@/lib/emailAddress'
 
@@ -81,13 +81,8 @@ export async function PATCH(request, { params }) {
         .select('id, cycle_id, branch_id, name, code, email, phone, address, status, login_sent_at, created_at')
         .single()
 
-    let { data, error } = await applyUpdate(updates)
-    // Before the encryption migration the rest of the update must still land.
-    if (isMissingEncryptedColumn(error)) {
-      const legacy = { ...updates }
-      delete legacy.passcode_encrypted
-      ;({ data, error } = await applyUpdate(legacy))
-    }
+    // Before the encryption migration the rest of the update still lands.
+    let { data, error } = await withPasscodeFallback(updates, applyUpdate)
     if (error) {
       if (String(error.code || '') === '23505') {
         if (String(error.constraint || '').includes('passcode_lookup')) {

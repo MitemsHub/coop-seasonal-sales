@@ -17,7 +17,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
 import { hashPasscode, passcodeLookup } from '@/lib/passcodeHash'
-import { encryptPasscode, isMissingEncryptedColumn } from '@/lib/passcodeVault'
+import { encryptPasscode, withPasscodeFallback } from '@/lib/passcodeVault'
 import { generatePasscodeRecord } from '@/lib/vendorCredentials'
 import { loadPasscodeLookups } from '@/lib/vendorPasscodeLookup'
 import { missingMailConfig, sendVendorLoginEmail } from '@/lib/vendorMailer'
@@ -146,12 +146,7 @@ export async function POST(request, { params }) {
     }
     const applyRotation = (row) => supabase.from('exhibition_vendors').update(row).eq('id', id)
 
-    let { error: saveError } = await applyRotation(rotation)
-    if (isMissingEncryptedColumn(saveError)) {
-      const legacy = { ...rotation }
-      delete legacy.passcode_encrypted
-      ;({ error: saveError } = await applyRotation(legacy))
-    }
+    let { error: saveError } = await withPasscodeFallback(rotation, applyRotation)
     if (saveError) {
       if (String(saveError.code || '') === '23505') {
         return NextResponse.json({ ok: false, error: 'That passcode is already assigned to another vendor.' }, { status: 409 })

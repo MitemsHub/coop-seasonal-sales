@@ -8,7 +8,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
 import { hashPasscode } from '@/lib/passcodeHash'
-import { encryptPasscode, isMissingEncryptedColumn } from '@/lib/passcodeVault'
+import { encryptPasscode, withPasscodeFallback } from '@/lib/passcodeVault'
 import { generateVendorCode, generatePasscodeRecord } from '@/lib/vendorCredentials'
 import { addPasscodesToLookupSet } from '@/lib/vendorPasscodeLookup'
 import { isValidEmail, normalizeEmail } from '@/lib/emailAddress'
@@ -102,12 +102,7 @@ export async function POST(request) {
       const insertVendor = (row) =>
         supabase.from('exhibition_vendors').insert(row).select('id, name, code, email, phone').single()
 
-      let { data, error } = await insertVendor(record)
-      if (isMissingEncryptedColumn(error)) {
-        const legacy = { ...record }
-        delete legacy.passcode_encrypted
-        ;({ data, error } = await insertVendor(legacy))
-      }
+      let { data, error } = await withPasscodeFallback(record, insertVendor)
 
       if (error) failed.push({ row: i + 1, error: error.message })
       else created.push({ ...data, passcode, branch: branch.name || branch.code })

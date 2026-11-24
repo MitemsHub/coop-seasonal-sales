@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
 import { hashPasscode, passcodeLookup } from '@/lib/passcodeHash'
-import { encryptPasscode, isMissingEncryptedColumn } from '@/lib/passcodeVault'
+import { encryptPasscode, withPasscodeFallback } from '@/lib/passcodeVault'
 import { generateVendorCode, generatePasscodeRecord } from '@/lib/vendorCredentials'
 import { isValidEmail, normalizeEmail } from '@/lib/emailAddress'
 
@@ -169,14 +169,9 @@ export async function POST(request) {
         .select('id, cycle_id, branch_id, name, code, email, phone, address, status, login_sent_at, created_at')
         .single()
 
-    let { data, error } = await insertVendor(record)
-    // Deployments that have not run add-exhibition-vendor-passcode-encrypted.sql
-    // yet still create vendors fine, just without the recoverable copy.
-    if (isMissingEncryptedColumn(error)) {
-      const legacy = { ...record }
-      delete legacy.passcode_encrypted
-      ;({ data, error } = await insertVendor(legacy))
-    }
+    // Still creates the vendor if the encryption migration has not run yet,
+    // just without the recoverable copy.
+    let { data, error } = await withPasscodeFallback(record, insertVendor)
 
     if (error) {
       if (String(error.code || '') === '23505') {
