@@ -10,6 +10,19 @@ import { ChevronLeft, ChevronRight, ImagePlus, Loader2, Sparkles, Star, X } from
 import { isSupportedProductImage, optimizeProductImage } from '@/lib/optimizeImage'
 import { MAX_PRODUCT_IMAGES } from '@/lib/exhibitionProductImages'
 
+// The session gate in front of the upload route refuses in plain text, so a
+// vendor whose sign-in ran out (or who is being throttled) saw only "Upload
+// failed" and had no way to know it was not the photo. Name the cause and the
+// next step instead of echoing a bare status.
+function uploadErrorMessage(status, json) {
+  if (json?.error) return json.error
+  if (status === 401) return 'Your sign-in has expired — sign in again, then retry the upload.'
+  if (status === 403) return 'This upload was blocked. Refresh the page and try again.'
+  if (status === 413) return 'That photo is too large to upload. Try a smaller one.'
+  if (status === 429) return 'Too many uploads just now — wait a minute, then try again.'
+  return `Upload failed (HTTP ${status}). Please try again.`
+}
+
 export default function ProductImagesUpload({ images = [], onChange, itemSku = '', vendorId = null }) {
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -51,9 +64,7 @@ export default function ProductImagesUpload({ images = [], onChange, itemSku = '
         const res = await fetch('/api/vendor/exhibition/upload-image', { method: 'POST', body: formData })
         const json = await res.json().catch(() => null)
         if (!res.ok || !json?.success || !json?.imageUrl) {
-          // A rejected gate (401/403/429) answers in plain text, so without the
-          // status the form could only say "Upload failed" and hide the reason.
-          throw new Error(json?.error || `Upload failed (HTTP ${res.status})`)
+          throw new Error(uploadErrorMessage(res.status, json))
         }
         next = [...next, json.imageUrl]
         onChange(next)
