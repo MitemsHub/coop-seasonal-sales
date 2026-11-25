@@ -21,6 +21,7 @@ import Skeleton from '../../../components/ui/Skeleton'
 import EmptyState from '../../../components/ui/EmptyState'
 import ExhibitionProductCard from '../../../components/ExhibitionProductCard'
 import { useAuth } from '../../../contexts/AuthContext'
+import { vendorAboutLine, vendorShelfLabels } from '../../../../lib/exhibitionShelf'
 
 function VendorHubContent() {
   const router = useRouter()
@@ -179,6 +180,18 @@ function VendorHubContent() {
                         {Number(vendor.min_order || 0) > 0 && (
                           <span>Min order ₦{Number(vendor.min_order).toLocaleString()}</span>
                         )}
+                      </p>
+                    )}
+                    <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
+                      {vendorAboutLine(vendor)}
+                    </p>
+                    {vendorShelfLabels(vendor).length > 0 && (
+                      <p className="mt-2 flex flex-wrap gap-1.5">
+                        {vendorShelfLabels(vendor).map((label) => (
+                          <span key={label} className="rounded-full bg-brand-subtle px-2 py-0.5 text-[10px] font-semibold text-brand-fg">
+                            {label}
+                          </span>
+                        ))}
                       </p>
                     )}
                     {vendor.whatsapp && (

@@ -93,6 +93,21 @@ export default function VendorStandPage() {
           </div>
         )}
 
+        <label className="block">
+          <span className="mb-1 block text-xs font-semibold text-fg">About your stand</span>
+          <textarea
+            rows={3}
+            maxLength={600}
+            value={form.about ?? ''}
+            onChange={(e) => set('about', e.target.value)}
+            placeholder="e.g. Corporate and occasion wear, including abayas and tailored gowns."
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
+          />
+          <span className="mt-1 block text-chips text-muted">
+            One or two lines on what you sell — shown on your stand card and stand page.
+          </span>
+        </label>
+
         {FIELDS.map((f) => (
           <label key={f.key} className="block">
             <span className="mb-1 block text-xs font-semibold text-fg">{f.label}</span>

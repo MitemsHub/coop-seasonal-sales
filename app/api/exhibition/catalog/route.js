@@ -17,6 +17,8 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { resolveMemberScope } from '@/lib/memberScope'
 import { cleanProductImages } from '@/lib/exhibitionProductImages'
+import { vendorShelfLabels } from '@/lib/exhibitionShelf'
+import { vendorAbout, vendorDeclared } from '@/lib/exhibitionVendorCategories'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -82,14 +84,30 @@ async function loadProducts(supabase, cycleId) {
   return { data: null, error: lastError }
 }
 
-async function loadCatalogCore(supabase, cycleId) {
-  const [vendorsRes, categoriesRes, productsRes] = await Promise.all([
+// `about` and `category` arrive with migrations/add-exhibition-vendor-about.sql.
+// Until that runs the shop still needs its stands, so the read drops the two
+// columns and the written profile copy in lib/exhibitionVendorCategories.js
+// fills in below — no deploy waits on SQL.
+const VENDOR_COLS =
+  'id, name, code, phone, address, banner_url, stand_number, hall, opening_hours, whatsapp, min_order, pickup_instructions'
+
+async function loadVendors(supabase, cycleId) {
+  const query = (cols) =>
     supabase
       .from('exhibition_vendors')
-      .select('id, name, code, phone, address, banner_url, stand_number, hall, opening_hours, whatsapp, min_order, pickup_instructions')
+      .select(cols)
       .eq('cycle_id', cycleId)
       .eq('status', 'active')
-      .order('name'),
+      .order('name')
+
+  const full = await query(`${VENDOR_COLS}, about, category`)
+  if (!full.error) return full
+  return query(VENDOR_COLS)
+}
+
+async function loadCatalogCore(supabase, cycleId) {
+  const [vendorsRes, categoriesRes, productsRes] = await Promise.all([
+    loadVendors(supabase, cycleId),
     supabase
       .from('exhibition_categories')
       .select('id, name')
@@ -285,6 +303,11 @@ export async function GET(req) {
         whatsapp: v.whatsapp || '',
         min_order: Number(v.min_order || 0),
         pickup_instructions: v.pickup_instructions || '',
+        // The stand's written pitch and what it declared it sells. The local
+        // copy is the fallback until the vendor (or an admin) edits the row.
+        about: v.about || vendorAbout(v.name),
+        category: v.category || vendorDeclared(v.name),
+        category_labels: vendorShelfLabels(v),
       })),
       categories: (categoriesRes.data || []).map((c) => ({ id: Number(c.id), name: c.name || '' })),
       products: paged,

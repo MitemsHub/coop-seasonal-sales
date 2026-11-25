@@ -194,6 +194,8 @@ export default function ExhibitionVendorsPage() {
       phone: v.phone || '',
       address: v.address || '',
       passcode: '',
+      about: v.about || '',
+      category: v.category || '',
       cycle_id: v.cycle_id,
       branch_id: v.branch_id,
     })
@@ -382,7 +384,15 @@ export default function ExhibitionVendorsPage() {
     setBusy(true)
     setMsg(null)
     try {
-      const payload = { name: form.name, code: form.code, email: form.email, phone: form.phone, address: form.address }
+      const payload = {
+        name: form.name,
+        code: form.code,
+        email: form.email,
+        phone: form.phone,
+        address: form.address,
+        about: form.about,
+        category: form.category,
+      }
       if (form.passcode) payload.passcode = form.passcode
       if (form.cycle_id) payload.cycle_id = Number(form.cycle_id)
       if (form.branch_id) payload.branch_id = Number(form.branch_id)
@@ -1394,6 +1404,33 @@ export default function ExhibitionVendorsPage() {
                 <Input id="exh-v-address" value={form.address || ''} onChange={(e) => setForm({ ...form, address: e.target.value })} />
               </div>
             </div>
+            {modal !== 'create' && (
+              <div className="space-y-3 rounded-xl border border-line-subtle bg-subtle/30 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">Stand profile</p>
+                <div>
+                  <Label htmlFor="exh-v-category">What they sell</Label>
+                  <Input
+                    id="exh-v-category"
+                    value={form.category || ''}
+                    onChange={(e) => setForm({ ...form, category: e.target.value })}
+                    placeholder="e.g. Fashion & Fabric"
+                  />
+                  <p className="mt-1 text-chips text-muted">Used to place the stand and its products on the right shelf.</p>
+                </div>
+                <div>
+                  <Label htmlFor="exh-v-about">About this stand</Label>
+                  <textarea
+                    id="exh-v-about"
+                    rows={3}
+                    maxLength={600}
+                    value={form.about || ''}
+                    onChange={(e) => setForm({ ...form, about: e.target.value })}
+                    placeholder="One or two lines on what members will find here."
+                    className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
             {modal !== 'create' && (
               <p className="text-xs text-muted">
                 Changing the code or passcode changes what the vendor signs in with. “Save &amp; email login” saves these edits first, then emails a reminder — or new details, if you typed a passcode.

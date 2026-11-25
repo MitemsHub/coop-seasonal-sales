@@ -32,7 +32,7 @@ export async function GET(request) {
     const q = String(searchParams.get('q') || '').trim()
 
     const supabase = createClient()
-    const selectVendors = ({ lastLogin, failedLogins }) => {
+    const selectVendors = ({ lastLogin, failedLogins, profile = true }) => {
       const signInColumns = [
         lastLogin ? 'last_login_at' : null,
         failedLogins ? 'failed_login_count, last_failed_login_at' : null,
@@ -42,7 +42,7 @@ export async function GET(request) {
       let query = supabase
         .from('exhibition_vendors')
         .select(
-          `id, cycle_id, branch_id, name, code, email, phone, address, status, login_sent_at, ${signInColumns ? `${signInColumns}, ` : ''}created_at, branches:branch_id(name, code), cycles:cycle_id(name, code)`
+          `id, cycle_id, branch_id, name, code, email, phone, address, status, login_sent_at, ${signInColumns ? `${signInColumns}, ` : ''}${profile ? 'about, category, ' : ''}created_at, branches:branch_id(name, code), cycles:cycle_id(name, code)`
         )
         .order('name')
       if (cycleId > 0) query = query.eq('cycle_id', cycleId)
@@ -62,6 +62,18 @@ export async function GET(request) {
     }
     if (isMissingColumn(error, 'last_login_at')) {
       ;({ data, error } = await selectVendors({ lastLogin: false, failedLogins: false }))
+    }
+    // The stand-profile columns arrive with their own migration: drop just
+    // those and keep the sign-in columns the list already loaded.
+    if (isMissingColumn(error, 'about') || isMissingColumn(error, 'category')) {
+      let retry = await selectVendors({ lastLogin: true, failedLogins: true, profile: false })
+      if (isMissingColumn(retry.error, 'failed_login_count') || isMissingColumn(retry.error, 'last_failed_login_at')) {
+        retry = await selectVendors({ lastLogin: true, failedLogins: false, profile: false })
+      }
+      if (isMissingColumn(retry.error, 'last_login_at')) {
+        retry = await selectVendors({ lastLogin: false, failedLogins: false, profile: false })
+      }
+      ;({ data, error } = retry)
     }
     if (error) {
       if (isMissingTable(error, 'exhibition')) {

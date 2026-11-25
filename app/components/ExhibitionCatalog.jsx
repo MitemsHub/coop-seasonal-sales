@@ -35,7 +35,7 @@ export default function ExhibitionCatalog({
 
   const products = useMemo(() => catalog?.products || [], [catalog])
   const vendors = useMemo(() => catalog?.vendors || [], [catalog])
-  const filters = useExhibitionFilters(products)
+  const filters = useExhibitionFilters(products, vendors)
 
   const [vendorId, setVendorId] = useState(null)
   const [page, setPage] = useState(0)

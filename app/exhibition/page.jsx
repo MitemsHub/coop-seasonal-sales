@@ -1,23 +1,18 @@
 // app/exhibition/page.jsx
-// Member-facing Coop Exhibition home, built to the approved mockup:
+// Member-facing Coop Exhibition home.
 //
 //   1. pickup location, front and centre (stands and stock belong to it)
-//   2. the sticky discovery bar — search with photo suggestions, intelligent
-//      category pills, in-stock / on-offer / price refinements and sort
-//   3. Featured stands — an auto-sliding rail through every stand
-//   4. Market bonanza — a rail of the products vendors have really discounted
-//   5. the branch's whole shelf, revealed in place a screenful at a time
-//      (16 per step), with "View all" still opening the full catalogue
+//   2. the sticky discovery bar — search (products and stands), category pills,
+//      in-stock / on-offer / price refinements and sort
+//   3. Featured stands — an auto-sliding rail of shopfront cards
+//   4. the branch's whole shelf, revealed in place a screenful at a time
+//      (16 per step), with "View all" at the bottom opening the full catalogue
 //
-// The stands remain the point of the page; the Featured stands "View all"
-// opens /exhibition/stands (the stands directory). The shelf no longer hides
-// products behind a click: a branch with 100 items shows all of them, just
-// not all at once.
-//
-// Category pills come from lib/exhibitionShelf.js rather than from vendor-typed
-// category names: vendors mostly leave that field empty, so the old chip row
-// showed a handful of pills and left most products unreachable. Every product
-// is now sorted onto exactly one shelf, so the pills always add up.
+// The stands remain the point of the page. Category pills come from what each
+// vendor declared it sells (lib/exhibitionVendorCategories.js, harmonised by
+// lib/exhibitionShelf.js), not from the products' own category field — that
+// field is mostly empty and, worse, let a product's name decide its shelf
+// ("Turkey gown" under Meat & Fish).
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -27,7 +22,6 @@ import ProtectedRoute from '../components/ProtectedRoute'
 import ExhibitionCycleHint from '../components/ExhibitionCycleHint'
 import ContinueShoppingBanner from '../components/ContinueShoppingBanner'
 import ExhibitionHubs from '../components/ExhibitionHubs'
-import ExhibitionDealsRail from '../components/ExhibitionDealsRail'
 import ExhibitionFilterBar from '../components/ExhibitionFilterBar'
 import ExhibitionProductCard from '../components/ExhibitionProductCard'
 import ExhibitionProductSkeleton from '../components/ExhibitionProductSkeleton'
@@ -54,19 +48,29 @@ function ExhibitionShopContent() {
   const products = useMemo(() => catalog?.products || [], [catalog])
   const vendors = useMemo(() => catalog?.vendors || [], [catalog])
 
-  const filters = useExhibitionFilters(products)
+  const filters = useExhibitionFilters(products, vendors)
   const { filtered, q, isFiltering, signature, activeShelf } = filters
 
   const [visibleCount, setVisibleCount] = useState(PRODUCT_STEP)
 
   const vendorCounts = useMemo(() => countVendorProducts(products), [products])
 
+  // The stand cards show a strip of what is actually on each stand, so the rail
+  // reads like a market rather than a directory of names.
+  const productsByVendor = useMemo(() => {
+    const map = {}
+    for (const p of products) {
+      if (!map[p.vendor_id]) map[p.vendor_id] = []
+      map[p.vendor_id].push(p)
+    }
+    return map
+  }, [products])
+
   // Only stands that actually have something to sell belong in the rail.
   const sellableStands = useMemo(() => standsWithProducts(vendors, products), [vendors, products])
 
-  // One search now serves both halves of the page: typing "rice" narrows the
-  // stands to those selling it and the shelf to the rice itself, so the old
-  // all/stands/products scope selector had nothing left to decide.
+  // One search serves both halves of the page: typing "rice" narrows the stands
+  // to those selling it and the shelf to the rice itself.
   const stands = useMemo(() => searchStands(sellableStands, q), [sellableStands, q])
 
   // Any change to the query starts the shelf over from the top.
@@ -84,17 +88,17 @@ function ExhibitionShopContent() {
         <div className="relative isolate min-h-screen bg-canvas">
           <AmbientBackdrop />
           <div className="relative z-10">
-          <ModuleClosedPanel
-            module="exhibition"
-            variant="inline"
-            hint={
-              catalog?.cycle?.starts_at || catalog?.cycle?.ends_at ? (
-                <ExhibitionCycleHint cycle={catalog.cycle} />
-              ) : undefined
-            }
-            onViewOrders={() => router.push('/orders')}
-            onBack={() => router.push('/my-coop')}
-          />
+            <ModuleClosedPanel
+              module="exhibition"
+              variant="inline"
+              hint={
+                catalog?.cycle?.starts_at || catalog?.cycle?.ends_at ? (
+                  <ExhibitionCycleHint cycle={catalog.cycle} />
+                ) : undefined
+              }
+              onViewOrders={() => router.push('/orders')}
+              onBack={() => router.push('/my-coop')}
+            />
           </div>
         </div>
       </ProtectedRoute>
@@ -225,14 +229,15 @@ function ExhibitionShopContent() {
                     <p className="mt-0.5 text-chips text-muted">Try another name, or clear the search.</p>
                   </div>
                 ) : (
-                  <ExhibitionHubs vendors={stands} vendorCounts={vendorCounts} />
+                  <ExhibitionHubs
+                    vendors={stands}
+                    vendorCounts={vendorCounts}
+                    productsByVendor={productsByVendor}
+                  />
                 )}
               </div>
 
-              {/* 4 — Market bonanza: vendor discounts only */}
-              <ExhibitionDealsRail products={products} onAdd={addToCart} qtyOf={qtyOf} />
-
-              {/* 5 — Products at this location — the whole shelf, revealed in place */}
+              {/* 4 — Products at this location — the whole shelf, revealed in place */}
               {visible.length > 0 && (
                 <div>
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -260,20 +265,29 @@ function ExhibitionShopContent() {
                     ))}
                   </div>
 
-                  {remaining > 0 && (
-                    <div className="mt-4 flex flex-col items-center gap-1.5">
+                  <div className="mt-4 flex flex-col items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      {remaining > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setVisibleCount((c) => c + PRODUCT_STEP)}
+                          className="inline-flex h-9 items-center rounded-lg border border-line bg-surface px-4 text-chips font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                        >
+                          Show {Math.min(PRODUCT_STEP, remaining)} more product{Math.min(PRODUCT_STEP, remaining) === 1 ? '' : 's'}
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() => setVisibleCount((c) => c + PRODUCT_STEP)}
-                        className="inline-flex h-9 items-center rounded-lg border border-line bg-surface px-4 text-chips font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                        onClick={() => router.push('/exhibition/all')}
+                        className="inline-flex h-9 items-center rounded-lg border border-brand bg-brand px-4 text-chips font-semibold text-on-accent transition-colors duration-200 ease-sakani hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
                       >
-                        Show {Math.min(PRODUCT_STEP, remaining)} more product{Math.min(PRODUCT_STEP, remaining) === 1 ? '' : 's'}
+                        View all {filtered.length} product{filtered.length === 1 ? '' : 's'}
                       </button>
-                      <span className="text-chips text-muted tabular-nums">
-                        Showing {visible.length} of {filtered.length}
-                      </span>
                     </div>
-                  )}
+                    <span className="text-chips text-muted tabular-nums">
+                      Showing {visible.length} of {filtered.length}
+                    </span>
+                  </div>
                 </div>
               )}
 

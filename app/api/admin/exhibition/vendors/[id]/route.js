@@ -70,6 +70,15 @@ export async function PATCH(request, { params }) {
       const branchId = Math.trunc(Number(body.branch_id || 0))
       if (branchId > 0) updates.branch_id = branchId
     }
+    // Stand profile copy: what the stand sells and the line members read on its
+    // card. Also editable by the vendor from /vendor/stand — admin can fix a
+    // stand's wording in place.
+    if (body.category !== undefined) {
+      updates.category = sanitizeString(body.category || '', { maxLength: 120, encodeHtml: false })
+    }
+    if (body.about !== undefined) {
+      updates.about = sanitizeString(body.about || '', { maxLength: 600, encodeHtml: false })
+    }
 
     if (!Object.keys(updates).length) return NextResponse.json({ ok: false, error: 'Nothing to update' }, { status: 400 })
 
@@ -84,6 +93,12 @@ export async function PATCH(request, { params }) {
     // Before the encryption migration the rest of the update still lands.
     let { data, error } = await withPasscodeFallback(updates, applyUpdate)
     if (error) {
+      if (String(error.code || '') === '42703' && /about|category/i.test(String(error.message || ''))) {
+        return NextResponse.json(
+          { ok: false, error: 'Run migrations/add-exhibition-vendor-about.sql to save stand profiles, then try again.' },
+          { status: 409 }
+        )
+      }
       if (String(error.code || '') === '23505') {
         if (String(error.constraint || '').includes('passcode_lookup')) {
           return NextResponse.json({ ok: false, error: 'That passcode is already assigned to another vendor.' }, { status: 409 })

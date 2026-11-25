@@ -11,13 +11,15 @@
 // useExhibitionFilters — this component only renders it, so the shop and the
 // full catalog behave identically.
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  Baby, Beef, BookOpen, Carrot, Check, Coffee, Cookie, Droplets, Flower2, Hammer, HeartPulse,
-  Package, Percent, Search, Shirt, ShoppingBasket, SlidersHorizontal, Smartphone, Sparkles,
-  SprayCan, Sprout, Tags, Wheat, X,
+  Baby, Beef, BookOpen, Building2, Car, Carrot, Check, Coffee, Cookie, Gem, HeartPulse, Package,
+  Percent, Search, Shirt, ShoppingBasket, SlidersHorizontal, Smartphone, Sofa, Sparkles, Sprout,
+  Wheat, X, Zap,
 } from 'lucide-react'
 import { EXHIBITION_SORTS } from '../hooks/useExhibitionFilters'
+import { initials } from '../../lib/exhibitionStands'
 
 const PLACEHOLDER = '/images/items/placeholder.svg'
 const naira = (v) => `₦${Number(v || 0).toLocaleString()}`
@@ -25,8 +27,8 @@ const naira = (v) => `₦${Number(v || 0).toLocaleString()}`
 // Icon names come from lib/exhibitionShelf.js as strings so that file stays
 // free of JSX; this is the only place they are resolved.
 const SHELF_ICON = {
-  Wheat, Carrot, Beef, Droplets, Coffee, Cookie, ShoppingBasket, SprayCan, Flower2, Shirt,
-  Smartphone, Baby, HeartPulse, Sprout, BookOpen, Hammer, Package, Tags,
+  Wheat, Carrot, Beef, Coffee, Cookie, ShoppingBasket, Shirt, Smartphone, Baby, HeartPulse,
+  Sprout, BookOpen, Package, Gem, Sparkles, Sofa, Zap, Car, Building2,
 }
 
 function Pill({ active, onClick, icon: Icon, label, count }) {
@@ -77,7 +79,7 @@ function Toggle({ checked, onChange, icon: Icon, children }) {
 
 export default function ExhibitionFilterBar({ filters, className = '' }) {
   const {
-    search, setSearch, q, suggestions,
+    search, setSearch, q, suggestions, standSuggestions,
     shelf, setShelf, shelves,
     stockOnly, setStockOnly, offerOnly, setOfferOnly,
     minPrice, setMinPrice, maxPrice, setMaxPrice, priceBounds,
@@ -85,12 +87,20 @@ export default function ExhibitionFilterBar({ filters, className = '' }) {
     sort, setSort,
   } = filters
 
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const [listOpen, setListOpen] = useState(false)
   const [active, setActive] = useState(-1)
   const wrapRef = useRef(null)
 
-  const showSuggestions = listOpen && q.length >= 2 && suggestions.length > 0
+  // Stands first, then products: typing a vendor's name should offer the stand
+  // itself, the way a marketplace lets you jump to a shop. One combined list
+  // keeps arrow keys and Enter working across both groups.
+  const options = [
+    ...standSuggestions.map((v) => ({ kind: 'stand', vendor: v })),
+    ...suggestions.map((p) => ({ kind: 'product', product: p })),
+  ]
+  const showSuggestions = listOpen && q.length >= 2 && options.length > 0
 
   // Close the suggestion list on any click outside the search box.
   useEffect(() => {
@@ -102,10 +112,14 @@ export default function ExhibitionFilterBar({ filters, className = '' }) {
     return () => document.removeEventListener('pointerdown', onDown)
   }, [listOpen])
 
-  const pick = (p) => {
-    setSearch(p.name)
+  const pick = (option) => {
     setListOpen(false)
     setActive(-1)
+    if (option?.kind === 'stand') {
+      router.push(`/exhibition/vendor/${option.vendor.id}`)
+      return
+    }
+    setSearch(option?.product?.name || '')
   }
 
   const onKeyDown = (e) => {
@@ -115,13 +129,13 @@ export default function ExhibitionFilterBar({ filters, className = '' }) {
     }
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setActive((i) => (i + 1) % suggestions.length)
+      setActive((i) => (i + 1) % options.length)
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
-      setActive((i) => (i <= 0 ? suggestions.length - 1 : i - 1))
+      setActive((i) => (i <= 0 ? options.length - 1 : i - 1))
     } else if (e.key === 'Enter' && active >= 0) {
       e.preventDefault()
-      pick(suggestions[active])
+      pick(options[active])
     } else if (e.key === 'Escape') {
       setListOpen(false)
       setActive(-1)
@@ -133,7 +147,11 @@ export default function ExhibitionFilterBar({ filters, className = '' }) {
   return (
     <div
       className={[
-        'sticky top-12 z-20 border-b border-line/70 bg-canvas/95 pb-2 pt-2 backdrop-blur-md lg:top-14',
+        // The member header is the navbar plus its breadcrumb strip (~78px on
+        // phones, ~86px on desktop). top-12/top-14 pinned the bar below the
+        // navbar but *under* the breadcrumb, so the search box slid behind the
+        // header. The offset now clears the whole header.
+        'sticky top-[4.875rem] z-20 border-b border-line/70 bg-canvas/95 pb-2 pt-2 backdrop-blur-md lg:top-[5.375rem]',
         className,
       ].join(' ')}
       // Full-bleed the bar out of the page gutter so nothing scrolls past its
@@ -193,40 +211,79 @@ export default function ExhibitionFilterBar({ filters, className = '' }) {
                 <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted">
                   Suggestions
                 </p>
-                <ul className="max-h-72 overflow-y-auto overscroll-contain pb-1">
-                  {suggestions.map((s, i) => (
-                    <li key={s.id}>
-                      <button
-                        type="button"
-                        role="option"
-                        aria-selected={i === active}
-                        onMouseDown={(e) => e.preventDefault()}
-                        onMouseEnter={() => setActive(i)}
-                        onClick={() => pick(s)}
-                        className={[
-                          'flex w-full items-center gap-2.5 px-2.5 py-2 text-left transition-colors',
-                          i === active ? 'bg-subtle' : 'hover:bg-subtle/70',
-                        ].join(' ')}
-                      >
-                        <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-line-subtle bg-white">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={s.image_url || PLACEHOLDER}
-                            alt=""
-                            className="h-full w-full object-contain"
-                            onError={(e) => { e.currentTarget.src = PLACEHOLDER }}
-                          />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-xs font-semibold text-fg">{s.name}</span>
-                          {!!s.vendor_name && (
-                            <span className="block truncate text-[11px] text-muted">{s.vendor_name}</span>
-                          )}
-                        </span>
-                        <span className="shrink-0 text-xs font-bold tabular-nums text-brand">{naira(s.price)}</span>
-                      </button>
-                    </li>
-                  ))}
+                <ul className="max-h-80 overflow-y-auto overscroll-contain pb-1">
+                  {options.map((option, i) => {
+                    const selected = i === active
+                    if (option.kind === 'stand') {
+                      const v = option.vendor
+                      return (
+                        <li key={`stand-${v.id}`}>
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={selected}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onMouseEnter={() => setActive(i)}
+                            onClick={() => pick(option)}
+                            className={[
+                              'flex w-full items-center gap-2.5 px-2.5 py-2 text-left transition-colors',
+                              selected ? 'bg-subtle' : 'hover:bg-subtle/70',
+                            ].join(' ')}
+                          >
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line-subtle bg-accent-subtle text-[10px] font-bold text-accent">
+                              {v.banner_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={v.banner_url} alt="" className="h-full w-full object-cover" />
+                              ) : (
+                                initials(v.name)
+                              )}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-xs font-semibold text-fg">{v.name}</span>
+                              <span className="block truncate text-[11px] text-muted">
+                                Stand · {v.hall || v.address || 'Exhibition'}
+                              </span>
+                            </span>
+                            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-accent">Visit</span>
+                          </button>
+                        </li>
+                      )
+                    }
+                    const s = option.product
+                    return (
+                      <li key={`product-${s.id}`}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={selected}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onMouseEnter={() => setActive(i)}
+                          onClick={() => pick(option)}
+                          className={[
+                            'flex w-full items-center gap-2.5 px-2.5 py-2 text-left transition-colors',
+                            selected ? 'bg-subtle' : 'hover:bg-subtle/70',
+                          ].join(' ')}
+                        >
+                          <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-line-subtle bg-white">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={s.image_url || PLACEHOLDER}
+                              alt=""
+                              className="h-full w-full object-contain"
+                              onError={(e) => { e.currentTarget.src = PLACEHOLDER }}
+                            />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-semibold text-fg">{s.name}</span>
+                            {!!s.vendor_name && (
+                              <span className="block truncate text-[11px] text-muted">{s.vendor_name}</span>
+                            )}
+                          </span>
+                          <span className="shrink-0 text-xs font-bold tabular-nums text-brand">{naira(s.price)}</span>
+                        </button>
+                      </li>
+                    )
+                  })}
                 </ul>
                 <button
                   type="button"
