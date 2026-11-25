@@ -417,13 +417,13 @@ export default function ExhibitionProductsPage() {
     }
     setBusy(true)
     setMsg(null)
-    let done = 0
-    let failed = 0
+    // Products this run actually changed. Whatever is missing at the end is
+    // what still needs attention — derived from outcomes rather than counted
+    // from responses, because a refused batch or a thrown request never
+    // reports per row.
+    const changed = new Set()
     let failure = null
-    // One entry per product that did not change, so the report counts products
-    // rather than operations: a failed batch is not one failure.
     const noteFailure = (text) => {
-      failed += 1
       if (!failure) failure = text
     }
     try {
@@ -438,11 +438,10 @@ export default function ExhibitionProductsPage() {
           const json = await res.json().catch(() => ({}))
           if (!res.ok || !json.ok) {
             // The call was refused before writing, so none of this batch moved.
-            const text = json.error || 'Bulk approval failed'
-            for (let n = 0; n < batch.length; n += 1) noteFailure(text)
+            noteFailure(json.error || 'Bulk approval failed')
             break
           }
-          done += (json.approved || []).length
+          for (const id of json.approved || []) changed.add(Number(id))
           // The route writes row by row and returns the rows it could not
           // touch in `failed` while still answering ok. Counting only
           // `approved` would report a partial approval as a clean success.
@@ -454,8 +453,9 @@ export default function ExhibitionProductsPage() {
         // Small batches: the per-product route is the one that owns the
         // archive/restore/delete guards, so keep the fan-out modest.
         for (let i = 0; i < ids.length; i += 5) {
+          const batch = ids.slice(i, i + 5)
           const results = await Promise.all(
-            ids.slice(i, i + 5).map(async (id) => {
+            batch.map(async (id) => {
               const res = await fetch(`/api/admin/exhibition/products/${id}`, {
                 method: action === 'delete' ? 'DELETE' : 'PATCH',
                 ...(action === 'delete'
@@ -469,20 +469,24 @@ export default function ExhibitionProductsPage() {
               return res.ok && json.ok ? null : json.error || 'Failed'
             })
           )
-          for (const error of results) {
+          results.forEach((error, index) => {
             if (error) noteFailure(error)
-            else done += 1
-          }
+            else changed.add(Number(batch[index]))
+          })
         }
       }
     } catch (e) {
+      // The request that threw never reported back, so its products count as
+      // unchanged and stay selected below.
       noteFailure(e.message || 'Bulk action failed')
-      // Whatever the failed request covered never reported back, so treat the
-      // unaccounted products as unchanged rather than claiming they moved.
-      failed = Math.max(failed, ids.length - done)
     } finally {
+      const done = changed.size
+      const failed = ids.length - done
+      // Keep only the products that did not change selected, so retrying them
+      // is one bulk action instead of hunting each one down. load() prunes this
+      // against the refreshed list, so a row that is gone cannot linger.
+      setSelected(new Set(ids.filter((id) => !changed.has(Number(id)))))
       await load({ keepMessage: true })
-      setSelected(new Set())
       if (!failed) {
         setMsg({ type: 'success', text: `${done} product(s) ${labels[action]}.` })
       } else if (done > 0) {
