@@ -157,27 +157,30 @@ export function PhotoHero() {
           </motion.div>
         </AnimatePresence>
 
-        {/* Left-to-right fade — keeps the copy readable, photo shows on the right.
-            Mobile lightens to ~80% photo visibility so the image actually reads on phones. */}
-        <div className="absolute inset-0 bg-gradient-to-r from-canvas via-canvas/40 to-canvas/15 sm:via-canvas/60 sm:to-transparent" />
+        {/* Laptops and desktops: the copy sits directly over the photo, so it
+            needs a left-to-right wash. Phones and tablets put the copy on its
+            own surface (below) and leave the photo at full contrast — at those
+            widths the copy ran over busy product photos and was hard to read. */}
+        <div className="absolute inset-0 hidden bg-gradient-to-r from-canvas via-canvas/40 to-canvas/15 lg:block lg:via-canvas/60 lg:to-transparent" />
         {/* Bottom fade into the page */}
         <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-canvas to-transparent" />
       </div>
 
       {/* Copy — centered vertically so the photo has premium presence on desktop */}
       <div className="relative mx-auto flex min-h-[30rem] max-w-7xl items-center px-4 pb-24 pt-16 sm:min-h-[34rem] sm:pt-20 lg:min-h-[40rem] lg:px-6 lg:pb-28 lg:pt-24">
-        <div className="relative isolate max-w-xl">
-          {/* Soft brand glow drifting behind the copy. soft-wash carries the
-              falloff in the gradient itself, so a tablet that drops the blur
-              still sees a soft glow, not a hard green disc. */}
+        {/* Phone/tablet: an opaque surface so the copy never sits on the photo.
+            Laptops and desktops drop the surface and use the gradient wash. */}
+        <div className="relative isolate max-w-xl rounded-3xl bg-canvas/95 px-5 py-6 shadow-xl shadow-black/10 ring-1 ring-line/70 backdrop-blur-sm sm:px-7 sm:py-8 lg:rounded-none lg:bg-transparent lg:p-0 lg:shadow-none lg:ring-0 lg:backdrop-blur-none">
+          {/* Soft brand glow drifting behind the copy (only where the copy sits
+              on the photo; soft-wash keeps the falloff without relying on blur). */}
           <div
             aria-hidden
-            className="soft-wash pointer-events-none absolute -inset-24 -z-10 text-brand opacity-20 blur-[110px] will-change-transform motion-safe:animate-[glow-drift_16s_ease-in-out_infinite] dark:opacity-30"
+            className="soft-wash pointer-events-none absolute -inset-24 -z-10 hidden text-brand opacity-20 blur-[110px] will-change-transform motion-safe:animate-[glow-drift_16s_ease-in-out_infinite] dark:opacity-30 lg:block"
           />
           {/* Localised canvas haze — lifts text contrast over the photo, no visible edge */}
           <div
             aria-hidden
-            className="soft-wash pointer-events-none absolute -inset-8 -z-10 text-canvas opacity-55 blur-2xl dark:opacity-75"
+            className="soft-wash pointer-events-none absolute -inset-8 -z-10 hidden text-canvas opacity-55 blur-2xl dark:opacity-75 lg:block"
           />
           <span className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-line bg-surface px-3 py-1.5 text-chips font-semibold text-brand shadow-xs sm:text-xs">
             <span className="relative flex h-2 w-2">
