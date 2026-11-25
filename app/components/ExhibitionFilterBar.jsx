@@ -38,11 +38,13 @@ function Pill({ active, onClick, icon: Icon, label, count }) {
       onClick={onClick}
       aria-pressed={active}
       className={[
-        'inline-flex shrink-0 snap-start items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-chips font-semibold transition-all duration-200 ease-sakani active:scale-[0.97]',
+        'inline-flex shrink-0 snap-start items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-chips font-semibold transition-colors duration-200 ease-sakani active:scale-[0.97]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
+        // No upward hover shift: the pill row is an overflow-x scroller, so a
+        // lifted pill is clipped at the top by the scroll box.
         active
           ? 'border-brand bg-brand text-on-accent shadow-sm'
-          : 'border-line bg-surface text-muted hover:-translate-y-0.5 hover:border-line-strong hover:text-fg hover:shadow-sm',
+          : 'border-line bg-surface text-muted hover:border-line-strong hover:text-fg hover:shadow-sm',
       ].join(' ')}
     >
       {Icon ? <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={2.1} aria-hidden="true" /> : null}
@@ -92,6 +94,25 @@ export default function ExhibitionFilterBar({ filters, className = '' }) {
   const [listOpen, setListOpen] = useState(false)
   const [active, setActive] = useState(-1)
   const wrapRef = useRef(null)
+
+  // The bar must pin exactly under the member header (navbar + breadcrumb).
+  // A hard-coded offset drifted as soon as the header's height changed, which
+  // is what left a strip of products visible above the search box. Measure the
+  // real header instead, and follow it when the viewport or font size changes.
+  const [headerHeight, setHeaderHeight] = useState(0)
+  useEffect(() => {
+    const header = document.querySelector('header')
+    if (!header) return undefined
+    const measure = () => setHeaderHeight(Math.round(header.getBoundingClientRect().height))
+    measure()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
+    ro?.observe(header)
+    window.addEventListener('resize', measure)
+    return () => {
+      ro?.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [])
 
   // Stands first, then products: typing a vendor's name should offer the stand
   // itself, the way a marketplace lets you jump to a shop. One combined list
@@ -151,12 +172,13 @@ export default function ExhibitionFilterBar({ filters, className = '' }) {
         // phones, ~86px on desktop). top-12/top-14 pinned the bar below the
         // navbar but *under* the breadcrumb, so the search box slid behind the
         // header. The offset now clears the whole header.
-        'sticky top-[4.875rem] z-20 border-b border-line/70 bg-canvas/95 pb-2 pt-2 backdrop-blur-md lg:top-[5.375rem]',
+        'sticky z-20 border-b border-line/70 bg-canvas/95 pb-2 pt-2 backdrop-blur-md',
         className,
       ].join(' ')}
       // Full-bleed the bar out of the page gutter so nothing scrolls past its
       // edges while it is pinned.
       style={{
+        top: headerHeight || undefined,
         marginLeft: 'calc(var(--sp-fluid) * -1)',
         marginRight: 'calc(var(--sp-fluid) * -1)',
         paddingLeft: 'var(--sp-fluid)',
@@ -335,7 +357,7 @@ export default function ExhibitionFilterBar({ filters, className = '' }) {
 
       {/* Intelligent shelf pills — every product belongs to exactly one. */}
       {shelves.length > 0 && (
-        <div className="scrollbar-hide -mx-1 mt-2 flex snap-x gap-1.5 overflow-x-auto overscroll-x-contain px-1 pb-0.5">
+        <div className="scrollbar-hide -mx-1 mt-2 flex snap-x gap-1.5 overflow-x-auto overscroll-x-contain px-1 py-1">
           <Pill active={!shelf} onClick={() => setShelf(null)} label="All" count={total} />
           {shelves.map((s) => {
             const Icon = SHELF_ICON[s.icon]

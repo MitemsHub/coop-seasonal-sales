@@ -53,7 +53,10 @@ function StandCard({ v, count, products = [], index = 0 }) {
       onClick={() => router.push(`/exhibition/vendor/${v.id}`)}
       aria-label={`Open ${v.name} stand — ${count} product${count === 1 ? '' : 's'}`}
       style={{ animationDelay: `${Math.min(index, 7) * 55}ms` }}
-      className="rise-in group relative flex h-full w-full flex-col overflow-hidden rounded-2xl border border-line bg-surface text-left shadow-sm transition-[transform,border-color,box-shadow] duration-300 ease-sakani hover:-translate-y-1 hover:border-accent hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+      // No hover lift here: the rail is an overflow-x scroller, so a card that
+      // moves up has its top edge and shadow clipped by the scroll box. The
+      // hover reads through the border, shadow and the banner zoom instead.
+      className="rise-in group relative flex h-full w-full flex-col overflow-hidden rounded-2xl border border-line bg-surface text-left shadow-sm transition-[border-color,box-shadow] duration-300 ease-sakani hover:border-accent hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
     >
       {/* Stand header — banner, or a colour drawn from the vendor's name */}
       <span className="relative block h-20 w-full overflow-hidden">
@@ -270,7 +273,7 @@ export default function ExhibitionHubs({ vendors = [], vendorCounts = {}, produc
         onTouchEnd={() => resumeAfter(1800)}
         onFocusCapture={() => setPaused(true)}
         onBlurCapture={() => resumeAfter(250)}
-        className="scrollbar-hide -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-1"
+        className="scrollbar-hide -mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 py-1"
       >
         {slides.map((v, idx) => (
           <div
