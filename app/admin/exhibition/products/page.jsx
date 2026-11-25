@@ -363,8 +363,9 @@ export default function ExhibitionProductsPage() {
   const pageProducts = products.slice(pageStart, pageStart + pageSize)
 
   // ── Selection ───────────────────────────────────────────────────────────
-  // Mirrors the vendor desk: a checkbox on every row, "select all shown" for
-  // the page, and "select all N" for the whole filtered list, so an admin can
+  // One select-all checkbox in the bar above the table (the table header has
+  // none, so there is a single control that also works on phones), plus
+  // "select all N" for the whole filtered list, so an admin can
   // act on a subset (one vendor's shelf, or everything still pending) without
   // working through the rows one at a time.
   const pageIds = pageProducts.map((p) => p.id)
@@ -653,19 +654,9 @@ export default function ExhibitionProductsPage() {
             <Table className="min-w-[720px]">
               <THead>
                 <TR>
-                  <TH className="w-[1%]">
-                    <input
-                      type="checkbox"
-                      checked={allPageSelected}
-                      onChange={toggleSelectPage}
-                      ref={(el) => {
-                        if (el) el.indeterminate = !allPageSelected && somePageSelected
-                      }}
-                      aria-label="Select all products on this page"
-                      disabled={busy || !pageProducts.length}
-                      className="h-4 w-4 rounded border-line accent-brand"
-                    />
-                  </TH>
+                  {/* The select-all control lives in the bar above the table,
+                      where it is also reachable on phones. */}
+                  <TH className="w-[1%]" aria-label="Select" />
                   <TH>Product</TH>
                   <TH>Vendor</TH>
                   <TH className="text-right">Price</TH>
