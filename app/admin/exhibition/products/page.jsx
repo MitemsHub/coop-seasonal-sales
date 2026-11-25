@@ -49,6 +49,8 @@ export default function ExhibitionProductsPage() {
   const [form, setForm] = useState({})
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
+  const [selected, setSelected] = useState(new Set())
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
 
   // keepMessage: a caller that is about to show its own confirmation (approve,
   // reject) must not have it wiped by the refresh it triggers. Without this the
@@ -74,6 +76,14 @@ export default function ExhibitionProductsPage() {
       if (p?.ok) {
         fetched = p.products || []
         setProducts(fetched)
+        // A refresh can drop rows (filters, or a delete elsewhere); the
+        // selection must not keep ids that are no longer in the list.
+        setSelected((prev) => {
+          if (!prev.size) return prev
+          const live = new Set(fetched.map((row) => row.id))
+          const next = new Set([...prev].filter((id) => live.has(id)))
+          return next.size === prev.size ? prev : next
+        })
         setPage(1)
       } else setMsg({ type: 'error', text: p?.error || 'Failed to load products' })
       if (c?.ok) setCycles(c.cycles || [])
@@ -352,6 +362,111 @@ export default function ExhibitionProductsPage() {
   const pageStart = (currentPage - 1) * pageSize
   const pageProducts = products.slice(pageStart, pageStart + pageSize)
 
+  // ── Selection ───────────────────────────────────────────────────────────
+  // Mirrors the vendor desk: a checkbox on every row, "select all shown" for
+  // the page, and "select all N" for the whole filtered list, so an admin can
+  // act on a subset (one vendor's shelf, or everything still pending) without
+  // working through the rows one at a time.
+  const pageIds = pageProducts.map((p) => p.id)
+  const selectedIds = products.filter((p) => selected.has(p.id)).map((p) => p.id)
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id))
+  const somePageSelected = pageIds.some((id) => selected.has(id))
+  const allFilteredSelected = products.length > 0 && products.every((p) => selected.has(p.id))
+
+  const toggleSelected = (id) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const toggleSelectPage = () =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const id of pageIds) {
+        if (allPageSelected) next.delete(id)
+        else next.add(id)
+      }
+      return next
+    })
+
+  // Bulk actions cover everything selected, not just the visible page.
+  // Approve uses the bulk route (it applies pending prices and notifies the
+  // stand's followers); archive, restore and delete reuse the single-product
+  // route so its order guard still stops a product that is already on an order.
+  const runBulk = async (action) => {
+    const ids = selectedIds
+    if (!ids.length) return
+    const labels = {
+      approve: 'approved and published',
+      archive: 'archived',
+      restore: 'restored',
+      delete: 'deleted',
+    }
+    setBusy(true)
+    setMsg(null)
+    let done = 0
+    let failure = null
+    try {
+      if (action === 'approve') {
+        for (let i = 0; i < ids.length; i += 200) {
+          const res = await fetch('/api/admin/exhibition/products/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'approve', ids: ids.slice(i, i + 200) }),
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok || !json.ok) {
+            failure = json.error || 'Bulk approval failed'
+            break
+          }
+          done += (json.approved || []).length
+        }
+      } else {
+        // Small batches: the per-product route is the one that owns the
+        // archive/restore/delete guards, so keep the fan-out modest.
+        for (let i = 0; i < ids.length; i += 5) {
+          const results = await Promise.all(
+            ids.slice(i, i + 5).map(async (id) => {
+              const res = await fetch(`/api/admin/exhibition/products/${id}`, {
+                method: action === 'delete' ? 'DELETE' : 'PATCH',
+                ...(action === 'delete'
+                  ? {}
+                  : {
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ status: action === 'archive' ? 'archived' : 'active' }),
+                    }),
+              })
+              const json = await res.json().catch(() => ({}))
+              return res.ok && json.ok ? null : json.error || 'Failed'
+            })
+          )
+          for (const error of results) {
+            if (error) failure = failure || error
+            else done += 1
+          }
+        }
+      }
+    } catch (e) {
+      failure = e.message || 'Bulk action failed'
+    } finally {
+      await load({ keepMessage: true })
+      setSelected(new Set())
+      if (!failure) {
+        setMsg({ type: 'success', text: `${done} product(s) ${labels[action]}.` })
+      } else if (done > 0) {
+        setMsg({
+          type: 'error',
+          text: `${done} of ${ids.length} product(s) ${labels[action]} — ${ids.length - done} left as they were (${failure}).`,
+        })
+      } else {
+        setMsg({ type: 'error', text: `Nothing was changed — ${failure}` })
+      }
+      setBusy(false)
+    }
+  }
+
   // One compact action control per row, mirroring the Food Distribution order
   // desk. Native selects stay usable on phones and never clip inside a table.
   const productActionSelect = (p, className = '') => (
@@ -457,6 +572,69 @@ export default function ExhibitionProductsPage() {
           </div>
         )}
 
+        {/* Selection bar — always visible so "select all shown" is reachable
+            before anything is ticked; the bulk actions appear once it is. */}
+        {!loading && products.length > 0 && (
+          <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-subtle/60 px-3 py-2">
+            <label className="flex items-center gap-2 text-xs font-medium text-muted">
+              <input
+                type="checkbox"
+                checked={allPageSelected}
+                onChange={toggleSelectPage}
+                ref={(el) => {
+                  if (el) el.indeterminate = !allPageSelected && somePageSelected
+                }}
+                disabled={busy || !pageProducts.length}
+                className="h-4 w-4 rounded border-line accent-brand"
+              />
+              Select all shown ({pageProducts.length})
+            </label>
+            {selected.size > 0 && (
+              <span className="rounded-full bg-brand-subtle px-2 py-0.5 text-xs font-semibold text-brand">
+                {selected.size} selected
+              </span>
+            )}
+            {selected.size > 0 && !allFilteredSelected && (
+              <button
+                type="button"
+                onClick={() => setSelected(new Set(products.map((p) => p.id)))}
+                className="text-xs font-medium text-brand underline-offset-2 hover:underline"
+              >
+                Select all {products.length}
+              </button>
+            )}
+            {selected.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelected(new Set())}
+                className="text-xs font-medium text-muted underline-offset-2 hover:text-fg hover:underline"
+              >
+                Clear
+              </button>
+            )}
+            {selected.size > 0 && (
+              <select
+                aria-label="Bulk action"
+                defaultValue=""
+                disabled={busy}
+                onChange={(e) => {
+                  const action = e.target.value
+                  e.target.value = ''
+                  if (action === 'delete') setBulkConfirmOpen(true)
+                  else runBulk(action)
+                }}
+                className="ml-auto rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm font-medium text-fg focus:border-brand focus:outline-none disabled:opacity-50"
+              >
+                <option value="" disabled>Bulk actions</option>
+                <option value="approve">Approve selected</option>
+                <option value="archive">Archive selected</option>
+                <option value="restore">Restore selected</option>
+                <option value="delete">Delete selected</option>
+              </select>
+            )}
+          </div>
+        )}
+
         <Card className="gap-0 overflow-hidden p-0">
           {loading ? (
             <div className="space-y-3 p-4">
@@ -475,6 +653,19 @@ export default function ExhibitionProductsPage() {
             <Table className="min-w-[720px]">
               <THead>
                 <TR>
+                  <TH className="w-[1%]">
+                    <input
+                      type="checkbox"
+                      checked={allPageSelected}
+                      onChange={toggleSelectPage}
+                      ref={(el) => {
+                        if (el) el.indeterminate = !allPageSelected && somePageSelected
+                      }}
+                      aria-label="Select all products on this page"
+                      disabled={busy || !pageProducts.length}
+                      className="h-4 w-4 rounded border-line accent-brand"
+                    />
+                  </TH>
                   <TH>Product</TH>
                   <TH>Vendor</TH>
                   <TH className="text-right">Price</TH>
@@ -485,7 +676,16 @@ export default function ExhibitionProductsPage() {
               </THead>
               <TBody>
                 {pageProducts.map((p) => (
-                  <TR key={p.id}>
+                  <TR key={p.id} className={selected.has(p.id) ? 'bg-brand-subtle/40' : ''}>
+                    <TD className="w-[1%]">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(p.id)}
+                        onChange={() => toggleSelected(p.id)}
+                        aria-label={`Select ${p.name}`}
+                        className="h-4 w-4 rounded border-line accent-brand"
+                      />
+                    </TD>
                     <TD className="w-[40%]">
                       <div className="flex items-center gap-2.5">
                         {p.image_url ? (
@@ -549,11 +749,18 @@ export default function ExhibitionProductsPage() {
             </Table>
             </div>
 
-            {/* Phones get cards; a six-column table cannot stay readable. */}
+            {/* Phones get cards; a seven-column table cannot stay readable. */}
             <div className="divide-y divide-line lg:hidden">
               {pageProducts.map((p) => (
                 <div key={`product-card-${p.id}`} className="p-4">
                   <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(p.id)}
+                      onChange={() => toggleSelected(p.id)}
+                      aria-label={`Select ${p.name}`}
+                      className="mt-1 h-4 w-4 shrink-0 rounded border-line accent-brand"
+                    />
                     {p.image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={p.image_url} alt="" className="h-14 w-14 shrink-0 rounded-xl border border-line-subtle bg-subtle object-contain" />
@@ -755,6 +962,19 @@ export default function ExhibitionProductsPage() {
           onConfirm={handleConfirmDelete}
           title="Delete product?"
           message={`Delete "${confirmTarget?.name}"? This cannot be undone.`}
+          confirmLabel="Delete"
+          variant="danger"
+        />
+
+        <ConfirmDialog
+          open={bulkConfirmOpen}
+          onClose={() => setBulkConfirmOpen(false)}
+          onConfirm={() => {
+            setBulkConfirmOpen(false)
+            runBulk('delete')
+          }}
+          title={`Delete ${selected.size} product(s)?`}
+          message="Products already on an order cannot be deleted — archive those instead. This cannot be undone."
           confirmLabel="Delete"
           variant="danger"
         />
