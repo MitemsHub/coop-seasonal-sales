@@ -13,6 +13,7 @@
 //                  page's inline message.
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronUp, ShoppingCart } from 'lucide-react'
 import Button from './ui/Button'
 import AnimatedNumber from './ui/AnimatedNumber'
@@ -43,10 +44,32 @@ export default function CartStickyBar({
   onToggleSummary,
   message = null, // { type: 'success'|'error', text } from the page
 }) {
+  // The bar nudges upward when something lands in the cart, so an add made
+  // further up a long shelf is acknowledged where the member's eye already is
+  // (the total). Style-only: no state is derived from it.
+  const prevCount = useRef(count)
+  const [bump, setBump] = useState(false)
+  useEffect(() => {
+    if (count > prevCount.current) {
+      prevCount.current = count
+      setBump(true)
+      const t = setTimeout(() => setBump(false), 480)
+      return () => clearTimeout(t)
+    }
+    prevCount.current = count
+    return undefined
+  }, [count])
+
   if (variant === 'compact') {
     if (count <= 0) return null
     return (
-      <div data-cart-bar="compact" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur-md">
+      <div
+        data-cart-bar="compact"
+        className={[
+          'fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur-md',
+          bump ? 'cart-bump' : '',
+        ].join(' ')}
+      >
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-sm font-semibold text-fg">

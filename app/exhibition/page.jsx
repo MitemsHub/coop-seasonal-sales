@@ -2,30 +2,39 @@
 // Member-facing Coop Exhibition home, built to the approved mockup:
 //
 //   1. pickup location, front and centre (stands and stock belong to it)
-//   2. search with a scope (all / stands / products)
+//   2. the sticky discovery bar — search with photo suggestions, intelligent
+//      category pills, in-stock / on-offer / price refinements and sort
 //   3. Featured stands — an auto-sliding rail through every stand
-//   4. category chips
-//   5. "Products at this location" — the branch's whole shelf, sorted and
-//      revealed in place a screenful at a time (16 per step), with "View all"
-//      still opening the filter-heavy full catalogue at /exhibition/all
+//   4. Market bonanza — a rail of the products vendors have really discounted
+//   5. the branch's whole shelf, revealed in place a screenful at a time
+//      (16 per step), with "View all" still opening the full catalogue
 //
 // The stands remain the point of the page; the Featured stands "View all"
 // opens /exhibition/stands (the stands directory). The shelf no longer hides
 // products behind a click: a branch with 100 items shows all of them, just
 // not all at once.
+//
+// Category pills come from lib/exhibitionShelf.js rather than from vendor-typed
+// category names: vendors mostly leave that field empty, so the old chip row
+// showed a handful of pills and left most products unreachable. Every product
+// is now sorted onto exactly one shelf, so the pills always add up.
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { MapPin, Search, Store, Tag, X } from 'lucide-react'
+import { MapPin, Store } from 'lucide-react'
 import ProtectedRoute from '../components/ProtectedRoute'
 import ExhibitionCycleHint from '../components/ExhibitionCycleHint'
 import ContinueShoppingBanner from '../components/ContinueShoppingBanner'
 import ExhibitionHubs from '../components/ExhibitionHubs'
+import ExhibitionDealsRail from '../components/ExhibitionDealsRail'
+import ExhibitionFilterBar from '../components/ExhibitionFilterBar'
 import ExhibitionProductCard from '../components/ExhibitionProductCard'
+import ExhibitionProductSkeleton from '../components/ExhibitionProductSkeleton'
 import CartStickyBar from '../components/CartStickyBar'
 import useExhibitionBranch from '../hooks/useExhibitionBranch'
 import useExhibitionCart from '../hooks/useExhibitionCart'
+import useExhibitionFilters from '../hooks/useExhibitionFilters'
 import ModuleClosedPanel from '../components/ModuleClosedPanel'
 import AmbientBackdrop from '../components/AmbientBackdrop'
 import Skeleton from '../components/ui/Skeleton'
@@ -36,70 +45,37 @@ import { countVendorProducts, searchStands, standsWithProducts } from '../../lib
 // now reveals the whole shelf in place, a screenful at a time.
 const PRODUCT_STEP = 16
 
-const SORTS = [
-  { value: 'recommended', label: 'Recommended' },
-  { value: 'price-asc', label: 'Price: low to high' },
-  { value: 'price-desc', label: 'Price: high to low' },
-  { value: 'name', label: 'Name A–Z' },
-]
-
-const priceOf = (p) => Number(p?.price ?? p?.final_price ?? 0) || 0
-
 function ExhibitionShopContent() {
   const router = useRouter()
   // Delivery location — persisted so the cart, stand pages and re-visits agree.
   const { catalog, error, loading, availableBranches, branchCode, branchName, changeBranch } = useExhibitionBranch()
   const { addToCart, qtyOf, cartCount, cartTotal } = useExhibitionCart()
 
-  const [query, setQuery] = useState('')
-  const [scope, setScope] = useState('all') // all | stands | products
-  const [categoryId, setCategoryId] = useState(null)
-  const [sort, setSort] = useState('recommended')
-  const [visibleCount, setVisibleCount] = useState(PRODUCT_STEP)
-
   const products = useMemo(() => catalog?.products || [], [catalog])
   const vendors = useMemo(() => catalog?.vendors || [], [catalog])
-  const categories = useMemo(() => catalog?.categories || [], [catalog])
+
+  const filters = useExhibitionFilters(products)
+  const { filtered, q, isFiltering, signature, activeShelf } = filters
+
+  const [visibleCount, setVisibleCount] = useState(PRODUCT_STEP)
 
   const vendorCounts = useMemo(() => countVendorProducts(products), [products])
 
   // Only stands that actually have something to sell belong in the rail.
   const sellableStands = useMemo(() => standsWithProducts(vendors, products), [vendors, products])
 
-  const q = query.trim().toLowerCase()
+  // One search now serves both halves of the page: typing "rice" narrows the
+  // stands to those selling it and the shelf to the rice itself, so the old
+  // all/stands/products scope selector had nothing left to decide.
   const stands = useMemo(() => searchStands(sellableStands, q), [sellableStands, q])
 
-  const matchedProducts = useMemo(() => {
-    const list = products.filter((p) => {
-      if (categoryId && p.category_id !== categoryId) return false
-      if (q) {
-        const name = String(p.name || '').toLowerCase()
-        const vendor = String(p.vendor_name || '').toLowerCase()
-        if (!name.includes(q) && !vendor.includes(q)) return false
-      }
-      return true
-    })
-    if (sort === 'price-asc') return [...list].sort((a, b) => priceOf(a) - priceOf(b))
-    if (sort === 'price-desc') return [...list].sort((a, b) => priceOf(b) - priceOf(a))
-    if (sort === 'name') return [...list].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
-    return list
-  }, [products, categoryId, q, sort])
-
-  const categoriesWithProducts = useMemo(() => {
-    const used = new Set(products.map((p) => p.category_id).filter(Boolean))
-    return categories.filter((c) => used.has(c.id))
-  }, [categories, products])
-
-  // A new search, category or sort starts the shelf over from the top.
+  // Any change to the query starts the shelf over from the top.
   useEffect(() => {
     setVisibleCount(PRODUCT_STEP)
-  }, [q, categoryId, sort])
+  }, [signature])
 
-  const visible = matchedProducts.slice(0, visibleCount)
-  const remaining = matchedProducts.length - visible.length
-  const showStands = scope !== 'products'
-  const showProducts = scope !== 'stands'
-  const searching = !!q || !!categoryId
+  const visible = filtered.slice(0, visibleCount)
+  const remaining = filtered.length - visible.length
 
   // ── Closed state ─────────────────────────────────────────────────
   if (!loading && catalog && !catalog.open) {
@@ -124,6 +100,12 @@ function ExhibitionShopContent() {
       </ProtectedRoute>
     )
   }
+
+  const heading = activeShelf
+    ? `${activeShelf.label} · ${filtered.length}`
+    : isFiltering
+      ? `${filtered.length} product${filtered.length === 1 ? '' : 's'} match`
+      : `Products at this location · ${filtered.length}`
 
   return (
     <ProtectedRoute allowedRoles={['member']}>
@@ -198,177 +180,110 @@ function ExhibitionShopContent() {
             </div>
           )}
 
-          {/* 2 — Search with a scope */}
-          <div className="mb-4 flex flex-col gap-2 sm:flex-row">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={scope === 'stands' ? 'Search stands…' : scope === 'products' ? 'Search products…' : 'Search products or stands…'}
-                aria-label="Search the exhibition"
-                className="w-full rounded-xl border border-line bg-surface py-2.5 pl-9 pr-9 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
-              />
-              {!!query && (
-                <button
-                  type="button"
-                  onClick={() => setQuery('')}
-                  aria-label="Clear search"
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted hover:bg-subtle hover:text-fg"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-            <select
-              value={scope}
-              onChange={(e) => setScope(e.target.value)}
-              aria-label="Search scope"
-              className="rounded-xl border border-line bg-surface px-3 py-2.5 text-sm font-medium text-fg focus:border-brand focus:outline-none sm:w-40"
-            >
-              <option value="all">All stands</option>
-              <option value="stands">Stands only</option>
-              <option value="products">Products only</option>
-            </select>
-          </div>
+          {/* 2 — Sticky discovery bar */}
+          <ExhibitionFilterBar filters={filters} className="mb-4" />
 
-          {/* 3 — Featured stands (sliding rail) */}
           {loading ? (
-            <div className="mb-6 flex gap-3 overflow-hidden">
-              {[0, 1, 2].map((i) => (
-                <Skeleton key={i} className="h-[104px] w-[calc(50%-6px)] shrink-0 rounded-2xl sm:w-[calc(33.333%-8px)] lg:w-[calc(25%-9px)] xl:w-[calc(20%-9.6px)]" />
-              ))}
-            </div>
-          ) : showStands ? (
-            <div>
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1 text-chips font-medium uppercase tracking-wider text-muted">
-                  <Store className="h-3 w-3" strokeWidth={2.2} />
-                  Featured stands
-                </span>
-                <span className="flex items-center gap-2">
-                  <span className="text-chips text-muted">
-                    {stands.length.toLocaleString()} stand{stands.length === 1 ? '' : 's'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => router.push('/exhibition/stands')}
-                    className="inline-flex h-8 items-center rounded-lg border border-line bg-surface px-3 text-chips font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
-                  >
-                    View all
-                  </button>
-                </span>
+            <>
+              <div className="mb-6 flex gap-3 overflow-hidden">
+                {[0, 1, 2].map((i) => (
+                  <Skeleton key={i} className="h-[148px] w-[calc(50%-6px)] shrink-0 rounded-2xl sm:w-[calc(33.333%-8px)] lg:w-[calc(25%-9px)] xl:w-[calc(20%-9.6px)]" />
+                ))}
               </div>
-
-              {stands.length === 0 ? (
-                <div className="rounded-2xl border border-line-subtle bg-subtle/40 px-4 py-6 text-center">
-                  <p className="text-sm font-medium text-fg">No stands match “{query}”</p>
-                  <p className="mt-0.5 text-chips text-muted">Try another name, or clear the search.</p>
-                </div>
-              ) : (
-                <ExhibitionHubs vendors={stands} vendorCounts={vendorCounts} />
-              )}
-            </div>
-          ) : null}
-
-          {/* 4 — Categories */}
-          {showProducts && categoriesWithProducts.length > 0 && (
-            <div className="mb-4 flex flex-wrap items-center gap-1.5">
-              <span className="mr-1 inline-flex items-center gap-1 text-chips font-medium uppercase tracking-wider text-muted">
-                <Tag className="h-3 w-3" strokeWidth={2.2} />
-                Categories
-              </span>
-              <button
-                type="button"
-                onClick={() => setCategoryId(null)}
-                className={[
-                  'rounded-full border px-3 py-1.5 text-chips font-medium transition-colors duration-150',
-                  categoryId === null ? 'border-brand bg-brand text-on-accent' : 'border-line bg-surface text-muted hover:border-line-strong hover:text-fg',
-                ].join(' ')}
-              >
-                All
-              </button>
-              {categoriesWithProducts.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setCategoryId(categoryId === c.id ? null : c.id)}
-                  className={[
-                    'rounded-full border px-3 py-1.5 text-chips font-medium transition-colors duration-150',
-                    categoryId === c.id ? 'border-brand bg-brand text-on-accent' : 'border-line bg-surface text-muted hover:border-line-strong hover:text-fg',
-                  ].join(' ')}
-                >
-                  {c.name}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* 5 — Products at this location — the whole shelf, revealed in place */}
-          {showProducts && !loading && visible.length > 0 && (
-            <div>
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-chips font-medium uppercase tracking-wider text-muted">
-                  {searching
-                    ? `${matchedProducts.length} match${matchedProducts.length === 1 ? '' : 'es'}`
-                    : `Products at this location · ${matchedProducts.length}`}
-                </span>
-                <div className="flex items-center gap-2">
-                  <label htmlFor="shop-sort" className="sr-only">Sort products</label>
-                  <select
-                    id="shop-sort"
-                    value={sort}
-                    onChange={(e) => setSort(e.target.value)}
-                    className="h-8 rounded-lg border border-line bg-surface px-2 text-chips font-medium text-fg focus:border-brand focus:outline-none"
-                  >
-                    {SORTS.map((s) => (
-                      <option key={s.value} value={s.value}>{s.label}</option>
-                    ))}
-                  </select>
-                  {!searching && (
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 2xl:grid-cols-7">
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <ExhibitionProductSkeleton key={i} />
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              {/* 3 — Featured stands (sliding rail) */}
+              <div>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1 text-chips font-medium uppercase tracking-wider text-muted">
+                    <Store className="h-3 w-3" strokeWidth={2.2} />
+                    Featured stands
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-chips text-muted">
+                      {stands.length.toLocaleString()} stand{stands.length === 1 ? '' : 's'}
+                    </span>
                     <button
                       type="button"
-                      onClick={() => router.push('/exhibition/all')}
+                      onClick={() => router.push('/exhibition/stands')}
                       className="inline-flex h-8 items-center rounded-lg border border-line bg-surface px-3 text-chips font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
                     >
                       View all
                     </button>
-                  )}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 2xl:grid-cols-7">
-                {visible.map((p) => (
-                  <ExhibitionProductCard
-                    key={p.id}
-                    p={p}
-                    qty={qtyOf(p.id)}
-                    onAdd={(d) => addToCart(p, d)}
-                  />
-                ))}
-              </div>
-
-              {remaining > 0 && (
-                <div className="mt-4 flex flex-col items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setVisibleCount((c) => c + PRODUCT_STEP)}
-                    className="inline-flex h-9 items-center rounded-lg border border-line bg-surface px-4 text-chips font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
-                  >
-                    Show {Math.min(PRODUCT_STEP, remaining)} more product{Math.min(PRODUCT_STEP, remaining) === 1 ? '' : 's'}
-                  </button>
-                  <span className="text-chips text-muted tabular-nums">
-                    Showing {visible.length} of {matchedProducts.length}
                   </span>
                 </div>
-              )}
-            </div>
-          )}
 
-          {!loading && showProducts && visible.length === 0 && searching && (
-            <div className="rounded-2xl border border-line-subtle bg-subtle/40 px-4 py-6 text-center">
-              <p className="text-sm font-medium text-fg">No products match your search</p>
-              <p className="mt-0.5 text-chips text-muted">Try clearing the search or picking another category.</p>
-            </div>
+                {stands.length === 0 ? (
+                  <div className="rounded-2xl border border-line-subtle bg-subtle/40 px-4 py-6 text-center">
+                    <p className="text-sm font-medium text-fg">No stands match “{filters.search.trim()}”</p>
+                    <p className="mt-0.5 text-chips text-muted">Try another name, or clear the search.</p>
+                  </div>
+                ) : (
+                  <ExhibitionHubs vendors={stands} vendorCounts={vendorCounts} />
+                )}
+              </div>
+
+              {/* 4 — Market bonanza: vendor discounts only */}
+              <ExhibitionDealsRail products={products} onAdd={addToCart} qtyOf={qtyOf} />
+
+              {/* 5 — Products at this location — the whole shelf, revealed in place */}
+              {visible.length > 0 && (
+                <div>
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-chips font-medium uppercase tracking-wider text-muted">
+                      {heading}
+                    </span>
+                    {!isFiltering && (
+                      <button
+                        type="button"
+                        onClick={() => router.push('/exhibition/all')}
+                        className="inline-flex h-8 items-center rounded-lg border border-line bg-surface px-3 text-chips font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                      >
+                        View all
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 2xl:grid-cols-7">
+                    {visible.map((p) => (
+                      <ExhibitionProductCard
+                        key={p.id}
+                        p={p}
+                        qty={qtyOf(p.id)}
+                        onAdd={(d) => addToCart(p, d)}
+                      />
+                    ))}
+                  </div>
+
+                  {remaining > 0 && (
+                    <div className="mt-4 flex flex-col items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setVisibleCount((c) => c + PRODUCT_STEP)}
+                        className="inline-flex h-9 items-center rounded-lg border border-line bg-surface px-4 text-chips font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                      >
+                        Show {Math.min(PRODUCT_STEP, remaining)} more product{Math.min(PRODUCT_STEP, remaining) === 1 ? '' : 's'}
+                      </button>
+                      <span className="text-chips text-muted tabular-nums">
+                        Showing {visible.length} of {filtered.length}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {visible.length === 0 && isFiltering && (
+                <div className="rounded-2xl border border-line-subtle bg-subtle/40 px-4 py-6 text-center">
+                  <p className="text-sm font-medium text-fg">No products match your filters</p>
+                  <p className="mt-0.5 text-chips text-muted">Try another shelf, or clear the search.</p>
+                </div>
+              )}
+            </>
           )}
         </div>
 

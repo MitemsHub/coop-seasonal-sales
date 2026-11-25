@@ -1,22 +1,26 @@
 'use client'
 
 // app/components/ExhibitionCatalog.jsx
-// The shared exhibition shopping surface: search, category chips, vendor
-// filter, the product grid and the sticky cart bar. Used by /exhibition (the
-// shop) and /exhibition/all (the full catalog page). When `pageSize` is set
-// the grid paginates, so a 100+ product market stays browsable. `beforeGrid`
-// lets a page slot content between the filters and the grid (the shop's hub
-// slideshow).
+// The full exhibition catalogue surface. Used by /exhibition/all (and any page
+// that wants the whole shelf with a vendor filter). When `pageSize` is set the
+// grid paginates, so a 100+ product market stays browsable. `beforeGrid` lets a
+// page slot content between the filters and the grid.
+//
+// Search, shelf pills, stock/offer/price refinements and sort are the shared
+// ExhibitionFilterBar over useExhibitionFilters, which is what the shop uses
+// too — this page only adds the vendor hub filter and the pager.
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronLeft, ChevronRight, Search, Store, Tag, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Store } from 'lucide-react'
 import CartStickyBar from './CartStickyBar'
 import ExhibitionCycleHint from './ExhibitionCycleHint'
 import useExhibitionCart from '../hooks/useExhibitionCart'
+import useExhibitionFilters from '../hooks/useExhibitionFilters'
 import SearchableSelect from './ui/SearchableSelect'
-import Skeleton from './ui/Skeleton'
 import EmptyState from './ui/EmptyState'
+import ExhibitionFilterBar from './ExhibitionFilterBar'
 import ExhibitionProductCard from './ExhibitionProductCard'
+import ExhibitionProductSkeleton from './ExhibitionProductSkeleton'
 
 export default function ExhibitionCatalog({
   catalog,
@@ -28,35 +32,20 @@ export default function ExhibitionCatalog({
 }) {
   const router = useRouter()
   const { addToCart, qtyOf, cartCount, cartTotal } = useExhibitionCart()
-  const [categoryId, setCategoryId] = useState(null)
-  const [vendorId, setVendorId] = useState(null)
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(0)
 
   const products = useMemo(() => catalog?.products || [], [catalog])
   const vendors = useMemo(() => catalog?.vendors || [], [catalog])
-  const categories = useMemo(() => catalog?.categories || [], [catalog])
+  const filters = useExhibitionFilters(products)
 
-  // Categories are optional now: if no product on the shelf carries one, the
-  // chip row is dead weight, so the shop shows the stands and search only.
-  const categoriesWithProducts = useMemo(() => {
-    const used = new Set(products.map((p) => p.category_id).filter(Boolean))
-    return categories.filter((c) => used.has(c.id))
-  }, [categories, products])
+  const [vendorId, setVendorId] = useState(null)
+  const [page, setPage] = useState(0)
 
-  const filtered = useMemo(() => {
-    return products.filter((p) => {
-      if (categoryId && p.category_id !== categoryId) return false
-      if (vendorId && p.vendor_id !== vendorId) return false
-      if (search) {
-        const s = search.toLowerCase()
-        if (!p.name.toLowerCase().includes(s) && !p.vendor_name.toLowerCase().includes(s)) return false
-      }
-      return true
-    })
-  }, [products, categoryId, vendorId, search])
+  // The vendor hub is the one filter this page owns.
+  const filtered = useMemo(
+    () => (vendorId ? filters.filtered.filter((p) => p.vendor_id === vendorId) : filters.filtered),
+    [filters.filtered, vendorId]
+  )
 
-  // Group filter options by the vendors that actually have products
   const vendorsWithProducts = useMemo(() => {
     const ids = new Set(products.map((p) => p.vendor_id))
     return vendors.filter((v) => ids.has(v.id))
@@ -64,7 +53,7 @@ export default function ExhibitionCatalog({
 
   useEffect(() => {
     setPage(0)
-  }, [categoryId, vendorId, search])
+  }, [filters.signature, vendorId])
 
   const pageCount = pageSize > 0 ? Math.max(1, Math.ceil(filtered.length / pageSize)) : 1
   const safePage = Math.min(page, pageCount - 1)
@@ -76,59 +65,7 @@ export default function ExhibitionCatalog({
         <div className="mb-4 rounded-xl border border-danger-border bg-danger-bg px-4 py-3 text-sm text-danger-fg">{error}</div>
       )}
 
-      {/* Search */}
-      <div className="relative mb-4 max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search products or vendors…"
-          className="w-full rounded-xl border border-line bg-surface py-2.5 pl-9 pr-8 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
-        />
-        {!!search && (
-          <button
-            type="button"
-            onClick={() => setSearch('')}
-            aria-label="Clear search"
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted hover:bg-subtle hover:text-fg"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </div>
-
-      {/* Category chips — only when products actually carry a category */}
-      {categoriesWithProducts.length > 0 && (
-      <div className="mb-2 flex flex-wrap items-center gap-1.5">
-        <span className="mr-1 inline-flex items-center gap-1 text-chips font-medium uppercase tracking-wider text-muted">
-          <Tag className="h-3 w-3" strokeWidth={2.2} />
-          Categories
-        </span>
-        <button
-          type="button"
-          onClick={() => setCategoryId(null)}
-          className={[
-            'rounded-full border px-3 py-1.5 text-chips font-medium transition-colors duration-150',
-            categoryId === null ? 'border-brand bg-brand text-on-accent' : 'border-line bg-surface text-muted hover:border-line-strong hover:text-fg',
-          ].join(' ')}
-        >
-          All
-        </button>
-        {categoriesWithProducts.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            onClick={() => setCategoryId(categoryId === c.id ? null : c.id)}
-            className={[
-              'rounded-full border px-3 py-1.5 text-chips font-medium transition-colors duration-150',
-              categoryId === c.id ? 'border-brand bg-brand text-on-accent' : 'border-line bg-surface text-muted hover:border-line-strong hover:text-fg',
-            ].join(' ')}
-          >
-            {c.name}
-          </button>
-        ))}
-      </div>
-      )}
+      <ExhibitionFilterBar filters={filters} className="mb-4" />
 
       {/* Vendor hub selector — a searchable combobox so the filter stays
           usable no matter how many stands the branch has. */}
@@ -147,21 +84,21 @@ export default function ExhibitionCatalog({
         />
       </div>
 
-      {/* Page-slot content (the shop's hub slideshow sits here) */}
+      {/* Page-slot content (a page's own content above the grid) */}
       {!loading && beforeGrid}
 
       {/* Product grid */}
       {loading ? (
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 2xl:grid-cols-7">
           {Array.from({ length: 12 }).map((_, i) => (
-            <Skeleton key={i} className="h-44 rounded-xl" />
+            <ExhibitionProductSkeleton key={i} />
           ))}
         </div>
       ) : visible.length === 0 ? (
         <EmptyState
           icon={Store}
           title="Nothing here yet"
-          description={search || categoryId || vendorId
+          description={filters.isFiltering || vendorId
             ? 'No products match your filters. Try clearing them.'
             : catalog?.cycle?.starts_at || catalog?.cycle?.ends_at
               ? (

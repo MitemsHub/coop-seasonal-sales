@@ -2,30 +2,119 @@
 
 // app/components/ExhibitionProductCard.jsx
 // One exhibition product card — the shared buying unit across the shop, the
-// all-products page and the vendor hub. Image, price (+ negotiated chip),
-// stock and the qty stepper all live here so the three surfaces can't drift.
-// The card shows only the cover photo; the remaining photos are in the View
-// popup's gallery, so a card never competes with a carousel for a tap.
+// all-products page, the vendor hub and the deals rail. Image, price, stock
+// and the qty stepper all live here so the surfaces can't drift.
+//
+// Buying rules this card follows:
+//   - Tapping the photo opens the product. It used to jump straight to the
+//     vendor's stand, which surprised members and lost the sale they were
+//     looking at; the stand is one deliberate tap away (the vendor line).
+//   - A tap that adds to the cart says so: the stepper flashes, a small
+//     "Added" pill appears on the photo, and the first add of the session
+//     gets a short confetti burst.
+//   - Stock is on the photo, where it is read before the name: "Sold out"
+//     dims the whole photo, "Only N left" warns before the member scrolls on.
+//   - The details popup can add to the cart too, so a member who checked the
+//     photos is not sent back to the grid to buy.
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { useRef, useState } from 'react'
-import { Minus, Plus } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Check, Minus, Plus, ShoppingCart, Store } from 'lucide-react'
 import Badge from './ui/Badge'
 import Button from './ui/Button'
 import DraggableModal from './DraggableModal'
+import { celebrateFirstAdd } from '../../lib/celebrate'
 
 const naira = (v) => `₦${Number(v || 0).toLocaleString()}`
 const PLACEHOLDER = '/images/items/placeholder.svg'
+const LOW_STOCK = 5
+
+// The stepper is rendered twice (card body + details popup) at two sizes, so
+// it lives here rather than being duplicated.
+function Stepper({ qty, max, name, onAdd, size = 'sm' }) {
+  const big = size === 'md'
+  const atMax = max !== null && max !== undefined && qty >= max
+  return (
+    <div
+      className={[
+        'flex items-center justify-center gap-1.5 rounded-lg bg-subtle/60',
+        big ? 'px-2 py-1.5' : 'px-1.5 py-1',
+      ].join(' ')}
+    >
+      <button
+        type="button"
+        aria-label={`Decrease ${name}`}
+        onClick={() => onAdd(-1)}
+        disabled={qty <= 0}
+        className={[
+          'inline-flex shrink-0 items-center justify-center rounded-full transition-[color,background-color,scale] duration-150 active:scale-[0.97]',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
+          big ? 'h-8 w-8' : 'h-6 w-6',
+          qty > 0 ? 'bg-subtle text-fg hover:bg-line-subtle' : 'bg-subtle text-subtext',
+        ].join(' ')}
+      >
+        <Minus className={big ? 'h-4 w-4' : 'h-3.5 w-3.5'} strokeWidth={2.5} />
+      </button>
+      <div
+        className={[
+          'flex items-center justify-center rounded-md border border-line-subtle bg-surface text-center font-semibold tabular-nums text-fg',
+          big ? 'h-8 w-12 text-sm' : 'h-6 w-9 text-xs',
+        ].join(' ')}
+      >
+        {/* Remounts per value so the new quantity pops into place. */}
+        <span key={qty} className="pop">
+          {qty}
+        </span>
+      </div>
+      <button
+        type="button"
+        aria-label={`Increase ${name}`}
+        onClick={() => onAdd(1)}
+        disabled={atMax}
+        title={atMax ? 'No more stock available' : undefined}
+        className={[
+          'inline-flex shrink-0 items-center justify-center rounded-full transition-[color,background-color,scale] duration-150 active:scale-[0.97]',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
+          big ? 'h-8 w-8' : 'h-6 w-6',
+          atMax ? 'bg-subtle text-subtext' : 'bg-brand-subtle text-brand hover:bg-brand/20',
+        ].join(' ')}
+      >
+        <Plus className={big ? 'h-4 w-4' : 'h-3.5 w-3.5'} strokeWidth={2.5} />
+      </button>
+    </div>
+  )
+}
 
 export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true }) {
   const router = useRouter()
   const [viewOpen, setViewOpen] = useState(false)
   const [index, setIndex] = useState(0)
+  const [added, setAdded] = useState(false)
+  const addedTimer = useRef(null)
+  const [flashKey, setFlashKey] = useState(0)
+
+  useEffect(() => () => clearTimeout(addedTimer.current), [])
 
   const images =
     Array.isArray(p.images) && p.images.length ? p.images : [p.image_url || PLACEHOLDER]
   const safeIndex = Math.min(index, images.length - 1)
   const many = images.length > 1
+
+  const soldOut = p.qty === 0
+  const lowStock = p.qty !== null && p.qty !== undefined && p.qty > 0 && p.qty <= LOW_STOCK
+
+  // Every add funnels through here so the flash, the confetti and the cart
+  // write all happen together no matter which control was tapped.
+  const add = (delta) => {
+    if (delta > 0) {
+      celebrateFirstAdd()
+      setAdded(true)
+      setFlashKey((k) => k + 1)
+      clearTimeout(addedTimer.current)
+      addedTimer.current = setTimeout(() => setAdded(false), 1400)
+    }
+    onAdd(delta)
+  }
 
   const step = (delta) => setIndex((i) => (i + delta + images.length) % images.length)
 
@@ -117,14 +206,43 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
   const imageArea = (
     <div className="relative block aspect-[4/3] w-full overflow-hidden bg-white dark:bg-subtle">
       {image}
-      {showVendor ? (
-        <button
-          type="button"
-          onClick={() => router.push(`/exhibition/vendor/${p.vendor_id}`)}
-          aria-label={`View ${p.vendor_name || 'vendor'} hub`}
-          className="absolute inset-0 z-10"
-        />
-      ) : null}
+
+      {/* The photo opens the product, not the stand. */}
+      <button
+        type="button"
+        onClick={() => setViewOpen(true)}
+        aria-label={`View details for ${p.name}`}
+        className="absolute inset-0 z-10 cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand/50"
+      />
+
+      {/* Read before the name: discount, then stock. */}
+      {p.discount_pct > 0 && (
+        <span className="pointer-events-none absolute left-1.5 top-1.5 z-20 rounded-full bg-danger-solid px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm">
+          −{p.discount_pct}%
+        </span>
+      )}
+      {lowStock && !soldOut && (
+        <span className="pointer-events-none absolute bottom-1.5 left-1.5 z-20 inline-flex items-center gap-1 rounded-full bg-warning-solid px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm">
+          <span className="h-1.5 w-1.5 rounded-full bg-white/90" aria-hidden="true" />
+          Only {p.qty} left
+        </span>
+      )}
+      {soldOut && (
+        <span className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-canvas/65 backdrop-blur-[1px]">
+          <span className="rounded-full bg-fg/90 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-on-accent shadow-sm">
+            Sold out
+          </span>
+        </span>
+      )}
+      {added && (
+        <span
+          key={flashKey}
+          className="pop pointer-events-none absolute bottom-1.5 left-1/2 z-20 inline-flex -translate-x-1/2 items-center gap-1 rounded-full bg-success-solid px-2 py-0.5 text-[10px] font-bold text-white shadow-md"
+        >
+          <Check className="h-3 w-3" strokeWidth={3} aria-hidden="true" />
+          Added
+        </span>
+      )}
     </div>
   )
 
@@ -137,22 +255,19 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
         {/* Two lines max so a very long product name can't stretch the card
             (or the grid row) and squash the price and stepper. */}
         <div className="line-clamp-2 break-words text-xs font-semibold leading-snug text-fg" title={p.name}>{p.name}</div>
-        {(!!p.description || many) && (
-          <div className="mt-0.5 flex items-start gap-1">
-            <p className="line-clamp-2 min-w-0 flex-1 break-words text-[11px] leading-snug text-muted" title={p.description}>
-              {p.description}
-            </p>
-            <button
-              type="button"
-              onClick={() => setViewOpen(true)}
-              aria-label={`View details for ${p.name}`}
-              className="shrink-0 text-[11px] font-semibold leading-snug text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
-            >
-              View
-            </button>
-          </div>
-        )}
-        <div className="mb-1.5 mt-0.5 flex flex-wrap items-center gap-x-1 text-chips text-muted">
+        {showVendor && p.vendor_name ? (
+          <button
+            type="button"
+            onClick={() => router.push(`/exhibition/vendor/${p.vendor_id}`)}
+            aria-label={`Open ${p.vendor_name} stand`}
+            className="mt-0.5 flex w-full items-center gap-1 text-left text-[11px] font-medium text-muted transition-colors duration-150 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+          >
+            <Store className="h-3 w-3 shrink-0" strokeWidth={2} aria-hidden="true" />
+            <span className="truncate">{p.vendor_name}</span>
+          </button>
+        ) : null}
+
+        <div className="mb-1.5 mt-1 flex flex-wrap items-center gap-x-1 text-chips text-muted">
           <span>{p.unit}</span>
           {p.qty !== null && p.qty !== undefined && p.qty > 0 && (
             <span className="font-medium text-success-fg">· {p.qty} left</span>
@@ -167,18 +282,18 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
               <span className="text-chips text-muted line-through">{naira(p.final_price)}</span>
             )}
           </div>
-          {p.discount_pct > 0 ? (
-            <span className="rounded-full bg-danger-bg px-1.5 py-0.5 text-[10px] font-semibold text-danger-fg">
-              −{p.discount_pct}%
-            </span>
-          ) : p.negotiated ? (
+          {p.negotiated ? (
             <Badge tone="accent" variant="subtle">
               Your price
             </Badge>
+          ) : p.discount_pct > 0 ? (
+            <span className="rounded-full bg-danger-bg px-1.5 py-0.5 text-[10px] font-semibold text-danger-fg">
+              Save {naira(Number(p.final_price || 0) - Number(p.price || 0))}
+            </span>
           ) : null}
         </div>
 
-        {p.qty === 0 ? (
+        {soldOut ? (
           <div
             role="status"
             className="mt-auto flex w-full items-center justify-center rounded-lg bg-subtle/60 px-2 py-1.5 text-xs font-semibold text-danger-fg"
@@ -186,42 +301,13 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
             Sold out
           </div>
         ) : (
-          <div className="mt-auto flex items-center justify-center gap-1.5 rounded-lg bg-subtle/60 px-1.5 py-1">
-            <button
-              type="button"
-              aria-label={`Decrease ${p.name}`}
-              onClick={() => onAdd(-1)}
-              disabled={qty <= 0}
-              className={[
-                'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-[color,background-color,scale] duration-150 active:scale-[0.97]',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
-                qty > 0 ? 'bg-subtle text-fg hover:bg-line-subtle' : 'bg-subtle text-subtext',
-              ].join(' ')}
-            >
-              <Minus className="h-3.5 w-3.5" strokeWidth={2.5} />
-            </button>
-            <div className="flex h-6 w-9 items-center justify-center rounded-md border border-line-subtle bg-surface text-center text-xs font-semibold tabular-nums text-fg">
-              {/* Remounts per value so the new quantity pops into place. */}
-              <span key={qty} className="pop">
-                {qty}
-              </span>
-            </div>
-            <button
-              type="button"
-              aria-label={`Increase ${p.name}`}
-              onClick={() => onAdd(1)}
-              disabled={p.qty !== null && p.qty !== undefined && qty >= p.qty}
-              title={p.qty !== null && p.qty !== undefined && qty >= p.qty ? 'No more stock available' : undefined}
-              className={[
-                'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-[color,background-color,scale] duration-150 active:scale-[0.97]',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
-                p.qty !== null && p.qty !== undefined && qty >= p.qty
-                  ? 'bg-subtle text-subtext'
-                  : 'bg-brand-subtle text-brand hover:bg-brand/20',
-              ].join(' ')}
-            >
-              <Plus className="h-3.5 w-3.5" strokeWidth={2.5} />
-            </button>
+          <div
+            className={[
+              'mt-auto rounded-lg transition-shadow duration-300',
+              added ? 'bg-success-bg ring-1 ring-success-border' : '',
+            ].join(' ')}
+          >
+            <Stepper qty={qty} max={p.qty} name={p.name} onAdd={add} />
           </div>
         )}
       </div>
@@ -233,9 +319,29 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
         align="center"
         widthClass="max-w-lg w-full mx-4"
         footer={
-          <Button variant="secondary" onClick={() => setViewOpen(false)}>
-            Close
-          </Button>
+          <div className="flex items-end gap-2">
+            {soldOut ? (
+              <div
+                role="status"
+                className="flex h-11 flex-1 items-center justify-center rounded-lg bg-subtle/60 text-sm font-semibold text-danger-fg"
+              >
+                Sold out
+              </div>
+            ) : (
+              <>
+                <Stepper qty={qty} max={p.qty} name={p.name} onAdd={add} size="md" />
+                <Button
+                  size="lg"
+                  className="flex-1"
+                  onClick={() => add(1)}
+                  disabled={p.qty !== null && p.qty !== undefined && qty >= p.qty}
+                  leftIcon={added ? Check : ShoppingCart}
+                >
+                  {added ? 'Added' : qty > 0 ? `Add another · ${naira(p.price)}` : 'Add to cart'}
+                </Button>
+              </>
+            )}
+          </div>
         }
       >
         <div className="space-y-3">
@@ -311,7 +417,17 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
           <div>
             <h3 className="break-words text-base font-semibold text-fg">{p.name}</h3>
             {showVendor && p.vendor_name && (
-              <p className="mt-0.5 text-chips text-muted">{p.vendor_name}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setViewOpen(false)
+                  router.push(`/exhibition/vendor/${p.vendor_id}`)
+                }}
+                className="mt-1 inline-flex items-center gap-1 text-chips font-semibold text-brand transition-colors hover:text-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+              >
+                <Store className="h-3.5 w-3.5" strokeWidth={2.1} aria-hidden="true" />
+                Visit {p.vendor_name}&rsquo;s stand
+              </button>
             )}
           </div>
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -331,6 +447,9 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
               <span className={p.qty > 0 ? 'font-medium text-success-fg' : 'font-medium text-danger-fg'}>
                 · {p.qty > 0 ? `${p.qty} left` : 'Sold out'}
               </span>
+            )}
+            {!!p.category_name && (
+              <span className="rounded-full bg-subtle px-1.5 py-0.5 font-medium text-muted">{p.category_name}</span>
             )}
           </p>
           {!!p.description && (
