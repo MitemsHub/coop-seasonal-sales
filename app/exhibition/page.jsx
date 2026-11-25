@@ -5,15 +5,17 @@
 //   2. search with a scope (all / stands / products)
 //   3. Featured stands — an auto-sliding rail through every stand
 //   4. category chips
-//   5. a short "Popular at this location" product preview (8 items), with
-//      "View all" going to the full catalogue
+//   5. "Products at this location" — the branch's whole shelf, sorted and
+//      revealed in place a screenful at a time (16 per step), with "View all"
+//      still opening the filter-heavy full catalogue at /exhibition/all
 //
-// The stands remain the point of the page: products are a preview, not an
-// endless feed. The Featured stands "View all" opens /exhibition/stands (the
-// stands directory); "View all" under the products opens /exhibition/all.
+// The stands remain the point of the page; the Featured stands "View all"
+// opens /exhibition/stands (the stands directory). The shelf no longer hides
+// products behind a click: a branch with 100 items shows all of them, just
+// not all at once.
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MapPin, Search, Store, Tag, X } from 'lucide-react'
 import ProtectedRoute from '../components/ProtectedRoute'
@@ -29,7 +31,19 @@ import AmbientBackdrop from '../components/AmbientBackdrop'
 import Skeleton from '../components/ui/Skeleton'
 import { countVendorProducts, searchStands, standsWithProducts } from '../../lib/exhibitionStands'
 
-const PREVIEW_COUNT = 8
+// The shop used to stop at eight products and send members to "View all" for
+// the rest, which read as a half-empty shop when a branch has 100+ items. It
+// now reveals the whole shelf in place, a screenful at a time.
+const PRODUCT_STEP = 16
+
+const SORTS = [
+  { value: 'recommended', label: 'Recommended' },
+  { value: 'price-asc', label: 'Price: low to high' },
+  { value: 'price-desc', label: 'Price: high to low' },
+  { value: 'name', label: 'Name A–Z' },
+]
+
+const priceOf = (p) => Number(p?.price ?? p?.final_price ?? 0) || 0
 
 function ExhibitionShopContent() {
   const router = useRouter()
@@ -40,6 +54,8 @@ function ExhibitionShopContent() {
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState('all') // all | stands | products
   const [categoryId, setCategoryId] = useState(null)
+  const [sort, setSort] = useState('recommended')
+  const [visibleCount, setVisibleCount] = useState(PRODUCT_STEP)
 
   const products = useMemo(() => catalog?.products || [], [catalog])
   const vendors = useMemo(() => catalog?.vendors || [], [catalog])
@@ -54,7 +70,7 @@ function ExhibitionShopContent() {
   const stands = useMemo(() => searchStands(sellableStands, q), [sellableStands, q])
 
   const matchedProducts = useMemo(() => {
-    return products.filter((p) => {
+    const list = products.filter((p) => {
       if (categoryId && p.category_id !== categoryId) return false
       if (q) {
         const name = String(p.name || '').toLowerCase()
@@ -63,14 +79,24 @@ function ExhibitionShopContent() {
       }
       return true
     })
-  }, [products, categoryId, q])
+    if (sort === 'price-asc') return [...list].sort((a, b) => priceOf(a) - priceOf(b))
+    if (sort === 'price-desc') return [...list].sort((a, b) => priceOf(b) - priceOf(a))
+    if (sort === 'name') return [...list].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+    return list
+  }, [products, categoryId, q, sort])
 
   const categoriesWithProducts = useMemo(() => {
     const used = new Set(products.map((p) => p.category_id).filter(Boolean))
     return categories.filter((c) => used.has(c.id))
   }, [categories, products])
 
-  const preview = matchedProducts.slice(0, PREVIEW_COUNT)
+  // A new search, category or sort starts the shelf over from the top.
+  useEffect(() => {
+    setVisibleCount(PRODUCT_STEP)
+  }, [q, categoryId, sort])
+
+  const visible = matchedProducts.slice(0, visibleCount)
+  const remaining = matchedProducts.length - visible.length
   const showStands = scope !== 'products'
   const showProducts = scope !== 'stands'
   const searching = !!q || !!categoryId
@@ -278,25 +304,40 @@ function ExhibitionShopContent() {
             </div>
           )}
 
-          {/* 5 — Popular at this location (preview only) */}
-          {showProducts && !loading && preview.length > 0 && (
+          {/* 5 — Products at this location — the whole shelf, revealed in place */}
+          {showProducts && !loading && visible.length > 0 && (
             <div>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <span className="text-chips font-medium uppercase tracking-wider text-muted">
-                  {searching ? `${matchedProducts.length} match${matchedProducts.length === 1 ? '' : 'es'}` : 'Popular at this location'}
+                  {searching
+                    ? `${matchedProducts.length} match${matchedProducts.length === 1 ? '' : 'es'}`
+                    : `Products at this location · ${matchedProducts.length}`}
                 </span>
-                {!searching && (
-                  <button
-                    type="button"
-                    onClick={() => router.push('/exhibition/all')}
-                    className="inline-flex h-8 items-center rounded-lg border border-line bg-surface px-3 text-chips font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                <div className="flex items-center gap-2">
+                  <label htmlFor="shop-sort" className="sr-only">Sort products</label>
+                  <select
+                    id="shop-sort"
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value)}
+                    className="h-8 rounded-lg border border-line bg-surface px-2 text-chips font-medium text-fg focus:border-brand focus:outline-none"
                   >
-                    View all
-                  </button>
-                )}
+                    {SORTS.map((s) => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                  {!searching && (
+                    <button
+                      type="button"
+                      onClick={() => router.push('/exhibition/all')}
+                      className="inline-flex h-8 items-center rounded-lg border border-line bg-surface px-3 text-chips font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                    >
+                      View all
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 2xl:grid-cols-7">
-                {preview.map((p) => (
+                {visible.map((p) => (
                   <ExhibitionProductCard
                     key={p.id}
                     p={p}
@@ -305,10 +346,25 @@ function ExhibitionShopContent() {
                   />
                 ))}
               </div>
+
+              {remaining > 0 && (
+                <div className="mt-4 flex flex-col items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount((c) => c + PRODUCT_STEP)}
+                    className="inline-flex h-9 items-center rounded-lg border border-line bg-surface px-4 text-chips font-semibold text-fg transition-colors duration-200 ease-sakani hover:bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
+                  >
+                    Show {Math.min(PRODUCT_STEP, remaining)} more product{Math.min(PRODUCT_STEP, remaining) === 1 ? '' : 's'}
+                  </button>
+                  <span className="text-chips text-muted tabular-nums">
+                    Showing {visible.length} of {matchedProducts.length}
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
-          {!loading && showProducts && preview.length === 0 && searching && (
+          {!loading && showProducts && visible.length === 0 && searching && (
             <div className="rounded-2xl border border-line-subtle bg-subtle/40 px-4 py-6 text-center">
               <p className="text-sm font-medium text-fg">No products match your search</p>
               <p className="mt-0.5 text-chips text-muted">Try clearing the search or picking another category.</p>
