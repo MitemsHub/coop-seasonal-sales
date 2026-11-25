@@ -5,7 +5,7 @@
 // exhibition. Admins can create products on a vendor's behalf, adjust the
 // quantities, status, and archive (delete is blocked for
 // products on orders — archive instead).
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, ImageOff, Plus, RefreshCw, Search, Store, Upload } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
@@ -51,12 +51,19 @@ export default function ExhibitionProductsPage() {
   const [pageSize, setPageSize] = useState(25)
   const [selected, setSelected] = useState(new Set())
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
+  const fetchSeq = useRef(0)
 
   // keepMessage: a caller that is about to show its own confirmation (approve,
   // reject) must not have it wiped by the refresh it triggers. Without this the
   // success banner was set and then cleared in the same tick, so a completed
   // approval looked like nothing had happened.
   const load = useCallback(async ({ keepMessage = false } = {}) => {
+    // Two filter changes in a row, or a search pressed while a refresh is
+    // already in flight, leave more than one request open. Only the newest one
+    // may touch state: an older response arriving last would otherwise put the
+    // previous filter's rows on screen and prune the selection against rows the
+    // desk is no longer showing — leaving a count for products nobody can see.
+    const seq = ++fetchSeq.current
     setLoading(true)
     if (!keepMessage) setMsg(null)
     // Returns the rows it just fetched, so a caller can report on the queue it
@@ -73,11 +80,13 @@ export default function ExhibitionProductsPage() {
         fetch('/api/admin/exhibition/cycles', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
         fetch('/api/admin/exhibition/vendors', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
       ])
+      if (seq !== fetchSeq.current) return []
       if (p?.ok) {
         fetched = p.products || []
         setProducts(fetched)
-        // A refresh can drop rows (filters, or a delete elsewhere); the
-        // selection must not keep ids that are no longer in the list.
+        // A refresh can drop rows (a filter change, a search, or a delete
+        // elsewhere); the selection must not keep ids that are no longer in
+        // the list, or a bulk action would report on rows that are gone.
         setSelected((prev) => {
           if (!prev.size) return prev
           const live = new Set(fetched.map((row) => row.id))
@@ -89,9 +98,10 @@ export default function ExhibitionProductsPage() {
       if (c?.ok) setCycles(c.cycles || [])
       if (v?.ok) setVendors(v.vendors || [])
     } catch (e) {
-      setMsg({ type: 'error', text: e.message })
+      if (seq === fetchSeq.current) setMsg({ type: 'error', text: e.message })
     } finally {
-      setLoading(false)
+      // A superseded request must not clear the newer one's spinner.
+      if (seq === fetchSeq.current) setLoading(false)
     }
     return fetched
   }, [cycleFilter, vendorFilter, statusFilter, term])
@@ -408,21 +418,37 @@ export default function ExhibitionProductsPage() {
     setBusy(true)
     setMsg(null)
     let done = 0
+    let failed = 0
     let failure = null
+    // One entry per product that did not change, so the report counts products
+    // rather than operations: a failed batch is not one failure.
+    const noteFailure = (text) => {
+      failed += 1
+      if (!failure) failure = text
+    }
     try {
       if (action === 'approve') {
         for (let i = 0; i < ids.length; i += 200) {
+          const batch = ids.slice(i, i + 200)
           const res = await fetch('/api/admin/exhibition/products/bulk', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'approve', ids: ids.slice(i, i + 200) }),
+            body: JSON.stringify({ action: 'approve', ids: batch }),
           })
           const json = await res.json().catch(() => ({}))
           if (!res.ok || !json.ok) {
-            failure = json.error || 'Bulk approval failed'
+            // The call was refused before writing, so none of this batch moved.
+            const text = json.error || 'Bulk approval failed'
+            for (let n = 0; n < batch.length; n += 1) noteFailure(text)
             break
           }
           done += (json.approved || []).length
+          // The route writes row by row and returns the rows it could not
+          // touch in `failed` while still answering ok. Counting only
+          // `approved` would report a partial approval as a clean success.
+          for (const id of json.failed || []) {
+            noteFailure(`product #${id} could not be approved`)
+          }
         }
       } else {
         // Small batches: the per-product route is the one that owns the
@@ -444,22 +470,25 @@ export default function ExhibitionProductsPage() {
             })
           )
           for (const error of results) {
-            if (error) failure = failure || error
+            if (error) noteFailure(error)
             else done += 1
           }
         }
       }
     } catch (e) {
-      failure = e.message || 'Bulk action failed'
+      noteFailure(e.message || 'Bulk action failed')
+      // Whatever the failed request covered never reported back, so treat the
+      // unaccounted products as unchanged rather than claiming they moved.
+      failed = Math.max(failed, ids.length - done)
     } finally {
       await load({ keepMessage: true })
       setSelected(new Set())
-      if (!failure) {
+      if (!failed) {
         setMsg({ type: 'success', text: `${done} product(s) ${labels[action]}.` })
       } else if (done > 0) {
         setMsg({
           type: 'error',
-          text: `${done} of ${ids.length} product(s) ${labels[action]} — ${ids.length - done} left as they were (${failure}).`,
+          text: `${done} of ${ids.length} product(s) ${labels[action]} — ${failed} did not change (${failure}).`,
         })
       } else {
         setMsg({ type: 'error', text: `Nothing was changed — ${failure}` })
