@@ -54,6 +54,11 @@ const securityHeaders = {
   'Content-Security-Policy': `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co${isLocalSupabase ? ` ${supabaseUrl} ${supabaseUrl.replace(/^http/, 'ws')}` : ''};`
 }
 
+// Vendor-namespace routes an admin may call with an admin session instead of a
+// vendor one, because the admin desk manages a stand's data on its behalf.
+// The routes themselves still require the admin role and a vendor_id.
+const ADMIN_UPLOAD_PATHS = new Set(['/api/vendor/exhibition/upload-image'])
+
 // Paths the original, narrower middleware matcher covered. Rate limiting stays
 // pinned to exactly that surface so widening the matcher (needed for Markdown
 // negotiation + Markdown 404s) does not change existing abuse protection.
@@ -362,7 +367,14 @@ export async function middleware(request) {
 
       // Skip session validation for login endpoints
       if (!pathname.includes('/session')) {
-        const sessionValidation = await validateSession(request, 'vendor')
+        let sessionValidation = await validateSession(request, 'vendor')
+        // The admin product desk gives a stand new photos through this route,
+        // which accepts an admin session plus an explicit vendor_id. Demanding
+        // a vendor token here rejected the admin with a bare 401 that the form
+        // could only report as "Upload failed".
+        if (!sessionValidation.isValid && ADMIN_UPLOAD_PATHS.has(pathname)) {
+          sessionValidation = await validateSession(request, 'admin')
+        }
         if (!sessionValidation.isValid) {
           console.warn(`Unauthorized vendor API access from IP: ${clientIP}`);
           return new NextResponse('Unauthorized', {

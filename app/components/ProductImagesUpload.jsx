@@ -51,7 +51,9 @@ export default function ProductImagesUpload({ images = [], onChange, itemSku = '
         const res = await fetch('/api/vendor/exhibition/upload-image', { method: 'POST', body: formData })
         const json = await res.json().catch(() => null)
         if (!res.ok || !json?.success || !json?.imageUrl) {
-          throw new Error(json?.error || 'Upload failed')
+          // A rejected gate (401/403/429) answers in plain text, so without the
+          // status the form could only say "Upload failed" and hide the reason.
+          throw new Error(json?.error || `Upload failed (HTTP ${res.status})`)
         }
         next = [...next, json.imageUrl]
         onChange(next)
