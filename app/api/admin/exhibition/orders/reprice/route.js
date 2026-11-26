@@ -16,12 +16,16 @@
 // orders are settled history and must not change under a member's feet.
 //
 // The whole recalculation is one statement, so a reprice is all-or-nothing and
-// the pre-update numbers are the ones the WHERE clauses compare against.
+// the pre-update numbers are the ones the WHERE clauses compare against. That
+// same statement returns every order that moved, with its before/after totals,
+// and each one gets an audit row (action 'Repriced') — a reprice changes money
+// on a member's invoice, so it needs the same trail a cancellation gets.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession } from '@/lib/validation'
 import { csrfGuard } from '@/lib/csrf'
 import { queryDirect } from '@/lib/directDb'
+import { logExhibitionAuditEntries } from '@/lib/exhibitionAudit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -38,7 +42,10 @@ function buildSql(hasDiscount) {
   return `
     WITH target AS (
       SELECT o.id,
+             o.order_id AS order_code,
              o.payment_option,
+             o.total_amount AS old_total,
+             o.total_qty AS old_qty,
              COALESCE(c.loan_interest_rate_pct, 0)::numeric AS rate
         FROM public.exhibition_orders o
         JOIN public.exhibition_cycles c ON c.id = o.cycle_id
@@ -107,13 +114,36 @@ function buildSql(hasDiscount) {
          AND v.paid = FALSE
          AND v.amount IS DISTINCT FROM pay.amount
       RETURNING v.id
+    ),
+    affected AS (
+      SELECT u.id AS order_id FROM updated_orders u
+      UNION
+      SELECT ul.order_id FROM updated_lines ul
+    ),
+    changes AS (
+      SELECT a.order_id AS id,
+             t.order_code,
+             t.payment_option,
+             t.old_total,
+             t.old_qty,
+             tot.qty AS new_qty,
+             (tot.principal + CASE WHEN t.payment_option = 'Loan'
+                                   THEN ROUND(tot.principal * t.rate / 100)
+                                   ELSE 0 END)::bigint AS new_total,
+             (SELECT COUNT(*)::int FROM updated_lines ul WHERE ul.order_id = a.order_id) AS changed_lines
+        FROM affected a
+        JOIN target t ON t.id = a.order_id
+        JOIN totals tot ON tot.order_id = a.order_id
     )
     SELECT (SELECT COUNT(*)::int FROM totals) AS scanned_orders,
            (SELECT COUNT(*)::int FROM updated_orders) AS updated_orders,
            (SELECT COUNT(*)::int FROM updated_lines) AS updated_lines,
-           (SELECT COUNT(*)::int FROM updated_payables) AS updated_payables;
+           (SELECT COUNT(*)::int FROM updated_payables) AS updated_payables,
+           COALESCE((SELECT json_agg(changes ORDER BY id) FROM changes), '[]'::json) AS changed;
   `
 }
+
+const money = (n) => Number(n || 0).toLocaleString('en-NG')
 
 export async function POST(request) {
   const csrfResponse = csrfGuard(request)
@@ -166,18 +196,46 @@ export async function POST(request) {
     const updatedOrders = Number(row.updated_orders || 0)
     const updatedLines = Number(row.updated_lines || 0)
     const updatedPayables = Number(row.updated_payables || 0)
+    const ratePct = Number(cycle.loan_interest_rate_pct || 0)
+
+    // One audit row per order that actually moved, carrying its own numbers so
+    // "who repriced what and when" is answerable from the trail alone.
+    const changed = Array.isArray(row.changed) ? row.changed : []
+    const entries = changed.map((c) => ({
+      orderId: Number(c.id),
+      cycleId,
+      action: 'Repriced',
+      actorType: 'admin',
+      actorLabel: 'System admin',
+      note:
+        `${cycle.code || cycle.name} at ${ratePct}% loan interest: total NGN ${money(c.old_total)} → ${money(c.new_total)}` +
+        `${Number(c.changed_lines || 0) ? `, ${Number(c.changed_lines)} line(s) repriced` : ''}.`,
+      detail: {
+        cycle_id: cycleId,
+        cycle_code: cycle.code || '',
+        loan_interest_rate_pct: ratePct,
+        old_total: Number(c.old_total || 0),
+        new_total: Number(c.new_total || 0),
+        total_delta: Number(c.new_total || 0) - Number(c.old_total || 0),
+        old_qty: Number(c.old_qty || 0),
+        new_qty: Number(c.new_qty || 0),
+        changed_lines: Number(c.changed_lines || 0),
+      },
+    }))
+    if (entries.length) await logExhibitionAuditEntries(entries)
 
     return NextResponse.json({
       ok: true,
       cycle_id: cycleId,
       cycle_name: cycle.name,
       cycle_code: cycle.code,
-      loan_interest_rate_pct: Number(cycle.loan_interest_rate_pct || 0),
+      loan_interest_rate_pct: ratePct,
       discount_applied: hasDiscount,
       scanned_orders: scanned,
       updated_orders: updatedOrders,
       updated_lines: updatedLines,
       updated_payables: updatedPayables,
+      audited_orders: entries.length,
     })
   } catch (error) {
     console.error('Error repricing exhibition orders:', error)
