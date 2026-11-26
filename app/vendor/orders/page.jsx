@@ -50,10 +50,11 @@ export default function VendorOrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter])
 
-  // A vendor may withdraw an order that still holds their goods. The status is
-  // order-wide, so it cancels the whole invoice; restoring one is the admin's
-  // call only (/api/admin/exhibition/orders/restore), which is why the dialog
-  // says so before anything is written.
+  // A vendor may withdraw an order that is entirely theirs. Cancelling is
+  // order-wide, so one that also holds another stand's goods is refused by the
+  // API and offers no button here — the co-op cancels those. Restoring a
+  // cancelled order is the admin's call only
+  // (/api/admin/exhibition/orders/restore), which is why the dialog says so.
   const cancelOrder = async () => {
     if (!cancelTarget || cancelling) return
     setCancelling(true)
@@ -171,7 +172,7 @@ export default function VendorOrdersPage() {
                   >
                     View items
                   </Button>
-                  {(o.status === 'Pending' || o.status === 'Approved') && (
+                  {o.can_cancel && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -185,6 +186,13 @@ export default function VendorOrdersPage() {
                       Cancel
                     </Button>
                   )}
+                  {!o.can_cancel &&
+                    (o.status === 'Pending' || o.status === 'Approved') &&
+                    Number(o.total_lines || 0) > Number(o.my_lines || 0) && (
+                      <span className="max-w-[11rem] text-right text-chips text-muted">
+                        Shared with other stands — ask the co-op to cancel it
+                      </span>
+                    )}
                 </div>
               </div>
             </div>
@@ -276,7 +284,7 @@ export default function VendorOrdersPage() {
         confirmLabel="Cancel order"
         message={
           cancelTarget
-            ? `${cancelTarget.order_id} for ${cancelTarget.member_name || cancelTarget.member_id} will be cancelled for the whole invoice — including any items from other stands — and its reserved stock goes back on sale. Only the co-op admin can restore a cancelled order.`
+            ? `${cancelTarget.order_id} for ${cancelTarget.member_name || cancelTarget.member_id} will be cancelled in full and its reserved stock goes back on sale. Every item on this order is from your stand. Only the co-op admin can restore a cancelled order.`
             : ''
         }
       />

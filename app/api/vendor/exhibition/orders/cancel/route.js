@@ -1,10 +1,15 @@
 // app/api/vendor/exhibition/orders/cancel/route.js
 // POST /api/vendor/exhibition/orders/cancel   body: { id | ids, reason? }
 //
-// A vendor can cancel an order that carries their lines, while it is still
-// Pending or Approved — the same cancellable window the admin desk has. The
-// order status is order-wide, so this cancels the whole invoice (any other
-// stand's lines included) and puts shop-reserved stock back on the shelf.
+// A vendor can cancel an order, while it is still Pending or Approved — the
+// same cancellable window the admin desk has — but ONLY when every line on the
+// order belongs to that vendor. Order status is order-wide, so cancelling is
+// all-or-nothing: allowing a stand with one line on a shared invoice to cancel
+// it would silently remove another stand's goods and void their payable. A
+// shared invoice is therefore the admin desk's call. (Partial cancellation was
+// the alternative; it would mean re-pricing the order, recomputing loan
+// interest, re-checking the member's cap and rewriting vendor payables — an
+// accounting change, not a permission check.)
 //
 // Restoring is deliberately NOT available here: /api/admin/exhibition/orders/
 // restore is the only way back, so a cancellation a vendor makes has to be
@@ -41,15 +46,26 @@ export async function POST(req) {
     const reason = sanitizeString(body.reason || '', { maxLength: 300, encodeHtml: false })
     const supabase = createClient()
 
-    // Ownership: an order is this vendor's business only if it holds one of
-    // their lines. Without this a stand could cancel the whole exhibition.
-    const { data: ownLines, error: ownErr } = await supabase
+    // Ownership: the order must be entirely this vendor's. Read every line, not
+    // just theirs, so a shared invoice can be recognised and refused instead of
+    // taking another stand's items down with it.
+    const { data: allLines, error: ownErr } = await supabase
       .from('exhibition_order_lines')
-      .select('order_id')
-      .eq('vendor_id', ctx.vendor_id)
+      .select('order_id, vendor_id')
       .in('order_id', ids)
     if (ownErr) return NextResponse.json({ ok: false, error: ownErr.message }, { status: 500 })
-    const mine = new Set((ownLines || []).map((l) => Number(l.order_id)))
+
+    const lineOwners = new Map() // order id -> vendor ids appearing on it
+    for (const line of allLines || []) {
+      const oid = Number(line.order_id)
+      if (!Number.isFinite(oid)) continue
+      if (!lineOwners.has(oid)) lineOwners.set(oid, new Set())
+      lineOwners.get(oid).add(Number(line.vendor_id))
+    }
+    const isOnlyMine = (id) => {
+      const owners = lineOwners.get(Number(id))
+      return !!owners && owners.size === 1 && owners.has(Number(ctx.vendor_id))
+    }
 
     const { data: rows, error: selErr } = await supabase
       .from('exhibition_orders')
@@ -59,24 +75,29 @@ export async function POST(req) {
 
     const byId = new Map((rows || []).map((r) => [Number(r.id), r]))
     const toCancel = ids.filter(
-      (id) => mine.has(Number(id)) && CANCELLABLE.includes(String(byId.get(id)?.status || ''))
+      (id) => isOnlyMine(id) && CANCELLABLE.includes(String(byId.get(id)?.status || ''))
     )
     const failed = ids
       .filter((id) => !toCancel.includes(id))
       .map((id) => {
         const entry = { id, status: String(byId.get(id)?.status || '') }
-        if (!mine.has(Number(id))) entry.reason = 'Not your order'
+        const owners = lineOwners.get(Number(id))
+        if (!owners || !owners.has(Number(ctx.vendor_id))) entry.reason = 'Not your order'
+        else if (owners.size > 1) entry.reason = 'Shared with another stand'
         else if (!CANCELLABLE.includes(entry.status)) entry.reason = 'Already completed'
         return entry
       })
     if (!toCancel.length) {
       const notMine = failed.length > 0 && failed.every((f) => f.reason === 'Not your order')
+      const shared = failed.length > 0 && failed.every((f) => f.reason === 'Shared with another stand')
       return NextResponse.json(
         {
           ok: false,
-          error: notMine
-            ? 'That order does not contain any of your products.'
-            : 'Only pending or approved orders can be cancelled.',
+          error: shared
+            ? 'This order also contains items from another stand, so only the co-op admin can cancel it.'
+            : notMine
+              ? 'That order does not contain any of your products.'
+              : 'Only pending or approved orders can be cancelled.',
           failed,
         },
         { status: 403 }

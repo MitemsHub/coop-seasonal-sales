@@ -81,10 +81,25 @@ export async function GET(req) {
       linesByOrder.set(Number(line.order_id), list)
     }
 
+    // A shared invoice (other stands' lines on it) is cancelled by the admin
+    // only — the vendor cancel route refuses it — so the list has to say which
+    // orders a vendor may withdraw, or the button would offer an action that
+    // always fails.
+    const { data: allPagedLines } = await supabase
+      .from('exhibition_order_lines')
+      .select('order_id')
+      .in('order_id', pagedIds)
+    const totalLinesByOrder = new Map()
+    for (const line of allPagedLines || []) {
+      const oid = Number(line.order_id)
+      totalLinesByOrder.set(oid, (totalLinesByOrder.get(oid) || 0) + 1)
+    }
+
     const orders = (data || []).map((o) => {
       const lines = linesByOrder.get(Number(o.id)) || []
       const myQty = lines.reduce((s, l) => s + l.qty, 0)
       const myAmount = lines.reduce((s, l) => s + l.amount, 0)
+      const totalLines = totalLinesByOrder.get(Number(o.id)) || lines.length
       return {
         ...o,
         db_id: Number(o.id),
@@ -96,6 +111,13 @@ export async function GET(req) {
         lines,
         my_qty: myQty,
         my_amount: myAmount,
+        my_lines: lines.length,
+        total_lines: totalLines,
+        // Pending/approved, nothing but this stand's items, and at least one line.
+        can_cancel:
+          ['Pending', 'Approved'].includes(String(o.status)) &&
+          lines.length > 0 &&
+          totalLines === lines.length,
       }
     })
 
