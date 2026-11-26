@@ -7,7 +7,7 @@
 // Each photo is resized/compressed in the browser before it is uploaded.
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight, ImagePlus, Loader2, Sparkles, Star, X } from 'lucide-react'
-import { isSupportedProductImage, optimizeProductImage } from '@/lib/optimizeImage'
+import { extensionForImageMime, isSupportedProductImage, optimizeProductImage } from '@/lib/optimizeImage'
 import { MAX_PRODUCT_IMAGES } from '@/lib/exhibitionProductImages'
 
 // The session gate in front of the upload route refuses in plain text, so a
@@ -50,9 +50,11 @@ export default function ProductImagesUpload({ images = [], onChange, itemSku = '
     let next = [...images]
     try {
       for (const file of picked.slice(0, MAX_PRODUCT_IMAGES - next.length)) {
-        const { blob } = await optimizeProductImage(file)
+        const { blob, mime } = await optimizeProductImage(file)
         const formData = new FormData()
-        formData.append('image', blob, `${itemSku || 'product'}.webp`)
+        // The name carries the real format: a phone that cannot write WebP gets
+        // a JPEG, and storing JPEG bytes under .webp breaks some viewers.
+        formData.append('image', blob, `${itemSku || 'product'}.${extensionForImageMime(mime)}`)
         formData.append('sku', itemSku)
         // Slot 1 keeps the long-standing deterministic path (replacing the
         // cover replaces that file); later slots get a unique path.

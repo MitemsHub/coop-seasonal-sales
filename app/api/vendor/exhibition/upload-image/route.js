@@ -9,8 +9,10 @@ import { validateSession } from '@/lib/validation'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// The client already resizes/crops to a square WebP before uploading, so the
-// route mainly validates and stores it. Keeps storage tiny and renders uniform.
+// The client already resizes and compresses the photo before uploading, so the
+// route mainly validates and stores it. It stores the format the browser
+// actually produced: phones whose canvas cannot encode WebP send JPEG, and
+// labelling those bytes .webp / image/webp made some viewers refuse them.
 export async function POST(request) {
   try {
     const formData = await request.formData()
@@ -43,24 +45,35 @@ export async function POST(request) {
       return NextResponse.json({ error: 'SKU is required' }, { status: 400 })
     }
 
-    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-    if (!validTypes.includes(file.type)) {
+    const typeToExt = {
+      'image/jpeg': 'jpg',
+      'image/jpg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+    }
+    const extension = typeToExt[file.type]
+    if (!extension) {
       return NextResponse.json({ error: 'Invalid file type. Only JPG, PNG and WebP are allowed.' }, { status: 400 })
     }
     if (file.size > 2 * 1024 * 1024) {
-      return NextResponse.json({ error: 'Image too large (max 2MB after optimization).' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'That photo is still over 2MB after resizing. Try taking it again or picking a smaller photo.' },
+        { status: 400 }
+      )
     }
 
     const bytes = Buffer.from(await file.arrayBuffer())
+    // A file name cannot be trusted for the extension, so the stored name comes
+    // from the declared image type instead of the name the browser sent.
     const safeSku = sku.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 60) || 'image'
     const slotSuffix =
       slot > 1 ? `-${String(slot).padStart(2, '0')}-${Math.random().toString(36).slice(2, 8)}` : ''
-    const fileName = `${safeSku}${slotSuffix}`
+    const fileName = `${safeSku}${slotSuffix}.${extension}`
 
     try {
       const supabase = createClient()
       const bucket = process.env.EXHIBITION_IMAGES_BUCKET || 'exhibition-images'
-      const path = `vendors/${vendorId}/${fileName}.webp`
+      const path = `vendors/${vendorId}/${fileName}`
 
       const { data: bucketInfo, error: bucketInfoErr } = await supabase.storage.getBucket(bucket)
       if (bucketInfoErr || !bucketInfo) {
@@ -68,7 +81,7 @@ export async function POST(request) {
       }
 
       const { error: upErr } = await supabase.storage.from(bucket).upload(path, bytes, {
-        contentType: 'image/webp',
+        contentType: file.type,
         upsert: true,
       })
       if (!upErr) {
@@ -92,9 +105,9 @@ export async function POST(request) {
     // Local filesystem fallback (development only)
     const uploadDir = join(process.cwd(), 'public', 'images', 'exhibition', String(vendorId))
     if (!existsSync(uploadDir)) await mkdir(uploadDir, { recursive: true })
-    const filepath = join(uploadDir, `${fileName}.webp`)
+    const filepath = join(uploadDir, fileName)
     await writeFile(filepath, bytes)
-    return NextResponse.json({ success: true, imageUrl: `/images/exhibition/${vendorId}/${fileName}.webp?v=${Date.now()}` })
+    return NextResponse.json({ success: true, imageUrl: `/images/exhibition/${vendorId}/${fileName}?v=${Date.now()}` })
   } catch (error) {
     console.error('Exhibition image upload error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

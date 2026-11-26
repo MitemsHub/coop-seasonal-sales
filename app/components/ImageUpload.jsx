@@ -1,13 +1,19 @@
 'use client'
 
 import { useState } from 'react'
-import { isSupportedProductImage, optimizeProductImage, PRODUCT_IMAGE_MAX_SIZE } from '@/lib/optimizeImage'
+import {
+  extensionForImageMime,
+  isSupportedProductImage,
+  optimizeProductImage,
+  PRODUCT_IMAGE_MAX_SIZE,
+} from '@/lib/optimizeImage'
 
 export default function ImageUpload({ onImageUploaded, currentImageUrl = null, itemSku = '' }) {
   const [uploading, setUploading] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [previewUrl, setPreviewUrl] = useState(currentImageUrl)
   const [processedKb, setProcessedKb] = useState(null)
+  const [processedMime, setProcessedMime] = useState('image/webp')
 
   const handleFileSelect = async (file) => {
     if (!file) return
@@ -20,10 +26,11 @@ export default function ImageUpload({ onImageUploaded, currentImageUrl = null, i
     setUploading(true)
 
     try {
-      const { blob, kb } = await optimizeProductImage(file)
+      const { blob, mime, kb } = await optimizeProductImage(file)
       setProcessedKb(kb)
+      setProcessedMime(mime)
       const formData = new FormData()
-      formData.append('image', blob, `${itemSku || 'image'}.webp`)
+      formData.append('image', blob, `${itemSku || 'image'}.${extensionForImageMime(mime)}`)
       formData.append('sku', itemSku)
 
       const response = await fetch('/api/upload-item-image', {
@@ -82,7 +89,7 @@ export default function ImageUpload({ onImageUploaded, currentImageUrl = null, i
             />
             {processedKb != null && (
               <p className="mt-1.5 text-center text-[11px] text-muted">
-                Optimized: WebP, up to {PRODUCT_IMAGE_MAX_SIZE}px · <span className="font-medium text-success-fg">{processedKb} KB</span>
+                Optimized: {processedMime === 'image/jpeg' ? 'JPG' : 'WebP'}, up to {PRODUCT_IMAGE_MAX_SIZE}px · <span className="font-medium text-success-fg">{processedKb} KB</span>
               </p>
             )}
             <button

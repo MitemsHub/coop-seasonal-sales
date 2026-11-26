@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { ImagePlus, Loader2, Sparkles, X } from 'lucide-react'
-import { isSupportedProductImage, optimizeProductImage, PRODUCT_IMAGE_MAX_SIZE } from '@/lib/optimizeImage'
+import { extensionForImageMime, isSupportedProductImage, optimizeProductImage, PRODUCT_IMAGE_MAX_SIZE } from '@/lib/optimizeImage'
 
 export default function ImageResizeUpload({ onImageUploaded, currentImageUrl = null, itemSku = '' }) {
   const [uploading, setUploading] = useState(false)
@@ -20,16 +20,16 @@ export default function ImageResizeUpload({ onImageUploaded, currentImageUrl = n
     setUploading(true)
     setProcessed(null)
     try {
-      const { blob, kb } = await optimizeProductImage(file)
+      const { blob, mime, kb } = await optimizeProductImage(file)
       const formData = new FormData()
-      formData.append('image', blob, `${itemSku || 'product'}.webp`)
+      formData.append('image', blob, `${itemSku || 'product'}.${extensionForImageMime(mime)}`)
       formData.append('sku', itemSku)
 
       const res = await fetch('/api/vendor/exhibition/upload-image', { method: 'POST', body: formData })
       const json = await res.json()
       if (!res.ok || !json.success) throw new Error(json.error || 'Upload failed')
 
-      setProcessed({ kb })
+      setProcessed({ kb, mime })
       setPreviewUrl(json.imageUrl)
       onImageUploaded(json.imageUrl)
     } catch (e) {
@@ -77,7 +77,7 @@ export default function ImageResizeUpload({ onImageUploaded, currentImageUrl = n
           </div>
           {processed && (
             <p className="pt-1 text-chips text-muted">
-              Optimized: WebP, up to {PRODUCT_IMAGE_MAX_SIZE}px · <span className="font-medium text-success-fg">{processed.kb} KB</span>
+              Optimized: {processed.mime === 'image/jpeg' ? 'JPG' : 'WebP'}, up to {PRODUCT_IMAGE_MAX_SIZE}px · <span className="font-medium text-success-fg">{processed.kb} KB</span>
             </p>
           )}
         </div>
