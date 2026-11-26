@@ -13,6 +13,7 @@ import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
 import ProductImagesUpload from '../../components/ProductImagesUpload'
 import { productImages } from '../../../lib/exhibitionProductImages'
+import { deleteBlockReason } from '../../../lib/exhibitionProductDelete'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import ProductImportModal from '../../components/ProductImportModal'
 import ShelfPicker from '../../components/ShelfPicker'
@@ -22,8 +23,9 @@ const fmtNaira = (n) => `NGN ${Number(n || 0).toLocaleString()}`
 
 // Until the co-op approves a product it is the vendor's own draft and can be
 // removed outright. Once approved it may sit on a member's order, so the most
-// a vendor can do is archive it.
-const isDeletable = (p) => !(p.approval_status === 'approved' && p.status !== 'archived')
+// a vendor can do is archive it. The rule comes from the same module both API
+// routes use, so the checkbox and the server agree.
+const isDeletable = (p) => !deleteBlockReason(p)
 
 const memberPrice = (listPrice, discountPct) =>
   Math.round((Number(listPrice || 0) * (100 - Math.min(90, Math.max(0, Number(discountPct || 0))))) / 100)

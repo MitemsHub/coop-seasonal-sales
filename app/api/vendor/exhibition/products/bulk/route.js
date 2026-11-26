@@ -3,23 +3,35 @@
 //
 // The single-product DELETE is fine for one row, but a vendor who imported or
 // uploaded a batch by mistake needs to clear hundreds at once. This is the same
-// rule as the single route, applied to a list:
+// rule as the single route — lib/exhibitionProductDelete.js, not a copy of it —
+// applied to a list:
 //   • only the vendor's own products
 //   • only unapproved ones — an approved product may already be on a member's
 //     order, so it is archived instead of deleted
 //   • anything that already sits on an order line cannot be deleted at all
 //     (the FK blocks it), so it is reported back instead of failing the batch.
 //
-// Work is chunked so a personal list in the thousands does not blow the
-// PostgREST URL length limit on the `in.(...)` filter.
+// Two reads cover the whole list — one to load and classify the rows, one to
+// find the products that are on an order — and the names for the report come
+// from the first read instead of a third lookup.
+//
+// Ids are chunked so a personal list in the thousands does not blow the
+// PostgREST URL length limit on the `in.(...)` filter. Every id in the request
+// is processed: there is no silent cap, because "select all removable" can
+// legitimately send more than any fixed number and the vendor would otherwise
+// be told the batch succeeded while part of it was never looked at.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { getVendorContext } from '../../../_session'
+import { deleteBlockReason, orderLineBlockReason } from '@/lib/exhibitionProductDelete'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const MAX_IDS = 2000
+// Large enough for any realistic stand, small enough that the work still fits
+// in one request. Above it the answer is an explicit error, never a quiet
+// partial delete.
+const MAX_IDS = 5000
 const CHUNK = 200
 
 function numArray(input) {
@@ -47,41 +59,53 @@ export async function POST(req) {
     if (!ctx) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json().catch(() => ({}))
-    const ids = numArray(body.ids).slice(0, MAX_IDS)
+    const ids = numArray(body.ids)
     if (!ids.length) return NextResponse.json({ ok: false, error: 'No products selected' }, { status: 400 })
+    if (ids.length > MAX_IDS) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `That is ${ids.length.toLocaleString()} products in one go; the limit is ${MAX_IDS.toLocaleString()}. Delete them in batches.`,
+        },
+        { status: 400 }
+      )
+    }
 
     const supabase = createClient()
-    const skipped = []
-    const candidates = []
 
+    // One read: ownership, approval state and the names for the report.
+    const rowsById = new Map()
     for (const slice of chunk(ids, CHUNK)) {
       const { data: rows, error } = await supabase
         .from('exhibition_products')
         .select('id, name, status, approval_status, vendor_id')
         .in('id', slice)
       if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+      for (const row of rows || []) rowsById.set(Number(row.id), row)
+    }
 
-      const byId = new Map((rows || []).map((r) => [Number(r.id), r]))
-      for (const id of slice) {
-        const row = byId.get(id)
-        if (!row) {
-          skipped.push({ id, name: '', reason: 'Product not found' })
-          continue
-        }
-        if (Number(row.vendor_id) !== Number(ctx.vendor_id)) {
-          skipped.push({ id, name: row.name || '', reason: 'Not your product' })
-          continue
-        }
-        if (row.approval_status === 'approved' && row.status !== 'archived') {
-          skipped.push({ id, name: row.name || '', reason: 'Approved — archive it instead' })
-          continue
-        }
-        candidates.push(id)
+    const skipped = []
+    const candidates = []
+    for (const id of ids) {
+      const row = rowsById.get(id)
+      if (!row) {
+        skipped.push({ id, name: '', reason: deleteBlockReason(null) })
+        continue
       }
+      if (Number(row.vendor_id) !== Number(ctx.vendor_id)) {
+        skipped.push({ id, name: row.name || '', reason: 'Not your product' })
+        continue
+      }
+      const blocked = deleteBlockReason(row)
+      if (blocked) {
+        skipped.push({ id, name: row.name || '', reason: blocked })
+        continue
+      }
+      candidates.push(id)
     }
 
     if (!candidates.length) {
-      return NextResponse.json({ ok: true, deleted: [], skipped })
+      return NextResponse.json({ ok: true, requested: ids.length, deleted: [], skipped })
     }
 
     // A product on an order line is history — deleting it would break the
@@ -99,16 +123,13 @@ export async function POST(req) {
       }
     }
 
-    const nameById = new Map()
-    for (const slice of chunk(candidates, CHUNK)) {
-      const { data: rows } = await supabase.from('exhibition_products').select('id, name').in('id', slice)
-      for (const row of rows || []) nameById.set(Number(row.id), row.name || '')
-    }
-
     const deletable = []
     for (const id of candidates) {
-      if (onOrder.has(id)) skipped.push({ id, name: nameById.get(id) || '', reason: 'On an order — archive it instead' })
-      else deletable.push(id)
+      if (onOrder.has(id)) {
+        skipped.push({ id, name: rowsById.get(id)?.name || '', reason: orderLineBlockReason(rowsById.get(id)) })
+      } else {
+        deletable.push(id)
+      }
     }
 
     const deleted = []
@@ -125,8 +146,9 @@ export async function POST(req) {
         continue
       }
 
-      // 23503 is a foreign-key block (e.g. a price-history or payout row we do
-      // not know about). Retry one by one so the rest of the batch still goes.
+      // 23503 is a foreign-key block (e.g. a price-history or payout row the
+      // order-line check above does not see). Retry one by one so the rest of
+      // the batch still goes.
       if (String(delErr.code || '') !== '23503') {
         return NextResponse.json({ ok: false, error: delErr.message }, { status: 500 })
       }
@@ -140,8 +162,11 @@ export async function POST(req) {
         if (oneErr) {
           skipped.push({
             id,
-            name: nameById.get(id) || '',
-            reason: String(oneErr.code || '') === '23503' ? 'Linked to an order — archive it instead' : oneErr.message,
+            name: rowsById.get(id)?.name || '',
+            reason:
+              String(oneErr.code || '') === '23503'
+                ? orderLineBlockReason(rowsById.get(id))
+                : oneErr.message,
           })
           continue
         }

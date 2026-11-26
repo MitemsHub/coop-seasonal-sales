@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Image from 'next/image'
 import { supabase } from '@/lib/supabaseClient'
 import { thumbSrcSet, thumbUrl } from '../../lib/imageUrl'
 import ImageUpload from './ImageUpload'
@@ -368,25 +367,28 @@ export default function ItemManagement({ reloadToken }) {
             <div className="mb-3">
               <div className="relative w-full h-28 bg-muted rounded-lg overflow-hidden">
                 {item.image_url ? (
-                  <Image
+                  // A ~190px card tile does not need the stored file at full
+                  // size: the resized 2x candidate is sharp on retina and half
+                  // of that is what a non-retina screen downloads.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
                     key={refreshKey}
-                    src={item.image_url}
+                    src={thumbUrl(item.image_url, 400)}
+                    srcSet={thumbSrcSet(item.image_url, 400)}
                     alt={item.name}
-                    fill
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 25vw, (max-width: 1536px) 20vw, 16vw"
                     loading="lazy"
-                    unoptimized
-                    className="object-contain"
+                    className="h-full w-full object-contain"
+                    onError={(e) => {
+                      e.currentTarget.src = '/images/items/placeholder.svg'
+                    }}
                   />
                 ) : (
-                  <Image
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
                     src="/images/items/placeholder.svg"
                     alt="No image"
-                    fill
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 25vw, (max-width: 1536px) 20vw, 16vw"
                     loading="lazy"
-                    unoptimized
-                    className="object-contain opacity-50"
+                    className="h-full w-full object-contain opacity-50"
                   />
                 )}
               </div>
@@ -601,7 +603,7 @@ export default function ItemManagement({ reloadToken }) {
                   <span className="h-9 w-9 shrink-0 overflow-hidden rounded-md border border-line bg-canvas">
                     {it.image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={thumbUrl(it.image_url, 160)} srcSet={thumbSrcSet(it.image_url, 160)} alt={it.name} className="h-full w-full object-contain" loading="lazy" />
+                      <img src={thumbUrl(it.image_url, 112)} srcSet={thumbSrcSet(it.image_url, 112)} alt={it.name} className="h-full w-full object-contain" loading="lazy" />
                     ) : null}
                   </span>
                   <span className="min-w-0 flex-1">

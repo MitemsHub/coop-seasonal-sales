@@ -290,8 +290,8 @@ export default function ExhibitionFilterBar({ filters, className = '' }) {
                           <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-line-subtle bg-white">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
-                              src={thumbUrl(s.image_url || PLACEHOLDER, 160)}
-                              srcSet={thumbSrcSet(s.image_url || PLACEHOLDER, 160)}
+                              src={thumbUrl(s.image_url || PLACEHOLDER, 112)}
+                              srcSet={thumbSrcSet(s.image_url || PLACEHOLDER, 112)}
                               alt=""
                               className="h-full w-full object-contain"
                               onError={(e) => { e.currentTarget.src = PLACEHOLDER }}

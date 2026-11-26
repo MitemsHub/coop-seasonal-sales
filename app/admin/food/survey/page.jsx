@@ -817,7 +817,7 @@ function SubmissionCard({ sub, onEdit, onDelete, onPhotoDeleted, onEntryRestored
                     {e.photo_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={thumbUrl(e.photo_url, 500)}
+                        src={thumbUrl(e.photo_url, 600)}
                         alt={e.item_name}
                         loading="lazy"
                         className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"

@@ -131,8 +131,8 @@ export default function StandCard({
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={thumbUrl(p.image_url || p.images?.[0] || PLACEHOLDER, 160)}
-                  srcSet={thumbSrcSet(p.image_url || p.images?.[0] || PLACEHOLDER, 160)}
+                  src={thumbUrl(p.image_url || p.images?.[0] || PLACEHOLDER, 96)}
+                  srcSet={thumbSrcSet(p.image_url || p.images?.[0] || PLACEHOLDER, 96)}
                   alt=""
                   loading="lazy"
                   className="h-full w-full object-cover transition-transform duration-300 ease-sakani group-hover:scale-105"

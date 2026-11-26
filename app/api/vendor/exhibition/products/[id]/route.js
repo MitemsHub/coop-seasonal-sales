@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { getVendorContext } from '../../../_session'
 import { cleanProductImages } from '@/lib/exhibitionProductImages'
+import { deleteBlockReason, orderLineBlockReason } from '@/lib/exhibitionProductDelete'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -227,25 +228,17 @@ export async function DELETE(req, { params }) {
 
     // Unapproved products are the vendor's own drafts and can go. An approved
     // product may already be on a member's order, so it is archived instead.
-    if (existing.approval_status === 'approved' && existing.status !== 'archived') {
-      return NextResponse.json(
-        { error: `"${existing.name}" is already approved. Archive it instead of deleting it.` },
-        { status: 409 }
-      )
+    // The rule and its wording live in lib/exhibitionProductDelete.js, shared
+    // with the bulk route so the two cannot drift apart.
+    const blocked = deleteBlockReason(existing)
+    if (blocked) {
+      return NextResponse.json({ error: blocked }, { status: 409 })
     }
 
     const { error } = await supabase.from('exhibition_products').delete().eq('id', id).eq('vendor_id', ctx.vendor_id)
     if (error) {
       if (String(error?.code || '') === '23503') {
-        return NextResponse.json(
-          {
-            error:
-              existing.status === 'archived'
-                ? `"${existing.name}" is on past orders, so it can't be deleted. It is already archived and no longer appears in the shop.`
-                : `"${existing.name}" is on an order and can't be deleted. Archive it instead.`,
-          },
-          { status: 409 }
-        )
+        return NextResponse.json({ error: orderLineBlockReason(existing) }, { status: 409 })
       }
       return NextResponse.json({ error: error.message || 'Failed to delete product' }, { status: 500 })
     }
