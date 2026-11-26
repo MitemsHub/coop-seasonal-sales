@@ -419,31 +419,53 @@ export default function ExhibitionProductsPage() {
     [products]
   )
 
-  // One number per question an admin actually asks of this page: how much is
-  // live, how much is waiting on us, how much we have parked. Approval and
-  // status are different axes (a pending product is usually still a draft),
-  // so they are counted separately instead of being folded into one figure.
-  const stats = useMemo(
-    () => ({
+  // Two views of the same catalogue, and each row adds up to `total` — that is
+  // what makes the tiles readable next to each other. The approval row answers
+  // "may this be sold?", the shelf row answers "where is it?". A product on
+  // sale whose price change is waiting for review is active AND pending: it
+  // appears once in each row, never twice. So
+  //   Approved + Awaiting approval + Rejected
+  //     = On sale + Price change pending + Drafts + Archived = Products.
+  // Nothing is dropped on the way: archived products have their own tile, and
+  // there is no soft-delete column to hide. `draft` is the remainder rather
+  // than a status match, so any odd row still lands in a tile and the row keeps
+  // summing to the header number.
+  const stats = useMemo(() => {
+    const is = (p, key, value) => String(p[key] || '') === value
+    const onSale = products.filter((p) => is(p, 'status', 'active') && is(p, 'approval_status', 'approved')).length
+    const livePending = products.filter((p) => is(p, 'status', 'active') && is(p, 'approval_status', 'pending')).length
+    const archived = products.filter((p) => is(p, 'status', 'archived')).length
+    return {
       total: products.length,
-      approved: products.filter((p) => p.approval_status === 'approved').length,
-      pending: products.filter((p) => p.approval_status === 'pending').length,
-      rejected: products.filter((p) => p.approval_status === 'rejected').length,
-      active: products.filter((p) => p.status === 'active').length,
-      draft: products.filter((p) => p.status === 'draft').length,
-      archived: products.filter((p) => p.status === 'archived').length,
-    }),
-    [products]
-  )
+      approved: products.filter((p) => is(p, 'approval_status', 'approved')).length,
+      pending: products.filter((p) => is(p, 'approval_status', 'pending')).length,
+      rejected: products.filter((p) => is(p, 'approval_status', 'rejected')).length,
+      onSale,
+      livePending,
+      draft: products.length - onSale - livePending - archived,
+      archived,
+    }
+  }, [products])
 
-  const statTiles = [
-    { key: 'total', label: 'Products', value: stats.total, tone: 'fg' },
-    { key: 'approved', label: 'Approved', value: stats.approved, tone: 'success' },
-    { key: 'pending', label: 'Awaiting approval', value: stats.pending, tone: 'warning' },
-    { key: 'rejected', label: 'Rejected', value: stats.rejected, tone: 'danger' },
-    { key: 'active', label: 'Active', value: stats.active, tone: 'fg' },
-    { key: 'draft', label: 'Drafts', value: stats.draft, tone: 'fg' },
-    { key: 'archived', label: 'Archived', value: stats.archived, tone: 'muted' },
+  const statGroups = [
+    {
+      title: 'Approval decision',
+      tiles: [
+        { key: 'total', label: 'Products', value: stats.total, tone: 'fg' },
+        { key: 'approved', label: 'Approved', value: stats.approved, tone: 'success' },
+        { key: 'pending', label: 'Awaiting approval', value: stats.pending, tone: 'warning' },
+        { key: 'rejected', label: 'Rejected', value: stats.rejected, tone: 'danger' },
+      ],
+    },
+    {
+      title: 'Where each product stands',
+      tiles: [
+        { key: 'onSale', label: 'On sale', value: stats.onSale, tone: 'success' },
+        { key: 'livePending', label: 'Active · price change pending', value: stats.livePending, tone: 'warning' },
+        { key: 'draft', label: 'Drafts (not on sale)', value: stats.draft, tone: 'fg' },
+        { key: 'archived', label: 'Archived', value: stats.archived, tone: 'muted' },
+      ],
+    },
   ]
 
   const totalPages = Math.max(1, Math.ceil(products.length / pageSize))
@@ -681,30 +703,39 @@ export default function ExhibitionProductsPage() {
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-sm font-semibold text-fg">Catalogue at a glance</h2>
             <span className="text-chips text-muted">
-              {products.length ? 'Counted across the products these filters show' : 'No products in this view'}
+              {products.length
+                ? 'Each row adds up to the products these filters show'
+                : 'No products in this view'}
             </span>
           </div>
-          <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
-            {statTiles.map((t) => (
-              <div
-                key={t.key}
-                className={`rounded-xl border px-3 py-2 ${
-                  t.key === 'pending' && t.value > 0
-                    ? 'border-warning-border bg-warning-bg/40'
-                    : 'border-line-subtle bg-subtle/40'
-                }`}
-              >
-                <dt className="text-chips font-medium uppercase tracking-wide text-muted">{t.label}</dt>
-                <dd className={`mt-0.5 text-h3 font-bold tabular-nums ${TILE_TONE[t.tone]}`}>
-                  {loading && !products.length ? '—' : t.value.toLocaleString()}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          {statGroups.map((group) => (
+            <div key={group.title} className="mb-2 last:mb-0">
+              <p className="mb-1 text-chips font-medium uppercase tracking-wide text-subtext">{group.title}</p>
+              <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {group.tiles.map((t) => (
+                  <div
+                    key={t.key}
+                    className={`rounded-xl border px-3 py-2 ${
+                      t.tone === 'warning' && t.value > 0
+                        ? 'border-warning-border bg-warning-bg/40'
+                        : 'border-line-subtle bg-subtle/40'
+                    }`}
+                  >
+                    <dt className="text-chips font-medium uppercase tracking-wide text-muted">{t.label}</dt>
+                    <dd className={`mt-0.5 text-h3 font-bold tabular-nums ${TILE_TONE[t.tone]}`}>
+                      {loading && !products.length ? '—' : t.value.toLocaleString()}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ))}
           {stats.pending > 0 && (
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line-subtle pt-3">
               <p className="text-chips text-muted">
-                Approving publishes a product to the shop at the vendor&apos;s price.
+                Approving publishes a product to the shop at the vendor&apos;s price. The shop only lists
+                products that are both approved and active, so a price change awaiting review keeps an
+                otherwise-live product off the shelf until it is approved.
               </p>
               <Button size="sm" variant="success" onClick={approveAllPending} disabled={busy}>
                 Approve all {stats.pending.toLocaleString()} pending
