@@ -217,13 +217,16 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
 
       {/* Read before the name: discount, then stock. */}
       {p.discount_pct > 0 && (
-        <span className="pointer-events-none absolute left-1.5 top-1.5 z-20 rounded-full bg-danger-solid px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm">
+        // The theme has no bg-danger-solid utility, so this chip painted no
+        // background at all and its white text vanished on the photo. The
+        // tinted pair below is the one the theme actually ships.
+        <span className="pointer-events-none absolute left-1.5 top-1.5 z-20 rounded-full border border-danger-border bg-danger-bg px-1.5 py-0.5 text-[10px] font-bold text-danger-fg shadow-sm">
           −{p.discount_pct}%
         </span>
       )}
       {lowStock && !soldOut && (
-        <span className="pointer-events-none absolute bottom-1.5 left-1.5 z-20 inline-flex items-center gap-1 rounded-full bg-warning-solid px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm">
-          <span className="h-1.5 w-1.5 rounded-full bg-white/90" aria-hidden="true" />
+        <span className="pointer-events-none absolute bottom-1.5 left-1.5 z-20 inline-flex items-center gap-1 rounded-full border border-warning-border bg-warning-bg px-1.5 py-0.5 text-[10px] font-bold text-warning-fg shadow-sm">
+          <span className="h-1.5 w-1.5 rounded-full bg-warning-fg" aria-hidden="true" />
           Only {p.qty} left
         </span>
       )}
@@ -237,7 +240,7 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
       {added && (
         <span
           key={flashKey}
-          className="pop pointer-events-none absolute bottom-1.5 left-1/2 z-20 inline-flex -translate-x-1/2 items-center gap-1 rounded-full bg-success-solid px-2 py-0.5 text-[10px] font-bold text-white shadow-md"
+          className="pop pointer-events-none absolute bottom-1.5 left-1/2 z-20 inline-flex -translate-x-1/2 items-center gap-1 rounded-full border border-success-border bg-success-bg px-2 py-0.5 text-[10px] font-bold text-success-fg shadow-md"
         >
           <Check className="h-3 w-3" strokeWidth={3} aria-hidden="true" />
           Added
