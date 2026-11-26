@@ -14,9 +14,9 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  Baby, Beef, BookOpen, Building2, Car, Carrot, Check, Coffee, Cookie, Gem, HeartPulse, Package,
-  Percent, Scissors, Search, Shirt, ShoppingBasket, SlidersHorizontal, Smartphone, Sofa, Sparkles,
-  Sprout, Wheat, X, Zap,
+  Baby, Beef, BookOpen, Building2, Car, Carrot, Check, Coffee, Cookie, Footprints, Gem, HeartPulse,
+  Package, Percent, Scissors, Search, Shirt, ShoppingBasket, SlidersHorizontal, Smartphone, Sofa,
+  Sparkles, Sprout, Wheat, X, Zap,
 } from 'lucide-react'
 import { EXHIBITION_SORTS } from '../hooks/useExhibitionFilters'
 import { initials } from '../../lib/exhibitionStands'
@@ -28,7 +28,7 @@ const naira = (v) => `₦${Number(v || 0).toLocaleString()}`
 // free of JSX; this is the only place they are resolved.
 const SHELF_ICON = {
   Wheat, Carrot, Beef, Coffee, Cookie, ShoppingBasket, Shirt, Smartphone, Baby, HeartPulse,
-  Sprout, BookOpen, Package, Gem, Sparkles, Sofa, Zap, Car, Building2, Scissors,
+  Sprout, BookOpen, Package, Gem, Sparkles, Sofa, Zap, Car, Building2, Scissors, Footprints,
 }
 
 function Pill({ active, onClick, icon: Icon, label, count }) {
