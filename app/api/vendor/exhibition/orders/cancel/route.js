@@ -1,27 +1,27 @@
 // app/api/vendor/exhibition/orders/cancel/route.js
 // POST /api/vendor/exhibition/orders/cancel   body: { id | ids, reason? }
 //
-// A vendor can cancel an order, while it is still Pending or Approved — the
-// same cancellable window the admin desk has — when every line on the order
-// belongs to that vendor. Order status is order-wide, so a whole-order cancel
-// on a shared invoice would silently remove another stand's goods and void
-// their payable; that case is handled item by item instead
-// (/api/vendor/exhibition/orders/lines/cancel), which recalculates the
-// surviving lines, loan interest, order total and payable in one transaction.
+// Cancelling an order from the vendor's own list. The button promises the order
+// goes away from the member's orders, so it does exactly that for this stand's
+// goods: every line the vendor has on the order comes off, the order total, its
+// loan interest, the quantities, this stand's payable and the reserved stock are
+// recalculated together, and the order is cancelled outright when nothing is
+// left on it.
 //
-// Restoring is deliberately NOT available here: /api/admin/exhibition/orders/
-// restore is the only way back, so a cancellation a vendor makes has to be
-// reversed by the co-op. That is also why the vendor UI says so before it acts.
+// On a shared invoice that means the other stands keep their items and the
+// order stays open — refusing the whole action instead (the old behaviour) made
+// a vendor unable to withdraw its own goods from a mixed order. The withdrawn
+// lines are kept in exhibition_cancelled_lines so the co-op can restore them
+// from /api/admin/exhibition/orders/restore or .../lines/restore; that is the
+// only way back, which is what the vendor dialog says.
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabaseServer'
-import { logExhibitionAudit } from '@/lib/exhibitionAudit'
+import { logExhibitionAuditEntries } from '@/lib/exhibitionAudit'
 import { validateNumber, sanitizeString } from '@/lib/validation'
+import { cancelVendorLines } from '@/lib/exhibitionOrderLines'
 import { getVendorContext } from '../../../_session'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-const CANCELLABLE = ['Pending', 'Approved']
 
 function asIdArray(input) {
   if (Array.isArray(input)) return input
@@ -35,121 +35,92 @@ export async function POST(req) {
     if (!ctx) return NextResponse.json({ ok: false, error: 'Unauthorized' }, { status: 401 })
 
     const body = await req.json().catch(() => ({}))
-    const ids = asIdArray(body.ids ?? body.id)
-      .map((v) => validateNumber(v, { min: 1, integer: true }))
-      .filter((r) => r.isValid)
-      .map((r) => r.value)
+    const ids = [...new Set(
+      asIdArray(body.ids ?? body.id)
+        .map((v) => validateNumber(v, { min: 1, integer: true }))
+        .filter((r) => r.isValid)
+        .map((r) => r.value)
+    )]
     if (!ids.length) return NextResponse.json({ ok: false, error: 'Invalid order id(s)' }, { status: 400 })
 
     const reason = sanitizeString(body.reason || '', { maxLength: 300, encodeHtml: false })
-    const supabase = createClient()
+    const actorLabel = `Vendor · ${ctx.vendor_code || ctx.vendor_id}`
 
-    // Ownership: the order must be entirely this vendor's. Read every line, not
-    // just theirs, so a shared invoice can be recognised and refused instead of
-    // taking another stand's items down with it.
-    const { data: allLines, error: ownErr } = await supabase
-      .from('exhibition_order_lines')
-      .select('order_id, vendor_id')
-      .in('order_id', ids)
-    if (ownErr) return NextResponse.json({ ok: false, error: ownErr.message }, { status: 500 })
+    const cancelled = []
+    const orders = []
+    const failed = []
 
-    const lineOwners = new Map() // order id -> vendor ids appearing on it
-    for (const line of allLines || []) {
-      const oid = Number(line.order_id)
-      if (!Number.isFinite(oid)) continue
-      if (!lineOwners.has(oid)) lineOwners.set(oid, new Set())
-      lineOwners.get(oid).add(Number(line.vendor_id))
-    }
-    const isOnlyMine = (id) => {
-      const owners = lineOwners.get(Number(id))
-      return !!owners && owners.size === 1 && owners.has(Number(ctx.vendor_id))
-    }
-
-    const { data: rows, error: selErr } = await supabase
-      .from('exhibition_orders')
-      .select('id, status')
-      .in('id', ids)
-    if (selErr) return NextResponse.json({ ok: false, error: selErr.message }, { status: 500 })
-
-    const byId = new Map((rows || []).map((r) => [Number(r.id), r]))
-    const toCancel = ids.filter(
-      (id) => isOnlyMine(id) && CANCELLABLE.includes(String(byId.get(id)?.status || ''))
-    )
-    const failed = ids
-      .filter((id) => !toCancel.includes(id))
-      .map((id) => {
-        const entry = { id, status: String(byId.get(id)?.status || '') }
-        const owners = lineOwners.get(Number(id))
-        if (!owners || !owners.has(Number(ctx.vendor_id))) entry.reason = 'Not your order'
-        else if (owners.size > 1) entry.reason = 'Shared with another stand'
-        else if (!CANCELLABLE.includes(entry.status)) entry.reason = 'Already completed'
-        return entry
+    for (const id of ids) {
+      const result = await cancelVendorLines({
+        orderId: id,
+        vendorId: Number(ctx.vendor_id),
+        vendorCode: ctx.vendor_code || '',
+        lineIds: null,
+        reason,
+        actorLabel,
       })
-    if (!toCancel.length) {
-      const notMine = failed.length > 0 && failed.every((f) => f.reason === 'Not your order')
-      const shared = failed.length > 0 && failed.every((f) => f.reason === 'Shared with another stand')
-      return NextResponse.json(
+      if (result?.error) {
+        failed.push({ id, status: '', reason: result.error, code: result.status || 400 })
+        continue
+      }
+      cancelled.push(id)
+      orders.push({
+        id: result.order.id,
+        order_id: result.order.order_id,
+        cycle_id: result.order.cycle_id,
+        status: result.order.status,
+        total_amount: result.order.total_amount,
+        total_qty: result.order.total_qty,
+        old_total_amount: result.order.old_total_amount,
+        removed_qty: result.removed_qty,
+        removed_amount: result.removed_amount,
+        remaining_lines: result.remaining_lines,
+        emptied: result.emptied,
+        restorable: Boolean(result.archived),
+      })
+
+      const removedLabel = result.removed
+        .map((l) => `${l.product_name || 'Item'}${l.qty ? ` × ${l.qty}` : ''}`)
+        .slice(0, 6)
+        .join(', ')
+      await logExhibitionAuditEntries([
         {
-          ok: false,
-          error: shared
-            ? 'This order also contains items from another stand — cancel your own items instead.'
-            : notMine
-              ? 'That order does not contain any of your products.'
-              : 'Only pending or approved orders can be cancelled.',
-          failed,
+          orderId: result.order.id,
+          cycleId: Number(result.order.cycle_id || 0),
+          action: result.emptied ? 'Cancelled' : 'Lines cancelled',
+          actorType: 'vendor',
+          actorLabel,
+          note: `${removedLabel}${result.removed.length > 6 ? ` +${result.removed.length - 6} more` : ''}${
+            reason ? ` — ${reason}` : ''
+          } · total NGN ${Number(result.order.old_total_amount || 0).toLocaleString('en-NG')} → ${Number(
+            result.order.total_amount || 0
+          ).toLocaleString('en-NG')}${result.emptied ? ' · order cancelled, nothing left' : ' · order kept for the other stands'}`,
+          detail: {
+            order_id: result.order.order_id,
+            removed_lines: result.removed,
+            removed_qty: result.removed_qty,
+            removed_amount: result.removed_amount,
+            old_total: result.order.old_total_amount,
+            new_total: result.order.total_amount,
+            emptied: result.emptied,
+            restorable: Boolean(result.archived),
+            reason: reason || '',
+          },
         },
-        { status: 403 }
-      )
+      ])
     }
 
-    const now = new Date().toISOString()
-    const updates = { status: 'Cancelled', cancelled_at: now, restored_at: null, updated_at: now }
-    if (reason) updates.cancelled_reason = reason
-
-    // Shop-originated lines reserved stock at checkout; counter-invoice lines
-    // have no product_id and are ignored.
-    const { data: reservedLines } = await supabase
-      .from('exhibition_order_lines')
-      .select('product_id, qty')
-      .in('order_id', toCancel)
-      .not('product_id', 'is', null)
-    const releaseByProduct = new Map()
-    for (const line of reservedLines || []) {
-      const pid = Number(line.product_id)
-      const qty = Number(line.qty || 0)
-      if (!Number.isFinite(pid) || pid <= 0 || qty <= 0) continue
-      releaseByProduct.set(pid, (releaseByProduct.get(pid) || 0) + qty)
+    if (!cancelled.length) {
+      const message =
+        failed.length === 1
+          ? failed[0].reason
+          : 'Only orders that are pending or approved, and contain your items, can be cancelled.'
+      return NextResponse.json({ ok: false, error: message, failed }, { status: 409 })
     }
 
-    const { error: upErr } = await supabase
-      .from('exhibition_orders')
-      .update(updates)
-      .in('id', toCancel)
-      .in('status', CANCELLABLE)
-    if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 })
-
-    let stockReleaseWarning = ''
-    if (releaseByProduct.size) {
-      const { error: releaseErr } = await supabase.rpc('exhibition_release_stock', {
-        p_items: [...releaseByProduct.entries()].map(([product_id, qty]) => ({ product_id, qty })),
-      })
-      if (releaseErr) stockReleaseWarning = releaseErr.message || 'Failed to release stock'
-    }
-
-    await logExhibitionAudit(toCancel, {
-      action: 'Cancelled',
-      actorType: 'vendor',
-      actorLabel: `Vendor · ${ctx.vendor_code || ctx.vendor_id}`,
-      note: reason || 'Cancelled from the vendor order list',
-    })
-
-    return NextResponse.json({
-      ok: true,
-      cancelled: toCancel,
-      failed,
-      ...(stockReleaseWarning ? { warning: stockReleaseWarning } : {}),
-    })
+    return NextResponse.json({ ok: true, cancelled, orders, failed })
   } catch (e) {
+    console.error('Vendor order cancel failed:', e)
     return NextResponse.json({ ok: false, error: e.message || 'Internal server error' }, { status: 500 })
   }
 }

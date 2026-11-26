@@ -75,6 +75,28 @@ export async function GET(request) {
       }
     }
 
+    // Items a stand withdrew from these orders. They are kept rather than
+    // deleted so the desk can put them back from the same modal — the restore
+    // the vendor's confirm dialog promises.
+    const cancelledByOrder = new Map()
+    if (orderIds.length) {
+      const { data: cancelledLines, error: cErr } = await supabase
+        .from('exhibition_cancelled_lines')
+        .select('id, order_id, vendor_id, product_name, sku, unit, vendor_price, final_price, qty, amount, cancelled_by, cancelled_reason, cancelled_at, vendors:vendor_id(name)')
+        .in('order_id', orderIds)
+        .is('restored_at', null)
+        .order('id')
+      // Before the migration is applied the table simply does not exist; the
+      // order list must keep working until then.
+      const notMigrated = cErr && (String(cErr.code) === '42P01' || String(cErr.code) === 'PGRST205')
+      if (cErr && !notMigrated) return NextResponse.json({ ok: false, error: cErr.message }, { status: 500 })
+      for (const l of cancelledLines || []) {
+        const list = cancelledByOrder.get(Number(l.order_id)) || []
+        list.push({ ...l, vendor_name: l.vendors?.name || '' })
+        cancelledByOrder.set(Number(l.order_id), list)
+      }
+    }
+
     // The admin needs to call the member about a collection, so each row also
     // carries the member's phone plus the two things the approver otherwise
     // has to go hunting for: how often this member orders, and how much room
@@ -184,6 +206,7 @@ export async function GET(request) {
       cycle_name: o.cycles?.name || '',
       cycle_code: o.cycles?.code || '',
       lines: linesByOrder.get(o.id) || [],
+      cancelled_lines: cancelledByOrder.get(o.id) || [],
       per_vendor: (() => {
         const by = new Map()
         for (const l of linesByOrder.get(o.id) || []) {

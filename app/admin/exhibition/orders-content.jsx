@@ -55,6 +55,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
   const [editOrder, setEditOrder] = useState(null)
   const [viewOrder, setViewOrder] = useState(null)
   const [cancelReason, setCancelReason] = useState('')
+  const [restoreBusy, setRestoreBusy] = useState(false)
 
   const fetchCtl = useRef(null)
   // Whether the default active-cycle scope has been applied (once on mount)
@@ -237,6 +238,44 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
     }
   }
 
+  // A stand can take an item off an order; the line is kept, not deleted, so
+  // the desk can put it back. The server reserves the stock again and
+  // recalculates the order total, its loan interest and the stand's payable.
+  const restoreWithdrawn = async (row) => {
+    if (!viewOrder || restoreBusy) return
+    setRestoreBusy(true)
+    setMsg(null)
+    try {
+      const res = await fetch('/api/admin/exhibition/orders/lines/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ order_id: viewOrder.id, ...(row ? { ids: [row.id] } : {}) }),
+      })
+      const json = await safeJson(res, '/api/admin/exhibition/orders/lines/restore')
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Failed to restore that item')
+      const restoredIds = new Set((json.restored || []).map((r) => Number(r.cancel_id)))
+      setViewOrder((cur) =>
+        cur
+          ? {
+              ...cur,
+              total_amount: json.order.total_amount,
+              total_qty: json.order.total_qty,
+              cancelled_lines: (cur.cancelled_lines || []).filter((c) => !restoredIds.has(Number(c.id))),
+            }
+          : cur
+      )
+      setMsg({
+        type: 'success',
+        text: `${json.restored.length} item(s) back on ${json.order.order_id} · total now ${naira(json.order.total_amount)}`,
+      })
+      fetchOrders({ page: safePage })
+    } catch (e) {
+      setMsg({ type: 'error', text: e?.message || 'Failed to restore that item' })
+    } finally {
+      setRestoreBusy(false)
+    }
+  }
+
   // ── Exports ─────────────────────────────────────────────────────
 
   // The export reflects whatever period the filter shows (default: the active
@@ -398,6 +437,9 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
   }
 
   const viewLines = viewOrder?.lines || []
+  // Items can be put back while the order is still open. On a cancelled order
+  // the whole order is restored from the Cancelled queue instead.
+  const canRestoreLines = ['Pending', 'Approved'].includes(String(viewOrder?.status || ''))
   const orderLineAmount = (line) => {
     const qty = Number(line?.qty || 0)
     return Number(line?.amount ?? qty * Number(line?.final_price ?? line?.vendor_price ?? 0))
@@ -448,7 +490,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
     },
     Cancelled: {
       label: 'Exception queue',
-      copy: 'Cancelled orders keep their audit trail. Restore one to Pending if it was cancelled by mistake.',
+      copy: 'Cancelled orders keep their audit trail, including every item a stand took off. Restore one to Pending to put the order and its withdrawn items back.',
       tone: 'border-danger-border bg-danger-bg/40 text-danger-fg',
       icon: XCircle,
     },
@@ -1088,6 +1130,68 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
               </div>
             </div>
 
+            {!!(viewOrder.cancelled_lines || []).length && (
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Cancelled items</h3>
+                  <div className="flex items-center gap-3">
+                    <span className="text-chips text-muted">
+                      {(viewOrder.cancelled_lines || []).length} withdrawn · kept so they can go back
+                    </span>
+                    {canRestoreLines && (viewOrder.cancelled_lines || []).length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => restoreWithdrawn(null)}
+                        disabled={restoreBusy}
+                        className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-0.5 text-chips font-medium text-fg transition-colors hover:bg-subtle disabled:opacity-50"
+                      >
+                        Restore all
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="divide-y divide-line overflow-hidden rounded-xl border border-line">
+                  {(viewOrder.cancelled_lines || []).map((c) => {
+                    const cancelledQty = Number(c.qty || 0)
+                    const cancelledUnit = Number(c.final_price ?? c.vendor_price ?? 0)
+                    return (
+                      <div key={c.id} className="flex items-start gap-3 px-3 py-2.5">
+                        <div className="min-w-0 flex-1">
+                          <p className="break-words text-sm font-medium text-muted line-through">
+                            {c.product_name || 'Item'}
+                          </p>
+                          <p className="mt-0.5 text-chips text-muted">
+                            {[
+                              c.vendor_name,
+                              c.sku,
+                              `${cancelledQty} × ${naira(cancelledUnit)}`,
+                              c.cancelled_reason ? `— ${c.cancelled_reason}` : '',
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-sm font-semibold tabular-nums text-muted">{naira(c.amount)}</p>
+                          {canRestoreLines && (
+                          <button
+                            type="button"
+                            onClick={() => restoreWithdrawn(c)}
+                            disabled={restoreBusy}
+                            className="mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-chips font-medium text-brand transition-colors hover:bg-subtle disabled:opacity-50"
+                            title="Put this item back on the order — its stock is reserved again and the total recalculated"
+                          >
+                            <RotateCcw className="h-3 w-3" /> Restore
+                          </button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-1.5 border-t border-line pt-3">
               <div className="flex items-center justify-between gap-3 text-sm text-muted">
                 <span>Items subtotal</span>
@@ -1200,7 +1304,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                 : 'Approve '}
             <b className="text-fg">{modal?.ids?.length || 0}</b> order(s)
             {modal?.type === 'restore'
-              ? ' back to Pending?'
+              ? ' back to Pending, with the items that were withdrawn?'
               : modal?.type === 'confirm'
                 ? '? This closes the order on the member\'s behalf.'
                 : ', and the member can then confirm receipt?'}

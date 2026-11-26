@@ -81,10 +81,10 @@ export async function GET(req) {
       linesByOrder.set(Number(line.order_id), list)
     }
 
-    // A shared invoice (other stands' lines on it) is withdrawn line by line —
-    // whole-order cancel is refused on it — so the list has to say which orders
-    // a vendor may clear in one go, or the button would offer an action that
-    // always fails.
+    // Cancel now clears this stand's own items on any open order, shared or
+    // not: on a mixed invoice the other stands keep theirs and the order stays
+    // open. The list still reports `shared` so the button can say so before it
+    // acts — the vendor is not cancelling goods it does not own.
     const { data: allPagedLines } = await supabase
       .from('exhibition_order_lines')
       .select('order_id')
@@ -113,11 +113,10 @@ export async function GET(req) {
         my_amount: myAmount,
         my_lines: lines.length,
         total_lines: totalLines,
-        // Pending/approved, nothing but this stand's items, and at least one line.
-        can_cancel:
-          ['Pending', 'Approved'].includes(String(o.status)) &&
-          lines.length > 0 &&
-          totalLines === lines.length,
+        // Pending/approved with at least one of this stand's items. On a shared
+        // invoice cancel takes off only this stand's goods and recalculates the
+        // order; when it is the only stand the order is cancelled outright.
+        can_cancel: ['Pending', 'Approved'].includes(String(o.status)) && lines.length > 0,
         // Item-level withdrawal works on any open order, shared or not: the
         // server recalculates the surviving lines and the order total.
         can_cancel_lines: ['Pending', 'Approved'].includes(String(o.status)) && lines.length > 0,

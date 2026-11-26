@@ -102,8 +102,16 @@ export default function VendorOrdersPage() {
       const json = await res.json().catch(() => ({}))
       if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to cancel this order')
       const label = cancelTarget.order_id
+      const result = (json.orders || [])[0]
       setCancelTarget(null)
-      setNotice({ type: 'success', text: `${label} cancelled. The stock is back on the shelf.` })
+      setNotice({
+        type: 'success',
+        text: result && result.emptied === false
+          ? `${label} updated — your items came off. The order stays open for the other stands and is now ${fmtNaira(
+              result.total_amount
+            )} for the member.`
+          : `${label} cancelled. The stock is back on the shelf.`,
+      })
       await load()
     } catch (e) {
       setCancelTarget(null)
@@ -207,26 +215,26 @@ export default function VendorOrdersPage() {
                     View items
                   </Button>
                   {o.can_cancel && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      leftIcon={XCircle}
-                      onClick={() => {
-                        setNotice(null)
-                        setCancelTarget(o)
-                      }}
-                      title="Cancel this order"
-                    >
-                      Cancel
-                    </Button>
+                    <>
+                      {o.shared && (
+                        <span className="max-w-[11rem] text-right text-chips text-muted">
+                          Shared order — Cancel removes only your items
+                        </span>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={XCircle}
+                        onClick={() => {
+                          setNotice(null)
+                          setCancelTarget(o)
+                        }}
+                        title={o.shared ? 'Cancel your items on this order' : 'Cancel this order'}
+                      >
+                        Cancel
+                      </Button>
+                    </>
                   )}
-                  {!o.can_cancel &&
-                    (o.status === 'Pending' || o.status === 'Approved') &&
-                    Number(o.total_lines || 0) > Number(o.my_lines || 0) && (
-                      <span className="max-w-[11rem] text-right text-chips text-muted">
-                        Shared with other stands — cancel your own items from View items
-                      </span>
-                    )}
                 </div>
               </div>
             </div>
@@ -347,11 +355,17 @@ export default function VendorOrdersPage() {
         onClose={() => (cancelling ? null : setCancelTarget(null))}
         onConfirm={cancelOrder}
         loading={cancelling}
-        title="Cancel this order?"
-        confirmLabel="Cancel order"
+        title={cancelTarget?.shared ? 'Cancel your items?' : 'Cancel this order?'}
+        confirmLabel={cancelTarget?.shared ? 'Cancel my items' : 'Cancel order'}
         message={
           cancelTarget
-            ? `${cancelTarget.order_id} for ${cancelTarget.member_name || cancelTarget.member_id} will be cancelled in full and its reserved stock goes back on sale. Every item on this order is from your stand. Only the co-op admin can restore a cancelled order.`
+            ? cancelTarget.shared
+              ? `${cancelTarget.order_id} also contains other stands' items. Cancelling takes your ${Number(
+                  cancelTarget.my_qty || 0
+                )} item(s) (${fmtNaira(
+                  cancelTarget.my_amount
+                )}) off it and the order is recalculated; the other stands keep theirs. Only the co-op admin can restore a cancelled item.`
+              : `${cancelTarget.order_id} for ${cancelTarget.member_name || cancelTarget.member_id} will be cancelled in full and its reserved stock goes back on sale. Every item on this order is from your stand. Only the co-op admin can restore a cancelled order.`
             : ''
         }
       />
