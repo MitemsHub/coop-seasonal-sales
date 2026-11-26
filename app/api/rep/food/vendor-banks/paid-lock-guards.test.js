@@ -10,7 +10,7 @@ vi.mock('@/lib/cycleResolve', () => ({ resolveFoodCycleId: vi.fn() }))
 vi.mock('@/lib/repFoodBankGuard', () => ({ isFoodBankAccountPaid: vi.fn() }))
 
 import { POST as uploadInvoice } from './invoices/upload/route'
-import { POST as directUploadInvoice } from './invoices/direct-upload/route'
+import { POST as directUploadInvoice } from '../../../vendor-invoices/direct-upload/route'
 import { POST as updateInvoice } from './invoices/update/route'
 import { DELETE as deleteInvoice } from './invoices/delete/route'
 import { createClient } from '@/lib/supabaseServer'
@@ -79,7 +79,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   validateSession.mockResolvedValue({
     valid: true,
-    claims: { branch_id: 1, module: 'food', branch_code: 'CALABAR' },
+    tokenType: 'rep',
+    claims: { role: 'rep', branch_id: 1, module: 'food', branch_code: 'CALABAR' },
   })
   resolveFoodCycleId.mockResolvedValue(7)
   isFoodBankAccountPaid.mockResolvedValue(false)
@@ -118,6 +119,7 @@ describe('rep food invoice paid-lock guards', () => {
     const res = await directUploadInvoice(
       jsonRequest({
         action: 'sign',
+        module: 'food',
         bank_account_id: 9,
         file_name: 'invoice.pdf',
         file_type: 'application/pdf',
@@ -137,6 +139,7 @@ describe('rep food invoice paid-lock guards', () => {
     const res = await directUploadInvoice(
       jsonRequest({
         action: 'sign',
+        module: 'food',
         file_name: 'invoice.pdf',
         file_type: 'application/pdf',
         file_size: 100,

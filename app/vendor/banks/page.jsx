@@ -15,7 +15,8 @@ import Label from '../../components/ui/Label'
 import Skeleton from '../../components/ui/Skeleton'
 import Badge from '../../components/ui/Badge'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
-import { prepareInvoiceFile, prettyInvoiceSize } from '../../../lib/invoiceUpload'
+import { uploadInvoiceFile } from '../../../lib/invoiceUpload'
+import { prettyInvoiceSize } from '../../../lib/invoiceLimits'
 
 function maskAccountNumber(s) {
   const v = String(s || '').replace(/\D/g, '')
@@ -127,18 +128,17 @@ export default function VendorBanksPage() {
     setUploading(true)
     setInvoicesMsg('')
     try {
-      // Shrink a phone photo and enforce the 10MB ceiling on the device, so a
-      // big receipt fails with a readable reason instead of mid-upload.
-      const prepared = await prepareInvoiceFile(upFile)
-      const fd = new FormData()
-      fd.append('file', prepared, prepared.name || 'invoice')
-      if (upRef.trim()) fd.append('invoice_ref', upRef.trim())
-      if (upDate) fd.append('invoice_date', upDate)
-      if (upAmount) fd.append('amount', upAmount)
-      if (upNotes.trim()) fd.append('notes', upNotes.trim())
-      const res = await fetch('/api/vendor/exhibition/invoices', { method: 'POST', body: fd })
-      const json = await res.json()
-      if (!res.ok || !json.ok) throw new Error(json.error || 'Upload failed')
+      await uploadInvoiceFile({
+        endpoint: '/api/vendor/exhibition/invoices',
+        module: 'exhibition',
+        fields: {
+          invoice_ref: upRef.trim(),
+          invoice_date: upDate,
+          amount: upAmount,
+          notes: upNotes.trim(),
+        },
+        file: upFile,
+      })
       setUploadOpen(false)
       await loadInvoices()
     } catch (e) {

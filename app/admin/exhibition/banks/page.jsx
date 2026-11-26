@@ -12,7 +12,7 @@ import DraggableModal from '../../../components/DraggableModal'
 import Button from '../../../components/ui/Button'
 import Select from '../../../components/ui/Select'
 import Skeleton from '../../../components/ui/Skeleton'
-import { prepareInvoiceFile } from '../../../../lib/invoiceUpload'
+import { uploadInvoiceFile } from '../../../../lib/invoiceUpload'
 import FilePicker from '../../../components/ui/FilePicker'
 import ConfirmDialog from '../../../components/ui/ConfirmDialog'
 import AdminBankAccountsModal from '../../../components/AdminBankAccountsModal'
@@ -336,16 +336,17 @@ function AdminExhibitionBanksContent() {
     setUploading(true)
     setMsg(null)
     try {
-      const prepared = await prepareInvoiceFile(invoiceFile)
-      const fd = new FormData()
-      fd.set('vendor_id', String(id))
-      fd.set('bank_account_id', String(invoiceUploadBankId))
-      fd.set('invoice_ref', invoiceRef)
-      fd.set('notes', invoiceNotes)
-      fd.set('file', prepared, prepared.name || 'invoice')
-      const res = await fetch('/api/admin/exhibition/vendor-banks/invoices/upload', { method: 'POST', body: fd })
-      const json = await safeJson(res, '/api/admin/exhibition/vendor-banks/invoices/upload')
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Upload failed')
+      await uploadInvoiceFile({
+        endpoint: '/api/admin/exhibition/vendor-banks/invoices/upload',
+        module: 'exhibition',
+        fields: {
+          vendor_id: id,
+          bank_account_id: invoiceUploadBankId,
+          invoice_ref: invoiceRef,
+          notes: invoiceNotes,
+        },
+        file: invoiceFile,
+      })
       setVendors((prev) => (prev || []).map((r) => (Number(r.id) === id ? { ...r, invoice_count: Number(r.invoice_count || 0) + 1 } : r)))
       setInvoiceUploadOpen(false)
       setInvoiceFile(null)

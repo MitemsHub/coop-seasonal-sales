@@ -8,7 +8,7 @@ import FilePicker from '../../../components/ui/FilePicker'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import AdminBankAccountsModal from '../../../components/AdminBankAccountsModal'
 import ConfirmDialog from '../../../components/ui/ConfirmDialog'
-import { prepareInvoiceFile } from '../../../../lib/invoiceUpload'
+import { uploadInvoiceFile } from '../../../../lib/invoiceUpload'
 
 function safeJsonFactory() {
   return async (res, label) => {
@@ -387,18 +387,19 @@ function AdminFoodBanksContent() {
     setInvoiceUploading(true)
     setMsg(null)
     try {
-      // The picker promises shrinking, so do it: photos are re-encoded and the
-      // shared 10MB ceiling is checked before anything is sent.
-      const prepared = await prepareInvoiceFile(invoiceFile)
-      const fd = new FormData()
-      fd.set('branch_id', String(id))
-      fd.set('bank_account_id', String(invoiceUploadBankId))
-      fd.set('invoice_ref', invoiceRef)
-      fd.set('notes', invoiceNotes)
-      fd.set('file', prepared, prepared.name || 'invoice')
-      const res = await fetch('/api/admin/food/vendor-banks/invoices/upload', { method: 'POST', body: fd })
-      const json = await safeJson(res, '/api/admin/food/vendor-banks/invoices/upload')
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Upload failed')
+      // One shared path: photos are shrunk, and a file too big for a request
+      // body is signed straight to storage instead of posting through here.
+      await uploadInvoiceFile({
+        endpoint: '/api/admin/food/vendor-banks/invoices/upload',
+        module: 'food',
+        fields: {
+          branch_id: id,
+          bank_account_id: invoiceUploadBankId,
+          invoice_ref: invoiceRef,
+          notes: invoiceNotes,
+        },
+        file: invoiceFile,
+      })
       setMsg({ type: 'success', text: 'Invoice uploaded' })
       setInvoiceUploadOpen(false)
       setInvoiceUploadLoc(null)

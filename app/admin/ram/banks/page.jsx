@@ -9,7 +9,7 @@ import DraggableModal from '../../../components/DraggableModal'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import AdminBankAccountsModal from '../../../components/AdminBankAccountsModal'
 import ConfirmDialog from '../../../components/ui/ConfirmDialog'
-import { prepareInvoiceFile } from '../../../../lib/invoiceUpload'
+import { uploadInvoiceFile } from '../../../../lib/invoiceUpload'
 import { Landmark, RefreshCw, Trash2 } from 'lucide-react'
 
 function safeJsonFactory() {
@@ -349,16 +349,17 @@ function RamBanksContent() {
     setUploading(true)
     setMsg(null)
     try {
-      const prepared = await prepareInvoiceFile(invoiceFile)
-      const fd = new FormData()
-      fd.set('delivery_location_id', String(id))
-      fd.set('bank_account_id', String(invoiceUploadBankId))
-      fd.set('invoice_ref', invoiceRef)
-      fd.set('notes', invoiceNotes)
-      fd.set('file', prepared, prepared.name || 'invoice')
-      const res = await fetch('/api/admin/ram/vendor-banks/invoices/upload', { method: 'POST', body: fd })
-      const json = await safeJson(res, '/api/admin/ram/vendor-banks/invoices/upload')
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Upload failed')
+      await uploadInvoiceFile({
+        endpoint: '/api/admin/ram/vendor-banks/invoices/upload',
+        module: 'ram',
+        fields: {
+          delivery_location_id: id,
+          bank_account_id: invoiceUploadBankId,
+          invoice_ref: invoiceRef,
+          notes: invoiceNotes,
+        },
+        file: invoiceFile,
+      })
       setRows((prev) => (prev || []).map((r) => (Number(r.id) === id ? { ...r, invoice_count: Number(r.invoice_count || 0) + 1 } : r)))
       setInvoiceUploadOpen(false)
       setInvoiceFile(null)
