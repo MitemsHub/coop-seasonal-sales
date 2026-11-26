@@ -26,6 +26,7 @@ import ProductImagesUpload from '../../../components/ProductImagesUpload'
 import ShelfPicker from '../../../components/ShelfPicker'
 import usePhotoShelfSuggestion from '../../../hooks/usePhotoShelfSuggestion'
 import { productImages } from '../../../../lib/exhibitionProductImages'
+import { readUrlInt, readUrlParam, writeUrlState } from '../../../lib/urlState'
 
 const naira = (v) =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(
@@ -50,10 +51,12 @@ export default function ExhibitionProductsPage() {
   const [products, setProducts] = useState([])
   const [cycles, setCycles] = useState([])
   const [vendors, setVendors] = useState([])
-  const [cycleFilter, setCycleFilter] = useState('')
-  const [vendorFilter, setVendorFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
-  const [term, setTerm] = useState('')
+  // Filters, page and row count come out of the URL first, so a reload or a
+  // shared link opens the catalogue exactly where it was left.
+  const [cycleFilter, setCycleFilter] = useState(() => readUrlParam('cycle', ''))
+  const [vendorFilter, setVendorFilter] = useState(() => readUrlParam('vendor', ''))
+  const [statusFilter, setStatusFilter] = useState(() => readUrlParam('status', ''))
+  const [term, setTerm] = useState(() => readUrlParam('q', ''))
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
@@ -62,15 +65,16 @@ export default function ExhibitionProductsPage() {
   const [imageKey, setImageKey] = useState('') // unique storage key for a new product's photos
   const [form, setForm] = useState({})
   const [categories, setCategories] = useState([])
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(25)
+  const [page, setPage] = useState(() => readUrlInt('page', 1))
+  const [pageSize, setPageSize] = useState(() => readUrlInt('size', 25))
   const [selected, setSelected] = useState(new Set())
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
   const fetchSeq = useRef(0)
   // The filters the list was last loaded with. A refresh after approving must
   // not count as a filter change, or the desk is thrown back to page 1 every
-  // time it acts on page 7.
-  const loadedFiltersRef = useRef('')
+  // time it acts on page 7. Seeded with the URL's filters so the first load of
+  // a linked page is not mistaken for a filter change either.
+  const loadedFiltersRef = useRef(`${cycleFilter}|${vendorFilter}|${statusFilter}|${term.trim()}`)
   const pageSizeRef = useRef(pageSize)
   useEffect(() => {
     pageSizeRef.current = pageSize
@@ -469,6 +473,22 @@ export default function ExhibitionProductsPage() {
   const currentPage = Math.min(page, totalPages)
   const pageStart = (currentPage - 1) * pageSize
   const pageProducts = products.slice(pageStart, pageStart + pageSize)
+
+  // Keep the address bar truthful: filters, page and row count live in the URL,
+  // so a reload, a Back into the catalogue or a link to a colleague reopens the
+  // same view. Defaults stay out of the query string so links stay short.
+  useEffect(() => {
+    writeUrlState({
+      cycle: cycleFilter,
+      vendor: vendorFilter,
+      status: statusFilter,
+      q: term.trim(),
+      // Before the first response lands totalPages is 1 and currentPage would
+      // collapse the linked page number; hold the URL's page until rows exist.
+      page: (products.length ? currentPage : page) > 1 ? (products.length ? currentPage : page) : '',
+      size: pageSize !== 25 ? pageSize : '',
+    })
+  }, [cycleFilter, vendorFilter, statusFilter, term, currentPage, page, products.length, pageSize])
 
   // ── Selection ───────────────────────────────────────────────────────────
   // One select-all checkbox in the bar above the table (the table header has

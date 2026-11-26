@@ -6,6 +6,7 @@ import ProtectedRoute from '../../../components/ProtectedRoute'
 import DraggableModal from '../../../components/DraggableModal'
 import ExportButton from '../../../components/ui/ExportButton'
 import Pagination from '../../../components/ui/Pagination'
+import { readUrlInt, readUrlParam, writeUrlState } from '../../../lib/urlState'
 
 import { createManifestDoc, addManifestTable, sanitizePdfText } from '../../../lib/pdfExport'
 import { announceRepFoodStats } from '../../../lib/repFoodStatsSync'
@@ -15,12 +16,14 @@ import { CheckSquare, Inbox, RefreshCw, RotateCcw, Search, Truck, Zap } from 'lu
 function PostedAdminPageContent() {
   const [orders, setOrders] = useState([])
   const [msg, setMsg] = useState(null)
-  const [term, setTerm] = useState('')
-  const [payment, setPayment] = useState('')
+  // Filters, page and row count come out of the URL first, so a reload, a Back
+  // into this queue or a shared link opens the same rows.
+  const [term, setTerm] = useState(() => readUrlParam('q', ''))
+  const [payment, setPayment] = useState(() => readUrlParam('payment', ''))
   const [selected, setSelected] = useState(new Set())
   const [loading, setLoading] = useState(false)
-  const [pageSize, setPageSize] = useState(50)
-  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(() => readUrlInt('size', 50))
+  const [page, setPage] = useState(() => readUrlInt('page', 1))
   const [total, setTotal] = useState(0)
   const [summary, setSummary] = useState(null)
   const [deliveringOrder, setDeliveringOrder] = useState(null) // Track which order is being delivered
@@ -75,7 +78,20 @@ function PostedAdminPageContent() {
     }
   }
 
-  useEffect(() => { fetchOrders(null) }, [])
+  // First load: the page and filters already came from the URL.
+  useEffect(() => { fetchOrders() }, [])
+
+  // Keep the address bar truthful as the desk pages and filters. replaceState,
+  // not a route change: paging is not a navigation, so Back still goes where
+  // the person actually came from.
+  useEffect(() => {
+    writeUrlState({
+      q: term,
+      payment,
+      page: page > 1 ? page : '',
+      size: pageSize !== 50 ? pageSize : '',
+    })
+  }, [term, payment, page, pageSize])
 
   const resetPagination = () => {
     setPage(1)
