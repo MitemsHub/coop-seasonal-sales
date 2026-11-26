@@ -380,7 +380,7 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   key={`${src}-${i}`}
-                  src={thumbUrl(src, 800)}
+                  src={thumbUrl(src, 1400)}
                   alt={many ? `${p.name} — photo ${i + 1} of ${images.length}` : p.name}
                   draggable={false}
                   className="pointer-events-none h-full w-full shrink-0 object-contain"

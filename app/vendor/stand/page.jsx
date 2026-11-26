@@ -87,7 +87,7 @@ export default function VendorStandPage() {
       <div className="mt-5 space-y-4 rounded-2xl border border-line bg-surface p-4">
         {form.banner_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={thumbUrl(form.banner_url, 900)} alt="Stand banner" className="h-36 w-full rounded-xl object-cover" />
+          <img src={thumbUrl(form.banner_url, 1200)} alt="Stand banner" className="h-36 w-full rounded-xl object-cover" />
         ) : (
           <div className="flex h-24 items-center justify-center rounded-xl border border-dashed border-line bg-subtle/60 text-chips text-muted">
             <ImageIcon className="mr-2 h-4 w-4" /> No banner yet

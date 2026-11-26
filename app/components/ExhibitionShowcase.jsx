@@ -66,7 +66,7 @@ function PhotoCard({ photo, index }) {
         {/* The image — CSS class handles light/dark adaptive filtering */}
         <div className="exhibition-photo-wrapper relative h-full min-h-[12rem] overflow-hidden">
           <img
-            src={thumbUrl(photo.src, 800)}
+            src={thumbUrl(photo.src, 1200)}
             alt={photo.alt}
             loading="lazy"
             draggable={false}

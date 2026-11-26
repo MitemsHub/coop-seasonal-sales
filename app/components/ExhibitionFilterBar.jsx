@@ -256,7 +256,7 @@ export default function ExhibitionFilterBar({ filters, className = '' }) {
                             <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line-subtle bg-accent-subtle text-[10px] font-bold text-accent">
                               {v.banner_url ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={thumbUrl(v.banner_url, 160)} alt="" className="h-full w-full object-cover" />
+                                <img src={thumbUrl(v.banner_url, 240)} alt="" className="h-full w-full object-cover" />
                               ) : (
                                 initials(v.name)
                               )}

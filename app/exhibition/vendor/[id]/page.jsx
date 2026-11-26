@@ -146,7 +146,7 @@ function VendorHubContent() {
               <div className="ui-card mb-fluid-lg overflow-hidden">
                 {vendor.banner_url && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={thumbUrl(vendor.banner_url, 900)} alt={`${vendor.name} banner`} className="h-32 w-full object-cover sm:h-44" />
+                  <img src={thumbUrl(vendor.banner_url, 1600)} alt={`${vendor.name} banner`} className="h-32 w-full object-cover sm:h-44" />
                 )}
                 <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:p-6">
                   <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-accent-subtle text-accent">

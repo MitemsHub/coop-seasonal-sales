@@ -59,7 +59,7 @@ export default function StandCard({
         {v.banner_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={thumbUrl(v.banner_url, 600)}
+            src={thumbUrl(v.banner_url, 800)}
             alt=""
             loading="lazy"
             className="h-full w-full object-cover transition-transform duration-500 ease-sakani group-hover:scale-110"
