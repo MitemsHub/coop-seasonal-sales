@@ -22,6 +22,13 @@ import Select from '../../../components/ui/Select'
 import Skeleton from '../../../components/ui/Skeleton'
 import { ExhibitionCyclesContent } from '../cycles/page'
 
+const money = (value) =>
+  new Intl.NumberFormat('en-NG', {
+    style: 'currency',
+    currency: 'NGN',
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0))
+
 /* ─── Exhibition Loan Limits (Selected Cycle) ──────────────────── */
 
 function LoanLimitsSection() {
@@ -293,6 +300,8 @@ function RepriceOrdersSection() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState(null)
+  const [impact, setImpact] = useState(null)
+  const [impactBusy, setImpactBusy] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -321,6 +330,31 @@ function RepriceOrdersSection() {
   const selected = cycles.find((c) => String(c.id) === String(cycleId))
   const ready = !!selected && confirmText.trim().toUpperCase() === 'REPRICE ORDERS'
 
+  // A reprice raises what a member owes, which can push them past their loan
+  // room. This preview computes the new totals without saving anything, so the
+  // admin can see who would go over before committing.
+  const checkImpact = useCallback(
+    async (seasonId) => {
+      const id = String(seasonId || cycleId || '')
+      if (!id || impactBusy) return
+      setImpactBusy(true)
+      try {
+        const res = await fetch(
+          `/api/admin/exhibition/orders/reprice-impact?cycle_id=${encodeURIComponent(id)}`,
+          { cache: 'no-store' }
+        )
+        const json = await res.json()
+        if (!json?.ok) throw new Error(json?.error || 'Failed to check the loan room')
+        setImpact(json)
+      } catch (e) {
+        setImpact({ error: e.message })
+      } finally {
+        setImpactBusy(false)
+      }
+    },
+    [cycleId, impactBusy]
+  )
+
   const reprice = async () => {
     if (!ready || busy) return
     setBusy(true)
@@ -334,6 +368,7 @@ function RepriceOrdersSection() {
       const json = await res.json()
       if (!json?.ok) throw new Error(json?.error || 'Failed to reprice orders')
       setConfirmText('')
+      checkImpact(cycleId)
       setMsg({
         type: 'success',
         text:
@@ -375,7 +410,10 @@ function RepriceOrdersSection() {
                 <Select
                   id="reprice-cycle"
                   value={cycleId}
-                  onChange={(e) => setCycleId(e.target.value)}
+                  onChange={(e) => {
+                    setCycleId(e.target.value)
+                    setImpact(null)
+                  }}
                   className="w-full"
                 >
                   {cycles.map((c) => (
@@ -398,6 +436,14 @@ function RepriceOrdersSection() {
               <Button loading={busy} disabled={!ready || busy} onClick={reprice}>
                 {busy ? 'Repricing…' : 'Reprice orders'}
               </Button>
+              <Button
+                variant="secondary"
+                loading={impactBusy}
+                disabled={!cycleId || impactBusy}
+                onClick={() => checkImpact(cycleId)}
+              >
+                {impactBusy ? 'Checking…' : 'Check loan room'}
+              </Button>
             </div>
             {selected && (
               <p className="text-xs text-muted">
@@ -405,6 +451,67 @@ function RepriceOrdersSection() {
                 {' · '}Vendor deduction: <span className="font-semibold text-fg">{Number(selected.vendor_deduction_rate_pct || 0)}%</span>
                 {' · '}Cash and Savings orders are repriced without interest.
               </p>
+            )}
+            {impact?.error && (
+              <p className="rounded-lg bg-subtle px-3 py-2 text-sm text-danger-fg">{impact.error}</p>
+            )}
+            {impact && !impact.error && (
+              <div
+                className={`rounded-xl border p-3 ${
+                  impact.over_members > 0 ? 'border-danger-border bg-danger-bg' : 'border-success-border bg-success-bg'
+                }`}
+              >
+                <p
+                  className={`text-sm font-medium ${
+                    impact.over_members > 0 ? 'text-danger-fg' : 'text-success-fg'
+                  }`}
+                >
+                  {impact.over_members === 0
+                    ? `No one goes over: ${impact.members_checked} member(s) still fit at ${impact.loan_interest_rate_pct}%`
+                    : `${impact.over_members} member(s) would go over their loan room by ${money(
+                        impact.members.reduce((sum, m) => sum + Number(m.over_by || 0), 0)
+                      )}`}
+                </p>
+                <p className="mt-0.5 text-xs text-muted">
+                  Preview only — nothing is saved. {impact.scanned_orders} open order(s) checked,{' '}
+                  {impact.total_delta === 0 ? 'no change in totals' : `${money(impact.total_delta)} more owed in total`}.
+                </p>
+                {impact.over_members > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {impact.members
+                      .filter((m) => m.over_by > 0)
+                      .map((m) => (
+                        <div key={m.member_id} className="rounded-lg bg-surface/80 p-2.5 text-xs">
+                          <div className="flex flex-wrap items-baseline justify-between gap-2">
+                            <span className="font-medium text-fg">
+                              {m.member_id}
+                              {m.name ? ` · ${m.name}` : ''}
+                              {m.category ? <span className="ml-1 text-muted">({m.category})</span> : null}
+                            </span>
+                            <span className="tabular-nums text-danger-fg">
+                              room {m.room_now == null ? '—' : money(m.room_now)} → over by {money(m.over_by)}
+                            </span>
+                          </div>
+                          <div className="mt-1 space-y-0.5">
+                            {m.orders
+                              .filter((o) => o.delta > 0)
+                              .map((o) => (
+                                <div key={o.id} className="flex justify-between gap-3 text-muted">
+                                  <span className="truncate">
+                                    {o.order_id || `#${o.id}`} · {o.payment_option || '—'}
+                                  </span>
+                                  <span className="shrink-0 tabular-nums">
+                                    {money(o.old_total)} → {money(o.new_total)}
+                                  </span>
+                                </div>
+                              ))}
+                          </div>
+                          {m.room_warning ? <p className="mt-1 text-muted">{m.room_warning}</p> : null}
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
             )}
             {msg && (
               <p className={`text-sm ${msg.type === 'error' ? 'text-danger-fg' : 'text-success-fg'}`}>{msg.text}</p>
