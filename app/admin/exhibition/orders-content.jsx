@@ -7,9 +7,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'framer-motion'
-import { CheckCircle2, ChevronLeft, ChevronRight, Clock, Inbox, PackageCheck, Plus, RefreshCw, RotateCcw, Search, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock, Inbox, PackageCheck, Plus, RefreshCw, RotateCcw, Search, XCircle } from 'lucide-react'
 import CounterInvoiceModal from '../../components/CounterInvoiceModal'
 import ExportButton from '../../components/ui/ExportButton'
+import Pagination from '../../components/ui/Pagination'
 import DraggableModal from '../../components/DraggableModal'
 
 import { createManifestDoc, addManifestTable, sanitizePdfText } from '../../lib/pdfExport'
@@ -765,49 +766,25 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
               </button>
             )}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
-              value={pageSize}
-              onChange={(e) => {
-                const next = Number(e.target.value) || 50
-                setPageSize(next)
-                setPage(1)
-                fetchOrders({ page: 1, pageSize: next })
-              }}
-            >
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
-              onClick={() => {
-                const next = Math.max(1, safePage - 1)
-                setPage(next)
-                fetchOrders({ page: next })
-              }}
-              disabled={safePage <= 1}
-            >
-              <ChevronLeft className="h-3.5 w-3.5" /> Prev
-            </button>
-            <div className="text-sm text-muted">
-              Page <span className="font-medium text-fg">{safePage}</span> / {pageCount}
-            </div>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm font-medium text-fg transition-colors duration-200 ease-sakani hover:bg-subtle disabled:opacity-50"
-              onClick={() => {
-                const next = Math.min(pageCount, safePage + 1)
-                setPage(next)
-                fetchOrders({ page: next })
-              }}
-              disabled={safePage >= pageCount}
-            >
-              Next <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
+          <Pagination
+            page={safePage}
+            pageCount={pageCount}
+            pageSize={pageSize}
+            totalItems={totalCount}
+            itemLabel="orders"
+            onPageChange={(next) => {
+              setPage(next)
+              fetchOrders({ page: next })
+            }}
+            onPageSizeChange={(next) => {
+              setPageSize(next)
+              setPage(1)
+              fetchOrders({ page: 1, pageSize: next })
+            }}
+            disabled={loading || bulkBusy}
+            flush
+            className="w-full lg:w-auto"
+          />
         </div>
 
         <div className="hidden overflow-x-auto lg:block">

@@ -6,7 +6,7 @@
 // member, branch, cycle and total, so admins can review staff actions from
 // one place. Filter by action, branch, or search an order / member.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CheckCircle2, ChevronLeft, ChevronRight, History, Inbox, RefreshCw, RotateCcw, Search, XCircle } from 'lucide-react'
+import { CheckCircle2, History, Inbox, RefreshCw, RotateCcw, Search, XCircle } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Badge from '../../../components/ui/Badge'
 import Button from '../../../components/ui/Button'
@@ -14,6 +14,7 @@ import Card from '../../../components/ui/Card'
 import { Table, THead, TBody, TR, TH, TD } from '../../../components/ui/Table'
 import Select from '../../../components/ui/Select'
 import Skeleton from '../../../components/ui/Skeleton'
+import Pagination from '../../../components/ui/Pagination'
 
 const naira = (v) =>
   new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(
@@ -358,38 +359,23 @@ export default function AdminExhibitionAuditPage() {
 
           {/* Pagination */}
           {!loading && total > 0 && (
-            <div className="flex flex-col gap-3 border-t border-line bg-subtle px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2">
-                <Select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); load({ page: 1, pageSize: Number(e.target.value) }) }} className="w-24">
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </Select>
-                <span className="text-sm text-muted">
-                  Page <span className="font-medium text-fg">{safePage}</span> / {pageCount}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  leftIcon={ChevronLeft}
-                  onClick={() => { const next = Math.max(1, safePage - 1); setPage(next); load({ page: next }) }}
-                  disabled={safePage <= 1 || loading}
-                >
-                  Prev
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  rightIcon={ChevronRight}
-                  onClick={() => { const next = Math.min(pageCount, safePage + 1); setPage(next); load({ page: next }) }}
-                  disabled={safePage >= pageCount || loading}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
+            <Pagination
+              page={safePage}
+              pageCount={pageCount}
+              pageSize={pageSize}
+              totalItems={total}
+              itemLabel="entries"
+              onPageChange={(next) => {
+                setPage(next)
+                load({ page: next })
+              }}
+              onPageSizeChange={(next) => {
+                setPageSize(next)
+                setPage(1)
+                load({ page: 1, pageSize: next })
+              }}
+              disabled={loading}
+            />
           )}
         </Card>
       </div>

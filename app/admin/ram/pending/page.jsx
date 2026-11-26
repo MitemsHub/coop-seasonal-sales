@@ -8,7 +8,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 import ExportButton from '../../../components/ui/ExportButton'
 import { createManifestDoc, addManifestTable, sanitizePdfText } from '../../../lib/pdfExport'
 import Button from '../../../components/ui/Button'
-import { CheckCircle2, CheckSquare, ChevronLeft, ChevronRight, Inbox, RefreshCw, RotateCcw, Search, XCircle } from 'lucide-react'
+import Pagination from '../../../components/ui/Pagination'
+import { CheckCircle2, CheckSquare, Inbox, RefreshCw, RotateCcw, Search, XCircle } from 'lucide-react'
 
 function safeJsonFactory() {
   return async (res, label) => {
@@ -687,33 +688,15 @@ export function RamOrdersAdminPageContent({ status = 'Pending' }) {
               <option value={50}>50</option>
               <option value={100}>100</option>
             </select>
-            <Button
-              variant="secondary"
-              leftIcon={ChevronLeft}
-              onClick={() => {
-                const next = Math.max(1, safePage - 1)
+            <Pagination
+              page={safePage}
+              pageCount={pageCount}
+              flush
+              onPageChange={(next) => {
                 setPage(next)
                 fetchOrders({ page: next })
               }}
-              disabled={safePage <= 1}
-            >
-              Prev
-            </Button>
-            <div className="text-sm text-muted">
-              Page <span className="font-medium text-fg">{safePage}</span> / {pageCount}
-            </div>
-            <Button
-              variant="secondary"
-              rightIcon={ChevronRight}
-              onClick={() => {
-                const next = Math.min(pageCount, safePage + 1)
-                setPage(next)
-                fetchOrders({ page: next })
-              }}
-              disabled={safePage >= pageCount}
-            >
-              Next
-            </Button>
+            />
           </div>
         </div>
 

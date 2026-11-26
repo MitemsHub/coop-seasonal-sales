@@ -9,6 +9,7 @@ import DraggableModal from '../../components/DraggableModal'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
 import CounterInvoiceModal from '../../components/CounterInvoiceModal'
+import Pagination from '../../components/ui/Pagination'
 
 const fmtNaira = (n) => `NGN ${Number(n || 0).toLocaleString()}`
 
@@ -38,13 +39,27 @@ export default function VendorOrdersPage() {
   const [lineTarget, setLineTarget] = useState(null)
   const [lineBusy, setLineBusy] = useState(false)
   const [notice, setNotice] = useState(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(25)
+  const [total, setTotal] = useState(0)
 
-  const load = async () => {
-    const qs = filter ? `?status=${filter}` : ''
-    const res = await fetch(`/api/vendor/exhibition/orders${qs}`, { cache: 'no-store' })
+  // Paged on the server: a stand that has been trading for a season has more
+  // orders than one screen, and the list used to stop at the first 50 with no
+  // way forward. A refresh after a cancellation keeps the page it was on.
+  const load = async (opts = {}) => {
+    const nextPage = Number(opts.page ?? page)
+    const nextSize = Number(opts.pageSize ?? pageSize)
+    const qs = new URLSearchParams({
+      limit: String(nextSize),
+      offset: String(Math.max(0, (nextPage - 1) * nextSize)),
+    })
+    if (filter) qs.set('status', filter)
+    const res = await fetch(`/api/vendor/exhibition/orders?${qs.toString()}`, { cache: 'no-store' })
     const json = await res.json()
-    if (json.ok) setOrders(json.orders)
-    else setMsg(json.error || 'Failed to load orders')
+    if (json.ok) {
+      setOrders(json.orders)
+      setTotal(Number(json.total || 0))
+    } else setMsg(json.error || 'Failed to load orders')
     return json.ok ? json.orders : []
   }
 
@@ -52,6 +67,18 @@ export default function VendorOrdersPage() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter])
+
+  // Cancelling an order can empty the last page; step back instead of leaving
+  // the vendor on a blank one.
+  useEffect(() => {
+    if (!orders) return
+    const lastPage = Math.max(1, Math.ceil(total / Math.max(1, pageSize)))
+    if (page > lastPage) {
+      setPage(lastPage)
+      load({ page: lastPage })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, total, page, pageSize])
 
   // A vendor may withdraw an order that is entirely theirs, or a single item
   // from any open order. Item cancellation is not a status change: the API
@@ -154,7 +181,10 @@ export default function VendorOrdersPage() {
           <button
             key={f.key}
             type="button"
-            onClick={() => setFilter(f.key)}
+            onClick={() => {
+              setFilter(f.key)
+              setPage(1)
+            }}
             className={[
               'rounded-full border px-3.5 py-1.5 text-sm font-medium transition-[color,background-color,scale] duration-150 active:scale-[0.97]',
               filter === f.key
@@ -239,6 +269,26 @@ export default function VendorOrdersPage() {
               </div>
             </div>
           ))}
+
+          <div className="rounded-2xl border border-line bg-surface px-1">
+            <Pagination
+              page={page}
+              pageCount={Math.max(1, Math.ceil(total / Math.max(1, pageSize)))}
+              pageSize={pageSize}
+              totalItems={total}
+              itemLabel="orders"
+              onPageChange={(next) => {
+                setPage(next)
+                load({ page: next })
+              }}
+              onPageSizeChange={(next) => {
+                setPageSize(next)
+                setPage(1)
+                load({ page: 1, pageSize: next })
+              }}
+              flush
+            />
+          </div>
         </div>
       )}
 

@@ -6,7 +6,7 @@
 // Admins can edit the login details and email them to the vendor. Suspend,
 // edit and delete live here too.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Copy, KeyRound, Mail, Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload, UserCheck, Users } from 'lucide-react'
+import { AlertTriangle, Check, Copy, KeyRound, Mail, Pencil, Plus, RefreshCw, Search, Store, Trash2, Upload, UserCheck, Users } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
@@ -19,6 +19,7 @@ import Skeleton from '../../../components/ui/Skeleton'
 import ConfirmDialog from '../../../components/ui/ConfirmDialog'
 import VendorImportModal from '../../../components/VendorImportModal'
 import ExportButton from '../../../components/ui/ExportButton'
+import Pagination from '../../../components/ui/Pagination'
 import { downloadExcelWorkbook } from '../../../../lib/excelExport'
 import { createManifestDoc, addManifestTable, sanitizePdfText } from '../../../lib/pdfExport'
 import { VENDOR_EMAIL_INTERVAL_MS } from '../../../../lib/vendorEmailLimits'
@@ -1153,50 +1154,19 @@ export default function ExhibitionVendorsPage() {
                 ))}
               </div>
 
-              <div className="flex flex-col gap-3 border-t border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs text-muted">
-                  Showing {pageStart + 1}–{Math.min(pageStart + pageSize, vendors.length)} of {vendors.length} vendors
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="flex items-center gap-2 text-xs text-muted">
-                    Rows
-                    <select
-                      value={pageSize}
-                      onChange={(e) => {
-                        setPageSize(Number(e.target.value))
-                        setPage(1)
-                      }}
-                      disabled={isEmailing}
-                      className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-fg focus:border-brand focus:outline-none"
-                    >
-                      <option value={25}>25</option>
-                      <option value={50}>50</option>
-                      <option value={100}>100</option>
-                    </select>
-                  </label>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    leftIcon={ChevronLeft}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage <= 1 || isEmailing}
-                  >
-                    Previous
-                  </Button>
-                  <span className="px-1 text-xs font-medium text-muted">
-                    Page {currentPage} of {totalPages}
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    rightIcon={ChevronRight}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage >= totalPages || isEmailing}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
+              <Pagination
+                page={currentPage}
+                pageCount={totalPages}
+                pageSize={pageSize}
+                totalItems={vendors.length}
+                itemLabel="vendors"
+                onPageChange={(next) => setPage(next)}
+                onPageSizeChange={(next) => {
+                  setPageSize(next)
+                  setPage(1)
+                }}
+                disabled={isEmailing}
+              />
             </>
           )}
         </Card>

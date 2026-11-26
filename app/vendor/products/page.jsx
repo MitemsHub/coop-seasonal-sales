@@ -11,6 +11,8 @@ import Badge from '../../components/ui/Badge'
 import { thumbSrcSet, thumbUrl } from '../../../lib/imageUrl'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
+import Pagination from '../../components/ui/Pagination'
+import SelectionBar from '../../components/ui/SelectionBar'
 import ProductImagesUpload from '../../components/ProductImagesUpload'
 import { productImages } from '../../../lib/exhibitionProductImages'
 import { deleteBlockReason } from '../../../lib/exhibitionProductDelete'
@@ -418,42 +420,26 @@ export default function VendorProductsPage() {
 
       {/* Bulk removal — one decision instead of one dialog per row. Only
           unapproved products can be deleted, so "select all" selects exactly
-          those and the approved ones stay tick-disabled. */}
+          those and the approved ones stay tick-disabled. The bar is the shared
+          one, so it matches the admin catalogue exactly. */}
       {filtered.length > 0 && (
-        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-subtle/60 px-3 py-2">
-          <label className="flex items-center gap-2 text-xs font-medium text-muted">
-            <input
-              type="checkbox"
-              checked={allDeletableSelected}
-              onChange={toggleSelectAll}
-              ref={(el) => {
-                if (el) el.indeterminate = !allDeletableSelected && selectedDeletable.length > 0
-              }}
-              disabled={!deletableFiltered.length || bulkBusy}
-              aria-label="Select all removable products"
-              className="h-4 w-4 rounded border-line accent-brand disabled:opacity-40"
-            />
-            Select all {deletableFiltered.length} removable
-          </label>
-          <span className="text-chips text-muted">Approved products can only be archived.</span>
+        <SelectionBar
+          selectedCount={selectedDeletable.length}
+          selectAllLabel={`Select all ${deletableFiltered.length} removable`}
+          allSelected={allDeletableSelected}
+          someSelected={selectedDeletable.length > 0}
+          onToggleSelectAll={toggleSelectAll}
+          onClear={() => setSelected(new Set())}
+          selectAllDisabled={!deletableFiltered.length}
+          busy={bulkBusy}
+          hint="Approved products can only be archived."
+        >
           {selectedDeletable.length > 0 && (
-            <>
-              <span className="rounded-full bg-danger-bg px-2 py-0.5 text-xs font-semibold text-danger-fg">
-                {selectedDeletable.length} selected
-              </span>
-              <Button size="sm" variant="danger" leftIcon={Trash2} onClick={() => setBulkConfirmOpen(true)} loading={bulkBusy}>
-                Delete selected
-              </Button>
-              <button
-                type="button"
-                onClick={() => setSelected(new Set())}
-                className="text-xs font-medium text-brand underline-offset-2 hover:underline"
-              >
-                Clear selection
-              </button>
-            </>
+            <Button size="sm" variant="danger" leftIcon={Trash2} onClick={() => setBulkConfirmOpen(true)} loading={bulkBusy}>
+              Delete selected
+            </Button>
           )}
-        </div>
+        </SelectionBar>
       )}
 
       {!products ? (
@@ -480,19 +466,15 @@ export default function VendorProductsPage() {
             {paged.map((p) => (
               <div key={p.id} className={`flex flex-col gap-3 p-4 transition-colors sm:flex-row sm:items-center ${selected.has(p.id) ? 'bg-danger-bg/20' : ''}`}>
                 <div className="flex items-center gap-3 sm:shrink-0">
-                  <label
-                    className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-line-subtle bg-subtle/60"
+                  <input
+                    type="checkbox"
+                    checked={selected.has(p.id)}
+                    onChange={() => toggleSelected(p.id)}
+                    disabled={!isDeletable(p) || bulkBusy}
+                    aria-label={`Select ${p.name}`}
                     title={isDeletable(p) ? 'Select this product' : 'Approved products can only be archived, not deleted'}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected.has(p.id)}
-                      onChange={() => toggleSelected(p.id)}
-                      disabled={!isDeletable(p) || bulkBusy}
-                      aria-label={`Select ${p.name}`}
-                      className="h-4 w-4 rounded border-line accent-brand disabled:cursor-not-allowed disabled:opacity-40"
-                    />
-                  </label>
+                    className="h-4 w-4 shrink-0 rounded border-line accent-brand disabled:cursor-not-allowed disabled:opacity-40"
+                  />
                   {productImages(p)[0] ? (
                     <img src={thumbUrl(productImages(p)[0], 160)} srcSet={thumbSrcSet(productImages(p)[0], 160)} alt={p.name} className="h-14 w-14 shrink-0 rounded-xl border border-line-subtle bg-subtle object-contain" />
                   ) : (
@@ -556,36 +538,20 @@ export default function VendorProductsPage() {
 
           {/* Pagination — vendors with many items get pages instead of one endless list */}
           {filtered.length > 0 && (
-            <div className="flex flex-col gap-3 border-t border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-sm text-muted">
-                Showing <span className="font-medium text-fg">{(safePage - 1) * pageSize + 1}</span>–
-                <span className="font-medium text-fg">{Math.min(safePage * pageSize, filtered.length)}</span> of{' '}
-                <span className="font-medium text-fg">{filtered.length}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value))
-                    setPage(1)
-                  }}
-                  className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg"
-                >
-                  {[10, 25, 50, 100].map((s) => (
-                    <option key={s} value={s}>{s} per page</option>
-                  ))}
-                </select>
-                <Button variant="secondary" size="sm" onClick={() => setPage(Math.max(1, safePage - 1))} disabled={safePage <= 1}>
-                  Prev
-                </Button>
-                <span className="text-sm text-muted">
-                  Page <span className="font-medium text-fg">{safePage}</span> / {pageCount}
-                </span>
-                <Button variant="secondary" size="sm" onClick={() => setPage(Math.min(pageCount, safePage + 1))} disabled={safePage >= pageCount}>
-                  Next
-                </Button>
-              </div>
-            </div>
+            <Pagination
+              page={safePage}
+              pageCount={pageCount}
+              pageSize={pageSize}
+              pageSizeOptions={[10, 25, 50, 100]}
+              totalItems={filtered.length}
+              itemLabel="products"
+              onPageChange={(next) => setPage(next)}
+              onPageSizeChange={(next) => {
+                setPageSize(next)
+                setPage(1)
+              }}
+              disabled={bulkBusy}
+            />
           )}
         </div>
       )}

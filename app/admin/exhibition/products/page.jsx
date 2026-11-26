@@ -6,12 +6,14 @@
 // quantities, status, and archive (delete is blocked for
 // products on orders — archive instead).
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, ImageOff, Plus, RefreshCw, Search, Store, Upload } from 'lucide-react'
+import { ImageOff, Plus, RefreshCw, Search, Store, Upload } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
 import { thumbSrcSet, thumbUrl } from '../../../../lib/imageUrl'
 import Card from '../../../components/ui/Card'
+import Pagination from '../../../components/ui/Pagination'
+import SelectionBar from '../../../components/ui/SelectionBar'
 import { Table, THead, TBody, TR, TH, TD } from '../../../components/ui/Table'
 import Input from '../../../components/ui/Input'
 import Label from '../../../components/ui/Label'
@@ -65,6 +67,14 @@ export default function ExhibitionProductsPage() {
   const [selected, setSelected] = useState(new Set())
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
   const fetchSeq = useRef(0)
+  // The filters the list was last loaded with. A refresh after approving must
+  // not count as a filter change, or the desk is thrown back to page 1 every
+  // time it acts on page 7.
+  const loadedFiltersRef = useRef('')
+  const pageSizeRef = useRef(pageSize)
+  useEffect(() => {
+    pageSizeRef.current = pageSize
+  }, [pageSize])
 
   // keepMessage: a caller that is about to show its own confirmation (approve,
   // reject) must not have it wiped by the refresh it triggers. Without this the
@@ -106,7 +116,18 @@ export default function ExhibitionProductsPage() {
           const next = new Set([...prev].filter((id) => live.has(id)))
           return next.size === prev.size ? prev : next
         })
-        setPage(1)
+        // Filtering or searching starts at page 1; a refresh after an approval,
+        // archive or edit stays where the desk was — clamped to the last page
+        // that still has rows, so clearing the final page does not show an
+        // empty one.
+        const signature = `${cycleFilter}|${vendorFilter}|${statusFilter}|${term.trim()}`
+        if (loadedFiltersRef.current !== signature) {
+          loadedFiltersRef.current = signature
+          setPage(1)
+        } else {
+          const lastPage = Math.max(1, Math.ceil(fetched.length / pageSizeRef.current))
+          setPage((current) => (current > lastPage ? lastPage : current))
+        }
       } else setMsg({ type: 'error', text: p?.error || 'Failed to load products' })
       if (c?.ok) setCycles(c.cycles || [])
       if (v?.ok) setVendors(v.vendors || [])
@@ -744,28 +765,21 @@ export default function ExhibitionProductsPage() {
           )}
         </div>
 
-        {/* Selection bar — always visible so "select all shown" is reachable
-            before anything is ticked; the bulk actions appear once it is. */}
+        {/* Selection bar — the shared one, so "select these" reads the same
+            here and in the vendor's own catalogue. Always visible so "select
+            all shown" is reachable before anything is ticked. */}
         {!loading && products.length > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-subtle/60 px-3 py-2">
-            <label className="flex items-center gap-2 text-xs font-medium text-muted">
-              <input
-                type="checkbox"
-                checked={allPageSelected}
-                onChange={toggleSelectPage}
-                ref={(el) => {
-                  if (el) el.indeterminate = !allPageSelected && somePageSelected
-                }}
-                disabled={busy || !pageProducts.length}
-                className="h-4 w-4 rounded border-line accent-brand"
-              />
-              Select all shown ({pageProducts.length})
-            </label>
-            {selected.size > 0 && (
-              <span className="rounded-full bg-brand-subtle px-2 py-0.5 text-xs font-semibold text-brand">
-                {selected.size} selected
-              </span>
-            )}
+          <SelectionBar
+            selectedCount={selected.size}
+            selectAllLabel={`Select all shown (${pageProducts.length})`}
+            allSelected={allPageSelected}
+            someSelected={somePageSelected}
+            onToggleSelectAll={toggleSelectPage}
+            onClear={() => setSelected(new Set())}
+            selectAllDisabled={!pageProducts.length}
+            busy={busy}
+            hint={allPageSelected && !allFilteredSelected ? `Only this page — ${products.length.toLocaleString()} in the filter` : ''}
+          >
             {selected.size > 0 && !allFilteredSelected && (
               <button
                 type="button"
@@ -773,15 +787,6 @@ export default function ExhibitionProductsPage() {
                 className="text-xs font-medium text-brand underline-offset-2 hover:underline"
               >
                 Select all {products.length}
-              </button>
-            )}
-            {selected.size > 0 && (
-              <button
-                type="button"
-                onClick={() => setSelected(new Set())}
-                className="text-xs font-medium text-muted underline-offset-2 hover:text-fg hover:underline"
-              >
-                Clear
               </button>
             )}
             {selected.size > 0 && (
@@ -795,7 +800,7 @@ export default function ExhibitionProductsPage() {
                   if (action === 'delete') setBulkConfirmOpen(true)
                   else runBulk(action)
                 }}
-                className="ml-auto rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm font-medium text-fg focus:border-brand focus:outline-none disabled:opacity-50"
+                className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm font-medium text-fg focus:border-brand focus:outline-none disabled:opacity-50"
               >
                 <option value="" disabled>Bulk actions</option>
                 <option value="approve">Approve selected</option>
@@ -804,7 +809,7 @@ export default function ExhibitionProductsPage() {
                 <option value="delete">Delete selected</option>
               </select>
             )}
-          </div>
+          </SelectionBar>
         )}
 
         <Card className="gap-0 overflow-hidden p-0">
@@ -975,49 +980,19 @@ export default function ExhibitionProductsPage() {
             </>
           )}
           {!loading && products.length > 0 && (
-            <div className="flex flex-col gap-3 border-t border-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs text-muted">
-                Showing {pageStart + 1}–{Math.min(pageStart + pageSize, products.length)} of {products.length} products
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="flex items-center gap-2 text-xs text-muted">
-                  Rows
-                  <select
-                    value={pageSize}
-                    onChange={(e) => {
-                      setPageSize(Number(e.target.value))
-                      setPage(1)
-                    }}
-                    className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-fg focus:border-brand focus:outline-none"
-                  >
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
-                </label>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  leftIcon={ChevronLeft}
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
-                  disabled={currentPage <= 1}
-                >
-                  Previous
-                </Button>
-                <span className="px-1 text-xs font-medium text-muted">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  rightIcon={ChevronRight}
-                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                  disabled={currentPage >= totalPages}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
+            <Pagination
+              page={currentPage}
+              pageCount={totalPages}
+              pageSize={pageSize}
+              totalItems={products.length}
+              itemLabel="products"
+              onPageChange={(next) => setPage(next)}
+              onPageSizeChange={(next) => {
+                setPageSize(next)
+                setPage(1)
+              }}
+              disabled={busy}
+            />
           )}
         </Card>
 
