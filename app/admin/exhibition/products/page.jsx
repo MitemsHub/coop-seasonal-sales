@@ -20,6 +20,7 @@ import Skeleton from '../../../components/ui/Skeleton'
 import ConfirmDialog from '../../../components/ui/ConfirmDialog'
 import ProductImportModal from '../../../components/ProductImportModal'
 import ProductImagesUpload from '../../../components/ProductImagesUpload'
+import ShelfPicker from '../../../components/ShelfPicker'
 import { productImages } from '../../../../lib/exhibitionProductImages'
 
 const naira = (v) =>
@@ -47,6 +48,7 @@ export default function ExhibitionProductsPage() {
   const [importOpen, setImportOpen] = useState(false)
   const [imageKey, setImageKey] = useState('') // unique storage key for a new product's photos
   const [form, setForm] = useState({})
+  const [categories, setCategories] = useState([])
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
   const [selected, setSelected] = useState(new Set())
@@ -116,6 +118,27 @@ export default function ExhibitionProductsPage() {
     if (active) setCycleFilter((current) => current || String(active.id))
   }, [cycles])
 
+  // Shelves for the picker, per cycle. The endpoint creates the shop's shelves
+  // for a cycle that has none, so this is never an empty select.
+  useEffect(() => {
+    if (!modal) return undefined
+    const cycleId = String(form.cycle_id || '')
+    if (!cycleId) {
+      setCategories([])
+      return undefined
+    }
+    let alive = true
+    fetch(`/api/admin/exhibition/categories?cycle_id=${encodeURIComponent(cycleId)}`, { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((json) => {
+        if (alive && json.ok) setCategories(json.categories || [])
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [modal, form.cycle_id])
+
   const openCreate = () => {
     const active = cycles.find((c) => c.status === 'active')
     setImageKey(`draft-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`)
@@ -141,6 +164,8 @@ export default function ExhibitionProductsPage() {
       qty: p.qty ?? '',
       status: p.status || 'active',
       description: p.description || '',
+      category_id: p.category_id ? String(p.category_id) : '',
+      cycle_id: p.cycle_id || '',
       images: productImages(p),
     })
     setModal(p)
@@ -268,6 +293,7 @@ export default function ExhibitionProductsPage() {
           image_urls: form.images || [],
           description: form.description || '',
           status: form.status,
+          category_id: form.category_id ? Number(form.category_id) : null,
         }),
       })
       const json = await res.json()
@@ -296,6 +322,7 @@ export default function ExhibitionProductsPage() {
           qty: form.qty,
           status: form.status,
           description: form.description || '',
+          category_id: form.category_id ? Number(form.category_id) : null,
           image_url: (form.images || [])[0] || '',
           image_urls: form.images || [],
         }),
@@ -918,6 +945,16 @@ export default function ExhibitionProductsPage() {
                   {modal === 'create' ? 'Generated automatically' : modal?.sku || '—'}
                 </p>
               </div>
+            </div>
+            <div>
+              <ShelfPicker
+                id="exh-p-shelf"
+                categories={categories}
+                name={form.name || ''}
+                description={form.description || ''}
+                value={form.category_id || ''}
+                onChange={(category_id) => setForm((f) => ({ ...f, category_id }))}
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

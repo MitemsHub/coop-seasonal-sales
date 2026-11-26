@@ -39,9 +39,12 @@ function hueOf(name) {
   return h
 }
 
-function StandCard({ v, count, products = [], index = 0 }) {
+function StandCard({ v, count, products = [], shelfLabels, index = 0 }) {
   const router = useRouter()
-  const labels = vendorShelfLabels(v)
+  // Up to three shelves, best first. The caller supplies labels already ordered
+  // by how many of the stand's products land on each, so a wig stand reads
+  // "Hair & Wigs" before it reads "Fashion".
+  const labels = (shelfLabels?.length ? shelfLabels : vendorShelfLabels(v)).slice(0, 3)
   const about = vendorAboutLine(v)
   const hue = hueOf(v.name)
   const thumbs = products.filter((p) => p.image_url || p.images?.length).slice(0, THUMBS)
@@ -120,7 +123,7 @@ function StandCard({ v, count, products = [], index = 0 }) {
       <span className="flex flex-1 flex-col px-3 pb-3 pt-2">
         <span className="block truncate text-sm font-bold tracking-tight text-fg">{v.name}</span>
         <span className="mt-0.5 block truncate text-[10px] font-semibold uppercase tracking-wide text-brand">
-          {labels.slice(0, 2).join(' · ') || 'Exhibition stand'}
+          {labels.join(' · ') || 'Exhibition stand'}
         </span>
         <span className="mt-1 line-clamp-2 min-h-[2.2rem] break-words text-[11px] leading-snug text-muted">
           {about || v.address || 'A stand at this season’s exhibition.'}
@@ -161,7 +164,7 @@ function StandCard({ v, count, products = [], index = 0 }) {
   )
 }
 
-export default function ExhibitionHubs({ vendors = [], vendorCounts = {}, productsByVendor = {} }) {
+export default function ExhibitionHubs({ vendors = [], vendorCounts = {}, productsByVendor = {}, shelfLabelsByVendor = {} }) {
   const trackRef = useRef(null)
   const resumeTimer = useRef(null)
   const pauseRef = useRef(false)
@@ -285,6 +288,7 @@ export default function ExhibitionHubs({ vendors = [], vendorCounts = {}, produc
               v={v}
               count={vendorCounts[v.id] || 0}
               products={productsByVendor[v.id] || []}
+              shelfLabels={shelfLabelsByVendor[v.id]}
               index={idx}
             />
           </div>

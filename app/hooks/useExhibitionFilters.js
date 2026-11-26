@@ -9,7 +9,7 @@
 // text, shelf, stock, offers, price and sort — so the sticky filter bar and
 // both grids always agree, and a new filter only has to be added once.
 import { useCallback, useMemo, useState } from 'react'
-import { categorizeShelf, vendorShelfLabels } from '@/lib/exhibitionShelf'
+import { categorizeShelf, shelfSummaryForVendor } from '@/lib/exhibitionShelf'
 import { vendorDeclared } from '@/lib/exhibitionVendorCategories'
 
 export const LOW_STOCK = 5
@@ -41,23 +41,32 @@ export default function useExhibitionFilters(products = [], vendors = []) {
   const { keyOf, shelves } = useMemo(() => categorizeShelf(products, vendors), [products, vendors])
 
   // What a stand sells, in words a member would type: its name, its declared
-  // category, its hall and address. One search now finds both stands and goods.
+  // category, the shelves its products actually land on, its hall and address.
+  // The inferred labels matter for stands whose name and declaration say
+  // nothing (a stall registered as just a business name).
   const vendorHay = useMemo(() => {
+    const byVendor = new Map()
+    for (const p of products) {
+      const id = Number(p.vendor_id)
+      if (!byVendor.has(id)) byVendor.set(id, [])
+      byVendor.get(id).push(p)
+    }
     const map = new Map()
     for (const v of vendors) {
+      const labels = shelfSummaryForVendor(v, byVendor.get(Number(v.id)) || []).map((s) => s.label)
       map.set(
         Number(v.id),
         clean([
           v.name,
           vendorDeclared(v.name) || v.category || '',
-          vendorShelfLabels(v).join(' '),
+          labels.join(' '),
           v.hall,
           v.address,
         ].join(' '))
       )
     }
     return map
-  }, [vendors])
+  }, [vendors, products])
 
   const priceBounds = useMemo(() => {
     if (!products.length) return { min: 0, max: 0 }

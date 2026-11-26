@@ -14,6 +14,7 @@ import ProductImagesUpload from '../../components/ProductImagesUpload'
 import { productImages } from '../../../lib/exhibitionProductImages'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import ProductImportModal from '../../components/ProductImportModal'
+import ShelfPicker from '../../components/ShelfPicker'
 
 const fmtNaira = (n) => `NGN ${Number(n || 0).toLocaleString()}`
 
@@ -27,6 +28,7 @@ const emptyForm = () => ({
   discount_pct: '0',
   qty: '',
   description: '',
+  category_id: '',
   images: [],
 })
 
@@ -70,6 +72,7 @@ export default function VendorProductsPage() {
   const [editing, setEditing] = useState(null) // product being edited or null for create
   const [imageKey, setImageKey] = useState('') // unique storage key for a new draft's photo
   const [form, setForm] = useState(emptyForm())
+  const [categories, setCategories] = useState([])
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
 
@@ -88,6 +91,21 @@ export default function VendorProductsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load])
 
+  // The shelves are read once; the API creates them for the vendor's cycle on
+  // first call, so the picker is never an empty select.
+  useEffect(() => {
+    let alive = true
+    fetch('/api/vendor/exhibition/categories', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((json) => {
+        if (alive && json.ok) setCategories(json.categories || [])
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
+
   const openCreate = () => {
     setEditing(null)
     setImageKey(`draft-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`)
@@ -105,6 +123,7 @@ export default function VendorProductsPage() {
       discount_pct: String(p.discount_pct ?? 0),
       qty: p.qty === null || p.qty === undefined ? '' : String(p.qty),
       description: p.description || '',
+      category_id: p.category_id ? String(p.category_id) : '',
       images: productImages(p),
     })
     setMsg('')
@@ -132,6 +151,7 @@ export default function VendorProductsPage() {
         discount_pct: discount,
         qty,
         description,
+        category_id: form.category_id ? Number(form.category_id) : null,
         image_url: images[0] || '',
         image_urls: images,
       }
@@ -150,6 +170,9 @@ export default function VendorProductsPage() {
     if (discount !== Number(editing.discount_pct || 0)) payload.discount_pct = discount
     if (qty !== previousQty) payload.qty = qty
     if (description !== (editing.description || '')) payload.description = description
+    if (String(form.category_id || '') !== String(editing.category_id || '')) {
+      payload.category_id = form.category_id ? Number(form.category_id) : null
+    }
     if (imagesChanged) {
       payload.image_url = images[0] || ''
       payload.image_urls = images
@@ -434,6 +457,16 @@ export default function VendorProductsPage() {
           <div className="sm:col-span-2">
             <Label htmlFor="p-name">Product name</Label>
             <Input id="p-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Handwoven Ankara Tote" />
+            <div className="mt-3">
+              <ShelfPicker
+                id="p-shelf"
+                categories={categories}
+                name={form.name}
+                description={form.description}
+                value={form.category_id}
+                onChange={(category_id) => setForm((f) => ({ ...f, category_id }))}
+              />
+            </div>
             <div className="mt-3">
               <Label htmlFor="p-description">Description (optional)</Label>
               <textarea

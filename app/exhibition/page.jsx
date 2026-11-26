@@ -33,6 +33,7 @@ import ModuleClosedPanel from '../components/ModuleClosedPanel'
 import AmbientBackdrop from '../components/AmbientBackdrop'
 import Skeleton from '../components/ui/Skeleton'
 import { countVendorProducts, searchStands, standsWithProducts } from '../../lib/exhibitionStands'
+import { shelfSummaryForVendor } from '../../lib/exhibitionShelf'
 
 // The shop used to stop at eight products and send members to "View all" for
 // the rest, which read as a half-empty shop when a branch has 100+ items. It
@@ -66,12 +67,23 @@ function ExhibitionShopContent() {
     return map
   }, [products])
 
+  // A stand's card names the shelves its own products land on, best first.
+  // Computed once per stand so a stand with no declaration and an unhelpful
+  // name still says what it sells instead of "Exhibition stand".
+  const shelfLabelsByVendor = useMemo(() => {
+    const map = {}
+    for (const v of vendors) {
+      map[v.id] = shelfSummaryForVendor(v, productsByVendor[v.id] || []).map((s) => s.label)
+    }
+    return map
+  }, [vendors, productsByVendor])
+
   // Only stands that actually have something to sell belong in the rail.
   const sellableStands = useMemo(() => standsWithProducts(vendors, products), [vendors, products])
 
   // One search serves both halves of the page: typing "rice" narrows the stands
   // to those selling it and the shelf to the rice itself.
-  const stands = useMemo(() => searchStands(sellableStands, q), [sellableStands, q])
+  const stands = useMemo(() => searchStands(sellableStands, q, products), [sellableStands, q, products])
 
   // Any change to the query starts the shelf over from the top.
   useEffect(() => {
@@ -194,7 +206,7 @@ function ExhibitionShopContent() {
                   <Skeleton key={i} className="h-[148px] w-[calc(50%-6px)] shrink-0 rounded-2xl sm:w-[calc(33.333%-8px)] lg:w-[calc(25%-9px)] xl:w-[calc(20%-9.6px)]" />
                 ))}
               </div>
-              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 2xl:grid-cols-7">
+              <div className="shelf-grid grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 2xl:grid-cols-7">
                 {Array.from({ length: 12 }).map((_, i) => (
                   <ExhibitionProductSkeleton key={i} />
                 ))}
@@ -233,6 +245,7 @@ function ExhibitionShopContent() {
                     vendors={stands}
                     vendorCounts={vendorCounts}
                     productsByVendor={productsByVendor}
+                    shelfLabelsByVendor={shelfLabelsByVendor}
                   />
                 )}
               </div>
@@ -254,7 +267,7 @@ function ExhibitionShopContent() {
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 2xl:grid-cols-7">
+                  <div className="shelf-grid grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 2xl:grid-cols-7">
                     {visible.map((p) => (
                       <ExhibitionProductCard
                         key={p.id}

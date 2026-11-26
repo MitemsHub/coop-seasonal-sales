@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession } from '@/lib/validation'
+import { ensureShelfCategories } from '@/lib/exhibitionShelfCategories'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -18,6 +19,14 @@ export async function GET(request) {
     const cycleId = Math.trunc(Number(searchParams.get('cycle_id') || 0))
 
     const supabase = createClient()
+
+    // One cycle's select needs the shop's shelves to exist; a cycle-less list
+    // (used by filters) does not create anything.
+    if (cycleId > 0) {
+      const shelves = await ensureShelfCategories(supabase, cycleId)
+      return NextResponse.json({ ok: true, categories: shelves })
+    }
+
     let query = supabase
       .from('exhibition_categories')
       .select('id, cycle_id, name, sort_order')

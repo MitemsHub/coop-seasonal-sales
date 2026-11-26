@@ -18,8 +18,9 @@ import ModuleClosedPanel from '../../components/ModuleClosedPanel'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
 import { countVendorProducts, initials, searchStands, standsWithProducts } from '../../../lib/exhibitionStands'
+import { shelfSummaryForVendor } from '../../../lib/exhibitionShelf'
 
-function StandTile({ v, count }) {
+function StandTile({ v, count, shelfLabels = [] }) {
   const router = useRouter()
   return (
     <button
@@ -39,6 +40,11 @@ function StandTile({ v, count }) {
         <MapPin className="h-3 w-3 shrink-0" strokeWidth={2} />
         {v.address || 'Exhibition stand'}
       </span>
+      {shelfLabels.length > 0 && (
+        <span className="mt-1 block truncate text-[10px] font-semibold uppercase tracking-wide text-brand">
+          {shelfLabels.slice(0, 3).join(' · ')}
+        </span>
+      )}
       <span className="mt-2 text-chips font-medium text-accent">
         {count} product{count === 1 ? '' : 's'}
       </span>
@@ -56,7 +62,23 @@ function AllStandsContent() {
 
   const vendorCounts = useMemo(() => countVendorProducts(products), [products])
   const sellableStands = useMemo(() => standsWithProducts(vendors, products), [vendors, products])
-  const stands = useMemo(() => searchStands(sellableStands, query), [sellableStands, query])
+  const stands = useMemo(() => searchStands(sellableStands, query, products), [sellableStands, query, products])
+
+  // The shelves each stand's products actually land on, best first, so a name
+  // like "OG WINNERS" still tells a member what the stand sells.
+  const shelfLabelsByVendor = useMemo(() => {
+    const byVendor = new Map()
+    for (const p of products) {
+      const id = Number(p.vendor_id)
+      if (!byVendor.has(id)) byVendor.set(id, [])
+      byVendor.get(id).push(p)
+    }
+    const map = {}
+    for (const v of vendors) {
+      map[v.id] = shelfSummaryForVendor(v, byVendor.get(Number(v.id)) || []).map((s) => s.label)
+    }
+    return map
+  }, [vendors, products])
 
   if (!loading && catalog && !catalog.open) {
     return (
@@ -169,7 +191,7 @@ function AllStandsContent() {
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {stands.map((v) => (
-                <StandTile key={v.id} v={v} count={vendorCounts[v.id] || 0} />
+                <StandTile key={v.id} v={v} count={vendorCounts[v.id] || 0} shelfLabels={shelfLabelsByVendor[v.id]} />
               ))}
             </div>
           )}
