@@ -28,52 +28,20 @@ import Label from './ui/Label'
 import Spinner from './ui/Spinner'
 import Badge from './ui/Badge'
 import Reveal from './ui/Reveal'
+import { optimizeProductImage, optimizedImageFile } from '../../lib/optimizeImage'
 
 /* ── Image helpers ─────────────────────────────────────────────────────── */
 
-// Downscale to max 1600px / JPEG 0.82 so phone photos (~5MB) go out as
-// ~150–400KB. Falls back to the original file if the browser can't decode it
-// (e.g. HEIC in non-Safari browsers) — the server accepts both.
-function compressImage(file, maxDim = 1600, quality = 0.82) {
-  return new Promise((resolve) => {
-    if (!file || !file.type?.startsWith('image/')) return resolve(file)
-    const img = new Image()
-    const objectUrl = URL.createObjectURL(file)
-    img.onload = () => {
-      try {
-        const scale = Math.min(1, maxDim / Math.max(img.width, img.height))
-        const w = Math.max(1, Math.round(img.width * scale))
-        const h = Math.max(1, Math.round(img.height * scale))
-        const canvas = document.createElement('canvas')
-        canvas.width = w
-        canvas.height = h
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h)
-        canvas.toBlob((blob) => {
-          URL.revokeObjectURL(objectUrl)
-          if (blob && blob.size < file.size) {
-            const name = (file.name || 'photo').replace(/\.\w+$/, '')
-            resolve(new File([blob], `${name}.jpg`, { type: 'image/jpeg' }))
-          } else {
-            resolve(file)
-          }
-        }, 'image/jpeg', quality)
-      } catch {
-        URL.revokeObjectURL(objectUrl)
-        resolve(file)
-      }
-    }
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl)
-      resolve(file)
-    }
-    img.src = objectUrl
-  })
-}
-
+// Photos go through the same optimizer as product uploads: 1200px long edge,
+// WebP (JPEG when the browser cannot encode WebP) measured under the size cap.
+// It throws instead of falling back to the original, so a HEIC photo the device
+// cannot convert is reported to the rep rather than stored where no admin could
+// open it.
 async function uploadPhoto(file) {
-  const blob = await compressImage(file)
+  const optimized = await optimizeProductImage(file)
+  const cooked = optimizedImageFile(file?.name || 'photo', optimized)
   const fd = new FormData()
-  fd.append('file', blob, blob.name || 'photo.jpg')
+  fd.append('file', cooked, cooked.name)
   const res = await fetch('/api/food-survey/photo', { method: 'POST', body: fd })
   const json = await res.json().catch(() => null)
   if (!res.ok || !json?.ok) throw new Error(json?.error || 'Photo upload failed')

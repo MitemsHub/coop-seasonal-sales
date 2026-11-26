@@ -11,12 +11,20 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 const BUCKET = 'food-survey'
-const VALID_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
-const MAX_BYTES = 8 * 1024 * 1024 // 8MB — phone photos; client compresses before sending
+// Only formats every browser can render are stored. The survey form converts
+// HEIC/AVIF to WebP on the device first; a HEIC upload that still arrives is
+// refused, because storing it leaves admins with a photo they cannot open.
+const WEB_TYPES = { 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
+const EXT_TYPES = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' }
+const MAX_BYTES = 8 * 1024 * 1024 // 8MB — phone photos; the client shrinks first
 
-const extFor = (type) => (
-  { 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic', 'image/heif': 'heif' }[type] || 'jpg'
-)
+// Phones sometimes send an empty or generic type, so fall back to the extension.
+function normalizeType(file) {
+  const declared = String(file?.type || '').toLowerCase()
+  if (WEB_TYPES[declared]) return declared === 'image/jpg' ? 'image/jpeg' : declared
+  const ext = (String(file?.name || '').match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase()
+  return EXT_TYPES[ext] || ''
+}
 
 export async function POST(req) {
   try {
@@ -25,15 +33,23 @@ export async function POST(req) {
     if (!file || typeof file === 'string') {
       return NextResponse.json({ ok: false, error: 'No file provided' }, { status: 400 })
     }
-    if (!VALID_TYPES.includes(file.type)) {
-      return NextResponse.json({ ok: false, error: 'Only JPG, PNG, HEIC or WebP images are allowed' }, { status: 400 })
+    const mime = normalizeType(file)
+    if (!mime) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            'Only JPG, PNG or WebP photos can be stored. HEIC photos are converted on the phone, so pick it from an iPhone/Safari, or export it as JPG first.',
+        },
+        { status: 400 }
+      )
     }
     if (file.size > MAX_BYTES) {
       return NextResponse.json({ ok: false, error: 'Image is too large (max 8MB)' }, { status: 400 })
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
-    const filename = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}.${extFor(file.type)}`
+    const filename = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}.${WEB_TYPES[mime]}`
 
     // Supabase Storage first (same pattern as upload-item-image).
     try {
@@ -44,7 +60,7 @@ export async function POST(req) {
       }
       const path = `survey/${filename}`
       const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, buffer, {
-        contentType: file.type,
+        contentType: mime,
         upsert: false,
       })
       if (!upErr) {
