@@ -132,7 +132,7 @@ function VendorHubContent() {
           )}
 
           {loading ? (
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 2xl:grid-cols-7">
+            <div className="shelf-grid grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 2xl:grid-cols-7">
               {Array.from({ length: 12 }).map((_, i) => (
                 <Skeleton key={i} className="h-44 rounded-xl" />
               ))}
@@ -252,7 +252,7 @@ function VendorHubContent() {
                   }
                 />
               ) : (
-                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 2xl:grid-cols-7">
+                <div className="shelf-grid grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6 2xl:grid-cols-7">
                   {products.map((p) => (
                     <ExhibitionProductCard
                       key={p.id}
