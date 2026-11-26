@@ -25,7 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import ProtectedRoute from '../../../components/ProtectedRoute'
-import { thumbUrl } from '../../../../lib/imageUrl'
+import { thumbSrcSet, thumbUrl } from '../../../../lib/imageUrl'
 import ConfirmDialog from '../../../components/ui/ConfirmDialog'
 import Button from '../../../components/ui/Button'
 import Input from '../../../components/ui/Input'
@@ -931,7 +931,7 @@ function ItemsImportContent() {
             <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md border border-line bg-canvas">
               {form.draft.rep_photo ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={thumbUrl(form.draft.rep_photo, 320)} alt="Rep photo (reference)" className="h-full w-full object-cover" />
+                <img src={thumbUrl(form.draft.rep_photo, 320)} srcSet={thumbSrcSet(form.draft.rep_photo, 320)} alt="Rep photo (reference)" className="h-full w-full object-cover" />
               ) : (
                 <span className="flex h-full w-full items-center justify-center text-caption text-muted">No photo</span>
               )}
@@ -1178,11 +1178,12 @@ function ItemsImportContent() {
           <div className="h-12 w-12 shrink-0 overflow-hidden rounded-md border border-line bg-canvas">
             {img ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={thumbUrl(img, 320)} alt={title} loading="lazy" className="h-full w-full object-contain" />
+              <img src={thumbUrl(img, 320)} srcSet={thumbSrcSet(img, 320)} alt={title} loading="lazy" className="h-full w-full object-contain" />
             ) : section === 'outsourced' && row.draft?.rep_photo ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={thumbUrl(row.draft.rep_photo, 320)}
+                srcSet={thumbSrcSet(row.draft.rep_photo, 320)}
                 alt={`${title} (rep draft photo)`}
                 loading="lazy"
                 className="h-full w-full object-cover opacity-50 grayscale"

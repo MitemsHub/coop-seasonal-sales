@@ -10,7 +10,7 @@ import { ChevronLeft, ChevronRight, ImageOff, Plus, RefreshCw, Search, Store, Up
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Button from '../../../components/ui/Button'
 import Badge from '../../../components/ui/Badge'
-import { thumbUrl } from '../../../../lib/imageUrl'
+import { thumbSrcSet, thumbUrl } from '../../../../lib/imageUrl'
 import Card from '../../../components/ui/Card'
 import { Table, THead, TBody, TR, TH, TD } from '../../../components/ui/Table'
 import Input from '../../../components/ui/Input'
@@ -821,7 +821,7 @@ export default function ExhibitionProductsPage() {
                       <div className="flex items-center gap-2.5">
                         {p.image_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={thumbUrl(p.image_url, 160)} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-line-subtle bg-subtle object-contain" />
+                          <img src={thumbUrl(p.image_url, 160)} srcSet={thumbSrcSet(p.image_url, 160)} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-line-subtle bg-subtle object-contain" />
                         ) : (
                           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-subtle text-subtext">
                             <ImageOff className="h-4 w-4" strokeWidth={1.5} />
@@ -894,7 +894,7 @@ export default function ExhibitionProductsPage() {
                     />
                     {p.image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={thumbUrl(p.image_url, 200)} alt="" className="h-14 w-14 shrink-0 rounded-xl border border-line-subtle bg-subtle object-contain" />
+                      <img src={thumbUrl(p.image_url, 200)} srcSet={thumbSrcSet(p.image_url, 200)} alt="" className="h-14 w-14 shrink-0 rounded-xl border border-line-subtle bg-subtle object-contain" />
                     ) : (
                       <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-subtle text-subtext">
                         <ImageOff className="h-5 w-5" strokeWidth={1.5} />

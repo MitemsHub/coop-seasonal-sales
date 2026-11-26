@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { supabase } from '@/lib/supabaseClient'
-import { thumbUrl } from '../../lib/imageUrl'
+import { thumbSrcSet, thumbUrl } from '../../lib/imageUrl'
 import ImageUpload from './ImageUpload'
 import Button from './ui/Button'
 import Input from './ui/Input'
@@ -601,7 +601,7 @@ export default function ItemManagement({ reloadToken }) {
                   <span className="h-9 w-9 shrink-0 overflow-hidden rounded-md border border-line bg-canvas">
                     {it.image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={thumbUrl(it.image_url, 160)} alt={it.name} className="h-full w-full object-contain" loading="lazy" />
+                      <img src={thumbUrl(it.image_url, 160)} srcSet={thumbSrcSet(it.image_url, 160)} alt={it.name} className="h-full w-full object-contain" loading="lazy" />
                     ) : null}
                   </span>
                   <span className="min-w-0 flex-1">

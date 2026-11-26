@@ -8,7 +8,7 @@ import Input from '../../components/ui/Input'
 import Select from '../../components/ui/Select'
 import Label from '../../components/ui/Label'
 import Badge from '../../components/ui/Badge'
-import { thumbUrl } from '../../../lib/imageUrl'
+import { thumbSrcSet, thumbUrl } from '../../../lib/imageUrl'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
 import ProductImagesUpload from '../../components/ProductImagesUpload'
@@ -356,7 +356,7 @@ export default function VendorProductsPage() {
             {paged.map((p) => (
               <div key={p.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
                 {productImages(p)[0] ? (
-                  <img src={thumbUrl(productImages(p)[0], 160)} alt={p.name} className="h-14 w-14 shrink-0 rounded-xl border border-line-subtle bg-subtle object-contain" />
+                  <img src={thumbUrl(productImages(p)[0], 160)} srcSet={thumbSrcSet(productImages(p)[0], 160)} alt={p.name} className="h-14 w-14 shrink-0 rounded-xl border border-line-subtle bg-subtle object-contain" />
                 ) : (
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-subtle text-muted">
                     <Package className="h-6 w-6" strokeWidth={1.5} />
