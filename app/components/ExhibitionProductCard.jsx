@@ -189,7 +189,7 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
   const image = (
     <div className="absolute inset-1.5">
       <Image
-        src={images[0]}
+        src={thumbUrl(images[0], 500)}
         alt={p.name}
         fill
         sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 18vw"

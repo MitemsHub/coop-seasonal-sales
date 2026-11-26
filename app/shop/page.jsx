@@ -3,6 +3,7 @@
 
 import React, { useEffect, useMemo, useState, useCallback, Suspense } from 'react'
 import Image from 'next/image'
+import { thumbUrl } from '@/lib/imageUrl'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertTriangle,
@@ -718,7 +719,7 @@ const itemCards = useMemo(() => (
       <div key={it.sku} className="group flex flex-col rounded-2xl border border-line bg-surface p-2.5 transition-all duration-200 ease-sakani hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md">
         <div className="relative mb-2 flex h-24 w-full items-center justify-center overflow-hidden rounded-xl bg-subtle sm:h-28">
           <Image
-            src={it.image_url || '/images/items/placeholder.svg'}
+            src={thumbUrl(it.image_url || '/images/items/placeholder.svg', 400)}
             alt={it.name}
             fill
             sizes="(max-width: 640px) 45vw, (max-width: 1024px) 30vw, 15vw"

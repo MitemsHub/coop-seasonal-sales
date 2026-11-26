@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
+import { thumbUrl } from '@/lib/imageUrl'
 import { useParams, useRouter } from 'next/navigation'
 import { CheckCircle2, FileText, Home, Package, Printer, Receipt, Store } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
@@ -311,7 +312,7 @@ function SuccessContent() {
                             <span className="flex items-center gap-2.5">
                               <span className="relative hidden h-8 w-8 shrink-0 overflow-hidden rounded-md bg-subtle sm:block">
                                 <Image
-                                  src={l.image_url || '/images/items/placeholder.svg'}
+                                  src={thumbUrl(l.image_url || '/images/items/placeholder.svg', 96)}
                                   alt=""
                                   fill
                                   sizes="32px"

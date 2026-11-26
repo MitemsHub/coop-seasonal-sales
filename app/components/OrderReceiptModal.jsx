@@ -9,6 +9,7 @@ import { useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Beef, FileText, Printer, ShoppingBasket, Store, X } from 'lucide-react'
 import Image from 'next/image'
+import { thumbUrl } from '@/lib/imageUrl'
 import useFocusTrap from '../hooks/useFocusTrap'
 import { normalizeExhibitionStatus } from '@/lib/exhibitionStatus'
 import Button from './ui/Button'
@@ -455,7 +456,7 @@ export default function OrderReceiptModal({
                                     <span className="flex items-center gap-2.5">
                                       <span className="relative hidden h-8 w-8 shrink-0 overflow-hidden rounded-md bg-subtle sm:block">
                                         <Image
-                                          src={l.image_url || '/images/items/placeholder.svg'}
+                                          src={thumbUrl(l.image_url || '/images/items/placeholder.svg', 96)}
                                           alt=""
                                           fill
                                           sizes="32px"

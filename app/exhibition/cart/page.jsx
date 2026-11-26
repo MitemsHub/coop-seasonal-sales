@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
+import { thumbUrl } from '@/lib/imageUrl'
 import { useRouter } from 'next/navigation'
 import {
   AlertTriangle,
@@ -550,7 +551,7 @@ function ExhibitionCartContent() {
                       >
                         <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-subtle">
                           <Image
-                            src={item.image_url || '/images/items/placeholder.svg'}
+                            src={thumbUrl(item.image_url || '/images/items/placeholder.svg', 160)}
                             alt={item.name}
                             fill
                             sizes="64px"

@@ -5,6 +5,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
+import { thumbUrl } from '@/lib/imageUrl'
 import { useRouter } from 'next/navigation'
 import {
   CheckCircle2,
@@ -273,7 +274,7 @@ function ExhibitionOrdersContent() {
                         <div key={l.id} className="flex items-center gap-3 p-3.5">
                           <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-subtle">
                             <Image
-                              src={l.image_url || '/images/items/placeholder.svg'}
+                              src={thumbUrl(l.image_url || '/images/items/placeholder.svg', 128)}
                               alt={l.product_name}
                               fill
                               sizes="48px"
