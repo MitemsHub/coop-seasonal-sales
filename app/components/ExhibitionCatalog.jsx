@@ -125,7 +125,7 @@ export default function ExhibitionCatalog({
 
       {/* Pagination — only when the surface opts in via pageSize */}
       {pageCount > 1 && (
-        <div className="mt-6 flex items-center justify-between gap-2">
+        <div className="mt-6 flex items-center justify-center gap-2">
           <button
             type="button"
             disabled={safePage === 0}
