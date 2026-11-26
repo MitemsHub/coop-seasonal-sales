@@ -181,6 +181,8 @@ describe('rep cancelled-order guards', () => {
     expect(state.audits).toBe(0)
   })
 
+  // Approving (posting) a food order is admin-only — the rep route refuses
+  // every order, cancelled or not, so the status check it used to make is gone.
   it('does not let a rep post a Cancelled order', async () => {
     const { client, state } = makeSupabase(cancelledOrder())
     createSupabaseClient.mockReturnValue(client)
@@ -191,7 +193,7 @@ describe('rep cancelled-order guards', () => {
     const body = await res.json()
 
     expect(res.status).toBe(403)
-    expect(body.error).toMatch(/pending/i)
+    expect(body.error).toMatch(/admin/i)
     expect(state.rpcs).toBe(0)
     expect(state.updates).toBe(0)
     expect(state.audits).toBe(0)
@@ -216,7 +218,7 @@ describe('rep cancelled-order guards', () => {
     expect(state.audits).toBe(1)
   })
 
-  it('posts a Pending order normally', async () => {
+  it('does not let a rep post a Pending order — approval is admin-only', async () => {
     const { client, state } = makeSupabase(
       { ...cancelledOrder(), status: 'Pending' },
       { allowWrites: true }
@@ -228,10 +230,12 @@ describe('rep cancelled-order guards', () => {
     )
     const body = await res.json()
 
-    expect(res.status).toBe(200)
-    expect(body.ok).toBe(true)
-    expect(state.rpcs).toBe(1)
-    expect(state.updates).toBe(1)
-    expect(state.audits).toBe(1)
+    expect(res.status).toBe(403)
+    expect(body.ok).toBe(false)
+    expect(body.error).toMatch(/admin/i)
+    // Nothing reached the order: no post RPC, no note update, no audit row.
+    expect(state.rpcs).toBe(0)
+    expect(state.updates).toBe(0)
+    expect(state.audits).toBe(0)
   })
 })
