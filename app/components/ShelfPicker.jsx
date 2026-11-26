@@ -21,6 +21,7 @@ export default function ShelfPicker({
   description = '',
   value = '',
   onChange = () => {},
+  photoNote = '',
 }) {
   const suggestion = labelOf(suggestShelfKey({ name, description }))
   const options = SHELVES.filter((shelf) => shelf.key !== 'other')
@@ -46,6 +47,7 @@ export default function ShelfPicker({
           </option>
         ))}
       </Select>
+      {!!photoNote && <p className="mt-1 text-chips font-medium text-brand">{photoNote}</p>}
       <p className="mt-1 text-chips text-muted">
         {value
           ? 'This listing goes on the shelf you picked, wherever its name would have sent it.'

@@ -15,6 +15,7 @@ import { productImages } from '../../../lib/exhibitionProductImages'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import ProductImportModal from '../../components/ProductImportModal'
 import ShelfPicker from '../../components/ShelfPicker'
+import usePhotoShelfSuggestion from '../../hooks/usePhotoShelfSuggestion'
 
 const fmtNaira = (n) => `NGN ${Number(n || 0).toLocaleString()}`
 
@@ -110,6 +111,7 @@ export default function VendorProductsPage() {
     setEditing(null)
     setImageKey(`draft-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`)
     setForm(emptyForm())
+    resetPhotoShelf()
     setMsg('')
     setModalOpen(true)
   }
@@ -126,6 +128,7 @@ export default function VendorProductsPage() {
       category_id: p.category_id ? String(p.category_id) : '',
       images: productImages(p),
     })
+    resetPhotoShelf()
     setMsg('')
     setModalOpen(true)
   }
@@ -209,6 +212,18 @@ export default function VendorProductsPage() {
       setSaving(false)
     }
   }
+
+  // A photo can suggest a shelf when the name cannot, but only as a default:
+  // the vendor still confirms it before the listing is saved.
+  const { suggestion: photoShelf, reset: resetPhotoShelf } = usePhotoShelfSuggestion({
+    enabled: modalOpen && !editing,
+    name: form.name,
+    imageUrl: (form.images || [])[0] || '',
+    categories,
+    categoryId: form.category_id,
+    onSuggestion: (_suggestion, categoryId) =>
+      setForm((f) => (f.category_id ? f : { ...f, category_id: categoryId })),
+  })
 
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmAction, setConfirmAction] = useState(null) // { type: 'archive'|'delete', product: p }
@@ -465,6 +480,9 @@ export default function VendorProductsPage() {
                 description={form.description}
                 value={form.category_id}
                 onChange={(category_id) => setForm((f) => ({ ...f, category_id }))}
+                photoNote={
+                  photoShelf ? `Suggested from the photo (${photoShelf.label}) — confirm it or pick another shelf.` : ''
+                }
               />
             </div>
             <div className="mt-3">

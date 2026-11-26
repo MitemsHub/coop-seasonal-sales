@@ -21,6 +21,7 @@ import ConfirmDialog from '../../../components/ui/ConfirmDialog'
 import ProductImportModal from '../../../components/ProductImportModal'
 import ProductImagesUpload from '../../../components/ProductImagesUpload'
 import ShelfPicker from '../../../components/ShelfPicker'
+import usePhotoShelfSuggestion from '../../../hooks/usePhotoShelfSuggestion'
 import { productImages } from '../../../../lib/exhibitionProductImages'
 
 const naira = (v) =>
@@ -139,10 +140,23 @@ export default function ExhibitionProductsPage() {
     }
   }, [modal, form.cycle_id])
 
+  // A photo can suggest a shelf when the name cannot. It only pre-selects the
+  // picker; the admin still confirms the shelf before creating the product.
+  const { suggestion: photoShelf, reset: resetPhotoShelf } = usePhotoShelfSuggestion({
+    enabled: modal === 'create',
+    name: form.name || '',
+    imageUrl: (form.images || [])[0] || '',
+    categories,
+    categoryId: form.category_id || '',
+    onSuggestion: (_suggestion, categoryId) =>
+      setForm((f) => (f.category_id ? f : { ...f, category_id: categoryId })),
+  })
+
   const openCreate = () => {
     const active = cycles.find((c) => c.status === 'active')
     setImageKey(`draft-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`)
     setForm({ status: 'active', unit: 'each', cycle_id: active?.id || '', images: [] })
+    resetPhotoShelf()
     setModal('create')
   }
 
@@ -168,6 +182,7 @@ export default function ExhibitionProductsPage() {
       cycle_id: p.cycle_id || '',
       images: productImages(p),
     })
+    resetPhotoShelf()
     setModal(p)
   }
 
@@ -954,6 +969,9 @@ export default function ExhibitionProductsPage() {
                 description={form.description || ''}
                 value={form.category_id || ''}
                 onChange={(category_id) => setForm((f) => ({ ...f, category_id }))}
+                photoNote={
+                  photoShelf ? `Suggested from the photo (${photoShelf.label}) — confirm it or pick another shelf.` : ''
+                }
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
