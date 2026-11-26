@@ -76,23 +76,109 @@ export async function GET(request) {
     }
 
     // The admin needs to call the member about a collection, so each row also
-    // carries the member's phone from the members table.
+    // carries the member's phone plus the two things the approver otherwise
+    // has to go hunting for: how often this member orders, and how much room
+    // they have left. Both are read live — nothing is stored per order.
     const memberIds = [...new Set((data || []).map((o) => String(o.member_id || '').trim().toUpperCase()).filter(Boolean))]
-    const phoneByMember = new Map()
+    const memberById = new Map()
+    const historyByMember = new Map()
     if (memberIds.length) {
-      const { data: members, error: memErr } = await supabase
-        .from('members')
-        .select('member_id, phone')
-        .in('member_id', memberIds)
+      const [{ data: members, error: memErr }, { data: history }] = await Promise.all([
+        supabase
+          .from('members')
+          .select('member_id, phone, category, savings, loans, global_limit')
+          .in('member_id', memberIds),
+        supabase
+          .from('exhibition_orders')
+          .select('member_id, status, cycle_id')
+          .in('member_id', memberIds),
+      ])
       if (memErr) return NextResponse.json({ ok: false, error: memErr.message }, { status: 500 })
       for (const m of members || []) {
-        phoneByMember.set(String(m.member_id || '').trim().toUpperCase(), String(m.phone || '').trim())
+        memberById.set(String(m.member_id || '').trim().toUpperCase(), m)
+      }
+      for (const h of history || []) {
+        const key = String(h.member_id || '').trim().toUpperCase()
+        const cur = historyByMember.get(key) || { total: 0, cancelled: 0, open: 0, confirmed: 0, byCycle: new Map() }
+        cur.total += 1
+        if (h.status === 'Cancelled') cur.cancelled += 1
+        else if (h.status === 'Confirmed') cur.confirmed += 1
+        else cur.open += 1
+        const cid = Number(h.cycle_id || 0)
+        cur.byCycle.set(cid, (cur.byCycle.get(cid) || 0) + 1)
+        historyByMember.set(key, cur)
       }
     }
 
-    const orders = (data || []).map((o) => ({
+    // Remaining room comes from the same function checkout enforces. One call
+    // per member+season, shared by every order on the page.
+    const roomByScope = new Map()
+    const scopes = [...new Set(
+      (data || [])
+        .map((o) => `${String(o.member_id || '').trim().toUpperCase()}|${Number(o.cycle_id || 0)}`)
+        .filter((k) => !k.startsWith('|'))
+    )]
+    for (let i = 0; i < scopes.length; i += 6) {
+      const chunk = scopes.slice(i, i + 6)
+      const settled = await Promise.all(chunk.map(async (key) => {
+        const [memberId, cyclePart] = key.split('|')
+        const cycleId = Number(cyclePart || 0)
+        if (!cycleId) return [key, { available: false, warning: 'No season on this order.' }]
+        const { data: exposure, error } = await supabase.rpc('check_exhibition_exposure_atomic', {
+          p_member_id: memberId,
+          p_payment_option: 'Loan',
+          p_total_amount: 0,
+          p_cycle_id: cycleId,
+        })
+        if (error) return [key, { available: false, warning: error.message || 'Could not read loan room.' }]
+        if (exposure?.ok) {
+          return [key, {
+            available: true,
+            loan_room: Number(exposure.loanEligible || 0),
+            savings_room: Number(exposure.savingsEligible || 0),
+            warning: '',
+          }]
+        }
+        // 'Loan option is not available' / an exceeded cap both mean the room
+        // is already gone, which is information — not a failed lookup.
+        const msg = String(exposure?.error || '')
+        if (/not available|exceeded|already been used/i.test(msg)) {
+          return [key, { available: true, loan_room: 0, savings_room: 0, warning: msg }]
+        }
+        return [key, { available: false, warning: msg || 'Could not read loan room.' }]
+      }))
+      for (const [key, value] of settled) {
+        roomByScope.set(key, value)
+      }
+    }
+
+    const orders = (data || []).map((o) => {
+      const key = String(o.member_id || '').trim().toUpperCase()
+      const member = memberById.get(key) || {}
+      const hist = historyByMember.get(key) || { total: 0, cancelled: 0, open: 0, confirmed: 0, byCycle: new Map() }
+      const room = roomByScope.get(`${key}|${Number(o.cycle_id || 0)}`) || { available: false, warning: '' }
+      return {
       ...o,
-      member_phone: phoneByMember.get(String(o.member_id || '').trim().toUpperCase()) || '',
+      member_phone: String(member.phone || '').trim(),
+      // What the approver needs at a glance: is this a first-time or repeat
+      // buyer, how many of their orders are still open, and does the season's
+      // room still cover what they already hold.
+      member_approval: {
+        orders_total: hist.total,
+        orders_open: hist.open,
+        orders_confirmed: hist.confirmed,
+        orders_cancelled: hist.cancelled,
+        orders_this_cycle: hist.byCycle.get(Number(o.cycle_id || 0)) || 0,
+        first_order: hist.total <= 1,
+        category: String(member.category || '').trim(),
+        savings: Number(member.savings || 0),
+        loans: Number(member.loans || 0),
+        global_limit: Number(member.global_limit || 0),
+        loan_room: room.available ? Number(room.loan_room || 0) : null,
+        savings_room: room.available ? Number(room.savings_room || 0) : null,
+        room_available: Boolean(room.available),
+        room_warning: room.warning || '',
+      },
       branch_name: o.branches?.name || '',
       branch_code: o.branches?.code || '',
       cycle_name: o.cycles?.name || '',
@@ -109,7 +195,8 @@ export async function GET(request) {
         }
         return [...by.values()]
       })(),
-    }))
+      }
+    })
 
     return NextResponse.json({ ok: true, orders, total: count || 0 })
   } catch (e) {

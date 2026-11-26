@@ -883,6 +883,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                       <td className="p-2 align-top xl:p-3">
                         <div className="font-medium text-fg">{o.member_id}</div>
                         <div className="truncate text-muted" title={o.member_name_snapshot || ''}>{o.member_name_snapshot || '-'}</div>
+                        <MemberApprovalHints order={o} />
                         {o.member_phone && (
                           <div className="truncate text-chips tabular-nums text-subtext" title={o.member_phone}>{o.member_phone}</div>
                         )}
@@ -979,6 +980,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                         <p className="mt-0.5 break-words font-medium text-fg">
                           {o.member_id}{o.member_name_snapshot ? ` · ${o.member_name_snapshot}` : ''}{o.member_phone ? ` · ${o.member_phone}` : ''}
                         </p>
+                        <MemberApprovalHints order={o} />
                       </div>
                       <div className="col-span-2 min-w-0 rounded-lg bg-subtle/50 px-2.5 py-2">
                         <p className="text-chips text-muted">Delivery Location</p>
@@ -1220,6 +1222,49 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
         onClose={() => { setInvoiceOpen(false); setEditOrder(null) }}
       />
 
+    </div>
+  )
+}
+
+// ─── Member context for approvals ──────────────────────────────────────────
+// Approving should not require opening another screen to find out whether this
+// is a regular buyer or whether they still have room. The orders API attaches
+// `member_approval` to every row: order counts and the room left are read live
+// from the same exposure function checkout uses, so nothing is stored per order.
+function MemberApprovalHints({ order }) {
+  const info = order?.member_approval
+  if (!info || !info.orders_total) return null
+  const room =
+    order.payment_option === 'Savings'
+      ? info.savings_room
+      : order.payment_option === 'Loan'
+        ? info.loan_room
+        : null
+  const detail = [
+    info.category ? `Category ${info.category}` : '',
+    `Savings ${naira(info.savings)}`,
+    `Loans ${naira(info.loans)}`,
+    info.global_limit ? `Global limit ${naira(info.global_limit)}` : '',
+    `${info.orders_open} open · ${info.orders_confirmed} confirmed · ${info.orders_cancelled} cancelled`,
+    info.room_warning || '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  const label = info.first_order
+    ? 'First order'
+    : `${info.orders_total} orders${info.orders_this_cycle ? ` · ${info.orders_this_cycle} this season` : ''}`
+  const tone =
+    room == null ? '' : room > 0 ? 'bg-success-bg text-success-fg' : 'bg-danger-bg text-danger-fg'
+  return (
+    <div className="mt-1 space-y-0.5" title={detail}>
+      <div className="truncate text-chips text-subtext">{label}</div>
+      {room != null && (
+        <span className={`inline-flex max-w-full truncate rounded px-1.5 py-0.5 text-chips font-medium ${tone}`}>
+          {room > 0
+            ? `${order.payment_option} room ${naira(room)}`
+            : `No ${String(order.payment_option || '').toLowerCase()} room left`}
+        </span>
+      )}
     </div>
   )
 }
