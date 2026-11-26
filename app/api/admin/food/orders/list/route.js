@@ -224,6 +224,14 @@ export async function GET(req) {
     const to = searchParams.get('to') || ''
     const limit = Number(searchParams.get('limit') || 50)
     const cursor = searchParams.get('cursor')
+    // Offset paging for the screens that show a numbered pager: they need a real
+    // last page, which a keyset cursor cannot name. The cursor branch stays for
+    // the export loops, which walk the whole result set 1000 rows at a time.
+    const offsetParam = searchParams.get('offset')
+    const offset =
+      offsetParam == null || offsetParam === ''
+        ? 0
+        : Math.max(0, Math.trunc(Number(offsetParam) || 0))
     const dir = (searchParams.get('dir') || 'next').toLowerCase()
     const ordersHasCycle = await hasColumn(supabase, 'orders', 'cycle_id')
     const ordersHasCategorySnapshot = await hasColumn(supabase, 'orders', 'member_category_snapshot').catch(() => false)
@@ -233,7 +241,7 @@ export async function GET(req) {
     if (ordersHasCycle && !cycleId) {
       // No active cycle — return an empty list instead of an error so the
       // admin dashboard doesn't show the "data sources couldn't be reached" warning.
-      return NextResponse.json({ ok: true, orders: [], next_cursor: null, meta: { delivered_this_cycle: 0 } })
+      return NextResponse.json({ ok: true, orders: [], nextCursor: null, total: 0, offset: 0, limit, meta: { delivered_this_cycle: 0 } })
     }
 
     let deliveryBranchId = null
@@ -293,12 +301,14 @@ export async function GET(req) {
       q = dir === 'next' ? q.lt('order_id', Number(cursor)) : q.gt('order_id', Number(cursor))
     }
 
-    const { data: pageRaw, error } = await q.limit(limit + 1)
+    const { data: pageRaw, error } = cursor
+      ? await q.limit(limit + 1)
+      : await q.range(offset, offset + limit - 1)
     if (error) throw new Error(error.message)
 
     let nextCursor = null
     let orders = pageRaw || []
-    if (orders.length > limit) {
+    if (cursor && orders.length > limit) {
       nextCursor = orders[limit - 1]?.order_id
       orders = orders.slice(0, limit)
     }
@@ -320,7 +330,12 @@ export async function GET(req) {
       to,
     })
 
-    return NextResponse.json({ ok: true, orders, nextCursor, summary })
+    // summary.count is already an exact head-count over the same filters, so
+    // the pager can size itself without a second query. If the count query is
+    // the one that failed (it is swallowed above), fall back to the rows in
+    // hand so a transient error cannot collapse a long queue onto one page.
+    const total = summary.count || (orders.length ? offset + orders.length : 0)
+    return NextResponse.json({ ok: true, orders, nextCursor, total, offset, limit, summary })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
   }

@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState, useRef } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import DraggableModal from '../../../components/DraggableModal'
 import ExportButton from '../../../components/ui/ExportButton'
+import Pagination from '../../../components/ui/Pagination'
 
 import { createManifestDoc, addManifestTable, sanitizePdfText } from '../../../lib/pdfExport'
 import { announceRepFoodStats } from '../../../lib/repFoodStatsSync'
 import Button from '../../../components/ui/Button'
-import { CheckSquare, ChevronLeft, ChevronRight, Inbox, RefreshCw, RotateCcw, Search, Send, Truck, XCircle, Zap } from 'lucide-react'
+import { CheckSquare, Inbox, RefreshCw, RotateCcw, Search, Send, Truck, XCircle, Zap } from 'lucide-react'
 
 // Named export: the /admin/food/cancelled page re-renders this same list with
 // status="Cancelled" (one shared component, two routes).
@@ -22,9 +23,8 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
   const [msg, setMsg] = useState(null)
   const [loading, setLoading] = useState(false)
   const [pageSize, setPageSize] = useState(50)
-  const [cursorStack, setCursorStack] = useState([null])
-  const [pageIndex, setPageIndex] = useState(0)
-  const [nextCursor, setNextCursor] = useState(null)
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
   const [summary, setSummary] = useState(null)
   const [postingOrder, setPostingOrder] = useState(null) // Track which order is being posted
   const [postingBulk, setPostingBulk] = useState(false) // Track bulk posting
@@ -70,20 +70,25 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
     return ''
   }
 
-  const fetchOrders = async (cursorOverride, overrides = null) => {
+  // pageOverride === null means "back to the first page" (every filter change);
+  // undefined means "reload the page I am on". `size` rides along so switching
+  // the row count does not ask for the old page size.
+  const fetchOrders = async (pageOverride, overrides = null) => {
     setLoading(true); setMsg(null)
     try {
       if (fetchCtl.current) fetchCtl.current.abort()
       const ctl = new AbortController()
       fetchCtl.current = ctl
+      const pageAt = pageOverride === null ? 1 : Math.max(1, Number(pageOverride) || page || 1)
+      const size = Math.max(1, Number(overrides?.size) || pageSize)
       const effTerm = overrides && typeof overrides.term === 'string' ? overrides.term : term
       const effPayment = overrides && typeof overrides.payment === 'string' ? overrides.payment : payment
       const effDeliveryBranch = overrides && typeof overrides.deliveryBranch === 'string' ? overrides.deliveryBranch : deliveryBranch
       const effMemberCategory = overrides && typeof overrides.memberCategory === 'string' ? overrides.memberCategory : memberCategory
-      const cursor = cursorOverride !== undefined ? cursorOverride : cursorStack[pageIndex] || null
       const qs = new URLSearchParams({
         status,
-        limit: String(pageSize),
+        limit: String(size),
+        offset: String((pageAt - 1) * size),
         ...(effTerm ? { term: effTerm } : {}),
         ...(effPayment ? { payment: effPayment } : {}),
       })
@@ -92,14 +97,21 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
         const cat = normalizeMemberCategory(effMemberCategory)
         if (cat) qs.set('member_category', cat)
       }
-      if (cursor) qs.set('cursor', String(cursor))
       const res = await fetch(`/api/admin/food/orders/list?${qs.toString()}`, { cache: 'no-store', signal: ctl.signal })
       const json = await safeJson(res, '/api/admin/food/orders/list')
       if (!json.ok) throw new Error(json.error || 'Failed to load')
+      const totalRows = Number(json.total || 0)
       setOrders(json.orders || [])
-      setNextCursor(json.nextCursor || null)
+      setPage(pageAt)
+      setTotal(totalRows)
       setSummary(json.summary || null)
       setSelected(new Set())
+      const lastPage = Math.max(1, Math.ceil(totalRows / size))
+      if (totalRows > 0 && pageAt > lastPage) {
+        // Rows left this page while it was open (posted, cancelled, restored):
+        // land on the last page that still has orders rather than an empty one.
+        return fetchOrders(lastPage, overrides)
+      }
     } catch (e) {
       if (e.name === 'AbortError') {
         // Ignore aborted fetches triggered by navigation or refresh
@@ -114,9 +126,7 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
   useEffect(() => { fetchOrders(null) }, []) // first load
 
   const resetPagination = () => {
-    setCursorStack([null])
-    setPageIndex(0)
-    setNextCursor(null)
+    setPage(1)
   }
 
   const toggleSelect = (id) => {
@@ -707,58 +717,26 @@ export function FoodOrdersAdminPageContent({ status = 'Pending' }) {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <select
-              className="rounded-lg border border-line bg-surface px-2 py-1.5 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
-              value={pageSize}
-              onChange={(e) => {
-                const next = Number(e.target.value) || 50
-                setPageSize(next)
-                resetPagination()
-                fetchOrders(null)
-              }}
-              disabled={loading}
-            >
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
-
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={ChevronLeft}
-              onClick={() => {
-                if (pageIndex <= 0) return
-                const nextIndex = pageIndex - 1
-                const prevCursor = cursorStack[nextIndex] || null
-                setPageIndex(nextIndex)
-                setSelected(new Set())
-                fetchOrders(prevCursor)
-              }}
-              disabled={pageIndex <= 0 || loading}
-            >
-              Prev
-            </Button>
-            <div className="text-sm text-muted">Page <span className="font-medium text-fg">{pageIndex + 1}</span></div>
-            <Button
-              variant="secondary"
-              size="sm"
-              rightIcon={ChevronRight}
-              onClick={() => {
-                if (!nextCursor) return
-                const nextIndex = pageIndex + 1
-                const nextStack = cursorStack.slice(0, pageIndex + 1).concat([nextCursor])
-                setCursorStack(nextStack)
-                setPageIndex(nextIndex)
-                setSelected(new Set())
-                fetchOrders(nextCursor)
-              }}
-              disabled={!nextCursor || loading}
-            >
-              Next
-            </Button>
-          </div>
+          <Pagination
+            page={page}
+            pageCount={Math.max(1, Math.ceil(total / pageSize))}
+            pageSize={pageSize}
+            totalItems={total}
+            itemLabel="orders"
+            disabled={loading}
+            flush
+            onPageChange={(next) => {
+              setPage(next)
+              setSelected(new Set())
+              fetchOrders(next)
+            }}
+            onPageSizeChange={(next) => {
+              setPageSize(next)
+              setPage(1)
+              setSelected(new Set())
+              fetchOrders(null, { size: next })
+            }}
+          />
         </div>
 
         <div className="overflow-x-auto">
