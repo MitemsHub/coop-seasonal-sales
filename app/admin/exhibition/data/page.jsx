@@ -280,6 +280,142 @@ function LoanLimitsSection() {
   )
 }
 
+/* ─── Reprice orders ───────────────────────────────────────────── */
+
+// A season's loan rate (and a product's price) is read at the moment an order
+// is created, so changing them afterwards leaves every existing order on the
+// old numbers. This is the exhibition twin of the Food Price Repricer: it
+// recalculates the still-open orders of the chosen season.
+function RepriceOrdersSection() {
+  const [cycles, setCycles] = useState([])
+  const [cycleId, setCycleId] = useState('')
+  const [confirmText, setConfirmText] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/admin/exhibition/cycles', { cache: 'no-store' })
+      const json = await res.json()
+      if (!json?.ok) throw new Error(json?.error || 'Failed to load seasons')
+      const list = json.cycles || []
+      setCycles(list)
+      setCycleId((cur) => {
+        if (cur && list.some((c) => String(c.id) === String(cur))) return cur
+        const active = list.find((c) => c.status === 'active') || list[0]
+        return active ? String(active.id) : ''
+      })
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const selected = cycles.find((c) => String(c.id) === String(cycleId))
+  const ready = !!selected && confirmText.trim().toUpperCase() === 'REPRICE ORDERS'
+
+  const reprice = async () => {
+    if (!ready || busy) return
+    setBusy(true)
+    setMsg(null)
+    try {
+      const res = await fetch('/api/admin/exhibition/orders/reprice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cycle_id: Number(cycleId) }),
+      })
+      const json = await res.json()
+      if (!json?.ok) throw new Error(json?.error || 'Failed to reprice orders')
+      setConfirmText('')
+      setMsg({
+        type: 'success',
+        text:
+          json.updated_orders === 0
+            ? `Nothing to change — all ${json.scanned_orders} open order(s) already match the current prices and the ${json.loan_interest_rate_pct}% loan rate.`
+            : `Repriced ${json.updated_orders} of ${json.scanned_orders} open order(s) at the ${json.loan_interest_rate_pct}% loan rate — ${json.updated_lines} line(s) and ${json.updated_payables} unpaid vendor payable(s) updated.`,
+      })
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card>
+      <Card.Header>
+        <Card.Title>Reprice Exhibition Orders</Card.Title>
+        <Card.Description>
+          A season&apos;s loan rate and a product&apos;s price are read when an order is created, so changing them
+          leaves orders already placed on the old numbers. Reprice recalculates every Pending and Approved order in
+          the season — each line at the product&apos;s current price and approved discount, and loan interest at the
+          season&apos;s current rate. Confirmed, Delivered and Cancelled orders are never changed, and counter
+          invoices keep the price the vendor typed.
+        </Card.Description>
+      </Card.Header>
+      <Card.Body>
+        {loading ? (
+          <Skeleton className="h-10 w-full" />
+        ) : cycles.length === 0 ? (
+          <p className="rounded-lg bg-subtle px-4 py-6 text-center text-sm text-muted">
+            No exhibition seasons yet — create one above.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+              <div className="flex-1">
+                <Label htmlFor="reprice-cycle">Season</Label>
+                <Select
+                  id="reprice-cycle"
+                  value={cycleId}
+                  onChange={(e) => setCycleId(e.target.value)}
+                  className="w-full"
+                >
+                  {cycles.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.code}){c.status === 'active' ? ' · Active' : ''}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="flex-1">
+                <Label htmlFor="reprice-confirm">Type REPRICE ORDERS to confirm</Label>
+                <Input
+                  id="reprice-confirm"
+                  value={confirmText}
+                  onChange={(e) => setConfirmText(e.target.value)}
+                  placeholder="REPRICE ORDERS"
+                  autoComplete="off"
+                />
+              </div>
+              <Button loading={busy} disabled={!ready || busy} onClick={reprice}>
+                {busy ? 'Repricing…' : 'Reprice orders'}
+              </Button>
+            </div>
+            {selected && (
+              <p className="text-xs text-muted">
+                Loan interest: <span className="font-semibold text-fg">{Number(selected.loan_interest_rate_pct || 0)}%</span>
+                {' · '}Vendor deduction: <span className="font-semibold text-fg">{Number(selected.vendor_deduction_rate_pct || 0)}%</span>
+                {' · '}Cash and Savings orders are repriced without interest.
+              </p>
+            )}
+            {msg && (
+              <p className={`text-sm ${msg.type === 'error' ? 'text-danger-fg' : 'text-success-fg'}`}>{msg.text}</p>
+            )}
+          </div>
+        )}
+      </Card.Body>
+    </Card>
+  )
+}
+
 /* ─── Page ─────────────────────────────────────────────────────── */
 
 function ExhibitionDataContent() {
@@ -298,6 +434,9 @@ function ExhibitionDataContent() {
         <div className="rounded-2xl border border-line bg-surface">
           <ExhibitionCyclesContent />
         </div>
+
+        {/* Rates only reach new orders — this recalculates the open ones. */}
+        <RepriceOrdersSection />
 
         {/* Loan limits for the selected cycle */}
         <LoanLimitsSection />

@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Eye, Plus, ShoppingBag } from 'lucide-react'
+import { Eye, Plus, ShoppingBag, XCircle } from 'lucide-react'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
+import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import DraggableModal from '../../components/DraggableModal'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
@@ -32,6 +33,9 @@ export default function VendorOrdersPage() {
   const [msg, setMsg] = useState('')
   const [invoiceOpen, setInvoiceOpen] = useState(false)
   const [viewOrder, setViewOrder] = useState(null)
+  const [cancelTarget, setCancelTarget] = useState(null)
+  const [cancelling, setCancelling] = useState(false)
+  const [notice, setNotice] = useState(null)
 
   const load = async () => {
     const qs = filter ? `?status=${filter}` : ''
@@ -45,6 +49,34 @@ export default function VendorOrdersPage() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter])
+
+  // A vendor may withdraw an order that still holds their goods. The status is
+  // order-wide, so it cancels the whole invoice; restoring one is the admin's
+  // call only (/api/admin/exhibition/orders/restore), which is why the dialog
+  // says so before anything is written.
+  const cancelOrder = async () => {
+    if (!cancelTarget || cancelling) return
+    setCancelling(true)
+    setNotice(null)
+    try {
+      const res = await fetch('/api/vendor/exhibition/orders/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: cancelTarget.db_id }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to cancel this order')
+      const label = cancelTarget.order_id
+      setCancelTarget(null)
+      setNotice({ type: 'success', text: `${label} cancelled. The stock is back on the shelf.` })
+      await load()
+    } catch (e) {
+      setCancelTarget(null)
+      setNotice({ type: 'error', text: e.message })
+    } finally {
+      setCancelling(false)
+    }
+  }
 
   const viewLines = viewOrder?.lines || []
 
@@ -65,6 +97,14 @@ export default function VendorOrdersPage() {
       </div>
 
       {!!msg && <div className="mb-4 rounded-xl border border-danger-border bg-danger-bg px-4 py-3 text-sm text-danger-fg">{msg}</div>}
+
+      {!!notice && (
+        <div
+          className={`mb-4 rounded-xl border px-4 py-3 text-sm ${notice.type === 'error' ? 'border-danger-border bg-danger-bg text-danger-fg' : 'border-success-border bg-success-bg text-success-fg'}`}
+        >
+          {notice.text}
+        </div>
+      )}
 
       <div className="mb-5 flex flex-wrap gap-2">
         {FILTERS.map((f) => (
@@ -131,6 +171,20 @@ export default function VendorOrdersPage() {
                   >
                     View items
                   </Button>
+                  {(o.status === 'Pending' || o.status === 'Approved') && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={XCircle}
+                      onClick={() => {
+                        setNotice(null)
+                        setCancelTarget(o)
+                      }}
+                      title="Cancel this order"
+                    >
+                      Cancel
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
@@ -212,6 +266,20 @@ export default function VendorOrdersPage() {
           </div>
         )}
       </DraggableModal>
+
+      <ConfirmDialog
+        open={!!cancelTarget}
+        onClose={() => (cancelling ? null : setCancelTarget(null))}
+        onConfirm={cancelOrder}
+        loading={cancelling}
+        title="Cancel this order?"
+        confirmLabel="Cancel order"
+        message={
+          cancelTarget
+            ? `${cancelTarget.order_id} for ${cancelTarget.member_name || cancelTarget.member_id} will be cancelled for the whole invoice — including any items from other stands — and its reserved stock goes back on sale. Only the co-op admin can restore a cancelled order.`
+            : ''
+        }
+      />
 
       <CounterInvoiceModal
         open={invoiceOpen}

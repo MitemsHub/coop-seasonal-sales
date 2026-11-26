@@ -32,6 +32,15 @@ const naira = (v) =>
 
 const STATUS_STYLES = { active: 'success', draft: 'neutral', archived: 'neutral' }
 
+// Colour of the number in each "catalogue at a glance" tile.
+const TILE_TONE = {
+  fg: 'text-fg',
+  success: 'text-success-fg',
+  warning: 'text-warning-fg',
+  danger: 'text-danger-fg',
+  muted: 'text-muted',
+}
+
 const memberPrice = (listPrice, discountPct) =>
   Math.round((Number(listPrice || 0) * (100 - Math.min(90, Math.max(0, Number(discountPct || 0))))) / 100)
 
@@ -410,6 +419,33 @@ export default function ExhibitionProductsPage() {
     [products]
   )
 
+  // One number per question an admin actually asks of this page: how much is
+  // live, how much is waiting on us, how much we have parked. Approval and
+  // status are different axes (a pending product is usually still a draft),
+  // so they are counted separately instead of being folded into one figure.
+  const stats = useMemo(
+    () => ({
+      total: products.length,
+      approved: products.filter((p) => p.approval_status === 'approved').length,
+      pending: products.filter((p) => p.approval_status === 'pending').length,
+      rejected: products.filter((p) => p.approval_status === 'rejected').length,
+      active: products.filter((p) => p.status === 'active').length,
+      draft: products.filter((p) => p.status === 'draft').length,
+      archived: products.filter((p) => p.status === 'archived').length,
+    }),
+    [products]
+  )
+
+  const statTiles = [
+    { key: 'total', label: 'Products', value: stats.total, tone: 'fg' },
+    { key: 'approved', label: 'Approved', value: stats.approved, tone: 'success' },
+    { key: 'pending', label: 'Awaiting approval', value: stats.pending, tone: 'warning' },
+    { key: 'rejected', label: 'Rejected', value: stats.rejected, tone: 'danger' },
+    { key: 'active', label: 'Active', value: stats.active, tone: 'fg' },
+    { key: 'draft', label: 'Drafts', value: stats.draft, tone: 'fg' },
+    { key: 'archived', label: 'Archived', value: stats.archived, tone: 'muted' },
+  ]
+
   const totalPages = Math.max(1, Math.ceil(products.length / pageSize))
   const currentPage = Math.min(page, totalPages)
   const pageStart = (currentPage - 1) * pageSize
@@ -638,16 +674,44 @@ export default function ExhibitionProductsPage() {
           </div>
         </div>
 
-        {products.some((p) => p.approval_status === 'pending') && (
-          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-warning-border bg-warning-bg/40 px-3 py-2">
-            <p className="text-chips font-medium text-warning-fg">
-              {products.filter((p) => p.approval_status === 'pending').length} product(s) waiting for approval
-            </p>
-            <Button size="sm" variant="success" onClick={approveAllPending} disabled={busy}>
-              Approve all pending
-            </Button>
+        {/* Catalogue at a glance — the queue used to be a single sentence, so
+            there was no telling whether the catalogue was growing because of
+            new products or because approvals were not being worked. */}
+        <div className="mb-4 rounded-2xl border border-line bg-surface p-3">
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-sm font-semibold text-fg">Catalogue at a glance</h2>
+            <span className="text-chips text-muted">
+              {products.length ? 'Counted across the products these filters show' : 'No products in this view'}
+            </span>
           </div>
-        )}
+          <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+            {statTiles.map((t) => (
+              <div
+                key={t.key}
+                className={`rounded-xl border px-3 py-2 ${
+                  t.key === 'pending' && t.value > 0
+                    ? 'border-warning-border bg-warning-bg/40'
+                    : 'border-line-subtle bg-subtle/40'
+                }`}
+              >
+                <dt className="text-chips font-medium uppercase tracking-wide text-muted">{t.label}</dt>
+                <dd className={`mt-0.5 text-h3 font-bold tabular-nums ${TILE_TONE[t.tone]}`}>
+                  {loading && !products.length ? '—' : t.value.toLocaleString()}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          {stats.pending > 0 && (
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line-subtle pt-3">
+              <p className="text-chips text-muted">
+                Approving publishes a product to the shop at the vendor&apos;s price.
+              </p>
+              <Button size="sm" variant="success" onClick={approveAllPending} disabled={busy}>
+                Approve all {stats.pending.toLocaleString()} pending
+              </Button>
+            </div>
+          )}
+        </div>
 
         {/* Selection bar — always visible so "select all shown" is reachable
             before anything is ticked; the bulk actions appear once it is. */}
