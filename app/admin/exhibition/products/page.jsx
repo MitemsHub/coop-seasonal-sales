@@ -47,6 +47,15 @@ const TILE_TONE = {
 const memberPrice = (listPrice, discountPct) =>
   Math.round((Number(listPrice || 0) * (100 - Math.min(90, Math.max(0, Number(discountPct || 0))))) / 100)
 
+// A pending approval earns its place on the row only if the row says what is
+// waiting, so the approver sees the number they are asked to accept instead of
+// having to open the product. Equal values are not a change (the cleanup
+// migration clears those), and they render as no arrow.
+const priceChange = (p) =>
+  p.pending_vendor_price != null && Number(p.pending_vendor_price) !== Number(p.vendor_price)
+const discountChange = (p) =>
+  p.pending_discount_pct != null && Number(p.pending_discount_pct) !== Number(p.discount_pct || 0)
+
 export default function ExhibitionProductsPage() {
   const [products, setProducts] = useState([])
   const [cycles, setCycles] = useState([])
@@ -875,17 +884,40 @@ export default function ExhibitionProductsPage() {
                       </div>
                     </TD>
                     <TD className="whitespace-nowrap text-right tabular-nums">
-                      {naira(p.vendor_price)}
-                      {Number(p.discount_pct || 0) > 0 && (
-                        <div className="text-chips font-medium text-danger-fg">
-                          −{p.discount_pct}% · {naira(memberPrice(p.vendor_price, p.discount_pct))}
+                      {priceChange(p) ? (
+                        <div
+                          className="flex items-baseline justify-end gap-1"
+                          title={`Vendor price awaiting approval: ${naira(p.vendor_price)} → ${naira(p.pending_vendor_price)}`}
+                        >
+                          <span className="text-muted line-through">{naira(p.vendor_price)}</span>
+                          <span className="text-warning-fg" aria-hidden="true">→</span>
+                          <span className="font-semibold text-warning-fg">{naira(p.pending_vendor_price)}</span>
                         </div>
+                      ) : (
+                        naira(p.vendor_price)
                       )}
-                      {p.pending_vendor_price != null && (
-                        <div className="text-chips text-warning-fg">→ {naira(p.pending_vendor_price)}</div>
-                      )}
-                      {p.pending_discount_pct != null && (
-                        <div className="text-chips text-warning-fg">→ −{p.pending_discount_pct}%</div>
+                      {(Number(p.discount_pct || 0) > 0 || discountChange(p)) && (
+                        <div className="text-chips font-medium text-danger-fg">
+                          {discountChange(p) ? (
+                            <>
+                              <span className="text-muted line-through">
+                                −{Number(p.discount_pct || 0)}% · {naira(memberPrice(p.vendor_price, p.discount_pct))}
+                              </span>
+                              {' → '}
+                              <span className="text-warning-fg">
+                                −{p.pending_discount_pct}% ·{' '}
+                                {naira(
+                                  memberPrice(
+                                    priceChange(p) ? p.pending_vendor_price : p.vendor_price,
+                                    p.pending_discount_pct
+                                  )
+                                )}
+                              </span>
+                            </>
+                          ) : (
+                            <>−{p.discount_pct}% · {naira(memberPrice(p.vendor_price, p.discount_pct))}</>
+                          )}
+                        </div>
                       )}
                     </TD>
                     <TD className="whitespace-nowrap text-right tabular-nums">{p.qty == null ? '∞' : Number(p.qty).toLocaleString()}</TD>
@@ -952,17 +984,36 @@ export default function ExhibitionProductsPage() {
                     <div>
                       <p className="text-chips text-muted">Price</p>
                       <p className="font-semibold tabular-nums text-fg">
-                        {naira(p.vendor_price)}
-                        {Number(p.discount_pct || 0) > 0 && (
+                        {priceChange(p) ? (
+                          <>
+                            <span className="text-muted line-through">{naira(p.vendor_price)}</span>
+                            <span className="text-warning-fg"> → </span>
+                            <span className="text-warning-fg">{naira(p.pending_vendor_price)}</span>
+                          </>
+                        ) : (
+                          naira(p.vendor_price)
+                        )}
+                        {(Number(p.discount_pct || 0) > 0 || discountChange(p)) && (
                           <span className="block text-chips font-medium text-danger-fg">
-                            −{p.discount_pct}% · {naira(memberPrice(p.vendor_price, p.discount_pct))}
+                            {discountChange(p) ? (
+                              <>
+                                <span className="text-muted line-through">
+                                  −{Number(p.discount_pct || 0)}% · {naira(memberPrice(p.vendor_price, p.discount_pct))}
+                                </span>
+                                <span className="text-warning-fg">
+                                  {' → '}−{p.pending_discount_pct}% ·{' '}
+                                  {naira(
+                                    memberPrice(
+                                      priceChange(p) ? p.pending_vendor_price : p.vendor_price,
+                                      p.pending_discount_pct
+                                    )
+                                  )}
+                                </span>
+                              </>
+                            ) : (
+                              <>−{p.discount_pct}% · {naira(memberPrice(p.vendor_price, p.discount_pct))}</>
+                            )}
                           </span>
-                        )}
-                        {p.pending_vendor_price != null && (
-                          <span className="block text-chips text-warning-fg">→ {naira(p.pending_vendor_price)}</span>
-                        )}
-                        {p.pending_discount_pct != null && (
-                          <span className="block text-chips text-warning-fg">→ −{p.pending_discount_pct}%</span>
                         )}
                       </p>
                     </div>
