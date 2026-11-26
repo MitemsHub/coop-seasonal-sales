@@ -81,9 +81,9 @@ export async function GET(req) {
       linesByOrder.set(Number(line.order_id), list)
     }
 
-    // A shared invoice (other stands' lines on it) is cancelled by the admin
-    // only — the vendor cancel route refuses it — so the list has to say which
-    // orders a vendor may withdraw, or the button would offer an action that
+    // A shared invoice (other stands' lines on it) is withdrawn line by line —
+    // whole-order cancel is refused on it — so the list has to say which orders
+    // a vendor may clear in one go, or the button would offer an action that
     // always fails.
     const { data: allPagedLines } = await supabase
       .from('exhibition_order_lines')
@@ -118,6 +118,10 @@ export async function GET(req) {
           ['Pending', 'Approved'].includes(String(o.status)) &&
           lines.length > 0 &&
           totalLines === lines.length,
+        // Item-level withdrawal works on any open order, shared or not: the
+        // server recalculates the surviving lines and the order total.
+        can_cancel_lines: ['Pending', 'Approved'].includes(String(o.status)) && lines.length > 0,
+        shared: totalLines > lines.length,
       }
     })
 

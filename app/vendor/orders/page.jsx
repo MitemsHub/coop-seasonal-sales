@@ -35,6 +35,8 @@ export default function VendorOrdersPage() {
   const [viewOrder, setViewOrder] = useState(null)
   const [cancelTarget, setCancelTarget] = useState(null)
   const [cancelling, setCancelling] = useState(false)
+  const [lineTarget, setLineTarget] = useState(null)
+  const [lineBusy, setLineBusy] = useState(false)
   const [notice, setNotice] = useState(null)
 
   const load = async () => {
@@ -43,6 +45,7 @@ export default function VendorOrdersPage() {
     const json = await res.json()
     if (json.ok) setOrders(json.orders)
     else setMsg(json.error || 'Failed to load orders')
+    return json.ok ? json.orders : []
   }
 
   useEffect(() => {
@@ -50,11 +53,42 @@ export default function VendorOrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter])
 
-  // A vendor may withdraw an order that is entirely theirs. Cancelling is
-  // order-wide, so one that also holds another stand's goods is refused by the
-  // API and offers no button here — the co-op cancels those. Restoring a
-  // cancelled order is the admin's call only
-  // (/api/admin/exhibition/orders/restore), which is why the dialog says so.
+  // A vendor may withdraw an order that is entirely theirs, or a single item
+  // from any open order. Item cancellation is not a status change: the API
+  // recalculates the surviving lines, loan interest, the order total and this
+  // stand's payable in one transaction, and cancels the order outright if
+  // nothing is left. Restoring is the admin's call only
+  // (/api/admin/exhibition/orders/restore), which is why the dialogs say so.
+  const cancelLine = async () => {
+    if (!lineTarget || lineBusy || !viewOrder) return
+    setLineBusy(true)
+    setNotice(null)
+    try {
+      const res = await fetch('/api/vendor/exhibition/orders/lines/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: viewOrder.db_id, line_ids: [lineTarget.id] }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to cancel that item')
+      const label = lineTarget.product_name || 'Item'
+      setLineTarget(null)
+      const list = await load()
+      setViewOrder((cur) => (cur ? list.find((o) => o.db_id === cur.db_id) || null : cur))
+      setNotice({
+        type: 'success',
+        text: json.emptied
+          ? `${label} cancelled — nothing was left on ${json.order.order_id}, so the order is cancelled too.`
+          : `${label} cancelled. ${json.order.order_id} is now ${fmtNaira(json.order.total_amount)} for the member.`,
+      })
+    } catch (e) {
+      setLineTarget(null)
+      setNotice({ type: 'error', text: e.message })
+    } finally {
+      setLineBusy(false)
+    }
+  }
+
   const cancelOrder = async () => {
     if (!cancelTarget || cancelling) return
     setCancelling(true)
@@ -190,7 +224,7 @@ export default function VendorOrdersPage() {
                     (o.status === 'Pending' || o.status === 'Approved') &&
                     Number(o.total_lines || 0) > Number(o.my_lines || 0) && (
                       <span className="max-w-[11rem] text-right text-chips text-muted">
-                        Shared with other stands — ask the co-op to cancel it
+                        Shared with other stands — cancel your own items from View items
                       </span>
                     )}
                 </div>
@@ -259,7 +293,22 @@ export default function VendorOrdersPage() {
                             {[l.sku, `${qty} × ${fmtNaira(unit)}`].filter(Boolean).join(' · ')}
                           </p>
                         </div>
-                        <p className="shrink-0 text-sm font-semibold tabular-nums text-fg">{fmtNaira(l.amount)}</p>
+                        <div className="shrink-0 text-right">
+                          <p className="text-sm font-semibold tabular-nums text-fg">{fmtNaira(l.amount)}</p>
+                          {viewOrder.can_cancel_lines && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNotice(null)
+                                setLineTarget(l)
+                              }}
+                              className="mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-chips font-medium text-danger-fg transition-colors hover:bg-danger-bg"
+                              title="Cancel this item — the order total and loan interest are recalculated"
+                            >
+                              <XCircle className="h-3 w-3" /> Cancel item
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )
                   })
@@ -274,6 +323,24 @@ export default function VendorOrdersPage() {
           </div>
         )}
       </DraggableModal>
+
+      <ConfirmDialog
+        open={!!lineTarget}
+        onClose={() => (lineBusy ? null : setLineTarget(null))}
+        onConfirm={cancelLine}
+        loading={lineBusy}
+        title="Cancel this item?"
+        confirmLabel="Cancel item"
+        message={
+          lineTarget
+            ? `${lineTarget.product_name || 'Item'} (${lineTarget.qty} × ${fmtNaira(
+                lineTarget.final_price
+              )}) comes off this order and its stock goes back on sale. The order total and its loan interest are recalculated from the items that remain, and the member's payable for your stand drops by ${fmtNaira(
+                lineTarget.amount
+              )}. Only the co-op admin can restore a cancelled item.`
+            : ''
+        }
+      />
 
       <ConfirmDialog
         open={!!cancelTarget}

@@ -40,6 +40,20 @@ export async function POST(req) {
       (id) => String(byId.get(id)?.status || '') === 'Cancelled' && !closed.has(Number(byId.get(id)?.cycle_id))
     )
 
+    // A vendor can withdraw every item it put on an order, which cancels the
+    // order itself. Nothing is left to restore in that case — restoring would
+    // put an empty order back in the approval queue.
+    const { data: lineRows } = await supabase
+      .from('exhibition_order_lines')
+      .select('order_id')
+      .in('order_id', cycleOk)
+    const lineCountByOrder = new Map()
+    for (const l of lineRows || []) {
+      const oid = Number(l.order_id)
+      lineCountByOrder.set(oid, (lineCountByOrder.get(oid) || 0) + 1)
+    }
+    const emptyIds = cycleOk.filter((id) => !(lineCountByOrder.get(Number(id)) || 0))
+
     // Shop-originated lines need their reserved units back before the order
     // can return to Pending. Manual invoice lines have no product_id.
     const { data: reservedLines } = await supabase
@@ -66,7 +80,7 @@ export async function POST(req) {
       }
     }
 
-    const toRestore = cycleOk
+    const toRestore = cycleOk.filter((id) => !emptyIds.includes(id))
 
     const failed = ids
       .filter((id) => !toRestore.includes(id))
@@ -75,13 +89,21 @@ export async function POST(req) {
         const closedCycle = !!row && closed.has(Number(row.cycle_id))
         const entry = { id, status: String(row?.status || '') }
         if (closedCycle) entry.reason = 'Closed exhibition cycle'
+        else if (emptyIds.includes(id)) entry.reason = 'No items left on the order'
         return entry
       })
     if (!toRestore.length) {
       const allClosed = failed.length > 0 && failed.every((f) => f.reason === 'Closed exhibition cycle')
+      const allEmpty = failed.length > 0 && failed.every((f) => f.reason === 'No items left on the order')
       if (allClosed) {
         return NextResponse.json(
           { ok: false, error: 'Cannot restore: this order belongs to a closed exhibition cycle.' },
+          { status: 409 }
+        )
+      }
+      if (allEmpty) {
+        return NextResponse.json(
+          { ok: false, error: 'Cannot restore: every item on this order was cancelled, so there is nothing left to restore.' },
           { status: 409 }
         )
       }

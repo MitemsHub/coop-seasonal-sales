@@ -15,7 +15,7 @@ import { validateSession } from '@/lib/validation'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const ACTIONS = ['Approved', 'Cancelled', 'Repriced', 'Restored', 'Confirmed', 'Rolled back']
+const ACTIONS = ['Approved', 'Cancelled', 'Lines cancelled', 'Repriced', 'Restored', 'Confirmed', 'Rolled back']
 const actionMatches = (action) =>
   action === 'Confirmed' ? ['Confirmed', 'Delivered'] : [action]
 

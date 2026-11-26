@@ -2,14 +2,12 @@
 // POST /api/vendor/exhibition/orders/cancel   body: { id | ids, reason? }
 //
 // A vendor can cancel an order, while it is still Pending or Approved — the
-// same cancellable window the admin desk has — but ONLY when every line on the
-// order belongs to that vendor. Order status is order-wide, so cancelling is
-// all-or-nothing: allowing a stand with one line on a shared invoice to cancel
-// it would silently remove another stand's goods and void their payable. A
-// shared invoice is therefore the admin desk's call. (Partial cancellation was
-// the alternative; it would mean re-pricing the order, recomputing loan
-// interest, re-checking the member's cap and rewriting vendor payables — an
-// accounting change, not a permission check.)
+// same cancellable window the admin desk has — when every line on the order
+// belongs to that vendor. Order status is order-wide, so a whole-order cancel
+// on a shared invoice would silently remove another stand's goods and void
+// their payable; that case is handled item by item instead
+// (/api/vendor/exhibition/orders/lines/cancel), which recalculates the
+// surviving lines, loan interest, order total and payable in one transaction.
 //
 // Restoring is deliberately NOT available here: /api/admin/exhibition/orders/
 // restore is the only way back, so a cancellation a vendor makes has to be
@@ -94,7 +92,7 @@ export async function POST(req) {
         {
           ok: false,
           error: shared
-            ? 'This order also contains items from another stand, so only the co-op admin can cancel it.'
+            ? 'This order also contains items from another stand — cancel your own items instead.'
             : notMine
               ? 'That order does not contain any of your products.'
               : 'Only pending or approved orders can be cancelled.',
