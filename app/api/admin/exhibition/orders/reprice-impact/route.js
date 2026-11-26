@@ -3,8 +3,9 @@
 //
 // Read-only preview of what a reprice would do to members' loan room, so the
 // admin can see who is about to be pushed over their limit BEFORE the numbers
-// settle. It calculates the paying price of every open (Pending/Approved)
-// order exactly the way the repricer does — product price less approved
+// settle. It calculates the paying price of every order the repricer will move
+// — Pending, Approved, Confirmed and Delivered, i.e. everything that counts
+// against room — exactly the way the repricer does — product price less approved
 // discount, plus the season's current loan rate — and asks the same
 // check_exhibition_exposure_atomic function the checkout uses for each
 // member's remaining room, so nothing here invents its own arithmetic.
@@ -37,7 +38,7 @@ function buildSql(hasDiscount) {
         FROM public.exhibition_orders o
         JOIN public.exhibition_cycles c ON c.id = o.cycle_id
        WHERE o.cycle_id = $1
-         AND o.status IN ('Pending', 'Approved')
+         AND o.status IN ('Pending', 'Approved', 'Confirmed', 'Delivered')
     ),
     priced AS (
       SELECT l.order_id,

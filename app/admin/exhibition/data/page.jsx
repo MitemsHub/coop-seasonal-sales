@@ -374,7 +374,7 @@ function RepriceOrdersSection() {
         text:
           json.updated_orders === 0
             ? `Nothing to change — all ${json.scanned_orders} open order(s) already match the current prices and the ${json.loan_interest_rate_pct}% loan rate.`
-            : `Repriced ${json.updated_orders} of ${json.scanned_orders} open order(s) at the ${json.loan_interest_rate_pct}% loan rate — ${json.updated_lines} line(s) and ${json.updated_payables} unpaid vendor payable(s) updated.`,
+            : `Repriced ${json.updated_orders} of ${json.scanned_orders} order(s) at the ${json.loan_interest_rate_pct}% loan rate — ${json.updated_lines} line(s) and ${json.updated_payables} unpaid vendor payable(s) updated.`,
       })
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
@@ -389,10 +389,10 @@ function RepriceOrdersSection() {
         <Card.Title>Reprice Exhibition Orders</Card.Title>
         <Card.Description>
           A season&apos;s loan rate and a product&apos;s price are read when an order is created, so changing them
-          leaves orders already placed on the old numbers. Reprice recalculates every Pending and Approved order in
-          the season — each line at the product&apos;s current price and approved discount, and loan interest at the
-          season&apos;s current rate. Confirmed, Delivered and Cancelled orders are never changed, and counter
-          invoices keep the price the vendor typed.
+          leaves orders already on the old numbers. Reprice recalculates every order in the season, whatever stage
+          it is at — Pending, Approved, Confirmed, Delivered or Cancelled — with each line at the product&apos;s
+          current price and approved discount, and loan interest at the season&apos;s current rate. A cancelled order
+          keeps its status and is left out of vendor payables; counter invoices keep the price the vendor typed.
         </Card.Description>
       </Card.Header>
       <Card.Body>

@@ -4,16 +4,19 @@
 // Bringing the season's loan rate (or a product's price/discount) up to date
 // only changes what new orders are charged — existing orders keep the numbers
 // they were written with. This is the exhibition twin of the food
-// price-repricer: it re-reads every still-open order in the season and
-// recalculates
+// price-repricer: it re-reads every order in the season and recalculates
 //   • each line at the product's current vendor price and approved discount
 //     (counter-invoice lines have no product, so their price is left alone)
 //   • every order total as principal + loan interest at the season's current
 //     loan_interest_rate_pct (Cash and Savings orders carry no interest)
 //   • the vendor payable rows that have not been paid yet
 //
-// Only Pending and Approved orders move: Confirmed, Delivered and Cancelled
-// orders are settled history and must not change under a member's feet.
+// Every stage moves, by design: the co-op's price correction has to reach the
+// orders that were already approved, confirmed, delivered or written off, not
+// just the ones still waiting. A cancelled order keeps its status — only its
+// numbers follow the catalogue — and is left out of the vendor payables, since
+// nothing is owed on it. Orders with no lines (cancelled in full by a stand)
+// have nothing to reprice and are untouched.
 //
 // The whole recalculation is one statement, so a reprice is all-or-nothing and
 // the pre-update numbers are the ones the WHERE clauses compare against. That
@@ -43,6 +46,7 @@ function buildSql(hasDiscount) {
     WITH target AS (
       SELECT o.id,
              o.order_id AS order_code,
+             o.status,
              o.payment_option,
              o.total_amount AS old_total,
              o.total_qty AS old_qty,
@@ -50,7 +54,6 @@ function buildSql(hasDiscount) {
         FROM public.exhibition_orders o
         JOIN public.exhibition_cycles c ON c.id = o.cycle_id
        WHERE o.cycle_id = $1
-         AND o.status IN ('Pending', 'Approved')
     ),
     priced AS (
       SELECT l.id AS line_id,
@@ -109,9 +112,11 @@ function buildSql(hasDiscount) {
             FROM priced x
            GROUP BY x.order_id, x.vendor_id
         ) pay
+        JOIN target t ON t.id = pay.order_id
        WHERE v.order_id = pay.order_id
          AND v.vendor_id = pay.vendor_id
          AND v.paid = FALSE
+         AND t.status <> 'Cancelled'
          AND v.amount IS DISTINCT FROM pay.amount
       RETURNING v.id
     ),
@@ -123,6 +128,7 @@ function buildSql(hasDiscount) {
     changes AS (
       SELECT a.order_id AS id,
              t.order_code,
+             t.status,
              t.payment_option,
              t.old_total,
              t.old_qty,
@@ -208,11 +214,12 @@ export async function POST(request) {
       actorType: 'admin',
       actorLabel: 'System admin',
       note:
-        `${cycle.code || cycle.name} at ${ratePct}% loan interest: total NGN ${money(c.old_total)} → ${money(c.new_total)}` +
+        `${cycle.code || cycle.name} at ${ratePct}% loan interest (${String(c.status || '').toLowerCase() || 'order'}): total NGN ${money(c.old_total)} → ${money(c.new_total)}` +
         `${Number(c.changed_lines || 0) ? `, ${Number(c.changed_lines)} line(s) repriced` : ''}.`,
       detail: {
         cycle_id: cycleId,
         cycle_code: cycle.code || '',
+        status: String(c.status || ''),
         loan_interest_rate_pct: ratePct,
         old_total: Number(c.old_total || 0),
         new_total: Number(c.new_total || 0),

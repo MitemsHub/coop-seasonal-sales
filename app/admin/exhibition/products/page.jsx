@@ -440,51 +440,27 @@ export default function ExhibitionProductsPage() {
     [products]
   )
 
-  // Two views of the same catalogue, and each row adds up to `total` — that is
-  // what makes the tiles readable next to each other. The approval row answers
-  // "may this be sold?", the shelf row answers "where is it?". A product on
-  // sale whose price change is waiting for review is active AND pending: it
-  // appears once in each row, never twice. So
-  //   Approved + Awaiting approval + Rejected
-  //     = On sale + Price change pending + Drafts + Archived = Products.
-  // Nothing is dropped on the way: archived products have their own tile, and
-  // there is no soft-delete column to hide. `draft` is the remainder rather
-  // than a status match, so any odd row still lands in a tile and the row keeps
-  // summing to the header number.
+  // One row, one question: "may this be sold?". The shelf row (Active /
+  // Drafts / Archived) answered a second question the desk does not act on from
+  // here, so it is gone; the approval row still adds up to Products, since
+  // every product carries exactly one approval decision.
   const stats = useMemo(() => {
     const is = (p, key, value) => String(p[key] || '') === value
-    const onSale = products.filter((p) => is(p, 'status', 'active') && is(p, 'approval_status', 'approved')).length
-    const livePending = products.filter((p) => is(p, 'status', 'active') && is(p, 'approval_status', 'pending')).length
-    const archived = products.filter((p) => is(p, 'status', 'archived')).length
     return {
       total: products.length,
       approved: products.filter((p) => is(p, 'approval_status', 'approved')).length,
       pending: products.filter((p) => is(p, 'approval_status', 'pending')).length,
       rejected: products.filter((p) => is(p, 'approval_status', 'rejected')).length,
-      onSale,
-      livePending,
-      draft: products.length - onSale - livePending - archived,
-      archived,
     }
   }, [products])
 
   const statGroups = [
     {
-      title: 'Approval decision',
       tiles: [
         { key: 'total', label: 'Products', value: stats.total, tone: 'fg' },
         { key: 'approved', label: 'Approved', value: stats.approved, tone: 'success' },
         { key: 'pending', label: 'Awaiting approval', value: stats.pending, tone: 'warning' },
         { key: 'rejected', label: 'Rejected', value: stats.rejected, tone: 'danger' },
-      ],
-    },
-    {
-      title: 'Where each product stands',
-      tiles: [
-        { key: 'onSale', label: 'On sale', value: stats.onSale, tone: 'success' },
-        { key: 'livePending', label: 'Active · price change pending', value: stats.livePending, tone: 'warning' },
-        { key: 'draft', label: 'Drafts (not on sale)', value: stats.draft, tone: 'fg' },
-        { key: 'archived', label: 'Archived', value: stats.archived, tone: 'muted' },
       ],
     },
   ]
@@ -725,13 +701,15 @@ export default function ExhibitionProductsPage() {
             <h2 className="text-sm font-semibold text-fg">Catalogue at a glance</h2>
             <span className="text-chips text-muted">
               {products.length
-                ? 'Each row adds up to the products these filters show'
+                ? 'Counted across the products these filters show'
                 : 'No products in this view'}
             </span>
           </div>
-          {statGroups.map((group) => (
-            <div key={group.title} className="mb-2 last:mb-0">
-              <p className="mb-1 text-chips font-medium uppercase tracking-wide text-subtext">{group.title}</p>
+          {statGroups.map((group, groupIndex) => (
+            <div key={group.title || groupIndex} className="mb-2 last:mb-0">
+              {group.title && (
+                <p className="mb-1 text-chips font-medium uppercase tracking-wide text-subtext">{group.title}</p>
+              )}
               <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {group.tiles.map((t) => (
                   <div
