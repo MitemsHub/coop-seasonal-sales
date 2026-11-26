@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { validateSession } from '@/lib/validation'
 import { createClient } from '@/lib/supabaseServer'
 import { invoiceFileLink } from '@/lib/invoiceStorage'
+import { INVOICE_MAX_BYTES, INVOICE_TOO_LARGE_ERROR } from '@/lib/invoiceLimits'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -97,6 +98,11 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: 'Only PDF/JPG/PNG/WEBP allowed' }, { status: 400 })
     }
 
+    const declaredSize = Number(file.size || 0)
+    if (Number.isFinite(declaredSize) && declaredSize > INVOICE_MAX_BYTES) {
+      return NextResponse.json({ ok: false, error: INVOICE_TOO_LARGE_ERROR }, { status: 400 })
+    }
+
     const invoiceRef = cleanText(fd.get('invoice_ref'), 120)
     const notes = cleanText(fd.get('notes'), 1000)
 
@@ -133,6 +139,9 @@ export async function POST(req) {
     const path = `ram/${locationId}/${day}/${Date.now()}_${rand}_${filename}`
 
     const buffer = Buffer.from(await file.arrayBuffer())
+    if (buffer.length > INVOICE_MAX_BYTES) {
+      return NextResponse.json({ ok: false, error: INVOICE_TOO_LARGE_ERROR }, { status: 400 })
+    }
     const { error: upErr } = await supabase.storage.from(bucket).upload(path, buffer, { contentType: mime, upsert: false })
     if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 })
 

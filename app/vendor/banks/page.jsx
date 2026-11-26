@@ -15,6 +15,7 @@ import Label from '../../components/ui/Label'
 import Skeleton from '../../components/ui/Skeleton'
 import Badge from '../../components/ui/Badge'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
+import { prepareInvoiceFile, prettyInvoiceSize } from '../../../lib/invoiceUpload'
 
 function maskAccountNumber(s) {
   const v = String(s || '').replace(/\D/g, '')
@@ -126,8 +127,11 @@ export default function VendorBanksPage() {
     setUploading(true)
     setInvoicesMsg('')
     try {
+      // Shrink a phone photo and enforce the 10MB ceiling on the device, so a
+      // big receipt fails with a readable reason instead of mid-upload.
+      const prepared = await prepareInvoiceFile(upFile)
       const fd = new FormData()
-      fd.append('file', upFile)
+      fd.append('file', prepared, prepared.name || 'invoice')
       if (upRef.trim()) fd.append('invoice_ref', upRef.trim())
       if (upDate) fd.append('invoice_date', upDate)
       if (upAmount) fd.append('amount', upAmount)
@@ -368,6 +372,11 @@ export default function VendorBanksPage() {
               onChange={(e) => setUpFile(e.target.files?.[0] || null)}
               className="w-full rounded-lg border border-line bg-surface p-2 text-sm text-fg file:mr-3 file:rounded-lg file:border-0 file:bg-brand file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-on-accent"
             />
+            <p className="mt-1 text-xs text-muted">
+              {upFile
+                ? `${upFile.name} · ${prettyInvoiceSize(upFile.size)} · photos are shrunk before upload`
+                : 'PDF or a photo, up to 10MB · large photos are shrunk before upload'}
+            </p>
           </div>
           <div>
             <Label htmlFor="v-invoice-ref">Invoice reference (optional)</Label>

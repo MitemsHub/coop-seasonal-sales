@@ -12,6 +12,7 @@ import DraggableModal from '../../../components/DraggableModal'
 import Button from '../../../components/ui/Button'
 import Select from '../../../components/ui/Select'
 import Skeleton from '../../../components/ui/Skeleton'
+import { prepareInvoiceFile } from '../../../../lib/invoiceUpload'
 import FilePicker from '../../../components/ui/FilePicker'
 import ConfirmDialog from '../../../components/ui/ConfirmDialog'
 import AdminBankAccountsModal from '../../../components/AdminBankAccountsModal'
@@ -335,12 +336,13 @@ function AdminExhibitionBanksContent() {
     setUploading(true)
     setMsg(null)
     try {
+      const prepared = await prepareInvoiceFile(invoiceFile)
       const fd = new FormData()
       fd.set('vendor_id', String(id))
       fd.set('bank_account_id', String(invoiceUploadBankId))
       fd.set('invoice_ref', invoiceRef)
       fd.set('notes', invoiceNotes)
-      fd.set('file', invoiceFile)
+      fd.set('file', prepared, prepared.name || 'invoice')
       const res = await fetch('/api/admin/exhibition/vendor-banks/invoices/upload', { method: 'POST', body: fd })
       const json = await safeJson(res, '/api/admin/exhibition/vendor-banks/invoices/upload')
       if (!res.ok || !json?.ok) throw new Error(json?.error || 'Upload failed')
@@ -835,7 +837,7 @@ function AdminExhibitionBanksContent() {
               onChange={setInvoiceFile}
               accept=".pdf,image/*"
               disabled={uploading}
-              hint="PDF, JPG or PNG of the invoice."
+              hint="PDF or a photo, up to 10MB · large photos are shrunk before upload"
             />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

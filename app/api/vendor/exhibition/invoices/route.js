@@ -8,6 +8,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { getVendorContext } from '../../_session'
 import { uploadInvoiceFile, invoiceFileLink, removeInvoiceFile } from '@/lib/invoiceStorage'
+import { INVOICE_MAX_BYTES, INVOICE_TOO_LARGE_ERROR } from '@/lib/invoiceLimits'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -112,6 +113,13 @@ export async function POST(req) {
       return NextResponse.json({ ok: false, error: 'Only PDF/JPG/PNG/WEBP/HEIC allowed' }, { status: 400 })
     }
 
+    // The vendor form shrinks photos on the device; this is the backstop that
+    // keeps an oversized file out of the bucket with a readable reason.
+    const declaredSize = Number(file.size || 0)
+    if (Number.isFinite(declaredSize) && declaredSize > INVOICE_MAX_BYTES) {
+      return NextResponse.json({ ok: false, error: INVOICE_TOO_LARGE_ERROR }, { status: 400 })
+    }
+
     const invoiceRef = cleanText(fd.get('invoice_ref'), 120)
     const notes = cleanText(fd.get('notes'), 1000)
     const amountRaw = Number(fd.get('amount'))
@@ -126,6 +134,9 @@ export async function POST(req) {
     const path = `exhibition/${ctx.vendor_id}/${day}/${Date.now()}_${rand}_${filename}`
 
     const buffer = Buffer.from(await file.arrayBuffer())
+    if (buffer.length > INVOICE_MAX_BYTES) {
+      return NextResponse.json({ ok: false, error: INVOICE_TOO_LARGE_ERROR }, { status: 400 })
+    }
     const stored = await uploadInvoiceFile(supabase, {
       path,
       publicPrefix: `invoices/${ctx.vendor_id}`,
