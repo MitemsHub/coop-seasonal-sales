@@ -1,13 +1,14 @@
 // app/exhibition/stands/page.jsx
 // "View all" for Featured stands — every stand in the member's delivery
 // location, as a browsable grid. Each card opens that stand's page, where its
-// approved products live. Products are deliberately not listed here; this is
-// the stands directory, not another catalogue.
+// approved products live. The card is the same StandCard the shop's featured
+// rail uses, so a stand looks identical wherever a member meets it, and the
+// thumbnails are a preview only — the stand page is where the products are.
 'use client'
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronRight, MapPin, Search, Store, X } from 'lucide-react'
+import { MapPin, Search, Store, X } from 'lucide-react'
 import ProtectedRoute from '../../components/ProtectedRoute'
 import ExhibitionCycleHint from '../../components/ExhibitionCycleHint'
 import ContinueShoppingBanner from '../../components/ContinueShoppingBanner'
@@ -17,40 +18,9 @@ import useExhibitionBranch from '../../hooks/useExhibitionBranch'
 import ModuleClosedPanel from '../../components/ModuleClosedPanel'
 import EmptyState from '../../components/ui/EmptyState'
 import Skeleton from '../../components/ui/Skeleton'
-import { countVendorProducts, initials, searchStands, standsWithProducts } from '../../../lib/exhibitionStands'
+import StandCard from '../../components/StandCard'
+import { countVendorProducts, searchStands, standsWithProducts } from '../../../lib/exhibitionStands'
 import { shelfSummaryForVendor } from '../../../lib/exhibitionShelf'
-
-function StandTile({ v, count, shelfLabels = [] }) {
-  const router = useRouter()
-  return (
-    <button
-      type="button"
-      onClick={() => router.push(`/exhibition/vendor/${v.id}`)}
-      aria-label={`Open ${v.name} stand`}
-      className="group flex w-full flex-col overflow-hidden rounded-2xl border border-line bg-surface p-4 text-left transition-all duration-200 ease-sakani hover:-translate-y-0.5 hover:border-accent hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40"
-    >
-      <span className="flex w-full min-w-0 items-center gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-xs font-bold text-accent-fg transition-colors duration-200 ease-sakani group-hover:bg-accent/25">
-          {initials(v.name)}
-        </span>
-        <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-subtext transition-transform duration-200 ease-sakani group-hover:translate-x-0.5 group-hover:text-accent" />
-      </span>
-      <span className="mt-3 block truncate text-sm font-semibold text-fg">{v.name}</span>
-      <span className="mt-1 flex items-center gap-1 truncate text-chips text-muted">
-        <MapPin className="h-3 w-3 shrink-0" strokeWidth={2} />
-        {v.address || 'Exhibition stand'}
-      </span>
-      {shelfLabels.length > 0 && (
-        <span className="mt-1 block truncate text-[10px] font-semibold uppercase tracking-wide text-brand">
-          {shelfLabels.slice(0, 3).join(' · ')}
-        </span>
-      )}
-      <span className="mt-2 text-chips font-medium text-accent">
-        {count} product{count === 1 ? '' : 's'}
-      </span>
-    </button>
-  )
-}
 
 function AllStandsContent() {
   const router = useRouter()
@@ -59,6 +29,16 @@ function AllStandsContent() {
 
   const products = useMemo(() => catalog?.products || [], [catalog])
   const vendors = useMemo(() => catalog?.vendors || [], [catalog])
+
+  // Each stand's own products, for the thumbnail strip on its card.
+  const productsByVendor = useMemo(() => {
+    const map = {}
+    for (const p of products) {
+      if (!map[p.vendor_id]) map[p.vendor_id] = []
+      map[p.vendor_id].push(p)
+    }
+    return map
+  }, [products])
 
   const vendorCounts = useMemo(() => countVendorProducts(products), [products])
   const sellableStands = useMemo(() => standsWithProducts(vendors, products), [vendors, products])
@@ -179,7 +159,7 @@ function AllStandsContent() {
           {loading ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
               {Array.from({ length: 10 }).map((_, i) => (
-                <Skeleton key={i} className="h-32 rounded-2xl" />
+                                  <Skeleton key={i} className="h-[248px] rounded-2xl" />
               ))}
             </div>
           ) : stands.length === 0 ? (
@@ -190,8 +170,15 @@ function AllStandsContent() {
             />
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {stands.map((v) => (
-                <StandTile key={v.id} v={v} count={vendorCounts[v.id] || 0} shelfLabels={shelfLabelsByVendor[v.id]} />
+              {stands.map((v, i) => (
+                <StandCard
+                  key={v.id}
+                  v={v}
+                  index={i}
+                  count={vendorCounts[v.id] || 0}
+                  products={productsByVendor[v.id] || []}
+                  shelfLabels={shelfLabelsByVendor[v.id]}
+                />
               ))}
             </div>
           )}
