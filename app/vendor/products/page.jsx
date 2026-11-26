@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Package, Plus, Search, Upload } from 'lucide-react'
+import { Package, Plus, Search, Trash2, Upload } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import Button from '../../components/ui/Button'
 import Input from '../../components/ui/Input'
@@ -19,6 +19,11 @@ import ShelfPicker from '../../components/ShelfPicker'
 import usePhotoShelfSuggestion from '../../hooks/usePhotoShelfSuggestion'
 
 const fmtNaira = (n) => `NGN ${Number(n || 0).toLocaleString()}`
+
+// Until the co-op approves a product it is the vendor's own draft and can be
+// removed outright. Once approved it may sit on a member's order, so the most
+// a vendor can do is archive it.
+const isDeletable = (p) => !(p.approval_status === 'approved' && p.status !== 'archived')
 
 const memberPrice = (listPrice, discountPct) =>
   Math.round((Number(listPrice || 0) * (100 - Math.min(90, Math.max(0, Number(discountPct || 0))))) / 100)
@@ -77,6 +82,10 @@ export default function VendorProductsPage() {
   const [categories, setCategories] = useState([])
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
+  const [notice, setNotice] = useState(null) // success/warning banner for bulk actions
+  const [selected, setSelected] = useState(new Set())
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
+  const [bulkBusy, setBulkBusy] = useState(false)
 
   const load = useCallback(async () => {
     const qs = new URLSearchParams()
@@ -281,6 +290,71 @@ export default function VendorProductsPage() {
     return list
   }, [products, search, statusFilter])
 
+  // Bulk removal works on the filtered view, so "select all" clears every
+  // unapproved product the vendor is looking at — not just the current page.
+  const deletableFiltered = useMemo(() => filtered.filter(isDeletable), [filtered])
+  const selectedDeletable = useMemo(
+    () => deletableFiltered.filter((p) => selected.has(p.id)),
+    [deletableFiltered, selected]
+  )
+  const allDeletableSelected = deletableFiltered.length > 0 && selectedDeletable.length === deletableFiltered.length
+
+  // A refresh or filter change can drop rows; a stale id would make a bulk
+  // delete report on products that are no longer there.
+  useEffect(() => {
+    setSelected((prev) => {
+      if (!prev.size || !products) return prev
+      const live = new Set(products.filter(isDeletable).map((p) => p.id))
+      const next = new Set([...prev].filter((id) => live.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [products])
+
+  const toggleSelected = (id) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const toggleSelectAll = () =>
+    setSelected(() => (allDeletableSelected ? new Set() : new Set(deletableFiltered.map((p) => p.id))))
+
+  const deleteSelected = async () => {
+    const ids = selectedDeletable.map((p) => p.id)
+    if (!ids.length || bulkBusy) return
+    setBulkBusy(true)
+    setBulkConfirmOpen(false)
+    setNotice(null)
+    try {
+      const res = await fetch('/api/vendor/exhibition/products/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to delete the selected products')
+      const deleted = Number(json.deleted?.length || 0)
+      const skipped = json.skipped || []
+      setSelected(new Set())
+      if (skipped.length) {
+        const detail = skipped.slice(0, 3).map((s) => `${s.name || `#${s.id}`} — ${s.reason}`).join('; ')
+        setNotice({
+          type: 'error',
+          text: `${deleted} product(s) deleted. ${skipped.length} kept: ${detail}${skipped.length > 3 ? `, and ${skipped.length - 3} more` : ''}.`,
+        })
+      } else {
+        setNotice({ type: 'success', text: `${deleted} product(s) deleted.` })
+      }
+      await load()
+    } catch (e) {
+      setNotice({ type: 'error', text: e.message })
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
   // Client-side pagination — vendors with hundreds of items get a tidy page
   // instead of one endless list.
   const [pageSize, setPageSize] = useState(10)
@@ -314,6 +388,14 @@ export default function VendorProductsPage() {
 
       {!!msg && <div className="mb-4 rounded-xl border border-danger-border bg-danger-bg px-4 py-3 text-sm text-danger-fg">{msg}</div>}
 
+      {!!notice && (
+        <div
+          className={`mb-4 rounded-xl border px-4 py-3 text-sm ${notice.type === 'error' ? 'border-danger-border bg-danger-bg text-danger-fg' : 'border-success-border bg-success-bg text-success-fg'}`}
+        >
+          {notice.text}
+        </div>
+      )}
+
       <div className="mb-4 flex flex-col gap-2 sm:flex-row">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
@@ -331,6 +413,46 @@ export default function VendorProductsPage() {
           <option value="archived">Archived</option>
         </Select>
       </div>
+
+      {/* Bulk removal — one decision instead of one dialog per row. Only
+          unapproved products can be deleted, so "select all" selects exactly
+          those and the approved ones stay tick-disabled. */}
+      {filtered.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-subtle/60 px-3 py-2">
+          <label className="flex items-center gap-2 text-xs font-medium text-muted">
+            <input
+              type="checkbox"
+              checked={allDeletableSelected}
+              onChange={toggleSelectAll}
+              ref={(el) => {
+                if (el) el.indeterminate = !allDeletableSelected && selectedDeletable.length > 0
+              }}
+              disabled={!deletableFiltered.length || bulkBusy}
+              aria-label="Select all removable products"
+              className="h-4 w-4 rounded border-line accent-brand disabled:opacity-40"
+            />
+            Select all {deletableFiltered.length} removable
+          </label>
+          <span className="text-chips text-muted">Approved products can only be archived.</span>
+          {selectedDeletable.length > 0 && (
+            <>
+              <span className="rounded-full bg-danger-bg px-2 py-0.5 text-xs font-semibold text-danger-fg">
+                {selectedDeletable.length} selected
+              </span>
+              <Button size="sm" variant="danger" leftIcon={Trash2} onClick={() => setBulkConfirmOpen(true)} loading={bulkBusy}>
+                Delete selected
+              </Button>
+              <button
+                type="button"
+                onClick={() => setSelected(new Set())}
+                className="text-xs font-medium text-brand underline-offset-2 hover:underline"
+              >
+                Clear selection
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {!products ? (
         <div className="space-y-3">
@@ -354,14 +476,29 @@ export default function VendorProductsPage() {
         <div className="rounded-2xl border border-line bg-surface">
           <div className="divide-y divide-line">
             {paged.map((p) => (
-              <div key={p.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-                {productImages(p)[0] ? (
-                  <img src={thumbUrl(productImages(p)[0], 160)} srcSet={thumbSrcSet(productImages(p)[0], 160)} alt={p.name} className="h-14 w-14 shrink-0 rounded-xl border border-line-subtle bg-subtle object-contain" />
-                ) : (
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-subtle text-muted">
-                    <Package className="h-6 w-6" strokeWidth={1.5} />
-                  </div>
-                )}
+              <div key={p.id} className={`flex flex-col gap-3 p-4 transition-colors sm:flex-row sm:items-center ${selected.has(p.id) ? 'bg-danger-bg/20' : ''}`}>
+                <div className="flex items-center gap-3 sm:shrink-0">
+                  <label
+                    className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-line-subtle bg-subtle/60"
+                    title={isDeletable(p) ? 'Select this product' : 'Approved products can only be archived, not deleted'}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected.has(p.id)}
+                      onChange={() => toggleSelected(p.id)}
+                      disabled={!isDeletable(p) || bulkBusy}
+                      aria-label={`Select ${p.name}`}
+                      className="h-4 w-4 rounded border-line accent-brand disabled:cursor-not-allowed disabled:opacity-40"
+                    />
+                  </label>
+                  {productImages(p)[0] ? (
+                    <img src={thumbUrl(productImages(p)[0], 160)} srcSet={thumbSrcSet(productImages(p)[0], 160)} alt={p.name} className="h-14 w-14 shrink-0 rounded-xl border border-line-subtle bg-subtle object-contain" />
+                  ) : (
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-subtle text-muted">
+                      <Package className="h-6 w-6" strokeWidth={1.5} />
+                    </div>
+                  )}
+                </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="min-w-0 break-words text-sm font-semibold text-fg">{p.name}</p>
@@ -552,6 +689,16 @@ export default function VendorProductsPage() {
           </div>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={bulkConfirmOpen}
+        onClose={() => (bulkBusy ? null : setBulkConfirmOpen(false))}
+        onConfirm={deleteSelected}
+        loading={bulkBusy}
+        title={`Delete ${selectedDeletable.length} product${selectedDeletable.length === 1 ? '' : 's'}?`}
+        message={`${selectedDeletable.length} unapproved product(s) will be removed from your list for good. Approved products are kept (archive them instead), and anything already on a member's order is kept and reported back. This cannot be undone.`}
+        confirmLabel="Delete selected"
+      />
 
       <ConfirmDialog
         open={confirmOpen}
