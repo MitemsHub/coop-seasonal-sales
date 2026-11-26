@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import ImageUpload from './ImageUpload'
+import { thumbUrl } from '../../lib/imageUrl'
 import { Check, Images, Plus, Search, X } from 'lucide-react'
 
 const skuFromName = (name) => {
@@ -154,7 +155,7 @@ export default function ItemImagePicker({ value, onChange, name = '', sku = '', 
         <div className="h-11 w-11 shrink-0 overflow-hidden rounded-md border border-line bg-canvas">
           {value ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={value} alt={selected?.name || 'Selected item'} className="h-full w-full object-contain" />
+            <img src={thumbUrl(value, 160)} alt={selected?.name || 'Selected item'} className="h-full w-full object-contain" />
           ) : (
             <span className="flex h-full w-full items-center justify-center text-[10px] text-muted">None</span>
           )}
@@ -272,7 +273,7 @@ export default function ItemImagePicker({ value, onChange, name = '', sku = '', 
                       >
                         <span className="h-9 w-9 shrink-0 overflow-hidden rounded border border-line bg-canvas">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={url} alt={r.name} loading="lazy" className="h-full w-full object-contain" />
+                          <img src={thumbUrl(url, 160)} alt={r.name} loading="lazy" className="h-full w-full object-contain" />
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-xs font-medium text-fg">{r.name}</span>

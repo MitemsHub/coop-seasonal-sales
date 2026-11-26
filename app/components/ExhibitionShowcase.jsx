@@ -6,6 +6,7 @@
 
 import { motion, useReducedMotion } from 'framer-motion'
 import Reveal from './ui/Reveal'
+import { thumbUrl } from '../../lib/imageUrl'
 
 const EXHIBITION_PHOTOS = [
   {
@@ -65,7 +66,7 @@ function PhotoCard({ photo, index }) {
         {/* The image — CSS class handles light/dark adaptive filtering */}
         <div className="exhibition-photo-wrapper relative h-full min-h-[12rem] overflow-hidden">
           <img
-            src={photo.src}
+            src={thumbUrl(photo.src, 800)}
             alt={photo.alt}
             loading="lazy"
             draggable={false}

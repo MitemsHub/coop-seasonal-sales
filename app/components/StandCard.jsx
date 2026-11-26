@@ -9,6 +9,7 @@
 // Kept as one component rather than two so the two surfaces cannot drift.
 import { useRouter } from 'next/navigation'
 import { ChevronRight } from 'lucide-react'
+import { thumbUrl } from '../../lib/imageUrl'
 import { initials } from '../../lib/exhibitionStands'
 import { vendorAboutLine, vendorShelfLabels } from '../../lib/exhibitionShelf'
 
@@ -58,7 +59,7 @@ export default function StandCard({
         {v.banner_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={v.banner_url}
+            src={thumbUrl(v.banner_url, 600)}
             alt=""
             loading="lazy"
             className="h-full w-full object-cover transition-transform duration-500 ease-sakani group-hover:scale-110"
@@ -130,7 +131,7 @@ export default function StandCard({
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={p.image_url || p.images?.[0] || PLACEHOLDER}
+                  src={thumbUrl(p.image_url || p.images?.[0] || PLACEHOLDER, 160)}
                   alt=""
                   loading="lazy"
                   className="h-full w-full object-cover transition-transform duration-300 ease-sakani group-hover:scale-105"

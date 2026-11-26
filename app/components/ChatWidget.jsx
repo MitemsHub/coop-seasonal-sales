@@ -11,6 +11,7 @@ import { MessageCircle, X, Send, Minus, Paperclip } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { createClient } from '../../lib/supabaseClient'
 import { shrinkImageForUpload } from '../../lib/imageShrink'
+import { thumbUrl } from '../../lib/imageUrl'
 
 export default function ChatWidget() {
   const { user } = useAuth()
@@ -316,7 +317,7 @@ export default function ChatWidget() {
       return (
         <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer" className="block mt-1">
           <img
-            src={msg.attachment_url}
+            src={thumbUrl(msg.attachment_url, 800)}
             alt={msg.attachment_name || 'Image'}
             className="max-h-48 rounded-lg object-cover border border-line-subtle"
             loading="lazy"

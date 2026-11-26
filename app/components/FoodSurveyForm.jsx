@@ -22,6 +22,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Camera, CheckCircle2, Lock, Minus, Pencil, Plus, RotateCw, Search, Trash2, X } from 'lucide-react'
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 import Button from './ui/Button'
+import { thumbUrl } from '../../lib/imageUrl'
 import { Input } from './ui/Input'
 import Select from './ui/Select'
 import Label from './ui/Label'
@@ -101,7 +102,7 @@ function PhotoControl({ photo, preview, uploading, error, onChange, onRemove, la
             className="absolute inset-0"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={shown} alt="" className="h-full w-full object-cover" />
+            <img src={thumbUrl(shown, 600)} alt="" className="h-full w-full object-cover" />
           </motion.span>
         ) : (
           <span className="inline-flex items-center gap-1.5 px-2.5 text-xs font-medium text-muted">

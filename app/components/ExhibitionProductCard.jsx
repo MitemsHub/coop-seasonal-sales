@@ -21,6 +21,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { Check, Minus, Plus, ShoppingCart, Store } from 'lucide-react'
 import Badge from './ui/Badge'
+import { thumbUrl } from '../../lib/imageUrl'
 import Button from './ui/Button'
 import DraggableModal from './DraggableModal'
 import { celebrateFirstAdd } from '../../lib/celebrate'
@@ -379,7 +380,7 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   key={`${src}-${i}`}
-                  src={src}
+                  src={thumbUrl(src, 800)}
                   alt={many ? `${p.name} — photo ${i + 1} of ${images.length}` : p.name}
                   draggable={false}
                   className="pointer-events-none h-full w-full shrink-0 object-contain"
@@ -411,7 +412,7 @@ export default function ExhibitionProductCard({ p, qty, onAdd, showVendor = true
                   ].join(' ')}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={src} alt="" className="h-14 w-14 object-cover" />
+                  <img src={thumbUrl(src, 160)} alt="" className="h-14 w-14 object-cover" />
                 </button>
               ))}
             </div>

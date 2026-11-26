@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import FoodSurveyForm from '../../../components/FoodSurveyForm'
+import { thumbUrl } from '../../../../lib/imageUrl'
 import Button from '../../../components/ui/Button'
 import { Input } from '../../../components/ui/Input'
 import Select from '../../../components/ui/Select'
@@ -816,7 +817,7 @@ function SubmissionCard({ sub, onEdit, onDelete, onPhotoDeleted, onEntryRestored
                     {e.photo_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={e.photo_url}
+                        src={thumbUrl(e.photo_url, 500)}
                         alt={e.item_name}
                         loading="lazy"
                         className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
@@ -899,7 +900,7 @@ function SubmissionCard({ sub, onEdit, onDelete, onPhotoDeleted, onEntryRestored
             {expandedPhoto.photo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={expandedPhoto.photo_url}
+                src={thumbUrl(expandedPhoto.photo_url, 900, 75)}
                 alt={expandedPhoto.item_name}
                 className="max-h-[65vh] w-full object-contain bg-canvas"
               />
