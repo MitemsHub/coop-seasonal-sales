@@ -325,34 +325,56 @@ export default function VendorProductsPage() {
   const toggleSelectAll = () =>
     setSelected(() => (allDeletableSelected ? new Set() : new Set(deletableFiltered.map((p) => p.id))))
 
+  // The bulk endpoint accepts 5,000 ids per call, so a larger select-all is
+  // sent in batches and the answers merged: the vendor gets one summary for the
+  // whole selection instead of an error that leaves them to split it by hand.
+  // Batch size stays well under the server limit, which also keeps each request
+  // body and each `in.(...)` URL short.
+  const BULK_BATCH = 2000
+
   const deleteSelected = async () => {
     const ids = selectedDeletable.map((p) => p.id)
     if (!ids.length || bulkBusy) return
     setBulkBusy(true)
     setBulkConfirmOpen(false)
     setNotice(null)
+    const deleted = []
+    const skipped = []
     try {
-      const res = await fetch('/api/vendor/exhibition/products/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to delete the selected products')
-      const deleted = Number(json.deleted?.length || 0)
-      const skipped = json.skipped || []
+      for (let start = 0; start < ids.length; start += BULK_BATCH) {
+        const batch = ids.slice(start, start + BULK_BATCH)
+        const res = await fetch('/api/vendor/exhibition/products/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: batch }),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok || !json.ok) {
+          throw new Error(
+            `${json.error || 'Failed to delete the selected products'}${
+              deleted.length ? ` — ${deleted.length} product(s) were deleted before this batch stopped.` : ''
+            }`
+          )
+        }
+        deleted.push(...(json.deleted || []))
+        skipped.push(...(json.skipped || []))
+      }
+
       setSelected(new Set())
+      await load()
       if (skipped.length) {
         const detail = skipped.slice(0, 3).map((s) => `${s.name || `#${s.id}`} — ${s.reason}`).join('; ')
         setNotice({
           type: 'error',
-          text: `${deleted} product(s) deleted. ${skipped.length} kept: ${detail}${skipped.length > 3 ? `, and ${skipped.length - 3} more` : ''}.`,
+          text: `${deleted.length} product(s) deleted. ${skipped.length} kept: ${detail}${skipped.length > 3 ? `, and ${skipped.length - 3} more` : ''}.`,
         })
       } else {
-        setNotice({ type: 'success', text: `${deleted} product(s) deleted.` })
+        setNotice({ type: 'success', text: `${deleted.length} product(s) deleted.` })
       }
-      await load()
     } catch (e) {
+      // Batches already sent are deleted for good. Refresh so the list shows
+      // what really happened, and keep the selection for a retry.
+      await load().catch(() => {})
       setNotice({ type: 'error', text: e.message })
     } finally {
       setBulkBusy(false)
