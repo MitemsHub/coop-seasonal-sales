@@ -58,6 +58,17 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
   const [cancelReason, setCancelReason] = useState('')
   const [restoreBusy, setRestoreBusy] = useState(false)
 
+  // Arriving from a link that already names the order (the Checker's ledger):
+  // start the queue filtered to it rather than the whole list.
+  useEffect(() => {
+    let requested = ''
+    try {
+      requested = new URLSearchParams(window.location.search).get('q') || ''
+    } catch {}
+    const q = requested.trim()
+    if (q) setTerm(q)
+  }, [])
+
   const fetchCtl = useRef(null)
   // Whether the default active-cycle scope has been applied (once on mount)
   // and the last cycle the admin picked — so an explicit "All cycles" or

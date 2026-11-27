@@ -6,6 +6,7 @@
 // in order, and the closing balance at the end. Read-only — nothing here
 // writes to the member file.
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Search, UserRound } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Badge from '../../../components/ui/Badge'
@@ -29,6 +30,21 @@ function timeOf(iso) {
   } catch {
     return '—'
   }
+}
+
+// Each order lives in the queue named after its status, and every queue accepts
+// ?q= — so an order id here opens the desk that can act on it, already filtered.
+const ORDER_QUEUE = {
+  Pending: '/admin/exhibition/pending',
+  Approved: '/admin/exhibition/approved',
+  Delivered: '/admin/exhibition/delivered',
+  Confirmed: '/admin/exhibition/confirmed',
+  Cancelled: '/admin/exhibition/cancelled',
+}
+
+function orderHref(o) {
+  const base = ORDER_QUEUE[String(o.status || '')] || ORDER_QUEUE.Pending
+  return `${base}?q=${encodeURIComponent(String(o.order_id || ''))}`
 }
 
 function Stat({ label, value, note, tone = '' }) {
@@ -240,7 +256,15 @@ export default function ExhibitionCheckerPage() {
                               </>
                             ) : null}
                           </TD>
-                          <TD className="font-medium text-fg">{o.order_id}</TD>
+                          <TD>
+                            <Link
+                              href={orderHref(o)}
+                              className="font-medium text-brand underline-offset-2 hover:underline"
+                              title="Open this order in its queue"
+                            >
+                              {o.order_id}
+                            </Link>
+                          </TD>
                           <TD className="text-muted">{timeOf(o.created_at)}</TD>
                           <TD className="text-right tabular-nums">{naira(o.amount)}</TD>
                           <TD className="text-muted">{o.payment_option || '—'}</TD>
