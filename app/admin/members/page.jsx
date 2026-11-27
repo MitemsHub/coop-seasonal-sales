@@ -385,6 +385,22 @@ function GradeLimitsSection() {
   )
 }
 
+const fmtBalance = (v) => (v == null ? '—' : `₦${Number(v || 0).toLocaleString()}`)
+const fmtHistoryWhen = (iso) => {
+  if (!iso) return '—'
+  try {
+    return new Date(iso).toLocaleString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return '—'
+  }
+}
+
 function MemberLookupSection() {
   const [q, setQ] = useState('')
   const [results, setResults] = useState(null) // null = not searched
@@ -413,6 +429,10 @@ function MemberLookupSection() {
   const [pwError, setPwError] = useState('')
   const [pwSaving, setPwSaving] = useState(false)
   const [saving, setSaving] = useState(false)
+  // Savings/loan balance trail for the member currently being edited.
+  const [historyRows, setHistoryRows] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState('')
   const debounceRef = useRef(null)
 
   // Load the status list (grade_limits) once — the dropdown shows each grade
@@ -460,6 +480,23 @@ function MemberLookupSection() {
     debounceRef.current = setTimeout(() => search(value), 300)
   }
 
+  const loadHistory = useCallback(async (memberId) => {
+    if (!memberId) return
+    setHistoryLoading(true)
+    setHistoryError('')
+    try {
+      const res = await fetch(`/api/admin/members/history?member_id=${encodeURIComponent(memberId)}&limit=10`, { cache: 'no-store' })
+      const json = await res.json()
+      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Could not load balance history')
+      setHistoryRows(json.events || [])
+    } catch (e) {
+      setHistoryError(e?.message || 'Could not load balance history')
+      setHistoryRows([])
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [])
+
   const openEdit = (m) => {
     setMember(m)
     setFullName(m.full_name || '')
@@ -473,6 +510,7 @@ function MemberLookupSection() {
     setHasAuth(Boolean(m.has_auth))
     setMsg('')
     setModalOpen(true)
+    loadHistory(m.member_id)
   }
 
   // Delete the member's email (Supabase Auth) sign-up state —
@@ -759,6 +797,57 @@ function MemberLookupSection() {
                 ) : null
               })()}
             </div>
+          </div>
+          {/* Balance history — savings/loan changes with old and new values,
+              who made them and which screen they came from. */}
+          <div className="rounded-lg border border-line bg-subtle px-3 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <Label>Balance history</Label>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => loadHistory(member?.member_id)}
+                disabled={historyLoading}
+              >
+                Refresh
+              </Button>
+            </div>
+            {historyLoading ? (
+              <p className="mt-1 text-[11px] text-muted">Loading…</p>
+            ) : historyError ? (
+              <p className="mt-1 text-[11px] text-danger-fg">{historyError}</p>
+            ) : historyRows.length === 0 ? (
+              <p className="mt-1 text-[11px] text-muted">
+                No recorded changes yet — savings and loan edits will appear here.
+              </p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {historyRows.map((h) => {
+                  const savingsChanged = Number(h.old_savings ?? 0) !== Number(h.new_savings ?? 0)
+                  const loansChanged = Number(h.old_loans ?? 0) !== Number(h.new_loans ?? 0)
+                  return (
+                    <li key={h.id} className="rounded-md border border-line bg-surface px-2 py-1.5">
+                      <div className="text-xs text-fg">
+                        {savingsChanged && (
+                          <div>
+                            Savings: {fmtBalance(h.old_savings)} → <span className="font-medium">{fmtBalance(h.new_savings)}</span>
+                          </div>
+                        )}
+                        {loansChanged && (
+                          <div>
+                            Loans: {fmtBalance(h.old_loans)} → <span className="font-medium">{fmtBalance(h.new_loans)}</span>
+                          </div>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-muted">
+                        {fmtHistoryWhen(h.changed_at)} · {h.changed_by || 'admin'} · {h.source || '—'}
+                        {h.note ? ` · ${h.note}` : ''}
+                      </p>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
           </div>
           <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-subtle px-3 py-3">
             <div className="min-w-0">

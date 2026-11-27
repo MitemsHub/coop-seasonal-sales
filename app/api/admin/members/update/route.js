@@ -13,6 +13,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession, sanitizeString } from '@/lib/validation'
+import { buildMemberBalanceHistoryEntry, logMemberBalanceHistory } from '@/lib/memberBalanceHistory'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -86,6 +87,16 @@ export async function PATCH(request) {
     // Status (grade) drives the loan ceiling — validate it against
     // grade_limits and, when it actually changes, apply that grade's default
     // as the member's global_limit in the same write.
+    // Snapshot the record before the write: the history row needs the exact
+    // old balances, and the grade check below compares against it.
+    const { data: before, error: beforeErr } = await supabase
+      .from('members')
+      .select('member_id, grade, savings, loans, full_name')
+      .eq('member_id', memberId)
+      .maybeSingle()
+    if (beforeErr) return NextResponse.json({ ok: false, error: beforeErr.message }, { status: 500 })
+    if (!before) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
+
     if (patch.grade) {
       const { data: grades, error: gErr } = await supabase.from('grade_limits').select('grade, global_limit')
       if (gErr) return NextResponse.json({ ok: false, error: gErr.message }, { status: 500 })
@@ -99,15 +110,7 @@ export async function PATCH(request) {
       }
       patch.grade = match.grade // canonical spelling from the list
 
-      const { data: current, error: cErr } = await supabase
-        .from('members')
-        .select('grade')
-        .eq('member_id', memberId)
-        .maybeSingle()
-      if (cErr) return NextResponse.json({ ok: false, error: cErr.message }, { status: 500 })
-      if (!current) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
-
-      const unchanged = String(current.grade || '').trim().toLowerCase() === patch.grade.toLowerCase()
+      const unchanged = String(before.grade || '').trim().toLowerCase() === patch.grade.toLowerCase()
       if (!unchanged) patch.global_limit = Number(match.global_limit) || 0
     }
 
@@ -119,6 +122,15 @@ export async function PATCH(request) {
       .maybeSingle()
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
     if (!data) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
+
+    // Append to the balance trail: old and new values, who made the change and
+    // which screen it came from. Best-effort — the save has already committed.
+    const historyEntry = buildMemberBalanceHistoryEntry(before, data, {
+      source: 'Members settings',
+      changedBy: String(session.claims?.email || session.claims?.sub || 'admin'),
+      note: 'Edited in Members settings',
+    })
+    if (historyEntry) await logMemberBalanceHistory([historyEntry])
 
     return NextResponse.json({
       ok: true,

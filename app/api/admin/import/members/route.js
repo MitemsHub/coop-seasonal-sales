@@ -2,6 +2,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '../../../../../lib/supabaseServer'
 import * as XLSX from 'xlsx/xlsx.mjs'
+import { buildMemberBalanceHistoryEntry, logMemberBalanceHistory } from '../../../../../lib/memberBalanceHistory'
+import { validateSession } from '../../../../../lib/validation'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -152,6 +154,19 @@ export async function POST(req) {
       )
     }
 
+    // Snapshot the balances about to be replaced so the trail records what
+    // each imported row changed from (and nulls for brand-new members).
+    const existingById = new Map()
+    const importIds = upsertRows.map((r) => r.member_id).filter(Boolean)
+    for (const part of chunk(importIds, 200)) {
+      const { data: existing, error: exErr } = await supabase
+        .from('members')
+        .select('member_id, savings, loans')
+        .in('member_id', part)
+      if (exErr) return NextResponse.json({ ok: false, error: exErr.message }, { status: 500 })
+      for (const m of existing || []) existingById.set(m.member_id, m)
+    }
+
     // Upsert in chunks
     let total = 0
     for (const part of chunk(upsertRows, 500)) {
@@ -162,7 +177,21 @@ export async function POST(req) {
       total += count || part.length
     }
 
-    return NextResponse.json({ ok: true, imported: total })
+    // Record the savings/loan changes this workbook made, one row per member.
+    const session = await validateSession(req, 'admin').catch(() => ({ valid: false }))
+    const changedBy = session?.valid
+      ? String(session.claims?.email || session.claims?.sub || 'admin')
+      : 'admin'
+    const historyEntries = upsertRows
+      .map((row) => buildMemberBalanceHistoryEntry(existingById.get(row.member_id) || {}, row, {
+        source: 'Bulk member import',
+        changedBy,
+        note: `Workbook import (${file?.name || 'sheet'})`,
+      }))
+      .filter(Boolean)
+    if (historyEntries.length) await logMemberBalanceHistory(historyEntries)
+
+    return NextResponse.json({ ok: true, imported: total, history_recorded: historyEntries.length })
   } catch (e) {
     return NextResponse.json({ ok: false, error: e.message || 'Unknown error' }, { status: 500 })
   }
