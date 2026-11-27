@@ -533,14 +533,16 @@ export default function ExhibitionProductsPage() {
     })
 
   // Bulk actions cover everything selected, not just the visible page.
-  // Approve uses the bulk route (it applies pending prices and notifies the
-  // stand's followers); archive, restore and delete reuse the single-product
-  // route so its order guard still stops a product that is already on an order.
+  // Approve and unapprove use the bulk route (approve applies pending prices
+  // and notifies the stand's followers); archive, restore and delete reuse the
+  // single-product route so its order guard still stops a product that is
+  // already on an order.
   const runBulk = async (action) => {
     const ids = selectedIds
     if (!ids.length) return
     const labels = {
       approve: 'approved and published',
+      unapprove: 'sent back to awaiting approval',
       archive: 'archived',
       restore: 'restored',
       delete: 'deleted',
@@ -557,13 +559,13 @@ export default function ExhibitionProductsPage() {
       if (!failure) failure = text
     }
     try {
-      if (action === 'approve') {
+      if (action === 'approve' || action === 'unapprove') {
         for (let i = 0; i < ids.length; i += 200) {
           const batch = ids.slice(i, i + 200)
           const res = await fetch('/api/admin/exhibition/products/bulk', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'approve', ids: batch }),
+            body: JSON.stringify({ action, ids: batch }),
           })
           const json = await res.json().catch(() => ({}))
           if (!res.ok || !json.ok) {
@@ -571,12 +573,18 @@ export default function ExhibitionProductsPage() {
             noteFailure(json.error || 'Bulk approval failed')
             break
           }
-          for (const id of json.approved || []) changed.add(Number(id))
+          for (const id of json.approved || json.unapproved || []) changed.add(Number(id))
           // The route writes row by row and returns the rows it could not
           // touch in `failed` while still answering ok. Counting only
           // `approved` would report a partial approval as a clean success.
           for (const id of json.failed || []) {
-            noteFailure(`product #${id} could not be approved`)
+            noteFailure(`product #${id} could not be ${action === 'unapprove' ? 'unapproved' : 'approved'}`)
+          }
+          // A row that is not currently approved has no approval to withdraw;
+          // the single-product route refuses it with a 409, so the bulk route
+          // reports it as skipped rather than pretending it changed.
+          for (const id of json.skipped || []) {
+            noteFailure(`product #${id} is not approved`)
           }
         }
       } else {
@@ -695,6 +703,7 @@ export default function ExhibitionProductsPage() {
         >
           <option value="" disabled>Bulk actions</option>
           <option value="approve">Approve selected</option>
+          <option value="unapprove">Unapprove selected</option>
           <option value="archive">Archive selected</option>
           <option value="restore">Restore selected</option>
           <option value="delete">Delete selected</option>

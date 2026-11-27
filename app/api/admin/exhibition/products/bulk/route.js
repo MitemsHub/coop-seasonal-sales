@@ -1,6 +1,6 @@
 // app/api/admin/exhibition/products/bulk/route.js
 // Bulk approval: one decision for a queue, not one POST per product.
-//   POST { action: 'approve'|'reject', ids: [...], note?: string }
+//   POST { action: 'approve'|'unapprove'|'reject', ids: [...], note?: string }
 // Approving applies any pending price, publishes the product and tells the
 // stand's followers (first publish only). Every applied price change is written
 // to exhibition_price_history so a dispute has a record.
@@ -19,8 +19,11 @@ export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}))
     const action = String(body.action || '').toLowerCase()
-    if (action !== 'approve' && action !== 'reject') {
-      return NextResponse.json({ ok: false, error: 'action must be approve or reject' }, { status: 400 })
+    if (action !== 'approve' && action !== 'unapprove' && action !== 'reject') {
+      return NextResponse.json(
+        { ok: false, error: 'action must be approve, unapprove or reject' },
+        { status: 400 }
+      )
     }
     const ids = (Array.isArray(body.ids) ? body.ids : [body.ids])
       .map((v) => Math.trunc(Number(v)))
@@ -37,6 +40,38 @@ export async function POST(req) {
       .select('id, name, status, vendor_id, cycle_id, vendor_price, pending_vendor_price, discount_pct, pending_discount_pct, approval_status')
       .in('id', ids)
     if (selErr) return NextResponse.json({ ok: false, error: selErr.message }, { status: 500 })
+
+    // Withdrawing an approval given in error. Only a row that carries an
+    // approval can be unapproved — the single-product route answers 409 for
+    // anything else, and here those ids come back as `skipped`. Shelf status
+    // is deliberately untouched: the shop lists active + approved only, so
+    // clearing the approval takes the product off the shelf, while the order
+    // lines that already exist keep the price they were sold at.
+    if (action === 'unapprove') {
+      const unapproved = []
+      const skipped = []
+      for (const row of rows || []) {
+        if (row.approval_status !== 'approved') {
+          skipped.push(Number(row.id))
+          continue
+        }
+        const { error } = await supabase
+          .from('exhibition_products')
+          .update({
+            approval_status: 'pending',
+            approval_note: '',
+            approval_reviewed_at: now,
+            approval_requested_at: now,
+          })
+          .eq('id', row.id)
+        if (error) continue
+        unapproved.push(Number(row.id))
+      }
+      // Ids that matched no row (deleted since the list loaded) or whose write
+      // failed land in `failed`, the same key the approve path uses.
+      const failed = ids.filter((id) => !unapproved.includes(id) && !skipped.includes(id))
+      return NextResponse.json({ ok: true, unapproved, skipped, failed })
+    }
 
     if (action === 'reject') {
       const { error } = await supabase
