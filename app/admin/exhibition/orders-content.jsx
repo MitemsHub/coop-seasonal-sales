@@ -1315,34 +1315,48 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
 function MemberApprovalHints({ order }) {
   const info = order?.member_approval
   if (!info || !info.orders_total) return null
+  const isLoan = order.payment_option === 'Loan'
   const room =
     order.payment_option === 'Savings'
       ? info.savings_room
-      : order.payment_option === 'Loan'
+      : isLoan
         ? info.loan_room
         : null
+  // A loan row shows the room left AFTER this order, not the member's current
+  // total: the total is identical on every row and hides which order consumed
+  // what, which is exactly what the approving officer needs to see.
+  const roomShown = isLoan && info.loan_room_after != null ? info.loan_room_after : room
+  const shopped = Number(info.orders_this_cycle_shopped ?? info.orders_this_cycle ?? 0)
   const detail = [
     info.category ? `Category ${info.category}` : '',
     `Savings ${naira(info.savings)}`,
     `Loans ${naira(info.loans)}`,
     info.global_limit ? `Global limit ${naira(info.global_limit)}` : '',
+    info.loan_room_facility != null ? `Season loan facility ${naira(info.loan_room_facility)}` : '',
+    info.loan_room_season_used != null ? `Used on loan this season ${naira(info.loan_room_season_used)}` : '',
+    info.loan_room_order_amount != null
+      ? `This order ${naira(info.loan_room_order_amount)}${
+          info.loan_room_order_interest > 0 ? ` (+${naira(info.loan_room_order_interest)} interest, not counted)` : ''
+        }`
+      : '',
+    info.loan_room_before != null
+      ? `Loan room ${naira(info.loan_room_before)} before → ${naira(info.loan_room_after)} after this order`
+      : '',
     `${info.orders_open} open · ${info.orders_confirmed} confirmed · ${info.orders_cancelled} cancelled`,
     info.room_warning || '',
   ]
     .filter(Boolean)
     .join(' · ')
-  const label = info.first_order
-    ? 'First order'
-    : `${info.orders_total} orders${info.orders_this_cycle ? ` · ${info.orders_this_cycle} this season` : ''}`
+  const label = `Shopped ${shopped} time${shopped === 1 ? '' : 's'}`
   const tone =
-    room == null ? '' : room > 0 ? 'bg-success-bg text-success-fg' : 'bg-danger-bg text-danger-fg'
+    roomShown == null ? '' : roomShown > 0 ? 'bg-success-bg text-success-fg' : 'bg-danger-bg text-danger-fg'
   return (
     <div className="mt-1 space-y-0.5" title={detail}>
       <div className="truncate text-chips text-subtext">{label}</div>
-      {room != null && (
+      {roomShown != null && (
         <span className={`inline-flex max-w-full truncate rounded px-1.5 py-0.5 text-chips font-medium ${tone}`}>
-          {room > 0
-            ? `${order.payment_option} room ${naira(room)}`
+          {roomShown > 0
+            ? `${order.payment_option} room ${naira(roomShown)} left`
             : `No ${String(order.payment_option || '').toLowerCase()} room left`}
         </span>
       )}

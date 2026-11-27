@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession } from '@/lib/validation'
+import { buildLoanRoomTimeline } from '@/lib/exhibitionLoanRoom'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -104,31 +105,76 @@ export async function GET(request) {
     const memberIds = [...new Set((data || []).map((o) => String(o.member_id || '').trim().toUpperCase()).filter(Boolean))]
     const memberById = new Map()
     const historyByMember = new Map()
+    // Every order these members hold (all statuses, every season) — the room
+    // timeline below needs the whole history, not just this page.
+    let history = []
     if (memberIds.length) {
-      const [{ data: members, error: memErr }, { data: history }] = await Promise.all([
+      const [{ data: members, error: memErr }, { data: historyRows }] = await Promise.all([
         supabase
           .from('members')
           .select('member_id, phone, category, savings, loans, global_limit')
           .in('member_id', memberIds),
         supabase
           .from('exhibition_orders')
-          .select('member_id, status, cycle_id')
+          .select('id, member_id, status, cycle_id, payment_option, total_amount, created_at')
           .in('member_id', memberIds),
       ])
       if (memErr) return NextResponse.json({ ok: false, error: memErr.message }, { status: 500 })
+      history = historyRows || []
       for (const m of members || []) {
         memberById.set(String(m.member_id || '').trim().toUpperCase(), m)
       }
-      for (const h of history || []) {
+      for (const h of history) {
         const key = String(h.member_id || '').trim().toUpperCase()
-        const cur = historyByMember.get(key) || { total: 0, cancelled: 0, open: 0, confirmed: 0, byCycle: new Map() }
+        const cur = historyByMember.get(key) || { total: 0, cancelled: 0, open: 0, confirmed: 0, byCycle: new Map(), byCycleShopped: new Map() }
         cur.total += 1
         if (h.status === 'Cancelled') cur.cancelled += 1
         else if (h.status === 'Confirmed') cur.confirmed += 1
         else cur.open += 1
         const cid = Number(h.cycle_id || 0)
         cur.byCycle.set(cid, (cur.byCycle.get(cid) || 0) + 1)
+        // A cancelled order was never a purchase, so it is not "shopped".
+        if (h.status !== 'Cancelled') cur.byCycleShopped.set(cid, (cur.byCycleShopped.get(cid) || 0) + 1)
         historyByMember.set(key, cur)
+      }
+    }
+
+    // ── What each order did to the loan room ─────────────────────────────
+    // The RPC below answers "room as of now", which is after every open order
+    // the member holds — printed on each row it reads like the room never
+    // moves. The cycle's cap basis and the members' orders are fetched here so
+    // each row can show the room before and after that particular order.
+    const capIncludesInterest = new Map()
+    const pageCycleIds = [...new Set((data || []).map((o) => Number(o.cycle_id || 0)).filter((n) => n > 0))]
+    if (pageCycleIds.length) {
+      const { data: cycRows, error: cycErr } = await supabase
+        .from('exhibition_cycles')
+        .select('id, exh_loan_cap_include_interest')
+        .in('id', pageCycleIds)
+      // A cycle table without the column keeps the default (interest counts).
+      if (!cycErr) {
+        for (const c of cycRows || []) {
+          capIncludesInterest.set(Number(c.id), c.exh_loan_cap_include_interest !== false)
+        }
+      }
+    }
+
+    const COUNTED_STATUSES = new Set(['Pending', 'Approved', 'Delivered', 'Confirmed'])
+    const countedLoanIds = (history || [])
+      .filter((h) => h.payment_option === 'Loan' && COUNTED_STATUSES.has(h.status))
+      .filter((h) => capIncludesInterest.get(Number(h.cycle_id || 0)) === false)
+      .map((h) => Number(h.id))
+    const principalByOrder = new Map()
+    if (countedLoanIds.length) {
+      const { data: lineRows, error: lineErr } = await supabase
+        .from('exhibition_order_lines')
+        .select('order_id, amount')
+        .in('order_id', countedLoanIds)
+      if (!lineErr) {
+        for (const l of lineRows || []) {
+          const oid = Number(l.order_id)
+          principalByOrder.set(oid, (principalByOrder.get(oid) || 0) + Number(l.amount || 0))
+        }
       }
     }
 
@@ -174,11 +220,35 @@ export async function GET(request) {
       }
     }
 
+    // Turn "room as of now" into a per-order timeline: facility (room now +
+    // everything counted this season) drawn down order by order.
+    const roomTimelineByOrder = new Map()
+    const loanOrdersByScope = new Map()
+    for (const h of history || []) {
+      if (!COUNTED_STATUSES.has(h.status) || h.payment_option !== 'Loan') continue
+      const scopeKey = `${String(h.member_id || '').trim().toUpperCase()}|${Number(h.cycle_id || 0)}`
+      const list = loanOrdersByScope.get(scopeKey) || []
+      list.push(h)
+      loanOrdersByScope.set(scopeKey, list)
+    }
+    for (const [scopeKey, list] of loanOrdersByScope) {
+      const room = roomByScope.get(scopeKey)
+      if (!room?.available) continue
+      const timeline = buildLoanRoomTimeline({
+        orders: list,
+        includeInterest: capIncludesInterest.get(Number(scopeKey.split('|')[1])) !== false,
+        principalByOrder,
+        roomNow: Number(room.loan_room || 0),
+      })
+      for (const [orderId, value] of timeline) roomTimelineByOrder.set(orderId, value)
+    }
+
     const orders = (data || []).map((o) => {
       const key = String(o.member_id || '').trim().toUpperCase()
       const member = memberById.get(key) || {}
-      const hist = historyByMember.get(key) || { total: 0, cancelled: 0, open: 0, confirmed: 0, byCycle: new Map() }
+      const hist = historyByMember.get(key) || { total: 0, cancelled: 0, open: 0, confirmed: 0, byCycle: new Map(), byCycleShopped: new Map() }
       const room = roomByScope.get(`${key}|${Number(o.cycle_id || 0)}`) || { available: false, warning: '' }
+      const timeline = roomTimelineByOrder.get(Number(o.id)) || null
       return {
       ...o,
       member_phone: String(member.phone || '').trim(),
@@ -191,6 +261,7 @@ export async function GET(request) {
         orders_confirmed: hist.confirmed,
         orders_cancelled: hist.cancelled,
         orders_this_cycle: hist.byCycle.get(Number(o.cycle_id || 0)) || 0,
+        orders_this_cycle_shopped: hist.byCycleShopped?.get(Number(o.cycle_id || 0)) ?? 0,
         first_order: hist.total <= 1,
         category: String(member.category || '').trim(),
         savings: Number(member.savings || 0),
@@ -198,6 +269,17 @@ export async function GET(request) {
         global_limit: Number(member.global_limit || 0),
         loan_room: room.available ? Number(room.loan_room || 0) : null,
         savings_room: room.available ? Number(room.savings_room || 0) : null,
+        // Per-order view of the same room: what this order took from the
+        // season facility, and what was left before and after it.
+        loan_room_facility: timeline ? timeline.facility : null,
+        loan_room_season_used: timeline ? timeline.season_used : null,
+        loan_room_order_amount: timeline ? timeline.amount : null,
+        loan_room_order_interest:
+          timeline && o.payment_option === 'Loan'
+            ? Math.max(0, Number(o.total_amount || 0) - timeline.amount)
+            : null,
+        loan_room_before: timeline ? timeline.before : null,
+        loan_room_after: timeline ? timeline.after : null,
         room_available: Boolean(room.available),
         room_warning: room.warning || '',
       },
