@@ -885,12 +885,11 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                         <div className="text-xs text-subtext">{fmtDate(o.created_at)}</div>
                         <div className="truncate text-xs text-subtext" title={o.cycle_name || o.cycle_code || ''}>{o.cycle_name || o.cycle_code || ''}</div>
                         {o.per_vendor?.length > 0 && (
-                          <div className="mt-1 space-y-0.5">
-                            {o.per_vendor.map((v) => (
-                              <div key={v.vendor_id} className="truncate text-xs text-subtext" title={v.vendor_name}>
-                                {v.vendor_name}: {v.qty}
-                              </div>
-                            ))}
+                          <div
+                            className="mt-1 truncate text-xs text-subtext"
+                            title={vendorLine(o.per_vendor, ' · ')}
+                          >
+                            {vendorSummaryLine(o.per_vendor)}
                           </div>
                         )}
                         {status === 'Cancelled' && (
@@ -1021,11 +1020,12 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
 
                     {o.per_vendor?.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1.5">
-                        {o.per_vendor.map((v) => (
-                          <span key={v.vendor_id} className="max-w-full truncate rounded-full bg-subtle px-2 py-0.5 text-chips text-muted" title={v.vendor_name}>
-                            {v.vendor_name}: {v.qty}
-                          </span>
-                        ))}
+                        <span
+                          className="max-w-full truncate rounded-full bg-subtle px-2 py-0.5 text-chips text-muted"
+                          title={vendorLine(o.per_vendor, ' · ')}
+                        >
+                          {vendorSummaryLine(o.per_vendor)}
+                        </span>
                       </div>
                     )}
 
@@ -1312,6 +1312,23 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
 // is a regular buyer or whether they still have room. The orders API attaches
 // `member_approval` to every row: order counts and the room left are read live
 // from the same exposure function checkout uses, so nothing is stored per order.
+// A member can shop from several stands on one invoice. Listing them all turns
+// the order cell into a column of truncated names, so the cell shows the first
+// stand and counts the rest; the hover title and the order modal hold the full
+// list for whoever needs it.
+function vendorLine(perVendor, sep = ', ') {
+  return (perVendor || []).map((v) => `${v.vendor_name}: ${v.qty}`).join(sep)
+}
+
+function vendorSummaryLine(perVendor) {
+  const list = perVendor || []
+  if (!list.length) return ''
+  const first = `${list[0].vendor_name}: ${list[0].qty}`
+  if (list.length === 1) return first
+  const others = list.length - 1
+  return `${first} & ${others} other${others === 1 ? '' : 's'}`
+}
+
 // Below this much loan space the chip turns amber: the member can still shop,
 // but the approving officer should see it coming rather than discover it when
 // the next order is refused at checkout.

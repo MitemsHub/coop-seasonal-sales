@@ -48,6 +48,22 @@ function fmtDate(iso) {
 // human labels with counts, so the skipped-count tooltip can explain exactly
 // why each order didn't process. Out-of-scope ids arrive as { reason } only
 // (never their status), so the labels never expose another branch's state.
+// A member can shop from several stands on one invoice. Listing them all turns
+// the order cell into a column of truncated names, so the cell shows the first
+// stand and counts the rest; the hover title keeps the full list.
+function vendorLine(perVendor, sep = ', ') {
+  return (perVendor || []).map((v) => `${v.vendor_name}: ${v.qty}`).join(sep)
+}
+
+function vendorSummaryLine(perVendor) {
+  const list = perVendor || []
+  if (!list.length) return ''
+  const first = `${list[0].vendor_name}: ${list[0].qty}`
+  if (list.length === 1) return first
+  const others = list.length - 1
+  return `${first} & ${others} other${others === 1 ? '' : 's'}`
+}
+
 function summarizeFailed(failed = []) {
   const counts = new Map()
   const labelFor = (f) => {
@@ -876,12 +892,11 @@ export default function RepExhibitionOrdersContent({ status = 'Pending' }) {
                       <td className="p-3 align-top">
                         <Badge tone={STATUS_TONE[o.status] || 'neutral'} variant="subtle">{o.status}</Badge>
                         {o.per_vendor?.length > 0 && (
-                          <div className="mt-1 max-w-[160px] space-y-0.5">
-                            {o.per_vendor.map((v) => (
-                              <div key={v.vendor_id} className="truncate text-xs text-subtext" title={v.vendor_name}>
-                                {v.vendor_name}: {v.qty}
-                              </div>
-                            ))}
+                          <div
+                            className="mt-1 max-w-[200px] truncate text-xs text-subtext"
+                            title={vendorLine(o.per_vendor, ' · ')}
+                          >
+                            {vendorSummaryLine(o.per_vendor)}
                           </div>
                         )}
                       </td>

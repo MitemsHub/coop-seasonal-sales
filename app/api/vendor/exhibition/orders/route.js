@@ -11,7 +11,12 @@ import { getVendorContext } from '../../_session'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const STATUS_FILTERS = ['Pending', 'Approved', 'Confirmed', 'Cancelled']
+// A stand only sees an invoice once the admin has approved it. Until then the
+// order can still be edited, re-priced or withdrawn, and goods picked against
+// a pending invoice are goods nobody may collect. `approved_at` is what
+// separates an order that was approved and later cancelled from one that was
+// cancelled before it ever reached the floor.
+const STATUS_FILTERS = ['Approved', 'Confirmed', 'Cancelled']
 
 export async function GET(req) {
   try {
@@ -36,7 +41,7 @@ export async function GET(req) {
     if (!ids.length) return NextResponse.json({ ok: true, orders: [], total: 0 })
 
     const applyFilters = (builder) => {
-      let next = builder.in('id', ids)
+      let next = builder.in('id', ids).not('approved_at', 'is', null)
       if (status && STATUS_FILTERS.includes(status)) next = next.eq('status', status)
       else next = next.in('status', STATUS_FILTERS)
       if (q) next = next.or(`order_id.ilike.%${q}%,member_id.ilike.%${q}%,member_name_snapshot.ilike.%${q}%`)
@@ -55,6 +60,20 @@ export async function GET(req) {
         .range(offset, offset + limit - 1)
     )
     if (error) return NextResponse.json({ error: error.message || 'Failed to load orders' }, { status: 500 })
+
+    // The stand calls the member to arrange collection, so the number travels
+    // with the order (members has no FK from exhibition_orders to embed).
+    const memberIds = [...new Set((data || []).map((o) => String(o.member_id || '').trim()).filter(Boolean))]
+    const phoneByMember = new Map()
+    if (memberIds.length) {
+      const { data: memberRows } = await supabase
+        .from('members')
+        .select('member_id, phone')
+        .in('member_id', memberIds)
+      for (const m of memberRows || []) {
+        phoneByMember.set(String(m.member_id || '').trim(), String(m.phone || '').trim())
+      }
+    }
 
     const pagedIds = (data || []).map((o) => Number(o.id))
     const { data: pagedLines, error: lErr } = await supabase
@@ -104,6 +123,7 @@ export async function GET(req) {
         ...o,
         db_id: Number(o.id),
         member_name: o.member_name_snapshot || '',
+        member_phone: phoneByMember.get(String(o.member_id || '').trim()) || '',
         branch_name: o.branches?.name || '',
         branch_code: o.branches?.code || '',
         cycle_name: o.cycles?.name || '',

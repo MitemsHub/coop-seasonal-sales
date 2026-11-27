@@ -20,9 +20,10 @@ const STATUS_TONE = {
   Cancelled: 'muted',
 }
 
+// No Pending tab: an order is not visible to the stand until the admin has
+// approved it, so that tab could only ever be empty.
 const FILTERS = [
   { key: '', label: 'All' },
-  { key: 'Pending', label: 'Pending' },
   { key: 'Approved', label: 'Approved' },
   { key: 'Confirmed', label: 'Confirmed' },
   { key: 'Cancelled', label: 'Cancelled' },
@@ -228,6 +229,13 @@ export default function VendorOrdersPage() {
                   <p className="mt-1 text-chips text-muted">
                     {o.member_name || o.member_id} · {o.payment_option} · {new Date(o.created_at).toLocaleString()}
                   </p>
+                  {o.member_phone && (
+                    <p className="mt-0.5 text-chips text-muted">
+                      <a href={`tel:${o.member_phone}`} className="tabular-nums underline-offset-2 hover:text-fg hover:underline">
+                        {o.member_phone}
+                      </a>
+                    </p>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-4 sm:shrink-0">
                   <div className="text-right">
@@ -308,6 +316,13 @@ export default function VendorOrdersPage() {
                   {viewOrder.member_name || viewOrder.member_id || 'Member'}
                   {viewOrder.member_name && viewOrder.member_id ? ` · ${viewOrder.member_id}` : ''}
                 </p>
+                {viewOrder.member_phone && (
+                  <p className="mt-0.5 text-chips text-muted">
+                    <a href={`tel:${viewOrder.member_phone}`} className="tabular-nums underline-offset-2 hover:text-fg hover:underline">
+                      {viewOrder.member_phone}
+                    </a>
+                  </p>
+                )}
               </div>
               <div>
                 <p className="text-chips text-muted">Payment</p>
