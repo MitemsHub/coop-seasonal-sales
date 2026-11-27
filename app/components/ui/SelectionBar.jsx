@@ -19,10 +19,13 @@ export default function SelectionBar({
   selectAllDisabled = false,
   busy = false,
   hint = '',
+  // The bar can sit above a table or under its pager; the caller owns that
+  // spacing (the default keeps every existing use unchanged).
+  className = 'mb-3',
   children,
 }) {
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-subtle/60 px-3 py-2">
+    <div className={`${className} flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-subtle/60 px-3 py-2`}>
       <label className="flex items-center gap-2 text-xs font-medium text-muted">
         <input
           type="checkbox"

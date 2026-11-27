@@ -659,6 +659,62 @@ export default function ExhibitionProductsPage() {
     </select>
   )
 
+  // The bar above the table and the one under the pager offer the same
+  // controls, so ticking the rows on page 9 does not mean scrolling back to the
+  // top to choose an action. Defined once, rendered twice, never drifting.
+  const selectionActions = (
+    <>
+      {selected.size > 0 && !allFilteredSelected && (
+        <button
+          type="button"
+          onClick={() => setSelected(new Set(products.map((p) => p.id)))}
+          className="text-xs font-medium text-brand underline-offset-2 hover:underline"
+        >
+          Select all {products.length}
+        </button>
+      )}
+      {selected.size > 0 && (
+        <select
+          aria-label="Bulk action"
+          defaultValue=""
+          disabled={busy}
+          onChange={(e) => {
+            const action = e.target.value
+            e.target.value = ''
+            if (action === 'delete') setBulkConfirmOpen(true)
+            else runBulk(action)
+          }}
+          className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm font-medium text-fg focus:border-brand focus:outline-none disabled:opacity-50"
+        >
+          <option value="" disabled>Bulk actions</option>
+          <option value="approve">Approve selected</option>
+          <option value="archive">Archive selected</option>
+          <option value="restore">Restore selected</option>
+          <option value="delete">Delete selected</option>
+        </select>
+      )}
+    </>
+  )
+
+  // className is the spacing for wherever the bar lands: the default sits above
+  // the table, "" is used inside the framed footer under the pager.
+  const selectionBar = (className) => (
+    <SelectionBar
+      className={className}
+      selectedCount={selected.size}
+      selectAllLabel={`Select all shown (${pageProducts.length})`}
+      allSelected={allPageSelected}
+      someSelected={somePageSelected}
+      onToggleSelectAll={toggleSelectPage}
+      onClear={() => setSelected(new Set())}
+      selectAllDisabled={!pageProducts.length}
+      busy={busy}
+      hint={allPageSelected && !allFilteredSelected ? `Only this page — ${products.length.toLocaleString()} in the filter` : ''}
+    >
+      {selectionActions}
+    </SelectionBar>
+  )
+
   return (
     <ProtectedRoute allowedRoles={['admin']}>
       <div className="p-4 sm:p-6 lg:p-8">
@@ -775,49 +831,7 @@ export default function ExhibitionProductsPage() {
         {/* Selection bar — the shared one, so "select these" reads the same
             here and in the vendor's own catalogue. Always visible so "select
             all shown" is reachable before anything is ticked. */}
-        {!loading && products.length > 0 && (
-          <SelectionBar
-            selectedCount={selected.size}
-            selectAllLabel={`Select all shown (${pageProducts.length})`}
-            allSelected={allPageSelected}
-            someSelected={somePageSelected}
-            onToggleSelectAll={toggleSelectPage}
-            onClear={() => setSelected(new Set())}
-            selectAllDisabled={!pageProducts.length}
-            busy={busy}
-            hint={allPageSelected && !allFilteredSelected ? `Only this page — ${products.length.toLocaleString()} in the filter` : ''}
-          >
-            {selected.size > 0 && !allFilteredSelected && (
-              <button
-                type="button"
-                onClick={() => setSelected(new Set(products.map((p) => p.id)))}
-                className="text-xs font-medium text-brand underline-offset-2 hover:underline"
-              >
-                Select all {products.length}
-              </button>
-            )}
-            {selected.size > 0 && (
-              <select
-                aria-label="Bulk action"
-                defaultValue=""
-                disabled={busy}
-                onChange={(e) => {
-                  const action = e.target.value
-                  e.target.value = ''
-                  if (action === 'delete') setBulkConfirmOpen(true)
-                  else runBulk(action)
-                }}
-                className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm font-medium text-fg focus:border-brand focus:outline-none disabled:opacity-50"
-              >
-                <option value="" disabled>Bulk actions</option>
-                <option value="approve">Approve selected</option>
-                <option value="archive">Archive selected</option>
-                <option value="restore">Restore selected</option>
-                <option value="delete">Delete selected</option>
-              </select>
-            )}
-          </SelectionBar>
-        )}
+        {!loading && products.length > 0 && selectionBar()}
 
         <Card className="gap-0 overflow-hidden p-0">
           {loading ? (
@@ -1042,6 +1056,14 @@ export default function ExhibitionProductsPage() {
               }}
               disabled={busy}
             />
+          )}
+          {/* The same bar again under the pager. After ticking the last row on a
+              page the desk is already at the bottom of the table, so the bulk
+              action belongs there instead of a scroll back to the top. */}
+          {!loading && products.length > 0 && (
+            <div className="border-t border-line px-4 py-3">
+              {selectionBar('')}
+            </div>
           )}
         </Card>
 
