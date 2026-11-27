@@ -5,7 +5,7 @@
 // entitlements at the top, food orders, then every shopping day of the season
 // in order, and the closing balance at the end. Read-only — nothing here
 // writes to the member file.
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Search, UserRound } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import Badge from '../../../components/ui/Badge'
@@ -47,8 +47,8 @@ export default function ExhibitionCheckerPage() {
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState(null)
 
-  const check = useCallback(async () => {
-    const id = memberId.trim().toUpperCase()
+  const check = useCallback(async (idArg) => {
+    const id = String(idArg ?? memberId).trim().toUpperCase()
     if (!id) {
       setMsg({ type: 'error', text: 'Enter a member ID first.' })
       return
@@ -73,6 +73,21 @@ export default function ExhibitionCheckerPage() {
       setLoading(false)
     }
   }, [memberId])
+
+  // Arriving from an approvals row: the member ID is already in the URL, so
+  // open the check straight away instead of asking the officer to retype it.
+  useEffect(() => {
+    let requested = ''
+    try {
+      requested = new URLSearchParams(window.location.search).get('member_id') || ''
+    } catch {}
+    const id = requested.trim().toUpperCase()
+    if (id) {
+      setMemberId(id)
+      check(id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const summary = data?.summary
   const days = data?.days || []

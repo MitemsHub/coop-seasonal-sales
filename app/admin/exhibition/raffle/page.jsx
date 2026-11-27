@@ -27,6 +27,21 @@ const naira = (v) =>
     maximumFractionDigits: 0,
   }).format(Number(v || 0))
 
+const stamp = (iso) => {
+  if (!iso) return '—'
+  try {
+    return new Date(iso).toLocaleString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } catch {
+    return '—'
+  }
+}
+
 const SLICE_COLORS = ['#0d9488', '#f59e0b', '#3b82f6', '#8b5cf6', '#ef4444', '#22c55e', '#0ea5e9', '#db2777']
 const MAX_SLICES = 36
 const SPIN_MS = 4800
@@ -132,6 +147,10 @@ export default function ExhibitionRafflePage() {
   const [rotation, setRotation] = useState(0)
   const [spinning, setSpinning] = useState(false)
   const [winner, setWinner] = useState(null)
+  // Audit trail: every completed spin is stored server-side, and the page
+  // reloads this season's past draws alongside the entries.
+  const [draws, setDraws] = useState([])
+  const [drawNote, setDrawNote] = useState('')
   const timer = useRef(null)
 
   const load = useCallback(async (opts = {}) => {
@@ -156,6 +175,20 @@ export default function ExhibitionRafflePage() {
       setTotals(json.totals || { members: 0, orders: 0, amount: 0, shopping_members: 0 })
       setPool(shuffle(json.entries || []).slice(0, MAX_SLICES))
       setWinner(null)
+
+      // Past draws are scoped to the season the entries came from.
+      const drawQs = new URLSearchParams({ limit: '25' })
+      if (json.cycle?.id) drawQs.set('cycle_id', String(json.cycle.id))
+      const drawRes = await fetch(`/api/admin/exhibition/raffle/draws?${drawQs}`, { cache: 'no-store' })
+      const drawJson = await drawRes.json().catch(() => null)
+      if (drawJson?.ok) {
+        setDraws(drawJson.draws || [])
+        setDrawNote(
+          drawJson.migration_required
+            ? `Draws are not being saved yet — run ${drawJson.migration_file || 'the raffle-draws migration'}, then reload.`
+            : ''
+        )
+      }
     } catch (e) {
       setMsg({ type: 'error', text: e?.message || 'Failed to load raffle entries' })
     } finally {
@@ -178,6 +211,34 @@ export default function ExhibitionRafflePage() {
     setPool(shuffle(entries).slice(0, MAX_SLICES))
   }
 
+  const recordDraw = useCallback(
+    async (winnerEntry) => {
+      if (!cycle?.id || !winnerEntry) return
+      try {
+        const res = await fetch('/api/admin/exhibition/raffle/draws', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cycle_id: cycle.id,
+            min_amount: Number(minAmount) || 0,
+            finalists: pool,
+            winner_member_id: winnerEntry.member_id,
+          }),
+        })
+        const json = await res.json().catch(() => null)
+        if (!res.ok || !json?.ok) {
+          setDrawNote(json?.error || 'This draw was not recorded.')
+          return
+        }
+        setDrawNote('')
+        setDraws((prev) => [json.draw, ...prev])
+      } catch (e) {
+        setDrawNote(`This draw was not recorded: ${e?.message || 'network error'}`)
+      }
+    },
+    [cycle?.id, minAmount, pool]
+  )
+
   const spin = () => {
     if (spinning || !pool.length) return
     const index = Math.floor(Math.random() * pool.length)
@@ -191,6 +252,9 @@ export default function ExhibitionRafflePage() {
     timer.current = setTimeout(() => {
       setSpinning(false)
       setWinner(pool[index])
+      // Record only once the wheel has settled, so the audit row can never
+      // claim a winner the desk did not see.
+      recordDraw(pool[index])
     }, SPIN_MS + 150)
   }
 
@@ -397,6 +461,74 @@ export default function ExhibitionRafflePage() {
                 )}
               </Card>
             </div>
+
+            {/* Past draws — the audit trail */}
+            <Card className="p-5">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="text-sm font-semibold text-fg">Past draws</h2>
+                <span className="text-xs text-muted">
+                  {draws.length} recorded{cycle ? ` · ${qualifyingLabel}` : ''}
+                </span>
+              </div>
+
+              {drawNote && (
+                <div className="rounded-lg border border-warning-border bg-warning-bg px-3 py-2 text-xs text-warning-fg">
+                  {drawNote}
+                </div>
+              )}
+
+              {draws.length === 0 ? (
+                <p className="text-sm text-muted">No draws recorded for this season yet.</p>
+              ) : (
+                <Table>
+                  <THead>
+                    <TR>
+                      <TH className="pl-0">Drawn</TH>
+                      <TH>Season</TH>
+                      <TH className="text-right">Qualifying</TH>
+                      <TH>Wheel</TH>
+                      <TH>Winner</TH>
+                    </TR>
+                  </THead>
+                  <TBody>
+                    {draws.map((d) => (
+                      <TR key={d.id}>
+                        <TD className="whitespace-nowrap pl-0 text-xs text-muted">{stamp(d.drawn_at)}</TD>
+                        <TD className="text-xs text-muted">{d.cycle_name || `#${d.cycle_id}`}</TD>
+                        <TD className="text-right text-xs tabular-nums text-muted">
+                          {naira(d.min_amount)}
+                        </TD>
+                        <TD>
+                          <details>
+                            <summary className="cursor-pointer text-xs font-medium text-brand">
+                              {d.finalist_count} finalist{Number(d.finalist_count) === 1 ? '' : 's'}
+                            </summary>
+                            <ul className="mt-1 space-y-0.5 text-xs text-muted">
+                              {(d.finalists || []).map((f) => (
+                                <li key={f.member_id}>
+                                  {f.member_name || f.member_id}
+                                  <span className="text-subtext">
+                                    {' '}
+                                    · {f.member_id} · {naira(f.amount)}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        </TD>
+                        <TD>
+                          <div className="font-medium text-fg">{d.winner_name || d.winner_member_id}</div>
+                          <div className="text-xs text-muted">
+                            {d.winner_member_id} · {naira(d.winner_amount)}
+                            {d.drawn_by ? ` · by ${d.drawn_by}` : ''}
+                          </div>
+                        </TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </Table>
+              )}
+            </Card>
           </div>
         )}
       </div>

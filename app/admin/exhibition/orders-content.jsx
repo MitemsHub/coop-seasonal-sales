@@ -898,7 +898,15 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                         )}
                       </td>
                       <td className="p-2 align-top xl:p-3">
-                        <div className="font-medium text-fg">{o.member_id}</div>
+                        {/* Straight to the Checker: the approver usually needs
+                            this member's balances before deciding. */}
+                        <Link
+                          href={`/admin/exhibition/checker?member_id=${encodeURIComponent(o.member_id || '')}`}
+                          className="font-medium text-brand hover:underline"
+                          title="Open this member in the Checker"
+                        >
+                          {o.member_id}
+                        </Link>
                         <div className="truncate text-muted" title={o.member_name_snapshot || ''}>{o.member_name_snapshot || '-'}</div>
                         <MemberApprovalHints order={o} />
                         {o.member_phone && (
@@ -992,7 +1000,14 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                       <div className="col-span-2 min-w-0 rounded-lg bg-subtle/50 px-2.5 py-2">
                         <p className="text-chips text-muted">Member</p>
                         <p className="mt-0.5 break-words font-medium text-fg">
-                          {o.member_id}{o.member_name_snapshot ? ` · ${o.member_name_snapshot}` : ''}{o.member_phone ? ` · ${o.member_phone}` : ''}
+                          <Link
+                            href={`/admin/exhibition/checker?member_id=${encodeURIComponent(o.member_id || '')}`}
+                            className="text-brand hover:underline"
+                            title="Open this member in the Checker"
+                          >
+                            {o.member_id}
+                          </Link>
+                          {o.member_name_snapshot ? ` · ${o.member_name_snapshot}` : ''}{o.member_phone ? ` · ${o.member_phone}` : ''}
                         </p>
                         <MemberApprovalHints order={o} />
                       </div>
