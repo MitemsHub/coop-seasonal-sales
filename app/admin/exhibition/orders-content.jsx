@@ -668,7 +668,6 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                 }}
               >
                 <option value="">All payments</option>
-                <option value="Cash">Cash</option>
                 <option value="Savings">Savings</option>
                 <option value="Loan">Loan</option>
               </select>

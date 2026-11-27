@@ -37,7 +37,7 @@ export async function GET(req) {
     // Count with the same filters
     let countQ = supabase.from('exhibition_orders').select('id', { count: 'exact', head: true }).eq('branch_id', branchId).in('status', statusesToMatch)
     if (cycleId > 0) countQ = countQ.eq('cycle_id', cycleId)
-    if (payment && ['Cash', 'Savings', 'Loan'].includes(payment)) countQ = countQ.eq('payment_option', payment)
+    if (payment && ['Savings', 'Loan'].includes(payment)) countQ = countQ.eq('payment_option', payment)
     if (q) countQ = countQ.or(`order_id.ilike.%${q}%,member_id.ilike.%${q}%,member_name_snapshot.ilike.%${q}%`)
     const { count } = await countQ
 
@@ -49,7 +49,7 @@ export async function GET(req) {
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1)
     if (cycleId > 0) query = query.eq('cycle_id', cycleId)
-    if (payment && ['Cash', 'Savings', 'Loan'].includes(payment)) query = query.eq('payment_option', payment)
+    if (payment && ['Savings', 'Loan'].includes(payment)) query = query.eq('payment_option', payment)
     if (q) query = query.or(`order_id.ilike.%${q}%,member_id.ilike.%${q}%,member_name_snapshot.ilike.%${q}%`)
 
     const { data, error } = await query

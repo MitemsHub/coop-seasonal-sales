@@ -199,7 +199,6 @@ export default function ExhibitionReportsPage() {
           ['Loan Interest', money(s.loanInterest || 0)],
           ['Loan Total', money(s.loanTotal || 0)],
           ['Savings', money(s.amounts?.savings || 0)],
-          ['Cash', money(s.amounts?.cash || 0)],
           ['Total Amount', money(s.amount || 0)],
         ].map((r) => r.map(sanitize)),
         startY: 22,
@@ -778,10 +777,6 @@ export default function ExhibitionReportsPage() {
                 <div className="text-[13px] font-semibold sm:text-lg mt-1">{money(s.amounts?.savings || 0)}</div>
               </div>
               <div className="ui-card p-4">
-                <div className="text-xs text-muted">Cash</div>
-                <div className="text-[13px] font-semibold sm:text-lg mt-1">{money(s.amounts?.cash || 0)}</div>
-              </div>
-              <div className="ui-card p-4">
                 <div className="text-xs text-muted">Total Amount</div>
                 <div className="text-[13px] font-semibold sm:text-lg mt-1">{money(s.amount || 0)}</div>
               </div>
@@ -879,7 +874,6 @@ export default function ExhibitionReportsPage() {
                   </select>
                   <select className={selectCls} value={appPayment} onChange={(e) => setAppPayment(e.target.value)}>
                     <option value="">All payments</option>
-                    <option value="Cash">Cash</option>
                     <option value="Loan">Loan</option>
                     <option value="Savings">Savings</option>
                   </select>
@@ -915,7 +909,6 @@ export default function ExhibitionReportsPage() {
                   </select>
                   <select className={selectCls} value={packPayment} onChange={(e) => setPackPayment(e.target.value)}>
                     <option value="">All payments</option>
-                    <option value="Cash">Cash</option>
                     <option value="Loan">Loan</option>
                     <option value="Savings">Savings</option>
                   </select>
@@ -928,7 +921,7 @@ export default function ExhibitionReportsPage() {
             {/* ─── Delivery Pack (RAM-style download section) ─── */}
             <div className="rounded-xl border border-line bg-surface overflow-hidden mb-6">
               <div className="flex flex-col gap-3 border-b border-line bg-subtle px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-sm font-semibold text-fg">Delivery Pack (Master/Cash/Loan/Savings)</div>
+                <div className="text-sm font-semibold text-fg">Delivery Pack (Master/Loan/Savings)</div>
                 <ExportButton
                   format="excel"
                   label="Download Delivery Pack"

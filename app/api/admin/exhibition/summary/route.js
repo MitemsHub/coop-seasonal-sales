@@ -68,14 +68,15 @@ export async function GET(request) {
     // The exhibition pipeline has exactly four states now. There is no
     // separate Delivered bucket to fold in.
     const byStatus = { Pending: 0, Approved: 0, Confirmed: 0, Cancelled: 0 }
-    const byPayment = { Loan: { orders: 0, amount: 0 }, Savings: { orders: 0, amount: 0 }, Cash: { orders: 0, amount: 0 } }
+    // Cash is not an exhibition payment method (stands are paid directly), so
+    // there is no cash bucket to report: only Loan and Savings reach the books.
+    const byPayment = { Loan: { orders: 0, amount: 0 }, Savings: { orders: 0, amount: 0 } }
     const byCategory = new Map()
     const byLocation = new Map()
     let amount = 0
     let loanPrincipal = 0
     let loanInterest = 0
     let savingsAmount = 0
-    let cashAmount = 0
     for (const o of activeOrders) {
       if (byStatus[o.status] !== undefined) byStatus[o.status]++
       if (o.status === 'Cancelled') continue
@@ -93,11 +94,9 @@ export async function GET(request) {
         loanInterest += interest
       } else if (payKey === 'Savings') {
         savingsAmount += total
-      } else if (payKey === 'Cash') {
-        cashAmount += total
       }
     }
-    const amounts = { total: amount, loans: loanPrincipal + loanInterest, savings: savingsAmount, cash: cashAmount }
+    const amounts = { total: amount, loans: loanPrincipal + loanInterest, savings: savingsAmount }
 
     // Per-vendor order value (selected cycle, non-cancelled) for the top/bottom
     // vendor performance charts — mirroring the food dashboard's branch charts.

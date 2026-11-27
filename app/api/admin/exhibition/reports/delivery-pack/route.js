@@ -1,5 +1,5 @@
 // app/api/admin/exhibition/reports/delivery-pack/route.js
-// Exhibition delivery-pack: Excel workbook with Master/Cash/Loan/Savings sheets
+// Exhibition delivery-pack: Excel workbook with Master/Loan/Savings sheets
 // for all non-cancelled orders in the active cycle, optionally filtered by branch.
 //   GET /api/admin/exhibition/reports/delivery-pack?branch_id=&from=&to=
 import { NextResponse } from 'next/server'
@@ -131,7 +131,6 @@ export async function GET(req) {
     const wb = XLSX.utils.book_new()
     const mk = (a) => XLSX.utils.json_to_sheet(a)
     XLSX.utils.book_append_sheet(wb, mk(rows), 'Master')
-    XLSX.utils.book_append_sheet(wb, mk(rows.filter((r) => r.Payment === 'Cash')), 'Cash')
     XLSX.utils.book_append_sheet(wb, mk(rows.filter((r) => r.Payment === 'Loan')), 'Loan')
     XLSX.utils.book_append_sheet(wb, mk(rows.filter((r) => r.Payment === 'Savings')), 'Savings')
 

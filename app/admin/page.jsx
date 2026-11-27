@@ -502,7 +502,6 @@ function ExhibitionDashboard({ loading, data }) {
         <StatCard loading={loading} featured icon={Banknote} title="Total value" value={loading ? '' : naira(amounts.total)} delta="non-cancelled, this cycle" trend="flat" href="/admin/exhibition/reports" />
         <StatCard loading={loading} icon={Wallet} title="Loan" value={loading ? '' : naira(amounts.loans)} delta="loan orders" trend="flat" href="/admin/exhibition/reports" />
         <StatCard loading={loading} icon={PiggyBank} title="Savings" value={loading ? '' : naira(amounts.savings)} delta="savings orders" trend="flat" href="/admin/exhibition/reports" />
-        <StatCard loading={loading} icon={Coins} title="Cash" value={loading ? '' : naira(amounts.cash)} delta="cash orders" trend="flat" href="/admin/exhibition/reports" />
         <StatCard loading={loading} icon={Clock} title="Pending" value={loading ? '' : (byStatus.Pending ?? 0).toLocaleString()} delta="awaiting approval" trend="flat" href="/admin/exhibition/pending" />
         <StatCard loading={loading} icon={Send} title="Approved" value={loading ? '' : (byStatus.Approved ?? 0).toLocaleString()} delta="ready for member confirmation" trend="flat" href="/admin/exhibition/approved" />
         <StatCard loading={loading} icon={Truck} title="Confirmed" value={loading ? '' : (byStatus.Confirmed ?? 0).toLocaleString()} delta="confirmed by members" trend="flat" href="/admin/exhibition/confirmed" />
