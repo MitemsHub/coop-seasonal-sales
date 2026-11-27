@@ -117,7 +117,7 @@ export default function ExhibitionCheckerPage() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') check()
                 }}
-                placeholder="e.g. A25862"
+                placeholder="Enter ID, name"
                 autoComplete="off"
               />
             </div>
