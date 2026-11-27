@@ -1340,7 +1340,7 @@ function MemberApprovalHints({ order }) {
         }`
       : '',
     info.loan_room_before != null
-      ? `Loan room ${naira(info.loan_room_before)} before → ${naira(info.loan_room_after)} after this order`
+      ? `Space left ${naira(info.loan_room_before)} before → ${naira(info.loan_room_after)} after this order`
       : '',
     `${info.orders_open} open · ${info.orders_confirmed} confirmed · ${info.orders_cancelled} cancelled`,
     info.room_warning || '',
@@ -1356,8 +1356,8 @@ function MemberApprovalHints({ order }) {
       {roomShown != null && (
         <span className={`inline-flex max-w-full truncate rounded px-1.5 py-0.5 text-chips font-medium ${tone}`}>
           {roomShown > 0
-            ? `${order.payment_option} room ${naira(roomShown)} left`
-            : `No ${String(order.payment_option || '').toLowerCase()} room left`}
+            ? `${isLoan ? 'Space left' : `${order.payment_option} room`} ${naira(roomShown)}`
+            : 'No space left'}
         </span>
       )}
     </div>
