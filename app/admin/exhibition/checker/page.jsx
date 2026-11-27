@@ -92,6 +92,7 @@ export default function ExhibitionCheckerPage() {
   const summary = data?.summary
   const days = data?.days || []
   const savingsBalance = Number(summary?.savings_balance || 0)
+  const loanParts = summary?.loan_space_parts || []
 
   return (
     <ProtectedRoute allowedRoles={['admin']}>
@@ -218,7 +219,7 @@ export default function ExhibitionCheckerPage() {
                       <TH className="pl-0">Day</TH>
                       <TH>Order</TH>
                       <TH>Time</TH>
-                      <TH className="text-right">Amount</TH>
+                      <TH className="text-right">Total</TH>
                       <TH>Paid with</TH>
                       <TH>Status</TH>
                     </TR>
@@ -228,12 +229,17 @@ export default function ExhibitionCheckerPage() {
                     <TBody key={d.date}>
                       {d.orders.map((o, i) => (
                         <TR key={`${d.date}-${o.order_id}-${i}`}>
-                          {i === 0 && (
-                            <TD rowSpan={d.orders.length} className="pl-0 align-top">
-                              <div className="font-semibold text-fg">Day {d.day}</div>
-                              <div className="text-xs text-muted">{d.date_label}</div>
-                            </TD>
-                          )}
+                          {/* The day label is drawn once, but every row keeps the
+                              cell: a rowSpan makes the following rows a column
+                              narrower, which is what set EXH013 off its grid. */}
+                          <TD className="pl-0 align-top">
+                            {i === 0 ? (
+                              <>
+                                <div className="font-semibold text-fg">Day {d.day}</div>
+                                <div className="text-xs text-muted">{d.date_label}</div>
+                              </>
+                            ) : null}
+                          </TD>
                           <TD className="font-medium text-fg">{o.order_id}</TD>
                           <TD className="text-muted">{timeOf(o.created_at)}</TD>
                           <TD className="text-right tabular-nums">{naira(o.amount)}</TD>
@@ -255,6 +261,13 @@ export default function ExhibitionCheckerPage() {
                   ))}
                 </Table>
               )}
+
+              {summary.exhibition_order_count ? (
+                <p className="mt-2 text-xs text-muted">
+                  Totals are what the member repays, interest included. Loan space left is
+                  measured on the goods value, so it moves by less than the totals here.
+                </p>
+              ) : null}
             </Card>
 
             {/* Closing balance */}
@@ -272,7 +285,20 @@ export default function ExhibitionCheckerPage() {
                 <Stat
                   label="Loan space left"
                   value={summary.loan_space_left == null ? '—' : naira(summary.loan_space_left)}
-                  note={summary.loan_space_warning || 'Remaining for this season'}
+                  note={
+                    loanParts.length ? (
+                      <span>
+                        {loanParts.map((p, i) => (
+                          <span key={`${p.label}-${i}`}>
+                            {i > 0 ? (p.op === '-' ? ' − ' : ' + ') : ''}
+                            {p.label} {naira(p.amount)}
+                          </span>
+                        ))}
+                      </span>
+                    ) : (
+                      summary.loan_space_warning || 'Remaining for this season'
+                    )
+                  }
                 />
               </div>
               <p className="text-xs text-muted">

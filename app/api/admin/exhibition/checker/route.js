@@ -86,18 +86,21 @@ export async function GET(request) {
     if (!member) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
 
     // ── Season ────────────────────────────────────────────────────────
+    // `*` because the loan-room note below needs the season's grace/pool
+    // columns, and a hand-written list would break the whole desk on a
+    // database that has not taken the newest cycle migration yet.
     let cycle = null
     if (cycleId > 0) {
       const { data } = await supabase
         .from('exhibition_cycles')
-        .select('id, name, code, status, starts_at, ends_at')
+        .select('*')
         .eq('id', cycleId)
         .maybeSingle()
       cycle = data || null
     } else {
       const { data: active } = await supabase
         .from('exhibition_cycles')
-        .select('id, name, code, status, starts_at, ends_at')
+        .select('*')
         .eq('status', 'active')
         .order('created_at', { ascending: false })
         .limit(1)
@@ -106,7 +109,7 @@ export async function GET(request) {
       if (!cycle) {
         const { data: latest } = await supabase
           .from('exhibition_cycles')
-          .select('id, name, code, status, starts_at, ends_at')
+          .select('*')
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle()
@@ -206,6 +209,7 @@ export async function GET(request) {
     // Remaining loan room comes from the same function checkout enforces. A
     // closed/not-yet-open season simply reports nothing available.
     let loanSpaceLeft = null
+    let loanSpaceUsed = 0
     let loanSpaceWarning = ''
     if (cycle?.id) {
       try {
@@ -216,10 +220,113 @@ export async function GET(request) {
           p_cycle_id: Number(cycle.id),
         })
         if (error) loanSpaceWarning = error.message || ''
-        else if (exposure?.ok) loanSpaceLeft = Number(exposure.loanEligible || 0)
-        else loanSpaceWarning = exposure?.error || ''
+        else if (exposure?.ok) {
+          loanSpaceLeft = Number(exposure.loanEligible || 0)
+          // Everything already lent against this member: loans on file plus
+          // this season's food and exhibition loan orders.
+          loanSpaceUsed = Number(exposure.outstandingLoansTotal || 0)
+        } else loanSpaceWarning = exposure?.error || ''
       } catch (e) {
         loanSpaceWarning = e.message || ''
+      }
+    }
+
+    // ── What the loan room is made of ────────────────────────────────
+    // The RPC answers with a single number, which leaves the desk doing
+    // mental arithmetic against the loan balance and the global limit. These
+    // parts are the two figures the season rules actually used. They are only
+    // published when they reproduce the RPC's own number, so if a rule
+    // changes the note disappears instead of telling the officer a lie.
+    let loanSpaceParts = null
+    if (cycle?.id && loanSpaceLeft != null) {
+      const cat = String(member.category || '').toLowerCase()
+      const group =
+        cat.startsWith('p') || cat.includes('pension')
+          ? 'pensioner'
+          : cat.startsWith('r') || cat.includes('retire')
+            ? 'retiree'
+            : 'active'
+      const whole = (v) => Math.max(0, Math.trunc(Number(v || 0)))
+
+      let pool = 0
+      let poolLabel = ''
+      if (group === 'pensioner') {
+        pool = whole(cycle.exh_loan_grace_amount_cap_pensioner)
+        poolLabel = 'Pensioner grace'
+      } else if (group === 'active') {
+        let gradeCategory = 'junior'
+        const { data: gradeRow } = await supabase
+          .from('grade_limits')
+          .select('category')
+          .ilike('grade', String(member.grade || ''))
+          .maybeSingle()
+        if (gradeRow?.category) gradeCategory = String(gradeRow.category).toLowerCase()
+        if (gradeCategory === 'executive') {
+          pool = whole(cycle.exh_no_space_executive)
+          poolLabel = 'Executive grade pool'
+        } else if (gradeCategory === 'senior') {
+          pool = whole(cycle.exh_no_space_senior)
+          poolLabel = 'Senior grade pool'
+        } else {
+          pool = whole(cycle.exh_no_space_junior)
+          poolLabel = 'Junior grade pool'
+        }
+      }
+
+      // What this season's loan orders have been debited by: the goods value
+      // when the season excludes interest, the repayable total when it
+      // includes it. Same basis as the exposure function.
+      const includeInterest = cycle.exh_loan_cap_include_interest !== false
+      const loanOrders = exhibitionOrders.filter((o) => o.payment_option === 'Loan')
+      let seasonLoanBasis = 0
+      if (loanOrders.length) {
+        let principals = null
+        if (!includeInterest) {
+          const { data: lines } = await supabase
+            .from('exhibition_order_lines')
+            .select('order_id, amount')
+            .in('order_id', loanOrders.map((o) => Number(o.id)))
+          if (lines) {
+            principals = new Map()
+            for (const line of lines) {
+              const key = Number(line.order_id)
+              principals.set(key, (principals.get(key) || 0) + Number(line.amount || 0))
+            }
+          }
+        }
+        seasonLoanBasis = loanOrders.reduce((sum, o) => {
+          const key = Number(o.id)
+          const value = principals?.has(key) ? principals.get(key) : Number(o.total_amount || 0)
+          return sum + value
+        }, 0)
+      }
+
+      let space = savings * 5 - loanSpaceUsed
+      const globalLimit = Number(member.global_limit || 0)
+      if (globalLimit > 0) space = Math.min(space, globalLimit)
+      const close = (a, b) => Math.abs(a - b) < 1
+
+      if (group === 'retiree') {
+        if (close(Math.max(0, savings - loanSpaceUsed), loanSpaceLeft)) {
+          loanSpaceParts = [
+            { label: 'Savings', amount: savings },
+            { label: 'already on loan', amount: loanSpaceUsed, op: '-' },
+          ]
+        }
+      } else if (space > 0) {
+        if (pool > 0 && close(space + pool, loanSpaceLeft)) {
+          loanSpaceParts = [
+            { label: 'Savings space', amount: space },
+            { label: poolLabel, amount: pool, op: '+' },
+          ]
+        } else if (close(space, loanSpaceLeft)) {
+          loanSpaceParts = [{ label: 'Savings space', amount: space }]
+        }
+      } else if (pool > 0 && close(pool - seasonLoanBasis, loanSpaceLeft)) {
+        loanSpaceParts = [
+          { label: poolLabel, amount: pool },
+          { label: 'borrowed this season', amount: seasonLoanBasis, op: '-' },
+        ]
       }
     }
 
@@ -267,6 +374,7 @@ export async function GET(request) {
         savings_spent: savingsSpent,
         savings_balance: savings - savingsSpent,
         loan_space_left: loanSpaceLeft,
+        loan_space_parts: loanSpaceParts,
         loan_space_warning: loanSpaceWarning,
       },
       days,
