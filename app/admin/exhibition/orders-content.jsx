@@ -1375,11 +1375,17 @@ function MemberApprovalHints({ order }) {
         : roomShown > 0
           ? 'bg-warning-bg text-warning-fg'
           : 'bg-danger-bg text-danger-fg'
+  // Both chips share the room's tone and weight, so "shopped" and "space
+  // left" read as one statement: green while there is room, amber when it is
+  // running low, red once it is gone.
+  const chipTone = tone || 'bg-subtle text-subtext'
   return (
     <div className="mt-1 space-y-0.5" title={detail}>
-      <div className="truncate text-chips text-subtext">{label}</div>
+      <span className={`inline-flex max-w-full truncate rounded px-1.5 py-0.5 text-chips font-bold ${chipTone}`}>
+        {label}
+      </span>
       {roomShown != null && (
-        <span className={`inline-flex max-w-full truncate rounded px-1.5 py-0.5 text-chips font-medium ${tone}`}>
+        <span className={`inline-flex max-w-full truncate rounded px-1.5 py-0.5 text-chips font-bold ${tone}`}>
           {roomShown > 0
             ? `${isLoan ? 'Space left' : `${order.payment_option} space`} ${naira(roomShown)}`
             : 'No space left'}

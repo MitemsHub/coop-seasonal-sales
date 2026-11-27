@@ -36,8 +36,10 @@ import {
   Percent,
   Send,
   Store,
+  Ticket,
   Truck,
   UserCheck,
+  SearchCheck,
   Users,
   X,
   XCircle,
@@ -290,7 +292,7 @@ export default function AdminLayout({ children }) {
       const isOps = ['/admin/exhibition/vendors', '/admin/exhibition/products',
         '/admin/exhibition/banks', '/admin/exhibition/cycles',
         '/admin/exhibition/payouts', '/admin/exhibition/data', '/admin/exhibition/audit',
-        '/admin/exhibition/reports'].some((p) => pathname.startsWith(p))
+        '/admin/exhibition/reports', '/admin/exhibition/checker', '/admin/exhibition/raffle'].some((p) => pathname.startsWith(p))
       setExhSub(isOps ? 'ops' : 'orders')
     }
   }, [pathname])
@@ -444,6 +446,8 @@ export default function AdminLayout({ children }) {
     if (pathname.startsWith('/admin/exhibition/banks')) return 'exh_banks'
     if (pathname.startsWith('/admin/exhibition/data')) return 'exh_data'
     if (pathname.startsWith('/admin/exhibition/reports')) return 'exh_reports'
+    if (pathname.startsWith('/admin/exhibition/raffle')) return 'exh_raffle'
+    if (pathname.startsWith('/admin/exhibition/checker')) return 'exh_checker'
     if (pathname.startsWith('/admin/exhibition/audit')) return 'exh_audit'
     return ''
   }, [pathname])
@@ -670,7 +674,9 @@ export default function AdminLayout({ children }) {
                     <NavLink href="/admin/exhibition/products" label="Products" icon={Package} active={activeKey === 'exh_products'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/banks" label="Banks" icon={Landmark} active={activeKey === 'exh_banks'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/data" label="Data" icon={Database} active={activeKey === 'exh_data'} collapsed={false} onNavigate={navOnClick} />
+                    <NavLink href="/admin/exhibition/checker" label="Checker" icon={SearchCheck} active={activeKey === 'exh_checker'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/reports" label="Report" icon={BarChart3} active={activeKey === 'exh_reports'} collapsed={false} onNavigate={navOnClick} />
+                    <NavLink href="/admin/exhibition/raffle" label="Raffle Ticket" icon={Ticket} active={activeKey === 'exh_raffle'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/audit" label="Audit Log" icon={History} active={activeKey === 'exh_audit'} collapsed={false} onNavigate={navOnClick} />
                   </div>
                 )}
