@@ -1312,6 +1312,11 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
 // is a regular buyer or whether they still have room. The orders API attaches
 // `member_approval` to every row: order counts and the room left are read live
 // from the same exposure function checkout uses, so nothing is stored per order.
+// Below this much loan space the chip turns amber: the member can still shop,
+// but the approving officer should see it coming rather than discover it when
+// the next order is refused at checkout.
+const LOW_SPACE_THRESHOLD = 50000
+
 function MemberApprovalHints({ order }) {
   const info = order?.member_approval
   if (!info || !info.orders_total) return null
@@ -1349,7 +1354,13 @@ function MemberApprovalHints({ order }) {
     .join(' · ')
   const label = `Shopped ${shopped} time${shopped === 1 ? '' : 's'}`
   const tone =
-    roomShown == null ? '' : roomShown > 0 ? 'bg-success-bg text-success-fg' : 'bg-danger-bg text-danger-fg'
+    roomShown == null
+      ? ''
+      : roomShown > LOW_SPACE_THRESHOLD
+        ? 'bg-success-bg text-success-fg'
+        : roomShown > 0
+          ? 'bg-warning-bg text-warning-fg'
+          : 'bg-danger-bg text-danger-fg'
   return (
     <div className="mt-1 space-y-0.5" title={detail}>
       <div className="truncate text-chips text-subtext">{label}</div>
