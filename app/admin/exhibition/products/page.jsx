@@ -259,10 +259,13 @@ export default function ExhibitionProductsPage() {
       const json = await res.json().catch(() => ({}))
       if (!res.ok || !json.ok) throw new Error(json.error || 'Failed to update approval')
       await load({ keepMessage: true })
-      setMsg({
-        type: 'success',
-        text: action === 'approve' ? `"${p.name}" approved and published.` : `"${p.name}" rejected.`,
-      })
+      const done =
+        action === 'approve'
+          ? `"${p.name}" approved and published.`
+          : action === 'unapprove'
+            ? `"${p.name}" is back in the approval queue and off the shop.`
+            : `"${p.name}" rejected.`
+      setMsg({ type: 'success', text: done })
     } catch (e) {
       setMsg({ type: 'error', text: e.message })
     } finally {
@@ -640,7 +643,7 @@ export default function ExhibitionProductsPage() {
         const action = e.target.value
         e.target.value = ''
         if (action === 'edit') openEdit(p)
-        if (action === 'approve' || action === 'reject') setApproval(p, action)
+        if (action === 'approve' || action === 'unapprove' || action === 'reject') setApproval(p, action)
         if (action === 'archive') setStatus(p, 'archived')
         if (action === 'restore') setStatus(p, 'active')
         if (action === 'delete') { setConfirmTarget(p); setConfirmOpen(true) }
@@ -649,6 +652,10 @@ export default function ExhibitionProductsPage() {
       <option value="" disabled>Actions</option>
       <option value="edit">Edit</option>
       {p.approval_status === 'pending' && <option value="approve">Approve</option>}
+      {/* An approval given in error has to be withdrawable: unapproving puts
+          the product back in the queue and off the shop, and approve puts it
+          back, so the desk can fix the listing without deleting anything. */}
+      {p.approval_status === 'approved' && <option value="unapprove">Unapprove</option>}
       {p.approval_status === 'pending' && <option value="reject">Reject</option>}
       {p.status === 'archived' ? (
         <option value="restore">Restore</option>

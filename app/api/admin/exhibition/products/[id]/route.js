@@ -28,7 +28,7 @@ export async function PATCH(request, { params }) {
     if (approvalAction) {
       const { data: row } = await supabase
         .from('exhibition_products')
-        .select('id, name, status, vendor_id, cycle_id, vendor_price, pending_vendor_price, discount_pct, pending_discount_pct')
+        .select('id, name, status, approval_status, vendor_id, cycle_id, vendor_price, pending_vendor_price, discount_pct, pending_discount_pct')
         .eq('id', id)
         .maybeSingle()
       if (!row) return NextResponse.json({ ok: false, error: 'Product not found' }, { status: 404 })
@@ -82,6 +82,28 @@ export async function PATCH(request, { params }) {
         return NextResponse.json({ ok: true, approved: true })
       }
 
+      // unapprove: an approval given in error goes back to the queue. The shop
+      // only lists products that are both active and approved, so clearing the
+      // approval takes it off the shelf without touching its shelf status;
+      // existing order lines keep the price they were sold at.
+      if (approvalAction === 'unapprove') {
+        if (row.approval_status !== 'approved') {
+          return NextResponse.json({ ok: false, error: 'This product is not approved.' }, { status: 409 })
+        }
+        const now = new Date().toISOString()
+        const { error } = await supabase
+          .from('exhibition_products')
+          .update({
+            approval_status: 'pending',
+            approval_note: '',
+            approval_reviewed_at: now,
+            approval_requested_at: now,
+          })
+          .eq('id', id)
+        if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+        return NextResponse.json({ ok: true, unapproved: true })
+      }
+
       if (approvalAction === 'reject') {
         const { error } = await supabase
           .from('exhibition_products')
@@ -98,7 +120,7 @@ export async function PATCH(request, { params }) {
         return NextResponse.json({ ok: true, rejected: true })
       }
 
-      return NextResponse.json({ ok: false, error: 'approval_action must be approve or reject' }, { status: 400 })
+      return NextResponse.json({ ok: false, error: 'approval_action must be approve, unapprove or reject' }, { status: 400 })
     }
 
     const updates = {}
