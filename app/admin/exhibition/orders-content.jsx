@@ -1384,7 +1384,7 @@ function MemberApprovalHints({ order }) {
       {roomShown != null && (
         <span className={`inline-flex max-w-full truncate rounded px-1.5 py-0.5 text-chips font-medium ${tone}`}>
           {roomShown > 0
-            ? `${isLoan ? 'Space left' : `${order.payment_option} room`} ${naira(roomShown)}`
+            ? `${isLoan ? 'Space left' : `${order.payment_option} space`} ${naira(roomShown)}`
             : 'No space left'}
         </span>
       )}
