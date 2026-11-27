@@ -272,7 +272,7 @@ export async function GET(request) {
         // Per-order view of the same room: what this order took from the
         // season facility, and what was left before and after it.
         loan_room_facility: timeline ? timeline.facility : null,
-        loan_room_season_used: timeline ? timeline.season_used : null,
+        loan_room_season_used: timeline ? timeline.season_total : null,
         loan_room_order_amount: timeline ? timeline.amount : null,
         loan_room_order_interest:
           timeline && o.payment_option === 'Loan'
