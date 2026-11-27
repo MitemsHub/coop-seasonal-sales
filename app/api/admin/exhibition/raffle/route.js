@@ -2,10 +2,11 @@
 // Raffle desk: which members bought enough this season to earn a ticket.
 //   GET /api/admin/exhibition/raffle?cycle_id=...&min_amount=1000000
 //
-// Qualifying spend is the sum of the member's exhibition orders in the season,
-// with cancelled orders left out — a cancelled order was never a purchase, so
-// it must not buy a ticket. Each qualifying member gets one ticket; the page
-// draws the winner, this route only decides who is in the hat.
+// A ticket is issued on confirmation: qualifying spend is the sum of the
+// member's CONFIRMED exhibition orders in the season. A pending or merely
+// approved order is not a completed purchase yet, and a cancelled one never
+// was, so neither buys a ticket. Each qualifying member holds one ticket; the
+// page draws the winner, this route only decides who is in the hat.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { validateSession } from '@/lib/validation'
@@ -53,14 +54,14 @@ export async function GET(request) {
       })
     }
 
-    // ── Every counting order in the season ───────────────────────────
+    // ── Every confirmed order in the season ──────────────────────────
     const orders = []
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await supabase
         .from('exhibition_orders')
         .select('id, order_id, member_id, member_name_snapshot, total_amount, status, created_at')
         .eq('cycle_id', Number(cycle.id))
-        .neq('status', 'Cancelled')
+        .eq('status', 'Confirmed')
         .order('id', { ascending: true })
         .range(from, from + PAGE - 1)
       if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })

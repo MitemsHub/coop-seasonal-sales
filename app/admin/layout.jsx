@@ -670,11 +670,11 @@ export default function AdminLayout({ children }) {
                 <SubGroupToggle open={exhOpsOpen} onToggle={() => toggleExhSub('ops')} label="Exhibition Operations" />
                 {exhOpsOpen && (
                   <div className="mt-0.5 space-y-0.5 pl-4">
+                    <NavLink href="/admin/exhibition/checker" label="Checker" icon={SearchCheck} active={activeKey === 'exh_checker'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/vendors" label="Vendors" icon={Store} active={activeKey === 'exh_vendors'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/products" label="Products" icon={Package} active={activeKey === 'exh_products'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/banks" label="Banks" icon={Landmark} active={activeKey === 'exh_banks'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/data" label="Data" icon={Database} active={activeKey === 'exh_data'} collapsed={false} onNavigate={navOnClick} />
-                    <NavLink href="/admin/exhibition/checker" label="Checker" icon={SearchCheck} active={activeKey === 'exh_checker'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/reports" label="Report" icon={BarChart3} active={activeKey === 'exh_reports'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/raffle" label="Raffle Ticket" icon={Ticket} active={activeKey === 'exh_raffle'} collapsed={false} onNavigate={navOnClick} />
                     <NavLink href="/admin/exhibition/audit" label="Audit Log" icon={History} active={activeKey === 'exh_audit'} collapsed={false} onNavigate={navOnClick} />

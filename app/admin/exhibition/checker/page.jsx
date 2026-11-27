@@ -206,8 +206,11 @@ export default function ExhibitionCheckerPage() {
                 </span>
               </div>
 
-              {!summary.exhibition_order_count && !summary.food_order_count ? (
-                <p className="text-sm text-muted">This member has no food or exhibition orders yet.</p>
+              {!summary.exhibition_order_count ? (
+                <p className="text-sm text-muted">
+                  This member has no exhibition orders yet. Food orders are counted in the member
+                  position above, not in this day-by-day ledger.
+                </p>
               ) : (
                 <Table>
                   <THead>
@@ -220,24 +223,6 @@ export default function ExhibitionCheckerPage() {
                       <TH>Status</TH>
                     </TR>
                   </THead>
-
-                  {summary.food_order_count > 0 && (
-                    <TBody>
-                      <TR>
-                        <TD className="pl-0 font-semibold text-fg">Food</TD>
-                        <TD className="text-muted" colSpan={2}>
-                          {summary.food_order_count} order{summary.food_order_count === 1 ? '' : 's'}
-                          {summary.food_cycle_name ? ` · ${summary.food_cycle_name}` : ''}
-                        </TD>
-                        <TD className="text-right font-semibold tabular-nums">
-                          {naira(summary.food_total)}
-                        </TD>
-                        <TD className="text-xs text-muted" colSpan={2}>
-                          Savings {naira(summary.food_savings)} · Loan {naira(summary.food_loan)}
-                        </TD>
-                      </TR>
-                    </TBody>
-                  )}
 
                   {days.map((d) => (
                     <TBody key={d.date}>

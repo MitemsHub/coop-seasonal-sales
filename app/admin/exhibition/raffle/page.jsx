@@ -151,6 +151,10 @@ export default function ExhibitionRafflePage() {
   // reloads this season's past draws alongside the entries.
   const [draws, setDraws] = useState([])
   const [drawNote, setDrawNote] = useState('')
+  // The qualifying amount the entries on screen were actually loaded with. The
+  // input box can be edited afterwards, so a draw must record this figure (not
+  // the box) or its amount would disagree with the finalists it lists.
+  const [loadedMin, setLoadedMin] = useState(0)
   const timer = useRef(null)
 
   const load = useCallback(async (opts = {}) => {
@@ -173,6 +177,7 @@ export default function ExhibitionRafflePage() {
       if (!nextCycle && json.cycle?.id) setCycleId(String(json.cycle.id))
       setEntries(json.entries || [])
       setTotals(json.totals || { members: 0, orders: 0, amount: 0, shopping_members: 0 })
+      setLoadedMin(Number(json.min_amount ?? nextMin ?? 0) || 0)
       setPool(shuffle(json.entries || []).slice(0, MAX_SLICES))
       setWinner(null)
 
@@ -220,7 +225,7 @@ export default function ExhibitionRafflePage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             cycle_id: cycle.id,
-            min_amount: Number(minAmount) || 0,
+            min_amount: loadedMin,
             finalists: pool,
             winner_member_id: winnerEntry.member_id,
           }),
@@ -236,7 +241,7 @@ export default function ExhibitionRafflePage() {
         setDrawNote(`This draw was not recorded: ${e?.message || 'network error'}`)
       }
     },
-    [cycle?.id, minAmount, pool]
+    [cycle?.id, loadedMin, pool]
   )
 
   const spin = () => {
@@ -266,8 +271,8 @@ export default function ExhibitionRafflePage() {
         <div className="mb-5">
           <h1 className="text-h2 font-bold tracking-tight text-fg">Raffle Ticket</h1>
           <p className="mt-0.5 text-sm text-muted">
-            Members who shopped at or above the qualifying amount in {qualifyingLabel} earn a
-            ticket. Spin the wheel to draw the winner.
+            A member earns a ticket once they confirm an order and their confirmed spend reaches
+            the qualifying amount in {qualifyingLabel}. Spin the wheel to draw the winner.
           </p>
         </div>
 
@@ -324,8 +329,8 @@ export default function ExhibitionRafflePage() {
             </Button>
           </div>
           <p className="text-xs text-muted">
-            Qualifying spend is the member's total exhibition orders for the season. Cancelled
-            orders do not count.
+            Qualifying spend is the member's total confirmed exhibition orders for the season.
+            Pending, approved and cancelled orders do not count.
           </p>
         </Card>
 
@@ -344,7 +349,7 @@ export default function ExhibitionRafflePage() {
                 </div>
                 <div className="mt-1 text-lg font-bold tabular-nums text-fg">{totals.members}</div>
                 <div className="mt-0.5 text-xs text-muted">
-                  of {totals.shopping_members || 0} who shopped this season
+                  of {totals.shopping_members || 0} with confirmed orders
                 </div>
               </div>
               <div className="rounded-xl border border-line bg-surface px-4 py-3">
@@ -425,8 +430,16 @@ export default function ExhibitionRafflePage() {
               <Card className="p-5">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <h2 className="text-sm font-semibold text-fg">Ticket holders</h2>
-                  <span className="text-xs text-muted">Highest spend first</span>
+                  <span className="text-xs text-muted">
+                    Issued on confirmation · qualifying {naira(loadedMin)} · highest spend first
+                  </span>
                 </div>
+                {String(minAmount) !== String(loadedMin) && (
+                  <p className="rounded-lg border border-warning-border bg-warning-bg px-3 py-2 text-xs text-warning-fg">
+                    The amount box says {naira(minAmount)} but these entries were loaded with{' '}
+                    {naira(loadedMin)}. Press Load entries to apply the new amount.
+                  </p>
+                )}
                 {entries.length === 0 ? (
                   <p className="text-sm text-muted">No qualifying members.</p>
                 ) : (
