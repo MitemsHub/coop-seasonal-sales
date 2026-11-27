@@ -804,8 +804,8 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                     aria-label="Select all"
                   />
                 </th>
-                <th className="w-[88px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[120px] xl:p-3">Order</th>
-                <th className="w-[96px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[140px] xl:p-3">Member</th>
+                <th className="w-[72px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[100px] xl:p-3">Order</th>
+                <th className="w-[140px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[210px] xl:p-3">Member</th>
                 {status === 'Pending' && (
                   <th className="w-[80px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[104px] xl:p-3">Source</th>
                 )}
@@ -815,9 +815,9 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                 {status === 'Confirmed' && (
                   <th className="w-[80px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[104px] xl:p-3">Confirmed by</th>
                 )}
-                <th className="w-[100px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[150px] xl:p-3">Delivery Location</th>
-                <th className="w-[68px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[88px] xl:p-3">Payment</th>
-                <th className="w-[40px] p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[56px] xl:p-3">Qty</th>
+                <th className="w-[84px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[120px] xl:p-3">Delivery Location</th>
+                <th className="w-[60px] p-2 text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[76px] xl:p-3">Payment</th>
+                <th className="w-[36px] p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[48px] xl:p-3">Qty</th>
                 <th className="w-[84px] p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[104px] xl:p-3">Total + Int</th>
                 <th className="w-[96px] p-2 text-right text-xs font-semibold uppercase tracking-wide text-subtext xl:w-[116px] xl:p-3">Actions</th>
               </tr>
@@ -881,17 +881,17 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                         />
                       </td>
                       <td className="p-2 align-top xl:p-3">
-                        <div className="truncate font-medium text-fg" title={o.order_id || `#${o.id}`}>{o.order_id || `#${o.id}`}</div>
+                        {/* Order number and timestamp only: the season and the
+                            stands on the invoice are in the order view behind
+                            Actions, and every line here is width the Member
+                            column cannot use. */}
+                        <div
+                          className="truncate font-medium text-fg"
+                          title={[o.order_id || `#${o.id}`, o.cycle_name || o.cycle_code, vendorLine(o.per_vendor, ' · ')].filter(Boolean).join(' · ')}
+                        >
+                          {o.order_id || `#${o.id}`}
+                        </div>
                         <div className="text-xs text-subtext">{fmtDate(o.created_at)}</div>
-                        <div className="truncate text-xs text-subtext" title={o.cycle_name || o.cycle_code || ''}>{o.cycle_name || o.cycle_code || ''}</div>
-                        {o.per_vendor?.length > 0 && (
-                          <div
-                            className="mt-1 truncate text-xs text-subtext"
-                            title={vendorLine(o.per_vendor, ' · ')}
-                          >
-                            {vendorSummaryLine(o.per_vendor)}
-                          </div>
-                        )}
                         {status === 'Cancelled' && (
                           <div className="mt-1 line-clamp-2 text-xs text-subtext" title={String(o.cancelled_reason || '—').trim()}>
                             Reason: {String(o.cancelled_reason || '—').trim()}
@@ -986,10 +986,7 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
                   <div className="min-w-0 flex-1">
                     <div className="min-w-0">
                       <p className="font-semibold text-fg">{o.order_id || `#${o.id}`}</p>
-                      <p className="text-xs text-subtext">
-                        {fmtDate(o.created_at)}
-                        {o.cycle_name || o.cycle_code ? ` · ${o.cycle_name || o.cycle_code}` : ''}
-                      </p>
+                      <p className="text-xs text-subtext">{fmtDate(o.created_at)}</p>
                     </div>
 
                     <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
