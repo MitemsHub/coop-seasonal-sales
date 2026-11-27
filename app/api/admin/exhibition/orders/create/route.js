@@ -2,7 +2,7 @@
 // POST /api/admin/exhibition/orders/create
 // The admin desk raises the same counter invoice a vendor would, on behalf of
 // a stand (the vendor still gets the payable). Body:
-//   { vendor_id, member_id, payment_option: 'Cash'|'Savings'|'Loan', items: [{ name, qty, price, note? }] }
+//   { vendor_id, member_id, payment_option: 'Savings'|'Loan', items: [{ name, qty, price, note? }] }
 //
 // The order lands Pending like every other counter invoice. Branch and season
 // come from the vendor's stand, so the shop doesn't have to be open.
@@ -16,7 +16,8 @@ export const dynamic = 'force-dynamic'
 
 const MAX_ITEMS = 40
 const MAX_PRINCIPAL = 100_000_000
-const PAYMENTS = ['Cash', 'Savings', 'Loan']
+// No Cash: stands are paid directly, so a cash invoice never reaches the books.
+const PAYMENTS = ['Savings', 'Loan']
 
 function cleanText(v, max = 120) {
   return String(v ?? '')
@@ -43,7 +44,7 @@ export async function POST(req) {
 
     const paymentOption = String(body?.payment_option || '').trim()
     if (!PAYMENTS.includes(paymentOption)) {
-      return NextResponse.json({ ok: false, error: 'Choose Cash, Savings or Loan.' }, { status: 400 })
+      return NextResponse.json({ ok: false, error: 'Choose Savings or Loan.' }, { status: 400 })
     }
 
     const memberId = String(body?.member_id || '').trim().toUpperCase()
@@ -128,7 +129,7 @@ export async function POST(req) {
     }
     if (paymentOption === 'Savings' && Number(member.loans || 0) > 0) {
       return NextResponse.json(
-        { ok: false, error: 'This member has an outstanding loan. Savings cannot be used — choose Loan or Cash.' },
+        { ok: false, error: 'This member has an outstanding loan. Savings cannot be used — choose Loan.' },
         { status: 400 },
       )
     }

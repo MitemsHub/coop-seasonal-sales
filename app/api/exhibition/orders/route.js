@@ -147,6 +147,11 @@ export async function POST(req) {
 
     const paymentRes = validatePaymentOption(String(body.payment_option || ''))
     if (!paymentRes.isValid) return NextResponse.json({ ok: false, error: paymentRes.error }, { status: 400 })
+    // Cash is no longer an exhibition payment method: stands are paid directly
+    // by the member, so nothing about a cash purchase belongs on a co-op order.
+    if (paymentRes.sanitized === 'Cash') {
+      return NextResponse.json({ ok: false, error: 'Cash is not a payment method for the exhibition. Choose Savings or Loan.' }, { status: 400 })
+    }
 
     const linesRaw = Array.isArray(body.lines) ? body.lines : []
     if (!linesRaw.length) return NextResponse.json({ ok: false, error: 'Your cart is empty' }, { status: 400 })

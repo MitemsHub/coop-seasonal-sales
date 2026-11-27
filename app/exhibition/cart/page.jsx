@@ -1,7 +1,9 @@
 // app/exhibition/cart/page.jsx
 // Coop Exhibition checkout — same flow and design language as the food cart:
 // line items with quantity controls, delivery branch + department, payment
-// method (Savings / Loan / Cash), eligibility-aware summary and submit.
+// method (Savings / Loan), eligibility-aware summary and submit. Cash is not
+// offered in the exhibition: the stands take their money directly, so an
+// invoice paid in cash never passes through the co-op's books.
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -262,7 +264,8 @@ function ExhibitionCartContent() {
       const pay = localStorage.getItem(`exhibitionPaymentOption_${memberId}`)
       if (d) setDeliveryBranch(d)
       if (dep) setDepartment(dep)
-      if (pay) setPaymentOption(pay)
+      // A cart saved before Cash was withdrawn may still remember it.
+      if (pay === 'Savings' || pay === 'Loan') setPaymentOption(pay)
     } catch {}
   }, [memberId, branches.length])
 
@@ -292,8 +295,8 @@ function ExhibitionCartContent() {
   const loanInterest = paymentOption === 'Loan' ? Math.round(cartTotal * (loanRatePct / 100)) : 0
   const totalWithInterest = paymentOption === 'Loan' ? cartTotal + loanInterest : cartTotal
 
-  const currentLimit = paymentOption === 'Savings' ? Number(eligibility.savingsEligible || 0) : paymentOption === 'Loan' ? Number(eligibility.loanEligible || 0) : Number.POSITIVE_INFINITY
-  const overLimit = paymentOption !== 'Cash' && totalWithInterest > currentLimit
+  const currentLimit = paymentOption === 'Savings' ? Number(eligibility.savingsEligible || 0) : Number(eligibility.loanEligible || 0)
+  const overLimit = totalWithInterest > currentLimit
   const canSubmit = cart.length > 0 && !overLimit && deliveryBranch && department
 
   const submitDisabledReason = useMemo(() => {
@@ -356,7 +359,7 @@ function ExhibitionCartContent() {
   }
 
   // Savings is unavailable the moment the member carries a loan. Keep the
-  // button tappable so it can say why ("use Loan or Cash") instead of being a
+  // button tappable so it can say why ("use Loan") instead of being a
   // dead grey control the member cannot query.
   const savingsUnavailable = Number(eligibility.savingsEligible || 0) <= 0
   const paymentOptions = [
@@ -364,10 +367,9 @@ function ExhibitionCartContent() {
       key: 'Savings',
       icon: Banknote,
       unavailable: savingsUnavailable,
-      title: savingsUnavailable ? 'Savings is not available — choose Loan or Cash' : 'Pay from your savings balance',
+      title: savingsUnavailable ? 'Savings is not available — choose Loan' : 'Pay from your savings balance',
     },
     { key: 'Loan', icon: Wallet, unavailable: false, title: `Pay on loan (${loanRatePct}% interest applies)` },
-    { key: 'Cash', icon: CreditCard, unavailable: false, title: 'Pay in cash on delivery' },
   ]
 
   return (
@@ -463,7 +465,7 @@ function ExhibitionCartContent() {
                   <h3 className="text-sm font-semibold text-fg">Payment</h3>
                 </div>
                 <Label htmlFor="exh-cart-payment">Payment Method</Label>
-                <div id="exh-cart-payment" role="radiogroup" aria-label="Payment method" className="grid grid-cols-3 gap-1 rounded-xl bg-subtle p-1">
+                <div id="exh-cart-payment" role="radiogroup" aria-label="Payment method" className="grid grid-cols-2 gap-1 rounded-xl bg-subtle p-1">
                   {paymentOptions.map((opt) => (
                     <button
                       key={opt.key}
@@ -475,7 +477,7 @@ function ExhibitionCartContent() {
                         if (opt.unavailable) {
                           setMessage({
                             type: 'error',
-                            text: 'Savings is not available while you have an outstanding loan. Please choose Loan or Cash for this purchase.',
+                            text: 'Savings is not available while you have an outstanding loan. Please choose Loan for this purchase.',
                           })
                           return
                         }
@@ -637,7 +639,7 @@ function ExhibitionCartContent() {
                   )}
                   <div className="rounded-xl border border-brand/20 bg-brand-subtle/60 px-2 py-2.5 text-center">
                     <div className="text-sm font-bold tabular-nums text-brand-fg sm:text-base">
-                      {currentLimit === Number.POSITIVE_INFINITY ? '∞' : naira(currentLimit)}
+                      {naira(currentLimit)}
                     </div>
                     <div className="text-chips font-medium text-brand-fg">Limit ({paymentOption})</div>
                   </div>

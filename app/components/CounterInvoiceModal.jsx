@@ -1,27 +1,21 @@
 // app/components/CounterInvoiceModal.jsx
 // The invoice filled in at the stand: pick the vendor stand (admin desk only),
-// pick the member, key the items (SN is automatic), choose Cash / Savings /
-// Loan, submit. No catalogue. The same form edits a pending invoice when
-// `order` is supplied.
+// pick the member, key the items (SN is automatic), choose Savings or Loan,
+// submit. No catalogue. The same form edits a pending invoice when `order` is
+// supplied. Cash is not offered for exhibition invoices: stands collect their
+// money directly, so a cash invoice never reaches the co-op's books.
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Info, Landmark, Loader2, MessageCircle, Plus, Search, Store, Trash2, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Info, Loader2, Plus, Search, Store, Trash2, X } from 'lucide-react'
 import DraggableModal from './DraggableModal'
 import Button from './ui/Button'
 
 const naira = (n) => `NGN ${Number(n || 0).toLocaleString()}`
 const newItem = () => ({ key: Math.random().toString(36).slice(2), name: '', qty: '1', price: '' })
-const PAYMENTS = ['Cash', 'Savings', 'Loan']
+const PAYMENTS = ['Savings', 'Loan']
 const CATEGORY_LABELS = { A: 'Active', R: 'Retiree', P: 'Pensioner', E: 'Coop Staff' }
-const SAVINGS_LOAN_ERROR = 'This member has an outstanding loan. Savings cannot be used — choose Loan or Cash.'
-const CASH_BANK = {
-  bankName: 'Guaranty Trust Bank',
-  accountNumber: '0023723318',
-  accountName: 'CBN Staff Multipurpose Cooperative Society Limited',
-  phone: '09061388502',
-  whatsapp: 'https://wa.me/+2349061388502',
-}
+const SAVINGS_LOAN_ERROR = 'This member has an outstanding loan. Savings cannot be used — choose Loan.'
 
 function categoryLabel(m) {
   const code = String(m?.category || '').trim().toUpperCase()
@@ -57,7 +51,7 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
   const [vendorResults, setVendorResults] = useState([])
   const [vendorSearching, setVendorSearching] = useState(false)
   const [items, setItems] = useState([newItem()])
-  const [payment, setPayment] = useState('Cash')
+  const [payment, setPayment] = useState('Savings')
   const [loanRatePct, setLoanRatePct] = useState(null)
   const [loanRateError, setLoanRateError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -77,7 +71,7 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
     setVendorResults([])
     setVendorSearching(false)
     setItems([newItem()])
-    setPayment('Cash')
+    setPayment('Savings')
     setLoanRatePct(null)
     setLoanRateError('')
     setSubmitting(false)
@@ -131,7 +125,9 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
             : newItem()
         )
       )
-      setPayment(order.payment_option || 'Cash')
+      // Legacy invoices were raised in Cash; the picker no longer offers it, so
+      // an old one opens on Savings rather than a button that does not exist.
+      setPayment(PAYMENTS.includes(order.payment_option) ? order.payment_option : 'Savings')
     } else {
       reset()
     }
@@ -568,7 +564,7 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
                             setMember(m)
                             setResults([])
                             if (isAdmin && m.has_loan && payment === 'Savings') {
-                              setPayment('Cash')
+                              setPayment('Loan')
                               setError(SAVINGS_LOAN_ERROR)
                             } else {
                               setError('')
@@ -821,39 +817,6 @@ export default function CounterInvoiceModal({ open, onClose, onCreated, mode = '
               </div>
             )}
 
-            {payment === 'Cash' && (
-              <div className="mt-2 rounded-xl border border-info-border bg-info-bg/60 p-3">
-                <div className="flex items-start gap-2">
-                  <Info className="mt-0.5 h-4 w-4 shrink-0 text-info-fg" strokeWidth={2} />
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold text-info-fg">Cash Payment</div>
-                    <p className="mt-0.5 text-xs text-muted">
-                      After raising the invoice, kindly send your payment receipt to the Cooperative ({CASH_BANK.phone}) for verification.
-                    </p>
-                    <div className="mt-2 rounded-lg border border-info-border bg-surface p-2.5">
-                      <div className="flex items-center gap-2 text-xs font-semibold text-fg">
-                        <Landmark className="h-4 w-4 text-info-fg" strokeWidth={2} />
-                        Bank Transfer Details
-                      </div>
-                      <div className="mt-1 space-y-0.5 text-xs text-muted">
-                        <div>{CASH_BANK.bankName}</div>
-                        <div>Account Number: {CASH_BANK.accountNumber}</div>
-                        <div>Account Name: {CASH_BANK.accountName}</div>
-                      </div>
-                    </div>
-                    <a
-                      href={CASH_BANK.whatsapp}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-2 inline-flex items-center gap-2 rounded-lg bg-success-fg px-3 py-2 text-xs font-medium text-on-accent transition-[filter] duration-200 hover:brightness-110"
-                    >
-                      <MessageCircle className="h-4 w-4" strokeWidth={2} />
-                      Send Receipt via WhatsApp
-                    </a>
-                  </div>
-                </div>
-              </div>
-            )}
           </section>
 
           {!!error && (

@@ -449,7 +449,7 @@ function RepriceOrdersSection() {
               <p className="text-xs text-muted">
                 Loan interest: <span className="font-semibold text-fg">{Number(selected.loan_interest_rate_pct || 0)}%</span>
                 {' · '}Vendor deduction: <span className="font-semibold text-fg">{Number(selected.vendor_deduction_rate_pct || 0)}%</span>
-                {' · '}Cash and Savings orders are repriced without interest.
+                {' · '}Savings orders are repriced without interest.
               </p>
             )}
             {impact?.error && (

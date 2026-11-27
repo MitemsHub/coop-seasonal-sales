@@ -17,7 +17,8 @@ export const dynamic = 'force-dynamic'
 
 const MAX_ITEMS = 40
 const MAX_PRINCIPAL = 100_000_000
-const PAYMENTS = ['Cash', 'Savings', 'Loan']
+// No Cash: stands are paid directly, so a cash invoice never reaches the books.
+const PAYMENTS = ['Savings', 'Loan']
 
 function cleanText(v, max = 120) {
   return String(v ?? '')
@@ -44,7 +45,7 @@ export async function PATCH(req, { params }) {
     const body = await req.json().catch(() => ({}))
     const paymentOption = String(body?.payment_option || '').trim()
     if (!PAYMENTS.includes(paymentOption)) {
-      return NextResponse.json({ ok: false, error: 'Choose Cash, Savings or Loan.' }, { status: 400 })
+      return NextResponse.json({ ok: false, error: 'Choose Savings or Loan.' }, { status: 400 })
     }
 
     const rawItems = Array.isArray(body?.items) ? body.items : []
@@ -91,7 +92,7 @@ export async function PATCH(req, { params }) {
       return NextResponse.json({ ok: false, error: 'Only counter invoices can be edited here.' }, { status: 409 })
     }
 
-    const oldPayment = String(order.payment_option || 'Cash')
+    const oldPayment = String(order.payment_option || 'Savings')
     if (
       (oldPayment === 'Savings' && paymentOption === 'Loan') ||
       (oldPayment === 'Loan' && paymentOption === 'Savings')

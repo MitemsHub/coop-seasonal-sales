@@ -75,7 +75,7 @@ describe('POST /api/vendor/exhibition/orders/create — Savings eligibility', ()
 
     expect(res.status).toBe(400)
     expect(body.ok).toBe(false)
-    expect(body.error).toBe('Savings is not available for this member. Choose Cash or Loan.')
+    expect(body.error).toBe('Savings is not available for this member. Choose Loan.')
     expect(body.error).not.toMatch(/outstanding|balance|credit/i)
   })
 })

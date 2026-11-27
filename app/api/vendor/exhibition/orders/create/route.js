@@ -4,14 +4,15 @@
 //
 // body: {
 //   member_id: 'CBN-104882',
-//   payment_option: 'Cash' | 'Savings' | 'Loan',
+//   payment_option: 'Savings' | 'Loan',
 //   items: [{ name: 'Ankara fabric', qty: 2, price: 45000 }]
 // }
 //
 // The order lands as Pending, exactly like a storefront order: the admin
 // approves it, then the member confirms receipt. Savings/Loan are checked
-// against the same atomic RPC the storefront uses, so Pending invoices hold
-// their room from the moment they are captured. Cash never touches a limit.
+// against the same atomic RPC the storefront uses, so an invoice that would
+// take the member past their room is refused here, and the stand is told to
+// take it to the admin rather than hand over goods the co-op cannot cover.
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabaseServer'
 import { logExhibitionAudit } from '@/lib/exhibitionAudit'
@@ -22,7 +23,8 @@ export const dynamic = 'force-dynamic'
 
 const MAX_ITEMS = 40
 const MAX_PRINCIPAL = 100_000_000
-const PAYMENTS = ['Cash', 'Savings', 'Loan']
+// No Cash: stands take cash directly, so it never belongs on a co-op invoice.
+const PAYMENTS = ['Savings', 'Loan']
 
 function cleanText(v, max = 120) {
   return String(v ?? '')
@@ -44,7 +46,7 @@ export async function POST(req) {
     const body = await req.json().catch(() => ({}))
     const paymentOption = String(body?.payment_option || '').trim()
     if (!PAYMENTS.includes(paymentOption)) {
-      return NextResponse.json({ ok: false, error: 'Choose Cash, Savings or Loan.' }, { status: 400 })
+      return NextResponse.json({ ok: false, error: 'Choose Savings or Loan.' }, { status: 400 })
     }
 
     const memberId = String(body?.member_id || '').trim().toUpperCase()
@@ -129,7 +131,7 @@ export async function POST(req) {
     }
     if (paymentOption === 'Savings' && Number(member.loans || 0) > 0) {
       return NextResponse.json(
-        { ok: false, error: 'Savings is not available for this member. Choose Cash or Loan.' },
+        { ok: false, error: 'Savings is not available for this member. Choose Loan.' },
         { status: 400 },
       )
     }
@@ -143,7 +145,7 @@ export async function POST(req) {
     const capAmount = includeInterest ? total : principal
 
     // Atomic exposure check: locks the member row, so two stands cannot both
-    // pass the check and overdraw the same room. Cash is untouched.
+    // pass the check and overdraw the same room.
     const { data: exposure, error: expErr } = await supabase.rpc('check_exhibition_exposure_atomic', {
       p_member_id: memberId,
       p_payment_option: paymentOption,
@@ -153,16 +155,15 @@ export async function POST(req) {
     if (expErr) return NextResponse.json({ ok: false, error: expErr.message }, { status: 500 })
     if (!exposure?.ok) {
       // The checker's message quotes the member's balances, loans and remaining
-      // room. That is the co-op's information, not the stand's, so a vendor only
-      // gets a plain "this won't go through" answer. Admins keep the figures on
-      // their own route.
+      // room. That is the co-op's information, not the stand's, so the vendor
+      // only learns that the invoice does not fit and who can settle it.
       return NextResponse.json(
         {
           ok: false,
+          code: 'member_over_limit',
           error:
-            paymentOption === 'Cash'
-              ? 'This invoice could not be submitted. Check the items and try again.'
-              : `This member cannot take this invoice on ${paymentOption} right now. Try a smaller total, or ask them to choose Cash.`,
+            `This member's ${paymentOption} space cannot cover this invoice, so it cannot be submitted. ` +
+            'Please contact the admin to confirm the member is eligible before you raise it.',
         },
         { status: 400 },
       )
