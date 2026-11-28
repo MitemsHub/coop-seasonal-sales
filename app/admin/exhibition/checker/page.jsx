@@ -6,9 +6,10 @@
 // in order, and the closing balance at the end. Read-only — nothing here
 // writes to the member file.
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
 import { Search, UserRound } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
+import DraggableModal from '../../../components/DraggableModal'
+import OrderItemsView from '../order-items'
 import Badge from '../../../components/ui/Badge'
 import Button from '../../../components/ui/Button'
 import Card from '../../../components/ui/Card'
@@ -31,20 +32,6 @@ function timeOf(iso) {
   }
 }
 
-// Each order lives in the queue named after its status, and every queue accepts
-// ?q= — so an order id here opens the desk that can act on it, already filtered.
-const ORDER_QUEUE = {
-  Pending: '/admin/exhibition/pending',
-  Approved: '/admin/exhibition/approved',
-  Delivered: '/admin/exhibition/delivered',
-  Confirmed: '/admin/exhibition/confirmed',
-  Cancelled: '/admin/exhibition/cancelled',
-}
-
-function orderHref(o) {
-  const base = ORDER_QUEUE[String(o.status || '')] || ORDER_QUEUE.Pending
-  return `${base}?q=${encodeURIComponent(String(o.order_id || ''))}`
-}
 
 // The shopping ledger is drawn once, from one description of an order. It is a
 // four-column grid from `sm` up and the same grid folded into two columns on a
@@ -65,17 +52,21 @@ function LedgerHeader() {
   )
 }
 
-function LedgerOrderRow({ order }) {
+function LedgerOrderRow({ order, onOpen }) {
   return (
     <div className={`grid ${LEDGER_GRID} py-2`}>
       <div className="min-w-0">
-        <Link
-          href={orderHref(order)}
-          className="font-medium text-brand underline-offset-2 hover:underline"
-          title="Open this order in its queue"
+        {/* Opens the order's items right here, the same popup the queue's
+            "View items" shows — the desk stopped having to leave the member
+            to see what was bought. */}
+        <button
+          type="button"
+          onClick={() => onOpen?.(order)}
+          className="text-left font-medium text-brand underline-offset-2 hover:underline"
+          title="Show the items on this order"
         >
           {order.order_id}
-        </Link>
+        </button>
         <div className="text-xs text-muted">{timeOf(order.created_at)}</div>
       </div>
       <div className="text-right font-semibold tabular-nums text-fg">{naira(order.amount)}</div>
@@ -85,7 +76,7 @@ function LedgerOrderRow({ order }) {
   )
 }
 
-function DayLedger({ days, loanBasisIsGoods }) {
+function DayLedger({ days, loanBasisIsGoods, onOpen }) {
   return (
     <div>
       <LedgerHeader />
@@ -100,7 +91,7 @@ function DayLedger({ days, loanBasisIsGoods }) {
               <span className="shrink-0 text-sm font-bold tabular-nums text-fg">{naira(d.total)}</span>
             </div>
             {d.orders.map((o, i) => (
-              <LedgerOrderRow key={`${d.date}-${o.order_id}-${i}`} order={o} />
+              <LedgerOrderRow key={`${d.date}-${o.order_id}-${i}`} order={o} onOpen={onOpen} />
             ))}
             <div className="mt-1 text-xs text-muted">
               {d.order_count} order{d.order_count === 1 ? '' : 's'} · Savings {naira(d.savings)} · Loan{' '}
@@ -129,6 +120,9 @@ export default function ExhibitionCheckerPage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState(null)
+  // An order opened from the ledger, and the popup's own load state.
+  const [viewOrder, setViewOrder] = useState(null)
+  const [viewError, setViewError] = useState('')
   // A near-miss on the ID (or a name) comes back as a short list to tap, so a
   // phone keyboard is not the only way to reach the member.
   const [suggestions, setSuggestions] = useState([])
@@ -187,6 +181,40 @@ export default function ExhibitionCheckerPage() {
       check(id)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Open an order's items without leaving the member. The queue endpoint
+  // returns each order with its lines, so the popup shows exactly what the
+  // Pending page's "View items" shows; nothing is written from here.
+  const openOrder = useCallback(async (row) => {
+    const orderId = String(row?.order_id || '')
+    if (!orderId) return
+    setViewError('')
+    setViewOrder({ order_id: orderId, lines: [], cancelled_lines: [], loading: true })
+    try {
+      // The queue endpoint hides cancelled orders by default; the ledger shows
+      // them, so ask for that queue when the row is one.
+      const cancelled = String(row?.status || '') === 'Cancelled' ? '&status=Cancelled' : ''
+      const res = await fetch(
+        `/api/admin/exhibition/orders?q=${encodeURIComponent(orderId)}&limit=5${cancelled}`,
+        { cache: 'no-store' }
+      )
+      const json = await res.json().catch(() => null)
+      const match = (json?.orders || []).find((o) => String(o.order_id) === orderId)
+      if (match) setViewOrder(match)
+      else {
+        setViewOrder(null)
+        setViewError(`Could not load ${orderId} from the order queue.`)
+      }
+    } catch {
+      setViewOrder(null)
+      setViewError(`Could not load ${orderId} from the order queue.`)
+    }
+  }, [])
+
+  const closeOrder = useCallback(() => {
+    setViewOrder(null)
+    setViewError('')
   }, [])
 
   const summary = data?.summary
@@ -368,7 +396,7 @@ export default function ExhibitionCheckerPage() {
                   position above, not in this day-by-day ledger.
                 </p>
               ) : (
-                <DayLedger days={days} loanBasisIsGoods={summary.loan_basis_is_goods} />
+                <DayLedger days={days} loanBasisIsGoods={summary.loan_basis_is_goods} onOpen={openOrder} />
               )}
 
               {summary.exhibition_order_count ? (
@@ -418,6 +446,25 @@ export default function ExhibitionCheckerPage() {
             </Card>
           </div>
         )}
+
+        <DraggableModal
+          open={!!viewOrder || !!viewError}
+          onClose={closeOrder}
+          widthClass="max-w-2xl w-full mx-4"
+          title={viewOrder ? `Items · ${viewOrder.order_id || ''}` : 'Order items'}
+        >
+          {viewError ? (
+            <p className="px-1 py-6 text-center text-sm text-muted">{viewError}</p>
+          ) : viewOrder?.loading ? (
+            <div className="space-y-2 py-4">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ) : (
+            <OrderItemsView order={viewOrder} />
+          )}
+        </DraggableModal>
       </div>
     </ProtectedRoute>
   )

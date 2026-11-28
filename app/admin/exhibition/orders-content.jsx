@@ -12,6 +12,7 @@ import CounterInvoiceModal from '../../components/CounterInvoiceModal'
 import ExportButton from '../../components/ui/ExportButton'
 import Pagination from '../../components/ui/Pagination'
 import DraggableModal from '../../components/DraggableModal'
+import OrderItemsView from './order-items'
 
 import { createManifestDoc, addManifestTable, sanitizePdfText } from '../../lib/pdfExport'
 
@@ -448,16 +449,10 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
     if (value === 'restore') setModal({ type: 'restore', ids: [o.id] })
   }
 
-  const viewLines = viewOrder?.lines || []
+  // Items come from the shared view; only the restore rule stays here.
   // Items can be put back while the order is still open. On a cancelled order
   // the whole order is restored from the Cancelled queue instead.
   const canRestoreLines = ['Pending', 'Approved'].includes(String(viewOrder?.status || ''))
-  const orderLineAmount = (line) => {
-    const qty = Number(line?.qty || 0)
-    return Number(line?.amount ?? qty * Number(line?.final_price ?? line?.vendor_price ?? 0))
-  }
-  const viewSubtotal = viewLines.reduce((sum, line) => sum + orderLineAmount(line), 0)
-  const viewInterest = Math.max(0, Number(viewOrder?.total_amount || 0) - viewSubtotal)
 
   const orderActionSelect = (o, className = '') => (
     <select
@@ -1067,150 +1062,21 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
         </div>
       </div>
 
-      <DraggableModal
+            <DraggableModal
         open={!!viewOrder}
         onClose={() => setViewOrder(null)}
         widthClass="max-w-2xl w-full mx-4"
         title={viewOrder ? `Items · ${viewOrder.order_id || `#${viewOrder.id}`}` : 'Items'}
       >
-        {viewOrder && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 rounded-xl bg-subtle/60 p-3 text-sm sm:grid-cols-4">
-              <div className="col-span-2 min-w-0">
-                <p className="text-chips text-muted">Member</p>
-                <p className="mt-0.5 break-words font-medium text-fg">
-                  {viewOrder.member_id}{viewOrder.member_name_snapshot ? ` · ${viewOrder.member_name_snapshot}` : ''}{viewOrder.member_phone ? ` · ${viewOrder.member_phone}` : ''}
-                </p>
-              </div>
-              <div>
-                <p className="text-chips text-muted">Payment</p>
-                <p className="mt-0.5 font-medium text-fg">{viewOrder.payment_option || '—'}</p>
-              </div>
-              <div className="text-right sm:text-left">
-                <p className="text-chips text-muted">Qty</p>
-                <p className="mt-0.5 font-medium tabular-nums text-fg">{Number(viewOrder.total_qty || 0).toLocaleString()}</p>
-              </div>
-              <div className="col-span-2 min-w-0">
-                <p className="text-chips text-muted">Delivery Location</p>
-                <p className="mt-0.5 break-words font-medium text-fg">{viewOrder.branch_name || `#${viewOrder.branch_id}`}</p>
-              </div>
-              <div className="col-span-2 min-w-0">
-                <p className="text-chips text-muted">Cycle</p>
-                <p className="mt-0.5 break-words font-medium text-fg">{viewOrder.cycle_name || viewOrder.cycle_code || '—'}</p>
-              </div>
-            </div>
-
-            <div>
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Items</h3>
-                <span className="text-chips text-muted">
-                  {viewLines.length} line{viewLines.length === 1 ? '' : 's'}
-                </span>
-              </div>
-              <div className="divide-y divide-line overflow-hidden rounded-xl border border-line">
-                {viewLines.length === 0 ? (
-                  <p className="px-3 py-6 text-center text-sm text-muted">No item lines recorded for this order.</p>
-                ) : (
-                  viewLines.map((l) => {
-                    const qty = Number(l.qty || 0)
-                    const unit = Number(l.final_price ?? l.vendor_price ?? 0)
-                    const amount = orderLineAmount(l)
-                    return (
-                      <div key={l.id} className="flex items-start gap-3 px-3 py-2.5">
-                        <div className="min-w-0 flex-1">
-                          <p className="break-words text-sm font-medium text-fg">{l.product_name || 'Item'}</p>
-                          <p className="mt-0.5 text-chips text-muted">
-                            {[l.vendor_name, l.sku, `${qty} × ${naira(unit)}`].filter(Boolean).join(' · ')}
-                          </p>
-                        </div>
-                        <p className="shrink-0 text-sm font-semibold tabular-nums text-fg">{naira(amount)}</p>
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-            </div>
-
-            {!!(viewOrder.cancelled_lines || []).length && (
-              <div>
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Cancelled items</h3>
-                  <div className="flex items-center gap-3">
-                    <span className="text-chips text-muted">
-                      {(viewOrder.cancelled_lines || []).length} withdrawn · kept so they can go back
-                    </span>
-                    {canRestoreLines && (viewOrder.cancelled_lines || []).length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => restoreWithdrawn(null)}
-                        disabled={restoreBusy}
-                        className="inline-flex items-center gap-1 rounded-md border border-line px-2 py-0.5 text-chips font-medium text-fg transition-colors hover:bg-subtle disabled:opacity-50"
-                      >
-                        Restore all
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="divide-y divide-line overflow-hidden rounded-xl border border-line">
-                  {(viewOrder.cancelled_lines || []).map((c) => {
-                    const cancelledQty = Number(c.qty || 0)
-                    const cancelledUnit = Number(c.final_price ?? c.vendor_price ?? 0)
-                    return (
-                      <div key={c.id} className="flex items-start gap-3 px-3 py-2.5">
-                        <div className="min-w-0 flex-1">
-                          <p className="break-words text-sm font-medium text-muted line-through">
-                            {c.product_name || 'Item'}
-                          </p>
-                          <p className="mt-0.5 text-chips text-muted">
-                            {[
-                              c.vendor_name,
-                              c.sku,
-                              `${cancelledQty} × ${naira(cancelledUnit)}`,
-                              c.cancelled_reason ? `— ${c.cancelled_reason}` : '',
-                            ]
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </p>
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <p className="text-sm font-semibold tabular-nums text-muted">{naira(c.amount)}</p>
-                          {canRestoreLines && (
-                          <button
-                            type="button"
-                            onClick={() => restoreWithdrawn(c)}
-                            disabled={restoreBusy}
-                            className="mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-chips font-medium text-brand transition-colors hover:bg-subtle disabled:opacity-50"
-                            title="Put this item back on the order — its stock is reserved again and the total recalculated"
-                          >
-                            <RotateCcw className="h-3 w-3" /> Restore
-                          </button>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-1.5 border-t border-line pt-3">
-              <div className="flex items-center justify-between gap-3 text-sm text-muted">
-                <span>Items subtotal</span>
-                <span className="tabular-nums">{naira(viewSubtotal)}</span>
-              </div>
-              {viewInterest > 0 && (
-                <div className="flex items-center justify-between gap-3 text-sm text-muted">
-                  <span>Loan interest</span>
-                  <span className="font-medium tabular-nums text-fg">{naira(viewInterest)}</span>
-                </div>
-              )}
-              <div className="flex items-center justify-between gap-3 pt-1">
-                <span className="text-sm font-semibold text-fg">Total + Int</span>
-                <span className="text-lg font-bold tabular-nums text-fg">{naira(viewOrder.total_amount)}</span>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* One items view, shared with the Checker, so an order looks the same
+            whichever desk opens it. */}
+        <OrderItemsView
+          order={viewOrder}
+          allowRestore={canRestoreLines}
+          onRestoreLine={restoreWithdrawn}
+          onRestoreAll={() => restoreWithdrawn(null)}
+          restoring={restoreBusy}
+        />
       </DraggableModal>
 
       <DraggableModal
