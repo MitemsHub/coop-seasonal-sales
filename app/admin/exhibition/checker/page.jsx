@@ -14,7 +14,6 @@ import Button from '../../../components/ui/Button'
 import Card from '../../../components/ui/Card'
 import Input from '../../../components/ui/Input'
 import Skeleton from '../../../components/ui/Skeleton'
-import { Table, THead, TBody, TR, TH, TD } from '../../../components/ui/Table'
 
 const naira = (v) =>
   new Intl.NumberFormat('en-NG', {
@@ -45,6 +44,74 @@ const ORDER_QUEUE = {
 function orderHref(o) {
   const base = ORDER_QUEUE[String(o.status || '')] || ORDER_QUEUE.Pending
   return `${base}?q=${encodeURIComponent(String(o.order_id || ''))}`
+}
+
+// The shopping ledger is drawn once, from one description of an order. It is a
+// four-column grid from `sm` up and the same grid folded into two columns on a
+// phone, so a field can never be added to the table and forgotten in the card
+// view (the two used to be written out separately).
+const LEDGER_GRID = 'grid-cols-2 items-baseline gap-x-3 gap-y-0.5 sm:grid-cols-[minmax(0,1fr)_7rem_6rem_6rem]'
+
+function LedgerHeader() {
+  return (
+    <div
+      className={`hidden border-b border-line-subtle pb-1 text-xs font-semibold uppercase tracking-wide text-muted sm:grid ${LEDGER_GRID}`}
+    >
+      <span>Order</span>
+      <span className="text-right">Total</span>
+      <span>Paid with</span>
+      <span>Status</span>
+    </div>
+  )
+}
+
+function LedgerOrderRow({ order }) {
+  return (
+    <div className={`grid ${LEDGER_GRID} py-2`}>
+      <div className="min-w-0">
+        <Link
+          href={orderHref(order)}
+          className="font-medium text-brand underline-offset-2 hover:underline"
+          title="Open this order in its queue"
+        >
+          {order.order_id}
+        </Link>
+        <div className="text-xs text-muted">{timeOf(order.created_at)}</div>
+      </div>
+      <div className="text-right font-semibold tabular-nums text-fg">{naira(order.amount)}</div>
+      <div className="text-muted">{order.payment_option || '—'}</div>
+      <div className="text-right text-muted sm:text-left">{order.status || '—'}</div>
+    </div>
+  )
+}
+
+function DayLedger({ days, loanBasisIsGoods }) {
+  return (
+    <div>
+      <LedgerHeader />
+      <div className="space-y-4">
+        {days.map((d) => (
+          <div key={d.date}>
+            <div className="flex items-baseline justify-between gap-2 border-b border-line-subtle pb-1">
+              <div className="min-w-0">
+                <span className="text-sm font-semibold text-fg">Day {d.day}</span>
+                <span className="ml-2 text-xs text-muted">{d.date_label}</span>
+              </div>
+              <span className="shrink-0 text-sm font-bold tabular-nums text-fg">{naira(d.total)}</span>
+            </div>
+            {d.orders.map((o, i) => (
+              <LedgerOrderRow key={`${d.date}-${o.order_id}-${i}`} order={o} />
+            ))}
+            <div className="mt-1 text-xs text-muted">
+              {d.order_count} order{d.order_count === 1 ? '' : 's'} · Savings {naira(d.savings)} · Loan{' '}
+              {naira(d.loan)}
+              {loanBasisIsGoods ? ' (goods value)' : ''}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function Stat({ label, value, note, tone = '' }) {
@@ -295,114 +362,7 @@ export default function ExhibitionCheckerPage() {
                   position above, not in this day-by-day ledger.
                 </p>
               ) : (
-                <>
-                <div className="hidden sm:block">
-                <Table>
-                  <THead>
-                    <TR>
-                      <TH className="pl-0">Day</TH>
-                      <TH>Order</TH>
-                      <TH>Time</TH>
-                      <TH className="text-right">Total</TH>
-                      <TH>Paid with</TH>
-                      <TH>Status</TH>
-                    </TR>
-                  </THead>
-
-                  {days.map((d) => (
-                    <TBody key={d.date}>
-                      {d.orders.map((o, i) => (
-                        <TR key={`${d.date}-${o.order_id}-${i}`}>
-                          {/* The day label is drawn once, but every row keeps the
-                              cell: a rowSpan makes the following rows a column
-                              narrower, which is what set EXH013 off its grid. */}
-                          <TD className="pl-0 align-top">
-                            {i === 0 ? (
-                              <>
-                                <div className="font-semibold text-fg">Day {d.day}</div>
-                                <div className="text-xs text-muted">{d.date_label}</div>
-                              </>
-                            ) : null}
-                          </TD>
-                          <TD>
-                            <Link
-                              href={orderHref(o)}
-                              className="font-medium text-brand underline-offset-2 hover:underline"
-                              title="Open this order in its queue"
-                            >
-                              {o.order_id}
-                            </Link>
-                          </TD>
-                          <TD className="text-muted">{timeOf(o.created_at)}</TD>
-                          <TD className="text-right tabular-nums">{naira(o.amount)}</TD>
-                          <TD className="text-muted">{o.payment_option || '—'}</TD>
-                          <TD className="text-muted">{o.status || '—'}</TD>
-                        </TR>
-                      ))}
-                      <TR className="bg-subtle/60 hover:bg-subtle/60">
-                        <TD className="pl-0 text-xs font-semibold text-fg">Day {d.day} total</TD>
-                        <TD className="text-xs text-muted" colSpan={2}>
-                          {d.order_count} order{d.order_count === 1 ? '' : 's'}
-                        </TD>
-                        <TD className="text-right font-bold tabular-nums text-fg">{naira(d.total)}</TD>
-                        <TD className="text-xs text-muted" colSpan={2}>
-                          Savings {naira(d.savings)} · Loan {naira(d.loan)}
-                          {summary.loan_basis_is_goods ? ' (goods value)' : ''}
-                        </TD>
-                      </TR>
-                    </TBody>
-                  ))}
-                </Table>
-                </div>
-
-                {/* Phones: six columns cannot stay readable at 360px, so each
-                    day becomes its own block with the orders listed under it.
-                    Same figures, no sideways scrolling. */}
-                <div className="space-y-3 sm:hidden">
-                  {days.map((d) => (
-                    <div key={`phone-${d.date}`} className="overflow-hidden rounded-xl border border-line-subtle">
-                      <div className="flex items-baseline justify-between gap-2 bg-subtle/40 px-3 py-2">
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold text-fg">Day {d.day}</div>
-                          <div className="text-xs text-muted">{d.date_label}</div>
-                        </div>
-                        <div className="shrink-0 text-sm font-bold tabular-nums text-fg">
-                          {naira(d.total)}
-                        </div>
-                      </div>
-                      <ul className="divide-y divide-line-subtle">
-                        {d.orders.map((o, i) => (
-                          <li key={`${d.date}-${o.order_id}-${i}`} className="px-3 py-2">
-                            <div className="flex items-baseline justify-between gap-2">
-                              <Link
-                                href={orderHref(o)}
-                                className="truncate font-medium text-brand underline-offset-2 hover:underline"
-                              >
-                                {o.order_id}
-                              </Link>
-                              <span className="shrink-0 font-semibold tabular-nums text-fg">
-                                {naira(o.amount)}
-                              </span>
-                            </div>
-                            <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted">
-                              <span>{timeOf(o.created_at)}</span>
-                              <span aria-hidden="true">·</span>
-                              <span>{o.payment_option || '—'}</span>
-                              <span aria-hidden="true">·</span>
-                              <span>{o.status || '—'}</span>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                      <div className="border-t border-line-subtle px-3 py-1.5 text-xs text-muted">
-                        {d.order_count} order{d.order_count === 1 ? '' : 's'} · Savings {naira(d.savings)} · Loan{' '}
-                        {naira(d.loan)}
-                        {summary.loan_basis_is_goods ? ' (goods value)' : ''}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                </>
+                <DayLedger days={days} loanBasisIsGoods={summary.loan_basis_is_goods} />
               )}
 
               {summary.exhibition_order_count ? (
