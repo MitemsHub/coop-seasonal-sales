@@ -15,7 +15,8 @@ const Input = forwardRef(function Input({ className = '', invalid = false, ...pr
       ref={ref}
       className={[
         baseField,
-        'h-9',
+        // 40px on phones, the desktop height from `sm` up.
+        'h-10 sm:h-9',
         invalid && 'border-danger focus:border-danger',
         className,
       ].join(' ')}

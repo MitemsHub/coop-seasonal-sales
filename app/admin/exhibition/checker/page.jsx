@@ -347,6 +347,7 @@ export default function ExhibitionCheckerPage() {
                         <TD className="text-right font-bold tabular-nums text-fg">{naira(d.total)}</TD>
                         <TD className="text-xs text-muted" colSpan={2}>
                           Savings {naira(d.savings)} · Loan {naira(d.loan)}
+                          {summary.loan_basis_is_goods ? ' (goods value)' : ''}
                         </TD>
                       </TR>
                     </TBody>
@@ -396,6 +397,7 @@ export default function ExhibitionCheckerPage() {
                       <div className="border-t border-line-subtle px-3 py-1.5 text-xs text-muted">
                         {d.order_count} order{d.order_count === 1 ? '' : 's'} · Savings {naira(d.savings)} · Loan{' '}
                         {naira(d.loan)}
+                        {summary.loan_basis_is_goods ? ' (goods value)' : ''}
                       </div>
                     </div>
                   ))}
@@ -405,8 +407,9 @@ export default function ExhibitionCheckerPage() {
 
               {summary.exhibition_order_count ? (
                 <p className="mt-2 text-xs text-muted">
-                  Totals are what the member repays, interest included. Loan space left is
-                  measured on the goods value, so it moves by less than the totals here.
+                  The Total column is what the member repays, interest included. The Loan figure
+                  under each day is the goods value the loan room was debited by, so it adds up
+                  with the Loan space left card instead of the repayable total.
                 </p>
               ) : null}
             </Card>

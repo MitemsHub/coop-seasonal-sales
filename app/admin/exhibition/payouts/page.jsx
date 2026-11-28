@@ -100,14 +100,23 @@ export default function ExhibitionPayoutsPage() {
               What the co-op owes each vendor for this cycle. Gross sales minus the deduction rate.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Select value={cycleId} onChange={(e) => setCycleId(e.target.value)} className="sm:w-64">
+          {/* Stacked on phones: the cycle name is long enough that a shared row
+              pushed Refresh off the edge. */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Select value={cycleId} onChange={(e) => setCycleId(e.target.value)} className="w-full sm:w-64">
               <option value="">Select cycle</option>
               {cycles.map((c) => (
                 <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
               ))}
             </Select>
-            <Button variant="ghost" size="sm" leftIcon={RefreshCw} onClick={loadPayouts} disabled={loading || busy || !cycleId}>
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={RefreshCw}
+              onClick={() => loadPayouts()}
+              disabled={loading || busy || !cycleId}
+              className="w-full justify-center sm:w-auto"
+            >
               Refresh
             </Button>
           </div>

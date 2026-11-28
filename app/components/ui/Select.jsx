@@ -13,7 +13,7 @@ const Select = forwardRef(function Select(
       <select
         ref={ref}
         className={[
-          'h-9 w-full appearance-none rounded-lg border border-line bg-surface pl-3 pr-9 text-sm text-fg',
+          'h-10 w-full appearance-none rounded-lg border border-line bg-surface pl-3 pr-9 text-sm text-fg sm:h-9',
           'transition-[border-color,box-shadow,background-color] duration-200 ease-sakani',
           'hover:border-line-strong focus:border-brand focus:outline-none',
           'disabled:cursor-not-allowed disabled:opacity-60',

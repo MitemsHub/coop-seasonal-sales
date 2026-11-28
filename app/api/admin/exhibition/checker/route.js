@@ -184,21 +184,51 @@ export async function GET(request) {
       exhibitionOrders = data || []
     }
 
+    // ── What a loan order moved in the loan room ─────────────────────
+    // The season decides the basis: when interest is excluded, the loan room is
+    // debited by the goods value (the order's line amounts), not by the
+    // repayable total. The ledger below and the "Loan space left" card have to
+    // speak the same language, or the officer adds up two different answers to
+    // one question.
+    const loanBasisIsGoods = cycle?.exh_loan_cap_include_interest === false
+    const loanItems = exhibitionOrders.filter((o) => o.payment_option === 'Loan')
+    const goodsByOrder = new Map()
+    if (loanBasisIsGoods && loanItems.length) {
+      const { data: lines } = await supabase
+        .from('exhibition_order_lines')
+        .select('order_id, amount')
+        .in('order_id', loanItems.map((o) => Number(o.id)))
+      for (const line of lines || []) {
+        const key = Number(line.order_id)
+        goodsByOrder.set(key, (goodsByOrder.get(key) || 0) + Number(line.amount || 0))
+      }
+    }
+    // Falls back to the total when an order has no lines, exactly as the
+    // exposure function does, so the two cannot disagree about an old order.
+    const loanBasisOf = (o) => {
+      const total = Number(o.total_amount || 0)
+      if (!loanBasisIsGoods) return total
+      const key = Number(o.id)
+      return goodsByOrder.has(key) ? goodsByOrder.get(key) : total
+    }
+
     // ── Day-by-day ledger ────────────────────────────────────────────
     const byDay = new Map()
     for (const o of exhibitionOrders) {
       const key = dayKey(o.created_at)
       const cur = byDay.get(key) || { date: key, orders: [], total: 0, savings: 0, loan: 0 }
       const amount = Number(o.total_amount || 0)
+      const loanBasis = o.payment_option === 'Loan' ? loanBasisOf(o) : 0
       cur.orders.push({
         order_id: o.order_id || `#${o.id}`,
         status: o.status || '',
         amount,
+        loan_basis: loanBasis,
         payment_option: o.payment_option || '',
         created_at: o.created_at || null,
       })
       cur.total += amount
-      if (o.payment_option === 'Loan') cur.loan += amount
+      if (o.payment_option === 'Loan') cur.loan += loanBasis
       else if (o.payment_option === 'Savings') cur.savings += amount
       byDay.set(key, cur)
     }
@@ -235,6 +265,8 @@ export async function GET(request) {
     let loanSpaceLeft = null
     let loanSpaceUsed = 0
     let loanSpaceWarning = ''
+    // The composition of that number, as the function itself describes it.
+    let loanSpaceParts = null
     if (cycle?.id) {
       try {
         const { data: exposure, error } = await supabase.rpc('check_exhibition_exposure_atomic', {
@@ -249,108 +281,12 @@ export async function GET(request) {
           // Everything already lent against this member: loans on file plus
           // this season's food and exhibition loan orders.
           loanSpaceUsed = Number(exposure.outstandingLoansTotal || 0)
+          // Returned by the function that computed the room, not rebuilt here:
+          // one rule, one author.
+          loanSpaceParts = Array.isArray(exposure.loanSpaceParts) ? exposure.loanSpaceParts : null
         } else loanSpaceWarning = exposure?.error || ''
       } catch (e) {
         loanSpaceWarning = e.message || ''
-      }
-    }
-
-    // ── What the loan room is made of ────────────────────────────────
-    // The RPC answers with a single number, which leaves the desk doing
-    // mental arithmetic against the loan balance and the global limit. These
-    // parts are the two figures the season rules actually used. They are only
-    // published when they reproduce the RPC's own number, so if a rule
-    // changes the note disappears instead of telling the officer a lie.
-    let loanSpaceParts = null
-    if (cycle?.id && loanSpaceLeft != null) {
-      const cat = String(member.category || '').toLowerCase()
-      const group =
-        cat.startsWith('p') || cat.includes('pension')
-          ? 'pensioner'
-          : cat.startsWith('r') || cat.includes('retire')
-            ? 'retiree'
-            : 'active'
-      const whole = (v) => Math.max(0, Math.trunc(Number(v || 0)))
-
-      let pool = 0
-      let poolLabel = ''
-      if (group === 'pensioner') {
-        pool = whole(cycle.exh_loan_grace_amount_cap_pensioner)
-        poolLabel = 'Pensioner grace'
-      } else if (group === 'active') {
-        let gradeCategory = 'junior'
-        const { data: gradeRow } = await supabase
-          .from('grade_limits')
-          .select('category')
-          .ilike('grade', String(member.grade || ''))
-          .maybeSingle()
-        if (gradeRow?.category) gradeCategory = String(gradeRow.category).toLowerCase()
-        if (gradeCategory === 'executive') {
-          pool = whole(cycle.exh_no_space_executive)
-          poolLabel = 'Executive grade pool'
-        } else if (gradeCategory === 'senior') {
-          pool = whole(cycle.exh_no_space_senior)
-          poolLabel = 'Senior grade pool'
-        } else {
-          pool = whole(cycle.exh_no_space_junior)
-          poolLabel = 'Junior grade pool'
-        }
-      }
-
-      // What this season's loan orders have been debited by: the goods value
-      // when the season excludes interest, the repayable total when it
-      // includes it. Same basis as the exposure function.
-      const includeInterest = cycle.exh_loan_cap_include_interest !== false
-      const loanOrders = exhibitionOrders.filter((o) => o.payment_option === 'Loan')
-      let seasonLoanBasis = 0
-      if (loanOrders.length) {
-        let principals = null
-        if (!includeInterest) {
-          const { data: lines } = await supabase
-            .from('exhibition_order_lines')
-            .select('order_id, amount')
-            .in('order_id', loanOrders.map((o) => Number(o.id)))
-          if (lines) {
-            principals = new Map()
-            for (const line of lines) {
-              const key = Number(line.order_id)
-              principals.set(key, (principals.get(key) || 0) + Number(line.amount || 0))
-            }
-          }
-        }
-        seasonLoanBasis = loanOrders.reduce((sum, o) => {
-          const key = Number(o.id)
-          const value = principals?.has(key) ? principals.get(key) : Number(o.total_amount || 0)
-          return sum + value
-        }, 0)
-      }
-
-      let space = savings * 5 - loanSpaceUsed
-      const globalLimit = Number(member.global_limit || 0)
-      if (globalLimit > 0) space = Math.min(space, globalLimit)
-      const close = (a, b) => Math.abs(a - b) < 1
-
-      if (group === 'retiree') {
-        if (close(Math.max(0, savings - loanSpaceUsed), loanSpaceLeft)) {
-          loanSpaceParts = [
-            { label: 'Savings', amount: savings },
-            { label: 'already on loan', amount: loanSpaceUsed, op: '-' },
-          ]
-        }
-      } else if (space > 0) {
-        if (pool > 0 && close(space + pool, loanSpaceLeft)) {
-          loanSpaceParts = [
-            { label: 'Savings space', amount: space },
-            { label: poolLabel, amount: pool, op: '+' },
-          ]
-        } else if (close(space, loanSpaceLeft)) {
-          loanSpaceParts = [{ label: 'Savings space', amount: space }]
-        }
-      } else if (pool > 0 && close(pool - seasonLoanBasis, loanSpaceLeft)) {
-        loanSpaceParts = [
-          { label: poolLabel, amount: pool },
-          { label: 'borrowed this season', amount: seasonLoanBasis, op: '-' },
-        ]
       }
     }
 
@@ -393,6 +329,9 @@ export async function GET(request) {
         exhibition_total: exhibitionTotal,
         exhibition_savings: exhibitionSavings,
         exhibition_loan: exhibitionLoan,
+        // Which figure the day ledger's Loan line is measured on, so the screen
+        // can say "goods" only when that is what the season enforces.
+        loan_basis_is_goods: loanBasisIsGoods,
         shopping_days: days.length,
         total_shopped: foodTotal + exhibitionTotal,
         savings_spent: savingsSpent,

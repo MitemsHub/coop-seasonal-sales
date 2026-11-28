@@ -18,10 +18,13 @@ const VARIANTS = {
   danger: 'bg-danger-fg text-on-accent hover:brightness-110 active:brightness-95 shadow-xs',
 }
 
+// Touch first: at phone widths every size is at least a 36px-high target, and
+// `sm:` restores the denser desktop heights. A 32px button is fine under a
+// mouse and fiddly under a thumb.
 const SIZES = {
-  sm: 'h-8 px-3 text-xs gap-1.5',
-  md: 'h-9 px-4 text-sm gap-2',
-  lg: 'h-10 px-5 text-sm gap-2',
+  sm: 'h-9 px-3 text-xs gap-1.5 sm:h-8',
+  md: 'h-10 px-4 text-sm gap-2 sm:h-9',
+  lg: 'h-11 px-5 text-sm gap-2 sm:h-10',
 }
 
 const Button = forwardRef(function Button(
