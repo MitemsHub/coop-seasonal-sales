@@ -179,6 +179,12 @@ export default function ExhibitionCheckerPage() {
     if (id) {
       setMemberId(id)
       check(id)
+      // The member is already open; leave their ID out of the address bar so
+      // it is not in screenshots, chat messages or the browser history. A
+      // reload starts from the empty form rather than carrying it.
+      try {
+        window.history.replaceState({}, '', window.location.pathname)
+      } catch {}
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

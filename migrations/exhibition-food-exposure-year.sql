@@ -199,7 +199,7 @@ BEGIN
         IF v_group = 'retiree' THEN
           -- No grace, no ceiling: savings minus everything.
           v_loan_eligible := GREATEST(0, v_member_savings - v_outstanding);
-          v_p1_label := 'Savings';
+          v_p1_label := 'Loan Space';
           v_p1_amount := v_member_savings;
           v_p2_label := 'already on loan';
           v_p2_amount := v_outstanding;
@@ -220,7 +220,7 @@ BEGIN
               v_loan_eligible := LEAST(v_loan_eligible, GREATEST(0, v_ceiling - v_cycle_loan_total));
               IF v_loan_eligible < v_space + v_grace THEN
                 -- The season ceiling, not the grace, is what is left.
-                v_p1_label := 'Pensioner ceiling';
+                v_p1_label := 'Grace from MC';
                 v_p1_amount := v_ceiling;
                 v_p2_label := 'borrowed this season';
                 v_p2_amount := v_cycle_loan_total;
