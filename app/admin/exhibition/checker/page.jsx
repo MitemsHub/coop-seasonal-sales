@@ -375,7 +375,7 @@ export default function ExhibitionCheckerPage() {
                 <p className="mt-2 text-xs text-muted">
                   The Total column is what the member repays, interest included. The Loan figure
                   under each day is the goods value the loan room was debited by, so it adds up
-                  with the Loan space left card instead of the repayable total.
+                  with the Available Loan Facility card instead of the repayable total.
                 </p>
               ) : null}
             </Card>
@@ -393,7 +393,7 @@ export default function ExhibitionCheckerPage() {
                   note={`${naira(summary.savings)} − ${naira(summary.savings_spent)}`}
                 />
                 <Stat
-                  label="Loan space left"
+                  label="Available Loan Facility"
                   value={summary.loan_space_left == null ? '—' : naira(summary.loan_space_left)}
                   note={
                     loanParts.length ? (

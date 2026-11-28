@@ -223,7 +223,7 @@ export async function GET(request) {
     // ── What a loan order moved in the loan room ─────────────────────
     // The season decides the basis: when interest is excluded, the loan room is
     // debited by the goods value (the order's line amounts), not by the
-    // repayable total. The ledger below and the "Loan space left" card have to
+    // repayable total. The ledger below and the "Available Loan Facility" card have to
     // speak the same language, or the officer adds up two different answers to
     // one question.
     const loanBasisIsGoods = cycle?.exh_loan_cap_include_interest === false

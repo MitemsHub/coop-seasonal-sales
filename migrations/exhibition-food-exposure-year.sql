@@ -31,6 +31,9 @@ DECLARE
   v_p2_label TEXT := '';
   v_p2_amount NUMERIC := 0;
   v_p2_op TEXT := '+';
+  v_p3_label TEXT := '';
+  v_p3_amount NUMERIC := 0;
+  v_p3_op TEXT := '+';
   v_parts jsonb := NULL;
   v_parts_sum NUMERIC := 0;
 BEGIN
@@ -208,7 +211,7 @@ BEGIN
             -- ceiling stays the absolute cap for the season.
             v_grace := GREATEST(0, TRUNC(COALESCE(v_policy.exh_loan_grace_amount_cap_pensioner, 0)));
             v_loan_eligible := v_space + v_grace;
-            v_p1_label := 'Savings space';
+            v_p1_label := 'Loan Space';
             v_p1_amount := v_space;
             v_p2_label := 'Pensioner grace';
             v_p2_amount := v_grace;
@@ -229,11 +232,16 @@ BEGIN
             -- decrements with whatever has already been borrowed this season.
             v_grace := GREATEST(0, TRUNC(COALESCE(v_policy.exh_loan_grace_amount_cap_pensioner, 0)));
             v_loan_eligible := GREATEST(0, v_grace - v_cycle_loan_total);
-            v_p1_label := 'Pensioner grace';
-            v_p1_amount := v_grace;
-            v_p2_label := 'borrowed this season';
-            v_p2_amount := v_cycle_loan_total;
-            v_p2_op := '-';
+            -- No room from savings × 5 − loans: print the zero, so the desk
+            -- knows the grace is all that is left rather than a line missing.
+            v_p1_label := 'Loan Space';
+            v_p1_amount := 0;
+            v_p2_label := 'Pensioner grace';
+            v_p2_amount := v_grace;
+            v_p2_op := '+';
+            v_p3_label := 'borrowed this season';
+            v_p3_amount := v_cycle_loan_total;
+            v_p3_op := '-';
           END IF;
         ELSE
           -- The grade pool is the season's facility, not a last resort: it
@@ -247,30 +255,33 @@ BEGIN
 
           IF LOWER(COALESCE(v_grade_category, 'Junior')) = 'executive' THEN
             v_grace := GREATEST(0, TRUNC(COALESCE(v_policy.exh_no_space_executive, 0)));
-            v_pool_label := 'Executive grade pool';
           ELSIF LOWER(COALESCE(v_grade_category, 'Junior')) = 'senior' THEN
             v_grace := GREATEST(0, TRUNC(COALESCE(v_policy.exh_no_space_senior, 0)));
-            v_pool_label := 'Senior grade pool';
           ELSE
             v_grace := GREATEST(0, TRUNC(COALESCE(v_policy.exh_no_space_junior, 0)));
-            v_pool_label := 'Junior grade pool';
           END IF;
+          -- Whatever the grade pool is called in the policy, the desk sees it
+          -- as grace from the MC.
+          v_pool_label := 'Grace from MC';
 
           IF v_space > 0 THEN
             -- Space already nets out this season's usage, so the pool rides flat.
             v_loan_eligible := v_space + v_grace;
-            v_p1_label := 'Savings space';
+            v_p1_label := 'Loan Space';
             v_p1_amount := v_space;
             v_p2_label := v_pool_label;
             v_p2_amount := v_grace;
             v_p2_op := '+';
           ELSE
             v_loan_eligible := GREATEST(0, v_grace - v_cycle_loan_total);
-            v_p1_label := v_pool_label;
-            v_p1_amount := v_grace;
-            v_p2_label := 'borrowed this season';
-            v_p2_amount := v_cycle_loan_total;
-            v_p2_op := '-';
+            v_p1_label := 'Loan Space';
+            v_p1_amount := 0;
+            v_p2_label := v_pool_label;
+            v_p2_amount := v_grace;
+            v_p2_op := '+';
+            v_p3_label := 'borrowed this season';
+            v_p3_amount := v_cycle_loan_total;
+            v_p3_op := '-';
           END IF;
         END IF;
       END IF;
@@ -310,6 +321,13 @@ BEGIN
         v_parts_sum := v_parts_sum + v_p2_amount;
       END IF;
     END IF;
+    IF v_p3_label <> '' THEN
+      IF v_p3_op = '-' THEN
+        v_parts_sum := v_parts_sum - v_p3_amount;
+      ELSE
+        v_parts_sum := v_parts_sum + v_p3_amount;
+      END IF;
+    END IF;
     IF ABS(v_parts_sum - v_loan_eligible) < 1 THEN
       v_parts := jsonb_build_array(
         jsonb_build_object('label', v_p1_label, 'amount', v_p1_amount)
@@ -317,6 +335,11 @@ BEGIN
       IF v_p2_label <> '' THEN
         v_parts := v_parts || jsonb_build_array(
           jsonb_build_object('label', v_p2_label, 'amount', v_p2_amount, 'op', v_p2_op)
+        );
+      END IF;
+      IF v_p3_label <> '' THEN
+        v_parts := v_parts || jsonb_build_array(
+          jsonb_build_object('label', v_p3_label, 'amount', v_p3_amount, 'op', v_p3_op)
         );
       END IF;
     END IF;
