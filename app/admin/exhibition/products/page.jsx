@@ -510,6 +510,17 @@ export default function ExhibitionProductsPage() {
   // working through the rows one at a time.
   const pageIds = pageProducts.map((p) => p.id)
   const selectedIds = products.filter((p) => selected.has(p.id)).map((p) => p.id)
+  // What the selection can actually be asked to do. Offering "Unapprove" over a
+  // list of pending drafts is a dead action — the route refuses every row and
+  // the desk reads a failure for work it never had. Each option appears only
+  // when the selection holds rows it applies to.
+  const selectedRows = products.filter((p) => selected.has(p.id))
+  const selectedPending = selectedRows.filter((p) => p.approval_status === 'pending').length
+  const selectedApproved = selectedRows.filter((p) => p.approval_status === 'approved').length
+  const selectedNotArchived = selectedRows.filter((p) => p.status !== 'archived').length
+  const selectedArchived = selectedRows.filter((p) => p.status === 'archived').length
+  // Mixed selections: say how many rows the action will really touch.
+  const mixedApproval = selectedPending > 0 && selectedApproved > 0
   const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selected.has(id))
   const somePageSelected = pageIds.some((id) => selected.has(id))
   const allFilteredSelected = products.length > 0 && products.every((p) => selected.has(p.id))
@@ -538,7 +549,19 @@ export default function ExhibitionProductsPage() {
   // single-product route so its order guard still stops a product that is
   // already on an order.
   const runBulk = async (action) => {
-    const ids = selectedIds
+    // Send only the rows this action applies to. A mixed selection (some
+    // approved, some still waiting) used to hand the route rows it would refuse,
+    // which came back as "product #x is not approved" noise around an action
+    // that had actually worked.
+    const byId = new Map(products.map((p) => [Number(p.id), p]))
+    const eligible = (p) => {
+      if (action === 'approve') return p.approval_status === 'pending'
+      if (action === 'unapprove') return p.approval_status === 'approved'
+      if (action === 'archive') return p.status !== 'archived'
+      if (action === 'restore') return p.status === 'archived'
+      return true
+    }
+    const ids = selectedIds.filter((id) => eligible(byId.get(Number(id)) || {}))
     if (!ids.length) return
     const labels = {
       approve: 'approved and published',
@@ -702,10 +725,18 @@ export default function ExhibitionProductsPage() {
           className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm font-medium text-fg focus:border-brand focus:outline-none disabled:opacity-50"
         >
           <option value="" disabled>Bulk actions</option>
-          <option value="approve">Approve selected</option>
-          <option value="unapprove">Unapprove selected</option>
-          <option value="archive">Archive selected</option>
-          <option value="restore">Restore selected</option>
+          {selectedPending > 0 && (
+            <option value="approve">
+              {mixedApproval ? `Approve the ${selectedPending} awaiting approval` : 'Approve selected'}
+            </option>
+          )}
+          {selectedApproved > 0 && (
+            <option value="unapprove">
+              {mixedApproval ? `Unapprove the ${selectedApproved} approved` : 'Unapprove selected'}
+            </option>
+          )}
+          {selectedNotArchived > 0 && <option value="archive">Archive selected</option>}
+          {selectedArchived > 0 && <option value="restore">Restore selected</option>}
           <option value="delete">Delete selected</option>
         </select>
       )}
