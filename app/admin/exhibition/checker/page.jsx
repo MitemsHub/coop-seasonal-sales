@@ -52,6 +52,26 @@ function LedgerHeader() {
   )
 }
 
+// The Available Loan Facility's composition, written once and used by the
+// Member position card and the closing-balance card. The function returns the
+// parts; this only prints them, so the two cards cannot drift apart.
+function FacilityNote({ parts, warning, globalLimit = null }) {
+  if (!parts.length) return warning || 'Remaining for this season'
+  return (
+    <span className="block">
+      <span className="block">
+        {parts.map((p, i) => (
+          <span key={`${p.label}-${i}`}>
+            {i > 0 ? (p.op === '-' ? ' − ' : ' + ') : ''}
+            {p.label} {naira(p.amount)}
+          </span>
+        ))}
+      </span>
+      {globalLimit != null && <span className="block">Global limit {naira(globalLimit)}</span>}
+    </span>
+  )
+}
+
 function LedgerOrderRow({ order, onOpen }) {
   return (
     <div className={`grid ${LEDGER_GRID} py-2`}>
@@ -366,8 +386,22 @@ export default function ExhibitionCheckerPage() {
               <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3">
                 <Stat label="Savings" value={naira(summary.savings)} />
                 <Stat label="5× savings" value={naira(summary.five_x_savings)} note="Savings × 5" />
+                {/* The figure the officer quotes first, so it sits in the first
+                    row instead of only at the bottom of the page. Its ceiling
+                    rides in the note rather than in a card of its own, which
+                    keeps the grid at six. */}
+                <Stat
+                  label="Available Loan Facility"
+                  value={summary.loan_space_left == null ? '—' : naira(summary.loan_space_left)}
+                  note={
+                    <FacilityNote
+                      parts={loanParts}
+                      warning={summary.loan_space_warning}
+                      globalLimit={summary.global_limit}
+                    />
+                  }
+                />
                 <Stat label="Grade" value={summary.grade || '—'} />
-                <Stat label="Global limit" value={naira(summary.global_limit)} />
                 <Stat label="Loan balance" value={naira(summary.loan_balance)} note="As on the member file" />
                 <Stat
                   label="Food orders"
@@ -438,20 +472,7 @@ export default function ExhibitionCheckerPage() {
                 <Stat
                   label="Available Loan Facility"
                   value={summary.loan_space_left == null ? '—' : naira(summary.loan_space_left)}
-                  note={
-                    loanParts.length ? (
-                      <span>
-                        {loanParts.map((p, i) => (
-                          <span key={`${p.label}-${i}`}>
-                            {i > 0 ? (p.op === '-' ? ' − ' : ' + ') : ''}
-                            {p.label} {naira(p.amount)}
-                          </span>
-                        ))}
-                      </span>
-                    ) : (
-                      summary.loan_space_warning || 'Remaining for this season'
-                    )
-                  }
+                  note={<FacilityNote parts={loanParts} warning={summary.loan_space_warning} />}
                 />
               </div>
               <p className="text-xs text-muted">
