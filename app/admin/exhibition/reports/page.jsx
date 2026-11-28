@@ -810,16 +810,18 @@ export default function ExhibitionReportsPage() {
               {filteredVendors.length === 0 ? <p className="px-4 py-6 text-center text-sm text-muted">No vendor data</p> : (
                 <>
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[480px] text-sm">
+                    {/* No minimum width: four short columns fit a phone, so the
+                        table never needs a sideways scroll it does not show. */}
+                    <table className="w-full text-xs sm:text-sm">
                       <thead><tr className="border-b border-line bg-subtle/30 text-left text-xs font-semibold uppercase tracking-wide text-muted">
-                        <th className="px-4 py-2">#</th><th className="px-4 py-2">Vendor</th><th className="px-4 py-2 text-right">Order Value</th><th className="px-4 py-2 text-right">Share</th>
+                        <th className="px-2 py-2 sm:px-4">#</th><th className="px-2 py-2 sm:px-4">Vendor</th><th className="px-2 py-2 text-right sm:px-4">Order Value</th><th className="px-2 py-2 text-right sm:px-4">Share</th>
                       </tr></thead>
                       <tbody>{pagedVendors.map((v, i) => (
                         <tr key={v.vendor_id} className="border-b border-line/50 last:border-0 hover:bg-subtle/30">
-                          <td className="px-4 py-2.5 text-muted">{(safeVendorPage - 1) * vendorPageSize + i + 1}</td>
-                          <td className="px-4 py-2.5 font-medium text-fg">{v.vendor_name}</td>
-                          <td className="px-4 py-2.5 text-right tabular-nums">{money(v.value)}</td>
-                          <td className="px-4 py-2.5 text-right text-muted">{s.amount ? ((v.value / s.amount) * 100).toFixed(1) + '%' : '0%'}</td>
+                          <td className="px-2 py-2.5 text-muted sm:px-4">{(safeVendorPage - 1) * vendorPageSize + i + 1}</td>
+                          <td className="break-words px-2 py-2.5 font-medium text-fg sm:px-4">{v.vendor_name}</td>
+                          <td className="px-2 py-2.5 text-right tabular-nums sm:px-4">{money(v.value)}</td>
+                          <td className="px-2 py-2.5 text-right text-muted sm:px-4">{s.amount ? ((v.value / s.amount) * 100).toFixed(1) + '%' : '0%'}</td>
                         </tr>
                       ))}</tbody>
                     </table>

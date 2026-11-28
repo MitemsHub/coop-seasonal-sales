@@ -587,7 +587,9 @@ export default function ExhibitionOrdersContent({ status = 'Pending' }) {
               <p className="mt-0.5 max-w-2xl text-sm text-fg/80">{statusInfo.copy}</p>
             </div>
           </div>
-          <div className="grid shrink-0 grid-cols-3 gap-2 text-center">
+          {/* Three tiles side by side squeeze big totals on a phone; they wrap
+              instead of overflowing their card. */}
+          <div className="flex shrink-0 flex-wrap gap-2 text-center [&>div]:min-w-[92px] [&>div]:flex-1">
             <div className="rounded-lg bg-surface/70 px-3 py-1.5">
               <p className="text-chips text-muted">On this page</p>
               <p className="text-sm font-bold tabular-nums text-fg">{orders.length}</p>
