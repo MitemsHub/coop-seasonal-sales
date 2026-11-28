@@ -227,13 +227,15 @@ export async function GET(request) {
     // speak the same language, or the officer adds up two different answers to
     // one question.
     const loanBasisIsGoods = cycle?.exh_loan_cap_include_interest === false
-    const loanItems = exhibitionOrders.filter((o) => o.payment_option === 'Loan')
+    // Goods value per order — the line amounts, with no distribution interest in
+    // them. Read for every order, not just loan ones, so the principal-only
+    // total below never depends on how an order was paid for.
     const goodsByOrder = new Map()
-    if (loanBasisIsGoods && loanItems.length) {
+    if (exhibitionOrders.length) {
       const { data: lines } = await supabase
         .from('exhibition_order_lines')
         .select('order_id, amount')
-        .in('order_id', loanItems.map((o) => Number(o.id)))
+        .in('order_id', exhibitionOrders.map((o) => Number(o.id)))
       for (const line of lines || []) {
         const key = Number(line.order_id)
         goodsByOrder.set(key, (goodsByOrder.get(key) || 0) + Number(line.amount || 0))
@@ -241,12 +243,11 @@ export async function GET(request) {
     }
     // Falls back to the total when an order has no lines, exactly as the
     // exposure function does, so the two cannot disagree about an old order.
-    const loanBasisOf = (o) => {
-      const total = Number(o.total_amount || 0)
-      if (!loanBasisIsGoods) return total
+    const goodsOf = (o) => {
       const key = Number(o.id)
-      return goodsByOrder.has(key) ? goodsByOrder.get(key) : total
+      return goodsByOrder.has(key) ? goodsByOrder.get(key) : Number(o.total_amount || 0)
     }
+    const loanBasisOf = (o) => (loanBasisIsGoods ? goodsOf(o) : Number(o.total_amount || 0))
 
     // ── Day-by-day ledger ────────────────────────────────────────────
     const byDay = new Map()
@@ -293,6 +294,7 @@ export async function GET(request) {
     const foodCycleName = [...new Set(foodOrders.map((r) => r.cycle_name).filter(Boolean))].join(', ')
 
     const exhibitionTotal = sumBy(exhibitionOrders, (r) => Number(r.total_amount || 0))
+    const exhibitionPrincipal = sumBy(exhibitionOrders, (r) => goodsOf(r))
     const exhibitionSavings = sumBy(exhibitionOrders.filter((r) => r.payment_option === 'Savings'), (r) => Number(r.total_amount || 0))
     const exhibitionLoan = sumBy(exhibitionOrders.filter((r) => r.payment_option === 'Loan'), (r) => Number(r.total_amount || 0))
 
@@ -368,13 +370,17 @@ export async function GET(request) {
         food_year: exhibitionYear,
         exhibition_order_count: exhibitionOrders.length,
         exhibition_total: exhibitionTotal,
+        exhibition_principal: exhibitionPrincipal,
         exhibition_savings: exhibitionSavings,
         exhibition_loan: exhibitionLoan,
         // Which figure the day ledger's Loan line is measured on, so the screen
         // can say "goods" only when that is what the season enforces.
         loan_basis_is_goods: loanBasisIsGoods,
         shopping_days: days.length,
-        total_shopped: foodTotal + exhibitionTotal,
+        // Principal only: what the goods were worth, with no distribution
+        // interest — the desk compares this against what the member took out,
+        // not against what they will repay.
+        total_shopped: foodTotal + exhibitionPrincipal,
         savings_spent: savingsSpent,
         savings_balance: savings - savingsSpent,
         loan_space_left: loanSpaceLeft,

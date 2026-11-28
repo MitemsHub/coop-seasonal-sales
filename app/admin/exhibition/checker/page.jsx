@@ -412,7 +412,16 @@ export default function ExhibitionCheckerPage() {
             <Card className="p-5">
               <h2 className="text-sm font-semibold text-fg">Balance at the end</h2>
               <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
-                <Stat label="Total shopped" value={naira(summary.total_shopped)} note="Food + exhibition" />
+                <Stat
+                  label="Total shopped (Prin. Only)"
+                  value={naira(summary.total_shopped)}
+                  note={
+                    <span className="block">
+                      <span className="block">Food = {naira(summary.food_total)}</span>
+                      <span className="block">Exhibition = {naira(summary.exhibition_principal)}</span>
+                    </span>
+                  }
+                />
                 <Stat label="Paid from savings" value={naira(summary.savings_spent)} />
                 <Stat
                   label="Savings balance left"
