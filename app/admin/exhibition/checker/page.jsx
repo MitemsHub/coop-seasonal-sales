@@ -6,6 +6,7 @@
 // in order, and the closing balance at the end. Read-only — nothing here
 // writes to the member file.
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Search, UserRound } from 'lucide-react'
 import ProtectedRoute from '../../../components/ProtectedRoute'
 import DraggableModal from '../../../components/DraggableModal'
@@ -50,6 +51,23 @@ function LedgerHeader() {
       <span>Status</span>
     </div>
   )
+}
+
+// Each order lives in the queue named after its status, and every queue accepts
+// ?q= — so the popup can hand the officer the desk that acts on it, filtered to
+// that one order.
+const ORDER_QUEUE = {
+  Pending: '/admin/exhibition/pending',
+  Approved: '/admin/exhibition/approved',
+  Delivered: '/admin/exhibition/delivered',
+  Confirmed: '/admin/exhibition/confirmed',
+  Cancelled: '/admin/exhibition/cancelled',
+}
+
+function orderHref(o) {
+  const status = String(o?.status || '')
+  const base = ORDER_QUEUE[status] || ORDER_QUEUE.Pending
+  return `${base}?q=${encodeURIComponent(String(o?.order_id || ''))}`
 }
 
 // The Available Loan Facility's composition, written once and used by the
@@ -453,7 +471,7 @@ export default function ExhibitionCheckerPage() {
               <h2 className="text-sm font-semibold text-fg">Balance at the end</h2>
               <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
                 <Stat
-                  label="Total shopped (Prin. Only)"
+                  label="Total shopped on Loan (Prin. Only)"
                   value={naira(summary.total_shopped)}
                   note={
                     <span className="block">
@@ -498,7 +516,20 @@ export default function ExhibitionCheckerPage() {
               <Skeleton className="h-10 w-full" />
             </div>
           ) : (
-            <OrderItemsView order={viewOrder} />
+            <div className="space-y-3">
+              {/* Clicking the order opens the items, so the way to the desk that
+                  approves, cancels or delivers it stays one small link away. */}
+              <div className="flex justify-end">
+                <Link
+                  href={orderHref(viewOrder)}
+                  className="text-xs font-medium text-brand underline-offset-2 hover:underline"
+                  title="Open this order in its queue, filtered to it"
+                >
+                  Open in queue →
+                </Link>
+              </div>
+              <OrderItemsView order={viewOrder} />
+            </div>
           )}
         </DraggableModal>
       </div>
