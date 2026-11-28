@@ -141,34 +141,70 @@ export async function GET(request) {
       }
     }
 
-    // ── Food orders ──────────────────────────────────────────────────
-    // Food is a separate module with its own cycle. When a food cycle is
-    // active only that cycle counts (the same rule as the exposure maths);
-    // with none active, the year's orders are shown.
-    const yearStart = new Date(new Date().getFullYear(), 0, 1).toISOString()
-    let foodCycle = null
+    // ── Food orders of the same season year ──────────────────────────
+    // Only food that belongs to the exhibition's calendar year is counted.
+    // An earlier distribution has already been rolled into the member's loan
+    // balance, so counting it again would charge them twice for one bag of
+    // food — which is exactly what a plain "created this year" window did.
+    //
+    // The year is the distribution's, not the row's: E00072's 2026 deliveries
+    // for the 2025 cycle are 2025 food, even though the rows were created in
+    // January. The cycle name carries the year when it has one; otherwise the
+    // cycle's creation date does.
+    const exhibitionYear =
+      Number(String(cycle?.starts_at || '').slice(0, 4)) || new Date().getFullYear()
+    const yearOf = (iso) => Number(String(iso || '').slice(0, 4)) || 0
+    let foodCyclesById = new Map()
     try {
-      const { data } = await supabase
+      const { data: foodCycles } = await supabase
         .from('cycles')
-        .select('id, name')
-        .eq('is_active', true)
-        .maybeSingle()
-      foodCycle = data || null
+        .select('id, name, created_at')
+      foodCyclesById = new Map((foodCycles || []).map((c) => [Number(c.id), c]))
     } catch {}
+    const cycleYear = (c) => {
+      if (!c) return 0
+      const named = String(c.name || '').match(/(?:19|20)\d{2}/)
+      return named ? Number(named[0]) : yearOf(c.created_at)
+    }
 
-    let foodQuery = supabase
+    const foodRes = await supabase
       .from('orders')
-      .select('order_id, status, total_amount, payment_option, created_at')
+      .select('order_id, cycle_id, status, total_amount, payment_option, created_at')
       .eq('member_id', memberId)
       .in('status', COUNTED_FOOD)
       .order('created_at', { ascending: true })
-    foodQuery = foodCycle?.id ? foodQuery.eq('cycle_id', foodCycle.id) : foodQuery.gte('created_at', yearStart)
-
-    const foodRes = await foodQuery
     if (foodRes.error) {
       return NextResponse.json({ ok: false, error: foodRes.error.message }, { status: 500 })
     }
-    const foodOrders = foodRes.data || []
+
+    // The principal, not the repayable total: food loans are already carried on
+    // the member's loan balance at goods value, and the exhibition room is
+    // measured the same way.
+    const foodRows = foodRes.data || []
+    const foodPrincipals = new Map()
+    if (foodRows.length) {
+      const { data: foodLines } = await supabase
+        .from('order_lines')
+        .select('order_id, amount')
+        .in('order_id', foodRows.map((o) => o.order_id))
+      for (const line of foodLines || []) {
+        foodPrincipals.set(line.order_id, (foodPrincipals.get(line.order_id) || 0) + Number(line.amount || 0))
+      }
+    }
+
+    const foodOrders = foodRows
+      .map((o) => {
+        const cycleRow = foodCyclesById.get(Number(o.cycle_id))
+        const year = cycleYear(cycleRow) || yearOf(o.created_at)
+        const principal = foodPrincipals.get(o.order_id)
+        return {
+          ...o,
+          food_year: year,
+          cycle_name: cycleRow?.name || '',
+          principal: principal > 0 ? principal : Number(o.total_amount || 0),
+        }
+      })
+      .filter((o) => o.food_year === exhibitionYear)
 
     // ── Exhibition orders of this season ─────────────────────────────
     let exhibitionOrders = []
@@ -249,9 +285,12 @@ export async function GET(request) {
     // ── Totals ───────────────────────────────────────────────────────
     const sumBy = (rows, pick) => rows.reduce((sum, r) => sum + (pick(r) || 0), 0)
 
-    const foodTotal = sumBy(foodOrders, (r) => Number(r.total_amount || 0))
-    const foodSavings = sumBy(foodOrders.filter((r) => r.payment_option === 'Savings'), (r) => Number(r.total_amount || 0))
-    const foodLoan = sumBy(foodOrders.filter((r) => r.payment_option === 'Loan'), (r) => Number(r.total_amount || 0))
+    const foodTotal = sumBy(foodOrders, (r) => Number(r.principal || 0))
+    const foodSavings = sumBy(foodOrders.filter((r) => r.payment_option === 'Savings'), (r) => Number(r.principal || 0))
+    const foodLoan = sumBy(foodOrders.filter((r) => r.payment_option === 'Loan'), (r) => Number(r.principal || 0))
+    // How the food was paid for, for the small line under the card's figure.
+    const foodMethods = [...new Set(foodOrders.map((r) => String(r.payment_option || '').trim()).filter(Boolean))]
+    const foodCycleName = [...new Set(foodOrders.map((r) => r.cycle_name).filter(Boolean))].join(', ')
 
     const exhibitionTotal = sumBy(exhibitionOrders, (r) => Number(r.total_amount || 0))
     const exhibitionSavings = sumBy(exhibitionOrders.filter((r) => r.payment_option === 'Savings'), (r) => Number(r.total_amount || 0))
@@ -324,7 +363,9 @@ export async function GET(request) {
         food_total: foodTotal,
         food_savings: foodSavings,
         food_loan: foodLoan,
-        food_cycle_name: foodCycle?.name || '',
+        food_cycle_name: foodCycleName,
+        food_payment_methods: foodMethods,
+        food_year: exhibitionYear,
         exhibition_order_count: exhibitionOrders.length,
         exhibition_total: exhibitionTotal,
         exhibition_savings: exhibitionSavings,

@@ -338,9 +338,15 @@ export default function ExhibitionCheckerPage() {
                 <Stat
                   label="Food orders"
                   value={naira(summary.food_total)}
-                  note={`${summary.food_order_count} order${summary.food_order_count === 1 ? '' : 's'}${
-                    summary.food_cycle_name ? ` · ${summary.food_cycle_name}` : ''
-                  }`}
+                  note={
+                    summary.food_order_count
+                      ? `${summary.food_order_count} order${summary.food_order_count === 1 ? '' : 's'} · ${
+                          summary.food_payment_methods?.length
+                            ? `paid by ${summary.food_payment_methods.join(' & ')}`
+                            : 'payment not set'
+                        }`
+                      : 'No food this year'
+                  }
                 />
               </div>
             </div>
