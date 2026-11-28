@@ -474,9 +474,18 @@ export default function ExhibitionCheckerPage() {
                   label="Total shopped on Loan (Prin. Only)"
                   value={naira(summary.total_shopped)}
                   note={
-                    <span className="block">
-                      <span className="block">Food = {naira(summary.food_total)}</span>
-                      <span className="block">Exhibition = {naira(summary.exhibition_principal)}</span>
+                    // Each part stays whole: in a half-width phone card the
+                    // amount used to drop onto its own line, leaving a bare
+                    // "Food =" behind.
+                    <span className="block text-[11px] sm:text-xs">
+                      <span className="block whitespace-nowrap">
+                        Food = {naira(summary.food_total)}
+                      </span>
+                      <span className="block whitespace-nowrap">
+                        <span className="sm:hidden">Exh.</span>
+                        <span className="hidden sm:inline">Exhibition</span> ={' '}
+                        {naira(summary.exhibition_principal)}
+                      </span>
                     </span>
                   }
                 />
