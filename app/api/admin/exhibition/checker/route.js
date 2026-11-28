@@ -83,7 +83,31 @@ export async function GET(request) {
         .maybeSingle())
     }
     if (memberError) return NextResponse.json({ ok: false, error: memberError.message }, { status: 500 })
-    if (!member) return NextResponse.json({ ok: false, error: 'Member not found' }, { status: 404 })
+    if (!member) {
+      // A desk remembers a name, or half an ID, long before it remembers the
+      // exact member number — and typing one on a phone is where the mistake
+      // happens. Offer the closest matches so the officer taps a member instead
+      // of retyping an ID that may be right or wrong.
+      //
+      // The term goes into a PostgREST `or` filter, so the characters that
+      // grammar treats as syntax are stripped rather than escaped.
+      const needle = memberId.replace(/[(),%_*"\\]/g, ' ').replace(/\s+/g, ' ').trim()
+      let suggestions = []
+      if (needle.length >= 2) {
+        const { data } = await supabase
+          .from('members')
+          .select('member_id, full_name, branches:branch_id(name, code)')
+          .or(`member_id.ilike.%${needle}%,full_name.ilike.%${needle}%`)
+          .order('member_id', { ascending: true })
+          .limit(8)
+        suggestions = (data || []).map((m) => ({
+          member_id: m.member_id,
+          full_name: m.full_name || '',
+          branch_name: m.branches?.name || '',
+        }))
+      }
+      return NextResponse.json({ ok: false, error: 'Member not found', suggestions }, { status: 404 })
+    }
 
     // ── Season ────────────────────────────────────────────────────────
     // `*` because the loan-room note below needs the season's grace/pool

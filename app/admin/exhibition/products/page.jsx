@@ -741,14 +741,35 @@ export default function ExhibitionProductsPage() {
               {totals.active} active · {naira(totals.value)} catalog value
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" leftIcon={RefreshCw} onClick={load} disabled={loading || busy}>
+          {/* Phones get a 2 + 1 layout: the two light actions share a row and
+              New Product takes the full width under them. Three text buttons
+              in one row overflowed a 360px screen. */}
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0 sm:items-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={RefreshCw}
+              onClick={() => load()}
+              disabled={loading || busy}
+              className="h-10 w-full justify-center sm:h-8 sm:w-auto"
+            >
               Refresh
             </Button>
-            <Button size="sm" variant="secondary" leftIcon={Upload} onClick={() => setImportOpen(true)}>
+            <Button
+              size="sm"
+              variant="secondary"
+              leftIcon={Upload}
+              onClick={() => setImportOpen(true)}
+              className="h-10 w-full justify-center sm:h-8 sm:w-auto"
+            >
               Import list
             </Button>
-            <Button size="sm" leftIcon={Plus} onClick={openCreate}>
+            <Button
+              size="sm"
+              leftIcon={Plus}
+              onClick={openCreate}
+              className="col-span-2 h-10 w-full justify-center sm:col-span-1 sm:h-8 sm:w-auto"
+            >
               New Product
             </Button>
           </div>
@@ -769,23 +790,23 @@ export default function ExhibitionProductsPage() {
               onChange={(e) => setTerm(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && load()}
               placeholder="Search name or SKU…"
-              className="w-full rounded-xl border border-line bg-surface py-2 pl-9 pr-3 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none"
+              className="h-11 w-full rounded-xl border border-line bg-surface py-2 pl-9 pr-3 text-sm text-fg placeholder:text-subtext focus:border-brand focus:outline-none sm:h-10"
             />
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Select value={cycleFilter} onChange={(e) => setCycleFilter(e.target.value)} className="sm:w-56">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:flex lg:flex-wrap">
+            <Select value={cycleFilter} onChange={(e) => setCycleFilter(e.target.value)} className="w-full lg:w-56">
               <option value="">All cycles</option>
               {cycles.map((c) => (
                 <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
               ))}
             </Select>
-            <Select value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)} className="sm:w-56">
+            <Select value={vendorFilter} onChange={(e) => setVendorFilter(e.target.value)} className="w-full lg:w-56">
               <option value="">All vendors</option>
               {cycleVendors.map((v) => (
                 <option key={v.id} value={v.id}>{v.name}</option>
               ))}
             </Select>
-            <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="sm:w-40">
+            <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full lg:w-40">
               <option value="">All statuses</option>
               <option value="active">Active</option>
               <option value="draft">Draft</option>
@@ -837,7 +858,13 @@ export default function ExhibitionProductsPage() {
                 products that are both approved and active, so a price change awaiting review keeps an
                 otherwise-live product off the shelf until it is approved.
               </p>
-              <Button size="sm" variant="success" onClick={approveAllPending} disabled={busy}>
+              <Button
+                size="sm"
+                variant="success"
+                onClick={approveAllPending}
+                disabled={busy}
+                className="h-10 w-full justify-center sm:h-8 sm:w-auto"
+              >
                 Approve all {stats.pending.toLocaleString()} pending
               </Button>
             </div>
@@ -1052,7 +1079,7 @@ export default function ExhibitionProductsPage() {
                       <p className="font-semibold tabular-nums text-fg">{p.qty == null ? '∞' : Number(p.qty).toLocaleString()}</p>
                     </div>
                   </div>
-                  <div className="mt-3">{productActionSelect(p, 'w-full')}</div>
+                  <div className="mt-3">{productActionSelect(p, 'h-10 w-full')}</div>
                 </div>
               ))}
             </div>

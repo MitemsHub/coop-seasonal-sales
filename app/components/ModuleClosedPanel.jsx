@@ -97,15 +97,24 @@ function ModuleClosedBody({ module, onViewOrders, onBack, rep = false, vendor = 
       <p className="mt-1.5 max-w-xs text-sm text-muted">{copy.description}</p>
       {!!hint && <div className="mt-2">{hint}</div>}
 
-      <div className="mt-5 flex w-full flex-col gap-2.5 sm:flex-row">
+      {/* Both icons are pinned to the button's own padding edge instead of
+          sitting in the label's flow. Centring icon + label together pushed
+          the words off-centre inside the pill, so the left and right padding
+          never looked equal. */}
+      <div className="mt-5 flex w-full flex-col gap-3 sm:flex-row sm:gap-2.5">
         <Button
-          className="flex-1 min-w-0 h-11 sm:h-9 text-[15px] sm:text-sm"
-          rightIcon={ArrowRight}
+          className="relative w-full min-w-0 px-10 h-11 text-[15px] sm:flex-1 sm:h-9 sm:text-sm"
           onClick={onViewOrders}
         >
           <span className="min-w-0 truncate">{rep ? 'View pending orders' : 'View my orders'}</span>
+          <ArrowRight className="pointer-events-none absolute right-3.5 h-4 w-4" strokeWidth={2} aria-hidden="true" />
         </Button>
-        <Button variant="secondary" className="flex-1 min-w-0 h-11 sm:h-9 text-[15px] sm:text-sm" leftIcon={Home} onClick={onBack}>
+        <Button
+          variant="secondary"
+          className="relative w-full min-w-0 px-10 h-11 text-[15px] sm:flex-1 sm:h-9 sm:text-sm"
+          onClick={onBack}
+        >
+          <Home className="pointer-events-none absolute left-3.5 h-4 w-4" strokeWidth={2} aria-hidden="true" />
           <span className="min-w-0 truncate">{rep ? 'Back to Reps Portal' : 'Back to dashboard'}</span>
         </Button>
       </div>

@@ -184,7 +184,7 @@ export function ExhibitionCyclesContent() {
             <h1 className="text-h2 font-bold tracking-tight text-fg">Exhibition Cycles</h1>
             <p className="mt-0.5 text-sm text-muted">One exhibition season serves every branch — vendors, products and orders roll up per branch.</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button variant="ghost" size="sm" leftIcon={RefreshCw} onClick={load} disabled={loading || busy}>
               Refresh
             </Button>

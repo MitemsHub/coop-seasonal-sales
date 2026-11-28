@@ -62,9 +62,15 @@ export default function ExhibitionCheckerPage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [msg, setMsg] = useState(null)
+  // A near-miss on the ID (or a name) comes back as a short list to tap, so a
+  // phone keyboard is not the only way to reach the member.
+  const [suggestions, setSuggestions] = useState([])
 
   const check = useCallback(async (idArg) => {
-    const id = String(idArg ?? memberId).trim().toUpperCase()
+    // Called straight from a click handler, idArg is the event object — which
+    // stringified to "[object Object]" and searched for a member that cannot
+    // exist. Only strings (from the input or a suggestion) are used as an ID.
+    const id = String(typeof idArg === 'string' ? idArg : memberId).trim().toUpperCase()
     if (!id) {
       setMsg({ type: 'error', text: 'Enter a member ID first.' })
       return
@@ -72,6 +78,7 @@ export default function ExhibitionCheckerPage() {
     setLoading(true)
     setMsg(null)
     setData(null)
+    setSuggestions([])
     try {
       const res = await fetch(`/api/admin/exhibition/checker?member_id=${encodeURIComponent(id)}`, {
         cache: 'no-store',
@@ -81,7 +88,17 @@ export default function ExhibitionCheckerPage() {
         throw new Error(`Unexpected response (${res.status}) from the checker`)
       }
       const json = await res.json()
-      if (!res.ok || !json?.ok) throw new Error(json?.error || 'Member not found')
+      if (!res.ok || !json?.ok) {
+        // A miss with matches answers "try one of these" — the officer taps a
+        // row instead of retyping an ID on a small keyboard.
+        const near = Array.isArray(json?.suggestions) ? json.suggestions : []
+        if (near.length) {
+          setMemberId(id)
+          setSuggestions(near)
+          return
+        }
+        throw new Error(json?.error || 'Member not found')
+      }
       setData(json)
     } catch (e) {
       setMsg({ type: 'error', text: e?.message || 'Failed to check member' })
@@ -122,7 +139,15 @@ export default function ExhibitionCheckerPage() {
         </div>
 
         <Card className="mb-5 p-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          {/* A real form: phones get a Go key on the keyboard, and the button
+              still submits to the same lookup. */}
+          <form
+            className="flex flex-col gap-2 sm:flex-row sm:items-end"
+            onSubmit={(e) => {
+              e.preventDefault()
+              check()
+            }}
+          >
             <div className="min-w-0 flex-1">
               <label className="mb-1 block text-xs font-medium text-subtext" htmlFor="checker-member">
                 Member ID
@@ -130,24 +155,63 @@ export default function ExhibitionCheckerPage() {
               <Input
                 id="checker-member"
                 value={memberId}
-                onChange={(e) => setMemberId(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') check()
+                onChange={(e) => {
+                  setMemberId(e.target.value)
+                  if (suggestions.length) setSuggestions([])
                 }}
                 placeholder="Enter ID, name"
                 autoComplete="off"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+                enterKeyHint="search"
+                className="h-11 sm:h-9"
               />
             </div>
-            <Button leftIcon={Search} onClick={check} loading={loading}>
+            <Button type="submit" leftIcon={Search} loading={loading} className="w-full sm:w-auto h-11 sm:h-9">
               Check member
             </Button>
-          </div>
+          </form>
         </Card>
 
         {msg && (
           <div className="mb-4 rounded-xl border border-danger-border bg-danger-bg px-4 py-3 text-sm text-danger-fg">
             {msg.text}
           </div>
+        )}
+
+        {suggestions.length > 0 && (
+          <Card className="mb-4 p-4">
+            <h2 className="text-sm font-semibold text-fg">No exact match</h2>
+            <p className="mt-0.5 text-sm text-muted">
+              Pick the member you meant, or correct the ID above.
+            </p>
+            <ul className="mt-1 divide-y divide-line-subtle">
+              {suggestions.map((s) => (
+                <li key={s.member_id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMemberId(s.member_id)
+                      check(s.member_id)
+                    }}
+                    className="flex w-full items-center justify-between gap-3 py-3 text-left transition-colors duration-150 hover:text-brand focus-visible:outline-none"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-fg">
+                        {s.full_name || '—'}
+                      </span>
+                      <span className="block text-xs text-muted">
+                        {s.member_id}
+                        {s.branch_name ? ` · ${s.branch_name}` : ''}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-xs font-medium text-brand">Open</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </Card>
         )}
 
         {loading && !data && (
@@ -196,7 +260,9 @@ export default function ExhibitionCheckerPage() {
             {/* Balances and entitlements */}
             <div>
               <h2 className="mb-2 text-sm font-semibold text-fg">Member position</h2>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Two up on a phone: one tall column made the desk scroll past
+                  six cards before reaching the shopping days. */}
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3">
                 <Stat label="Savings" value={naira(summary.savings)} />
                 <Stat label="5× savings" value={naira(summary.five_x_savings)} note="Savings × 5" />
                 <Stat label="Grade" value={summary.grade || '—'} />
@@ -229,6 +295,8 @@ export default function ExhibitionCheckerPage() {
                   position above, not in this day-by-day ledger.
                 </p>
               ) : (
+                <>
+                <div className="hidden sm:block">
                 <Table>
                   <THead>
                     <TR>
@@ -284,6 +352,55 @@ export default function ExhibitionCheckerPage() {
                     </TBody>
                   ))}
                 </Table>
+                </div>
+
+                {/* Phones: six columns cannot stay readable at 360px, so each
+                    day becomes its own block with the orders listed under it.
+                    Same figures, no sideways scrolling. */}
+                <div className="space-y-3 sm:hidden">
+                  {days.map((d) => (
+                    <div key={`phone-${d.date}`} className="overflow-hidden rounded-xl border border-line-subtle">
+                      <div className="flex items-baseline justify-between gap-2 bg-subtle/40 px-3 py-2">
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-fg">Day {d.day}</div>
+                          <div className="text-xs text-muted">{d.date_label}</div>
+                        </div>
+                        <div className="shrink-0 text-sm font-bold tabular-nums text-fg">
+                          {naira(d.total)}
+                        </div>
+                      </div>
+                      <ul className="divide-y divide-line-subtle">
+                        {d.orders.map((o, i) => (
+                          <li key={`${d.date}-${o.order_id}-${i}`} className="px-3 py-2">
+                            <div className="flex items-baseline justify-between gap-2">
+                              <Link
+                                href={orderHref(o)}
+                                className="truncate font-medium text-brand underline-offset-2 hover:underline"
+                              >
+                                {o.order_id}
+                              </Link>
+                              <span className="shrink-0 font-semibold tabular-nums text-fg">
+                                {naira(o.amount)}
+                              </span>
+                            </div>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted">
+                              <span>{timeOf(o.created_at)}</span>
+                              <span aria-hidden="true">·</span>
+                              <span>{o.payment_option || '—'}</span>
+                              <span aria-hidden="true">·</span>
+                              <span>{o.status || '—'}</span>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="border-t border-line-subtle px-3 py-1.5 text-xs text-muted">
+                        {d.order_count} order{d.order_count === 1 ? '' : 's'} · Savings {naira(d.savings)} · Loan{' '}
+                        {naira(d.loan)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                </>
               )}
 
               {summary.exhibition_order_count ? (
@@ -297,7 +414,7 @@ export default function ExhibitionCheckerPage() {
             {/* Closing balance */}
             <Card className="p-5">
               <h2 className="text-sm font-semibold text-fg">Balance at the end</h2>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
                 <Stat label="Total shopped" value={naira(summary.total_shopped)} note="Food + exhibition" />
                 <Stat label="Paid from savings" value={naira(summary.savings_spent)} />
                 <Stat
